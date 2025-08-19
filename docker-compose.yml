@@ -1,31 +1,56 @@
 version: '3.8'
 
 services:
-  web:
-    build: .
+  nginx:
+    image: nginx:alpine
     ports:
       - "8080:80"
-    environment:
-      - APACHE_DOCUMENT_ROOT=/var/www/html/web
     volumes:
-      - ./web/sites/default/files:/var/www/html/web/sites/default/files
-      - ./private:/var/www/html/private
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./web:/var/www/html/web
     depends_on:
-      - db
+      - php
     networks:
       - mantle-network
 
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: mantle2
-      MYSQL_USER: drupal
-      MYSQL_PASSWORD: drupal
-    ports:
-      - "3306:3306"
+  php:
+    build: 
+      context: .
+      dockerfile: docker/php/Dockerfile
     volumes:
-      - db_data:/var/lib/mysql
+      - ./web:/var/www/html/web
+      - ./private:/var/www/html/private
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=earth
+      - POSTGRES_USER=earth
+      - POSTGRES_PASSWORD=earth
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=earth
+      - S3_ACCESS_KEY=minio
+      - S3_SECRET_KEY=miniosecret
+      - DRUPAL_AI_PROVIDER=openrouter
+      - DRUPAL_AI_MODEL_TEXT=meta-llama/llama-3.1-8b-instruct:free
+      - AI_ENABLE_LIVE=false
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - mantle-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: earth
+      POSTGRES_USER: earth
+      POSTGRES_PASSWORD: earth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - mantle-network
 
@@ -36,8 +61,23 @@ services:
     networks:
       - mantle-network
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: miniosecret
+    volumes:
+      - minio_data:/data
+    networks:
+      - mantle-network
+
 volumes:
-  db_data:
+  postgres_data:
+  minio_data:
 
 networks:
   mantle-network:

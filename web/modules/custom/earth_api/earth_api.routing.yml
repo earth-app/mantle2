@@ -1,0 +1,96 @@
+# Earth API Routes
+# These routes provide exact API parity with the original Mantle API
+
+# Health check endpoint
+earth_api.health:
+  path: '/api/health'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\HealthController::check'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+
+# OpenAPI specification endpoint
+earth_api.openapi:
+  path: '/openapi'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\OpenApiController::spec'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+
+# Authentication endpoints
+earth_api.auth.login:
+  path: '/api/auth/login'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\AuthController::login'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.auth.logout:
+  path: '/api/auth/logout'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\AuthController::logout'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.auth.refresh:
+  path: '/api/auth/refresh'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\AuthController::refresh'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+# User endpoints
+earth_api.users.me:
+  path: '/api/users/me'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UserController::me'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Controller\UserController::accessCheck'
+
+earth_api.users.profile:
+  path: '/api/users/{id}'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UserController::profile'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Controller\UserController::accessCheck'
+    id: '\d+'
+
+# Content endpoints (placeholders for now)
+earth_api.prompts.list:
+  path: '/api/prompts'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\PromptsController::list'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Controller\PromptsController::accessCheck'
+
+earth_api.activities.list:
+  path: '/api/activities'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\ActivitiesController::list'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Controller\ActivitiesController::accessCheck'
+
+earth_api.articles.list:
+  path: '/api/articles'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\ArticlesController::list'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Controller\ArticlesController::accessCheck'
+
+earth_api.events.list:
+  path: '/api/events'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\EventsController::list'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Controller\EventsController::accessCheck'

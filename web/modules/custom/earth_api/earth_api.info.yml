@@ -1,0 +1,12 @@
+name: Earth API
+type: module
+description: 'Provides API endpoints with exact parity to the original Mantle API'
+core_version_requirement: ^10 || ^11
+package: 'Earth App'
+dependencies:
+  - drupal:system
+  - drupal:user
+  - drupal:serialization
+  - drupal:hal
+  - drupal:rest
+configure: earth_api.settings

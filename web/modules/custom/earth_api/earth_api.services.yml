@@ -1,0 +1,24 @@
+services:
+  earth_api.manager:
+    class: Drupal\earth_api\Service\ApiManager
+    arguments: ['@entity_type.manager', '@database', '@cache.default', '@logger.factory']
+
+  earth_api.serializer:
+    class: Drupal\earth_api\Service\ApiSerializer
+    arguments: ['@serializer']
+
+  earth_api.validator:
+    class: Drupal\earth_api\Service\ApiValidator
+    arguments: ['@typed_data_manager']
+
+  earth_api.auth_manager:
+    class: Drupal\earth_api\Service\AuthManager
+    arguments: ['@user.auth', '@entity_type.manager', '@database']
+
+  earth_api.ai_provider:
+    class: Drupal\earth_api\Service\AiProviderManager
+    arguments: ['@config.factory', '@plugin.manager.ai_provider']
+
+  earth_api.queue_manager:
+    class: Drupal\earth_api\Service\QueueManager
+    arguments: ['@queue', '@advancedqueue.job_runner']

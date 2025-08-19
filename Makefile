@@ -1,6 +1,6 @@
 # Mantle2 Development Makefile
 
-.PHONY: help install start stop restart status logs ssh lint lint-fix analyze test clean
+.PHONY: help install start stop restart status logs ssh lint lint-fix analyze test clean up down build-containers
 
 # Default target
 help: ## Show this help message
@@ -13,84 +13,117 @@ help: ## Show this help message
 install: ## Install dependencies and setup the project
 	./setup.sh
 
-# DDEV commands
-start: ## Start the development environment
-	ddev start
+# Docker Compose commands
+up: ## Start all services using Docker Compose
+	docker-compose up -d
 
-stop: ## Stop the development environment
-	ddev stop
+down: ## Stop all services using Docker Compose
+	docker-compose down
+
+start: up ## Start the development environment (alias for up)
+
+stop: down ## Stop the development environment (alias for down)
 
 restart: ## Restart the development environment
-	ddev restart
+	docker-compose restart
 
 status: ## Show development environment status
-	ddev describe
+	docker-compose ps
 
 logs: ## Show logs
-	ddev logs
+	docker-compose logs -f
 
-ssh: ## Access the web container
-	ddev ssh
+logs-php: ## Show PHP logs
+	docker-compose logs -f php
+
+logs-nginx: ## Show Nginx logs
+	docker-compose logs -f nginx
+
+build-containers: ## Build Docker containers
+	docker-compose build
+
+# Container access
+ssh: ## Access the PHP container
+	docker-compose exec php bash
+
+ssh-nginx: ## Access the Nginx container
+	docker-compose exec nginx sh
 
 # Development commands
 lint: ## Check code style
-	ddev composer lint
+	docker-compose exec php composer lint
 
 lint-fix: ## Fix code style issues automatically
-	ddev composer lint-fix
+	docker-compose exec php composer lint-fix
 
 analyze: ## Run static analysis
-	ddev composer analyze
+	docker-compose exec php composer analyze
 
 test: ## Run unit tests
-	ddev composer test
+	docker-compose exec php composer test
+
+# Contract testing
+test-contract: ## Run contract tests against OpenAPI spec
+	./scripts/fetch-openapi.sh
+	docker-compose exec php vendor/bin/phpunit tests/contract/
 
 # Database commands
 db-import: ## Import database from file (usage: make db-import FILE=database.sql)
-	ddev import-db < $(FILE)
+	docker-compose exec -T postgres psql -U earth -d earth < $(FILE)
 
 db-export: ## Export database to file (usage: make db-export FILE=database.sql)
-	ddev export-db > $(FILE)
+	docker-compose exec postgres pg_dump -U earth earth > $(FILE)
 
 db-drop: ## Drop all database tables
-	ddev drush sql:drop -y
+	docker-compose exec php drush sql:drop -y
 
 # Drupal commands
 drush: ## Run drush command (usage: make drush CMD="cache:rebuild")
-	ddev drush $(CMD)
+	docker-compose exec php drush $(CMD)
 
 cr: ## Clear Drupal cache
-	ddev drush cache:rebuild
+	docker-compose exec php drush cache:rebuild
 
 install-drupal: ## Install Drupal
-	ddev drush site:install standard --yes --site-name="Mantle2" --account-name=admin --account-pass=admin
+	docker-compose exec php drush site:install standard --yes --site-name="Mantle2" --account-name=admin --account-pass=admin --db-url=pgsql://earth:earth@postgres/earth
 
 enable-modules: ## Enable custom modules
-	ddev drush en mantle_core -y
+	docker-compose exec php drush en earth_api redis simple_oauth tfa advancedqueue -y
+
+# AI and queue commands
+test-ai: ## Test AI provider integration
+	docker-compose exec php drush earth-api:test-ai
+
+run-queues: ## Process background queues
+	docker-compose exec php drush advancedqueue:queue:process default
 
 # Cleanup commands
 clean: ## Clean up temporary files and caches
-	rm -rf web/sites/default/files/php/twig/*
-	rm -rf coverage/
-	ddev drush cache:rebuild
+	docker-compose down
+	docker volume prune -f
+	docker system prune -f
 
 # Composer commands
 composer-install: ## Install composer dependencies
-	ddev composer install
+	docker-compose exec php composer install
 
 composer-update: ## Update composer dependencies
-	ddev composer update
+	docker-compose exec php composer update
 
 # Quality assurance
 qa: lint analyze test ## Run all quality assurance checks
 
 # Production build
 build: ## Build for production
-	composer install --no-dev --optimize-autoloader
-	ddev drush cache:rebuild
+	docker-compose exec php composer install --no-dev --optimize-autoloader
+	docker-compose exec php drush cache:rebuild
 
 # Development reset
 reset: ## Reset development environment
-	ddev stop
-	ddev start
+	make down
+	make up
 	make cr
+
+# Fetch OpenAPI specification
+fetch-openapi: ## Download OpenAPI specification from earth-app.com
+	./scripts/fetch-openapi.sh

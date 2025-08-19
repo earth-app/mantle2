@@ -20,7 +20,15 @@
         "drupal/core-recipe-unpack": "^11.2",
         "drupal/core-project-message": "^11.2",
         "drupal/core-recommended": "^11.2",
-        "drush/drush": "^13"
+        "drush/drush": "^13",
+        "drupal/ai": "^1.0@alpha",
+        "drupal/redis": "^1.7",
+        "drupal/simple_oauth": "^5.2",
+        "drupal/tfa": "^2.0@alpha",
+        "drupal/advancedqueue": "^1.4",
+        "drupal/serialization": "^1.0",
+        "predis/predis": "^2.0",
+        "symfony/validator": "^6.0"
     },
     "require-dev": {
         "drupal/core-dev": "^11.2",

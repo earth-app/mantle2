@@ -1,77 +1,81 @@
 #!/bin/bash
 
 # Mantle2 Development Setup Script
-# This script sets up the development environment
+# This script sets up the development environment using Docker Compose
 
 set -e
 
 echo "🚀 Setting up Mantle2 Development Environment"
 echo "=============================================="
 
-# Check if DDEV is available
-if command -v ddev &> /dev/null; then
-    echo "✓ DDEV found"
-    USE_DDEV=true
-else
-    echo "⚠ DDEV not found - using manual setup"
-    USE_DDEV=false
+# Check if Docker and Docker Compose are available
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker not found. Please install Docker first."
+    exit 1
 fi
 
-# Function to run commands with or without DDEV
-run_cmd() {
-    if [ "$USE_DDEV" = true ]; then
-        ddev exec "$1"
-    else
-        eval "$1"
-    fi
-}
-
-# Start DDEV if available
-if [ "$USE_DDEV" = true ]; then
-    echo "📦 Starting DDEV..."
-    ddev start
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ Docker Compose not found. Please install Docker Compose first."
+    exit 1
 fi
+
+echo "✓ Docker and Docker Compose found"
+
+# Copy environment file if it doesn't exist
+if [ ! -f ".env" ]; then
+    echo "📋 Creating .env file from template..."
+    cp .env.example .env
+    echo "✓ .env file created. Please review and update as needed."
+fi
+
+# Build and start services
+echo "🏗️  Building Docker containers..."
+docker-compose build
+
+echo "🚀 Starting services..."
+docker-compose up -d
+
+# Wait for services to be ready
+echo "⏳ Waiting for services to start..."
+sleep 10
+
+# Check if services are running
+echo "🔍 Checking service status..."
+docker-compose ps
 
 # Install Composer dependencies
 echo "📦 Installing Composer dependencies..."
-if [ "$USE_DDEV" = true ]; then
-    ddev composer install
-else
-    composer install
-fi
+docker-compose exec php composer install
+
+# Fetch OpenAPI specification
+echo "📥 Fetching OpenAPI specification..."
+./scripts/fetch-openapi.sh
 
 # Set up Drupal if not already installed
 echo "🏗️  Checking Drupal installation..."
-if [ ! -f "web/sites/default/settings.php" ] || ! grep -q "database" web/sites/default/settings.php; then
+if ! docker-compose exec php drush status --field=bootstrap 2>/dev/null | grep -q "Successful"; then
     echo "🏗️  Installing Drupal..."
-    
-    if [ "$USE_DDEV" = true ]; then
-        ddev drush site:install standard --yes --site-name="Mantle2" --account-name=admin --account-pass=admin
-    else
-        echo "⚠ Please configure your database in web/sites/default/settings.php"
-        echo "⚠ Then run: vendor/bin/drush site:install standard --yes --site-name=\"Mantle2\""
-    fi
+    docker-compose exec php drush site:install standard --yes \
+        --site-name="Mantle2" \
+        --account-name=admin \
+        --account-pass=admin \
+        --db-url=pgsql://earth:earth@postgres/earth
 else
     echo "✓ Drupal already installed"
 fi
 
 # Enable custom modules
 echo "🔧 Enabling custom modules..."
-if [ "$USE_DDEV" = true ]; then
-    ddev drush en mantle_core -y || echo "⚠ Could not enable mantle_core module (this is normal if Drupal is not fully installed)"
-else
-    echo "⚠ Please enable modules manually: vendor/bin/drush en mantle_core -y"
-fi
+docker-compose exec php drush en earth_api redis simple_oauth tfa advancedqueue -y || echo "⚠ Some modules may not be available yet"
+
+# Clear cache
+echo "🧹 Clearing cache..."
+docker-compose exec php drush cache:rebuild
 
 # Set file permissions
 echo "🔐 Setting file permissions..."
-if [ -d "web/sites/default/files" ]; then
-    chmod -R 755 web/sites/default/files
-fi
-
-if [ -f "web/sites/default/settings.php" ]; then
-    chmod 644 web/sites/default/settings.php
-fi
+docker-compose exec php chmod -R 755 /var/www/html/web/sites/default/files 2>/dev/null || true
+docker-compose exec php chmod 644 /var/www/html/web/sites/default/settings.php 2>/dev/null || true
 
 # Create private files directory
 echo "📁 Creating private files directory..."
@@ -81,27 +85,24 @@ chmod 755 private
 echo ""
 echo "✅ Setup completed!"
 echo ""
-
-if [ "$USE_DDEV" = true ]; then
-    echo "🌐 Your site is available at: https://mantle2.ddev.site"
-    echo ""
-    echo "Useful commands:"
-    echo "  ddev ssh          - Access the web container"
-    echo "  ddev drush status - Check Drupal status"
-    echo "  ddev logs         - View logs"
-    echo "  ddev composer     - Run composer commands"
-else
-    echo "🌐 Configure your web server to point to the 'web' directory"
-    echo ""
-    echo "Next steps:"
-    echo "  1. Configure your database in web/sites/default/settings.php"
-    echo "  2. Run: vendor/bin/drush site:install"
-    echo "  3. Run: vendor/bin/drush en mantle_core -y"
-fi
-
+echo "🌐 Your site is available at: http://localhost:8080"
+echo ""
+echo "Useful commands:"
+echo "  make ssh          - Access the PHP container"
+echo "  make drush CMD    - Run drush commands"
+echo "  make logs         - View logs"
+echo "  make test         - Run tests"
+echo "  make qa           - Run quality assurance checks"
+echo ""
+echo "Services:"
+echo "  Web:      http://localhost:8080"
+echo "  MinIO:    http://localhost:9001 (admin: minio/miniosecret)"
+echo "  Postgres: localhost:5432 (earth/earth)"
+echo "  Redis:    localhost:6379"
 echo ""
 echo "Development commands:"
-echo "  composer lint     - Check code style"
-echo "  composer lint-fix - Fix code style issues"
-echo "  composer analyze  - Run static analysis"
-echo "  composer test     - Run unit tests"
+echo "  make lint         - Check code style"
+echo "  make lint-fix     - Fix code style issues"
+echo "  make analyze      - Run static analysis"
+echo "  make test         - Run unit tests"
+echo "  make test-contract - Run contract tests"

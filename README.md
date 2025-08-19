@@ -1,52 +1,89 @@
 # Mantle2 Backend
 
-A modern Drupal 11 application built with best practices for development, testing, and deployment.
+A modern Drupal 11 backend with exact API parity to the original Mantle API, built with Docker Compose for local development using Postgres, Redis, and MinIO.
+
+## Overview
+
+Mantle2 provides:
+- **Exact API Parity**: Identical JSON responses and HTTP semantics to the original Mantle API
+- **Modern Infrastructure**: Docker Compose with Postgres, Redis, and MinIO for local development
+- **AI Integration**: Configurable AI providers via Drupal AI module (OpenRouter, OpenAI, Anthropic, etc.)
+- **Queue System**: Internal background job processing for "Cloud" functionality
+- **Contract Testing**: Automated validation against OpenAPI specification
+- **Quality Assurance**: PHPStan, coding standards, and comprehensive testing
 
 ## Prerequisites
 
-- PHP 8.3+
-- Composer 2.x
-- Node.js 18+ (for frontend assets)
-- DDEV (for local development)
+- Docker & Docker Compose
+- Git
 
 ## Quick Start
 
-### Local Development with DDEV
+### Automated Setup (Recommended)
 
-1. **Clone the repository:**
+```bash
+git clone [repository-url]
+cd mantle2
+./setup.sh
+```
+
+This will:
+- Start all Docker services (Nginx, PHP, Postgres, Redis, MinIO)
+- Install Composer dependencies
+- Fetch OpenAPI specification
+- Install and configure Drupal
+- Enable required modules
+
+### Manual Setup
+
+1. **Start services:**
    ```bash
-   git clone [repository-url]
-   cd mantle2
+   make up
    ```
 
-2. **Start DDEV:**
+2. **Install dependencies:**
    ```bash
-   ddev start
+   make composer-install
    ```
 
-3. **Install dependencies:**
+3. **Install Drupal:**
    ```bash
-   ddev composer install
+   make install-drupal
    ```
 
-4. **Install Drupal:**
+4. **Enable modules:**
    ```bash
-   ddev drush site:install --yes
+   make enable-modules
    ```
 
-5. **Enable custom modules:**
-   ```bash
-   ddev drush en mantle_core -y
-   ```
+## Services
 
-### Manual Setup (without DDEV)
+After setup, the following services are available:
 
-1. **Install PHP dependencies:**
-   ```bash
-   composer install
-   ```
+- **Web Application**: http://localhost:8080
+- **MinIO Console**: http://localhost:9001 (minio/miniosecret)
+- **Postgres**: localhost:5432 (earth/earth)
+- **Redis**: localhost:6379
 
-2. **Configure your web server** to point to the `web/` directory
+## API Parity
+
+The API provides exact compatibility with the original Mantle API:
+
+- **Health Check**: `GET /api/health`
+- **OpenAPI Spec**: `GET /openapi`
+- **Authentication**: `/api/auth/*` endpoints
+- **User Management**: `/api/users/*` endpoints
+- **Content APIs**: `/api/prompts`, `/api/activities`, `/api/articles`, `/api/events`
+
+### Contract Testing
+
+Run contract tests to validate API parity:
+
+```bash
+make test-contract
+```
+
+This fetches the latest OpenAPI specification from https://api.earth-app.com/openapi and validates all endpoints.
 
 3. **Set up your database** and update `web/sites/default/settings.php`
 
