@@ -19,7 +19,18 @@
         "drupal/core-composer-scaffold": "^11.2",
         "drupal/core-recipe-unpack": "^11.2",
         "drupal/core-project-message": "^11.2",
-        "drupal/core-recommended": "^11.2"
+        "drupal/core-recommended": "^11.2",
+        "drush/drush": "^13"
+    },
+    "require-dev": {
+        "drupal/core-dev": "^11.2",
+        "phpunit/phpunit": "^10",
+        "phpstan/phpstan": "^1.11",
+        "phpstan/phpstan-drupal": "^1.2",
+        "mglaman/phpstan-drupal": "^1.2",
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "drupal/coder": "^8.3",
+        "phpcompatibility/php-compatibility": "^9.3"
     },
     "conflict": {
         "drupal/drupal": "*"
@@ -98,5 +109,25 @@
                 "      composer remove drupal/core-project-message"
             ]
         }
+    },
+    "scripts": {
+        "test": [
+            "phpunit --configuration web/core/phpunit.xml.dist web/modules/custom"
+        ],
+        "lint": [
+            "phpcs --standard=Drupal,DrupalPractice web/modules/custom web/themes/custom"
+        ],
+        "lint-fix": [
+            "phpcbf --standard=Drupal,DrupalPractice web/modules/custom web/themes/custom"
+        ],
+        "analyze": [
+            "phpstan analyze web/modules/custom --level=1"
+        ],
+        "post-install-cmd": [
+            "@composer drupal:scaffold"
+        ],
+        "post-update-cmd": [
+            "@composer drupal:scaffold"
+        ]
     }
 }

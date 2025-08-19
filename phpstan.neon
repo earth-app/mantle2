@@ -1,0 +1,16 @@
+parameters:
+    level: 1
+    paths:
+        - web/modules/custom
+        - web/themes/custom
+    excludePaths:
+        - web/modules/custom/*/tests/*
+    drupal:
+        drupal_root: web
+    ignoreErrors:
+        - '#\Drupal calls should be avoided in classes, use dependency injection instead#'
+    bootstrapFiles:
+        - web/core/tests/bootstrap.php
+includes:
+    - vendor/mglaman/phpstan-drupal/extension.neon
+    - vendor/phpstan/phpstan-drupal/extension.neon

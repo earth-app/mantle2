@@ -1,0 +1,4 @@
+services:
+  mantle_core.manager:
+    class: Drupal\mantle_core\MantleCoreManager
+    arguments: ['@entity_type.manager', '@config.factory']

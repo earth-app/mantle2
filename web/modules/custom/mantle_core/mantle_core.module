@@ -1,0 +1,18 @@
+<?php
+
+/**
+ * @file
+ * Main module file for Mantle Core.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+ * Implements hook_help().
+ */
+function mantle_core_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    case 'help.page.mantle_core':
+      return '<p>' . t('Core functionality for the Mantle2 application.') . '</p>';
+  }
+}

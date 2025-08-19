@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="mantle2">
+    <description>Code standards for Mantle2 project</description>
+    
+    <!-- Use Drupal coding standards -->
+    <rule ref="Drupal"/>
+    <rule ref="DrupalPractice"/>
+    
+    <!-- Include all PHP files in custom modules and themes -->
+    <file>web/modules/custom</file>
+    <file>web/themes/custom</file>
+    
+    <!-- Exclude test files from some rules -->
+    <rule ref="Drupal.Commenting.FunctionComment.Missing">
+        <exclude-pattern>*/tests/*</exclude-pattern>
+    </rule>
+    
+    <!-- Show progress and use colors -->
+    <arg name="colors"/>
+    <arg value="p"/>
+    
+    <!-- Include file extensions -->
+    <arg name="extensions" value="php,module,inc,install,test,profile,theme,css,info,txt,md,yml"/>
+</ruleset>

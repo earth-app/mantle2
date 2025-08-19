@@ -1,0 +1,23 @@
+name: Mantle Theme
+type: theme
+description: 'Custom theme for the Mantle2 application'
+package: Mantle
+version: 1.0.0
+core_version_requirement: ^11
+base theme: olivero
+
+libraries:
+  - mantle_theme/global-styling
+
+regions:
+  header: Header
+  primary_menu: 'Primary menu'
+  secondary_menu: 'Secondary menu'
+  page_top: 'Page top'
+  page_bottom: 'Page bottom'
+  highlighted: Highlighted
+  breadcrumb: Breadcrumb
+  content: Content
+  sidebar_first: 'Sidebar first'
+  sidebar_second: 'Sidebar second'
+  footer: Footer

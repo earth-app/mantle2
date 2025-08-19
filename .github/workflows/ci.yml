@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        php-version: [8.3]
+        
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: drupal
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-version }}
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, dom, filter, gd, iconv, json, mbstring, pdo
+        coverage: xdebug
+
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-
+
+    - name: Install dependencies
+      run: |
+        composer install --prefer-dist --no-progress --no-interaction
+        
+    - name: Setup Drupal
+      run: |
+        cp web/sites/default/default.settings.php web/sites/default/settings.php
+        chmod 666 web/sites/default/settings.php
+        mkdir -p web/sites/default/files
+        chmod -R 777 web/sites/default/files
+        
+    - name: Install Drupal
+      run: |
+        vendor/bin/drush site:install standard --yes \
+          --db-url="mysql://root@127.0.0.1:3306/drupal" \
+          --site-name="Mantle2 CI" \
+          --account-name=admin \
+          --account-pass=admin
+          
+    - name: Enable custom modules
+      run: |
+        vendor/bin/drush en mantle_core -y
+        
+    - name: Run code style checks
+      run: |
+        composer lint
+        
+    - name: Run static analysis
+      run: |
+        composer analyze
+        
+    - name: Run unit tests
+      run: |
+        composer test
+        
+    - name: Check Drupal status
+      run: |
+        vendor/bin/drush status

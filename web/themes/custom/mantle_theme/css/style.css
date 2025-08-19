@@ -1,0 +1,22 @@
+/**
+ * @file
+ * Custom styles for Mantle2 theme.
+ */
+
+/* Custom variables */
+:root {
+  --mantle-primary-color: #2c3e50;
+  --mantle-secondary-color: #3498db;
+  --mantle-accent-color: #e74c3c;
+}
+
+/* Global styles */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.mantle-branding {
+  color: var(--mantle-primary-color);
+}
+
+/* Add custom styles here */

@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www/html/web
+    volumes:
+      - ./web/sites/default/files:/var/www/html/web/sites/default/files
+      - ./private:/var/www/html/private
+    depends_on:
+      - db
+    networks:
+      - mantle-network
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mantle2
+      MYSQL_USER: drupal
+      MYSQL_PASSWORD: drupal
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - mantle-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - mantle-network
+
+volumes:
+  db_data:
+
+networks:
+  mantle-network:
+    driver: bridge
