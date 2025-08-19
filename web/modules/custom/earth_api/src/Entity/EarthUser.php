@@ -81,6 +81,16 @@ class EarthUser extends ContentEntityBase {
         'text_processing' => 0,
       ]);
 
+    // Password salt field  
+    $fields['password_salt'] = BaseFieldDefinition::create('string')
+      ->setLabel(t('Password Salt'))
+      ->setDescription(t('The salt used for password hashing'))
+      ->setRequired(TRUE)
+      ->setSettings([
+        'max_length' => 255,
+        'text_processing' => 0,
+      ]);
+
     // First name
     $fields['first_name'] = BaseFieldDefinition::create('string')
       ->setLabel(t('First Name'))
@@ -196,16 +206,6 @@ class EarthUser extends ContentEntityBase {
       ->setLabel(t('Last Login'))
       ->setDescription(t('The time when the user last logged in'))
       ->setDisplayConfigurable('view', TRUE);
-
-    // Session token
-    $fields['session_token'] = BaseFieldDefinition::create('string')
-      ->setLabel(t('Session Token'))
-      ->setDescription(t('The current session token'))
-      ->setSettings([
-        'max_length' => 37,
-        'text_processing' => 0,
-      ])
-      ->setDefaultValue('');
 
     return $fields;
   }

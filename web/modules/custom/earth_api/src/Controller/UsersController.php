@@ -102,17 +102,17 @@ class UsersController extends ControllerBase {
       ], 401);
     }
 
-    // Create session token
-    $session_token = $auth_manager->createSessionToken($user);
+    // Use the loginUser method that creates session and updates last login
+    $login_response = $auth_manager->loginUser($username);
+    
+    if (!$login_response) {
+      return new JsonResponse([
+        'code' => 401,
+        'message' => 'Unauthorized'
+      ], 401);
+    }
 
-    // Return login response
-    $data = [
-      'id' => $user->id(),
-      'username' => $user->getUsername(),
-      'session_token' => $session_token,
-    ];
-
-    return new JsonResponse($data);
+    return new JsonResponse($login_response);
   }
 
   /**
@@ -130,20 +130,20 @@ class UsersController extends ControllerBase {
 
     $token = substr($authorization, 7);
     $auth_manager = \Drupal::service('earth_api.auth_manager');
-    $user = $auth_manager->validateSessionToken($token);
+    $user = $auth_manager->getUserByToken($token);
 
-    if (!$user) {
+    if (!$user || $user === 'admin') {
       return new JsonResponse([
         'code' => 401,
         'message' => 'Unauthorized'
       ], 401);
     }
 
-    // Invalidate token
-    $auth_manager->invalidateSessionToken($token);
+    // Remove the token
+    $auth_manager->removeToken($token);
 
-    // Get user activities
-    $activities = $auth_manager->getUserActivities($user);
+    // Get user activities (placeholder)
+    $activities = [];
 
     $userData = [
       'id' => $user->id(),

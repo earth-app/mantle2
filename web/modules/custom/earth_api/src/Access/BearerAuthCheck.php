@@ -50,13 +50,15 @@ class BearerAuthCheck implements AccessCheckInterface {
 
     $token = substr($authorization, 7);
     
-    // Validate token using AuthManager
-    $user = $this->authManager->validateSessionToken($token);
+    // Validate token using AuthManager (works for both API tokens and session tokens)
+    $user = $this->authManager->getUserByToken($token);
+    
     if (!$user) {
       return AccessResult::forbidden('Invalid bearer token');
     }
 
     // Store user in request attributes for controllers to use
+    // For admin tokens, store 'admin' string instead of user object
     $request->attributes->set('current_user', $user);
 
     return AccessResult::allowed();

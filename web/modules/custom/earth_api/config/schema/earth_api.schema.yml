@@ -1,0 +1,8 @@
+earth_api.settings:
+  type: config_object
+  label: 'Earth API Settings'
+  mapping:
+    admin_api_key:
+      type: string
+      label: 'Admin API Key'
+      description: 'The admin API key for elevated privileges'

@@ -50,17 +50,13 @@ class AdminAccessCheck implements AccessCheckInterface {
 
     $token = substr($authorization, 7);
     
-    // Validate token and check admin status
-    $user = $this->authManager->validateSessionToken($token);
-    if (!$user) {
-      return AccessResult::forbidden('Invalid bearer token');
-    }
-
-    if (!$this->authManager->isAdmin($user)) {
+    // Check if token is admin (either admin API key or admin user)
+    if (!$this->authManager->isAdmin($token)) {
       return AccessResult::forbidden('Admin access required');
     }
 
-    // Store user in request attributes for controllers to use
+    // Get user (or admin) for context
+    $user = $this->authManager->getUserByToken($token);
     $request->attributes->set('current_user', $user);
 
     return AccessResult::allowed();
