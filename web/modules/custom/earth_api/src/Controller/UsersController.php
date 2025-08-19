@@ -71,7 +71,6 @@ class UsersController extends ControllerBase {
    * User login endpoint.
    */
   public function login(Request $request) {
-    // TODO: Implement proper Basic Auth validation
     $authorization = $request->headers->get('Authorization');
     
     if (!$authorization || !str_starts_with($authorization, 'Basic ')) {
@@ -81,11 +80,36 @@ class UsersController extends ControllerBase {
       ], 401);
     }
 
+    // Decode Basic Auth
+    $credentials = base64_decode(substr($authorization, 6));
+    if (!$credentials || !str_contains($credentials, ':')) {
+      return new JsonResponse([
+        'code' => 401,
+        'message' => 'Unauthorized'
+      ], 401);
+    }
+
+    [$username, $password] = explode(':', $credentials, 2);
+
+    // Get AuthManager service
+    $auth_manager = \Drupal::service('earth_api.auth_manager');
+    $user = $auth_manager->authenticateUser($username, $password);
+
+    if (!$user) {
+      return new JsonResponse([
+        'code' => 401,
+        'message' => 'Unauthorized'
+      ], 401);
+    }
+
+    // Create session token
+    $session_token = $auth_manager->createSessionToken($user);
+
     // Return login response
     $data = [
-      'id' => 'eb9137b1272938',
-      'username' => 'johndoe',
-      'session_token' => '4bHN3nxwb21bd1sm109s1nan28xm1bab2Js18',
+      'id' => $user->id(),
+      'username' => $user->getUsername(),
+      'session_token' => $session_token,
     ];
 
     return new JsonResponse($data);
@@ -95,47 +119,54 @@ class UsersController extends ControllerBase {
    * User logout endpoint.
    */
   public function logout(Request $request) {
-    $sampleUser = [
-      'id' => 'eb9137b1272938',
-      'username' => 'johndoe',
-      'created_at' => '2025-01-15T10:00:00Z',
-      'updated_at' => '2025-01-15T12:00:00Z',
-      'last_login' => '2025-01-15T11:30:00Z',
+    $authorization = $request->headers->get('Authorization');
+    
+    if (!$authorization || !str_starts_with($authorization, 'Bearer ')) {
+      return new JsonResponse([
+        'code' => 401,
+        'message' => 'Unauthorized'
+      ], 401);
+    }
+
+    $token = substr($authorization, 7);
+    $auth_manager = \Drupal::service('earth_api.auth_manager');
+    $user = $auth_manager->validateSessionToken($token);
+
+    if (!$user) {
+      return new JsonResponse([
+        'code' => 401,
+        'message' => 'Unauthorized'
+      ], 401);
+    }
+
+    // Invalidate token
+    $auth_manager->invalidateSessionToken($token);
+
+    // Get user activities
+    $activities = $auth_manager->getUserActivities($user);
+
+    $userData = [
+      'id' => $user->id(),
+      'username' => $user->getUsername(),
+      'created_at' => date('c', $user->getCreatedTime()),
+      'updated_at' => date('c', $user->getChangedTime()),
+      'last_login' => date('c', $user->getLastLogin()),
       'account' => [
         'type' => 'com.earthapp.account.Account',
-        'id' => 'account123',
-        'username' => 'johndoe',
-        'email' => 'johndoe@example.com',
-        'country' => 'US',
-        'phoneNumber' => 1234567890,
-        'visibility' => [
-          'name' => 'PUBLIC',
-          'bio' => 'PUBLIC',
-          'phone_number' => 'PRIVATE',
-          'country' => 'PUBLIC',
-          'email' => 'CIRCLE',
-          'address' => 'PRIVATE',
-          'activities' => 'PUBLIC',
-          'events' => 'PUBLIC',
-          'friends' => 'MUTUAL',
-          'last_login' => 'CIRCLE',
-          'account_type' => 'PUBLIC',
-          'circle' => 'CIRCLE',
-        ],
+        'id' => $user->id(),
+        'username' => $user->getUsername(),
+        'email' => $user->getEmail(),
+        'country' => $user->get('country')->value ?? '',
+        'phoneNumber' => $user->get('phone_number')->value ?? 0,
+        'visibility' => $user->getVisibilitySettings(),
       ],
-      'activities' => [
-        [
-          'id' => 'hiking',
-          'name' => 'Hiking',
-          'types' => ['HOBBY', 'SPORT'],
-        ],
-      ],
+      'activities' => $activities,
     ];
 
     $data = [
       'message' => 'Logout successful',
-      'session_token' => '4bHN3nxwb21bd1sm109s1nan28xm1bab2Js18',
-      'user' => $sampleUser,
+      'session_token' => $token,
+      'user' => $userData,
     ];
 
     return new JsonResponse($data);
@@ -154,40 +185,40 @@ class UsersController extends ControllerBase {
       ], 400);
     }
 
-    $sampleUser = [
-      'id' => 'eb9137b1272938',
-      'username' => $content['username'],
-      'created_at' => date('c'),
-      'updated_at' => date('c'),
-      'last_login' => date('c'),
+    $auth_manager = \Drupal::service('earth_api.auth_manager');
+    $user = $auth_manager->createUser($content);
+
+    if (!$user) {
+      return new JsonResponse([
+        'code' => 400,
+        'message' => 'Bad Request'
+      ], 400);
+    }
+
+    // Create session token
+    $session_token = $auth_manager->createSessionToken($user);
+
+    $userData = [
+      'id' => $user->id(),
+      'username' => $user->getUsername(),
+      'created_at' => date('c', $user->getCreatedTime()),
+      'updated_at' => date('c', $user->getChangedTime()),
+      'last_login' => date('c', $user->getLastLogin()),
       'account' => [
         'type' => 'com.earthapp.account.Account',
-        'id' => 'account123',
-        'username' => $content['username'],
-        'email' => $content['email'] ?? '',
-        'country' => '',
-        'phoneNumber' => 0,
-        'visibility' => [
-          'name' => 'PUBLIC',
-          'bio' => 'PUBLIC',
-          'phone_number' => 'PRIVATE',
-          'country' => 'PUBLIC',
-          'email' => 'CIRCLE',
-          'address' => 'PRIVATE',
-          'activities' => 'MUTUAL',
-          'events' => 'MUTUAL',
-          'friends' => 'MUTUAL',
-          'last_login' => 'CIRCLE',
-          'account_type' => 'PUBLIC',
-          'circle' => 'CIRCLE',
-        ],
+        'id' => $user->id(),
+        'username' => $user->getUsername(),
+        'email' => $user->getEmail(),
+        'country' => $user->get('country')->value ?? '',
+        'phoneNumber' => $user->get('phone_number')->value ?? 0,
+        'visibility' => $user->getVisibilitySettings(),
       ],
       'activities' => [],
     ];
 
     $data = [
-      'user' => $sampleUser,
-      'session_token' => '4bHN3nxwb21bd1sm109s1nan28xm1bab2Js18',
+      'user' => $userData,
+      'session_token' => $session_token,
     ];
 
     return new JsonResponse($data, 201);
@@ -198,49 +229,82 @@ class UsersController extends ControllerBase {
    */
   public function current(Request $request) {
     $method = $request->getMethod();
+    $user = $request->attributes->get('current_user');
 
-    $sampleUser = [
-      'id' => 'eb9137b1272938',
-      'username' => 'johndoe',
-      'created_at' => '2025-01-15T10:00:00Z',
-      'updated_at' => '2025-01-15T12:00:00Z',
-      'last_login' => '2025-01-15T11:30:00Z',
-      'account' => [
-        'type' => 'com.earthapp.account.Account',
-        'id' => 'account123',
-        'username' => 'johndoe',
-        'email' => 'johndoe@example.com',
-        'country' => 'US',
-        'phoneNumber' => 1234567890,
-        'visibility' => [
-          'name' => 'PUBLIC',
-          'bio' => 'PUBLIC',
-          'phone_number' => 'PRIVATE',
-          'country' => 'PUBLIC',
-          'email' => 'CIRCLE',
-          'address' => 'PRIVATE',
-          'activities' => 'PUBLIC',
-          'events' => 'PUBLIC',
-          'friends' => 'MUTUAL',
-          'last_login' => 'CIRCLE',
-          'account_type' => 'PUBLIC',
-          'circle' => 'CIRCLE',
-        ],
-      ],
-      'activities' => [
-        [
-          'id' => 'hiking',
-          'name' => 'Hiking',
-          'types' => ['HOBBY', 'SPORT'],
-        ],
-      ],
-    ];
+    if (!$user) {
+      return new JsonResponse([
+        'code' => 401,
+        'message' => 'Unauthorized'
+      ], 401);
+    }
 
     if ($method === 'DELETE') {
+      // Delete user account
+      $user->delete();
       return new JsonResponse(null, 204);
     }
 
-    return new JsonResponse($sampleUser);
+    if ($method === 'PATCH') {
+      // Update user data
+      $content = json_decode($request->getContent(), TRUE);
+      if ($content) {
+        if (isset($content['username'])) {
+          $user->setUsername($content['username']);
+        }
+        if (isset($content['email'])) {
+          $user->setEmail($content['email']);
+        }
+        if (isset($content['firstName'])) {
+          $user->set('first_name', $content['firstName']);
+        }
+        if (isset($content['lastName'])) {
+          $user->set('last_name', $content['lastName']);
+        }
+        if (isset($content['address'])) {
+          $user->set('address', $content['address']);
+        }
+        if (isset($content['bio'])) {
+          $user->set('bio', $content['bio']);
+        }
+        if (isset($content['country'])) {
+          $user->set('country', $content['country']);
+        }
+        if (isset($content['phoneNumber'])) {
+          $user->set('phone_number', $content['phoneNumber']);
+        }
+        
+        $user->set('changed', time());
+        $user->save();
+      }
+    }
+
+    return new JsonResponse($this->buildUserResponse($user));
+  }
+
+  /**
+   * Build user response data.
+   */
+  private function buildUserResponse($user) {
+    $auth_manager = \Drupal::service('earth_api.auth_manager');
+    $activities = $auth_manager->getUserActivities($user);
+
+    return [
+      'id' => $user->id(),
+      'username' => $user->getUsername(),
+      'created_at' => date('c', $user->getCreatedTime()),
+      'updated_at' => date('c', $user->getChangedTime()),
+      'last_login' => date('c', $user->getLastLogin()),
+      'account' => [
+        'type' => 'com.earthapp.account.Account',
+        'id' => $user->id(),
+        'username' => $user->getUsername(),
+        'email' => $user->getEmail(),
+        'country' => $user->get('country')->value ?? '',
+        'phoneNumber' => $user->get('phone_number')->value ?? 0,
+        'visibility' => $user->getVisibilitySettings(),
+      ],
+      'activities' => $activities,
+    ];
   }
 
   /**

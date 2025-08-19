@@ -13,7 +13,7 @@ services:
 
   earth_api.auth_manager:
     class: Drupal\earth_api\Service\AuthManager
-    arguments: ['@user.auth', '@entity_type.manager', '@database']
+    arguments: ['@entity_type.manager', '@database', '@logger.factory']
 
   earth_api.ai_provider:
     class: Drupal\earth_api\Service\AiProviderManager
@@ -26,10 +26,12 @@ services:
   # Access check services
   earth_api.bearer_auth_check:
     class: Drupal\earth_api\Access\BearerAuthCheck
+    arguments: ['@earth_api.auth_manager']
     tags:
       - { name: access_check, applies_to: _custom_access }
 
   earth_api.admin_access_check:
     class: Drupal\earth_api\Access\AdminAccessCheck
+    arguments: ['@earth_api.auth_manager']
     tags:
       - { name: access_check, applies_to: _custom_access }
