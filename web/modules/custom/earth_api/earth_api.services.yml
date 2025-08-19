@@ -22,3 +22,14 @@ services:
   earth_api.queue_manager:
     class: Drupal\earth_api\Service\QueueManager
     arguments: ['@queue', '@advancedqueue.job_runner']
+
+  # Access check services
+  earth_api.bearer_auth_check:
+    class: Drupal\earth_api\Access\BearerAuthCheck
+    tags:
+      - { name: access_check, applies_to: _custom_access }
+
+  earth_api.admin_access_check:
+    class: Drupal\earth_api\Access\AdminAccessCheck
+    tags:
+      - { name: access_check, applies_to: _custom_access }

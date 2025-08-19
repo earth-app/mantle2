@@ -1,96 +1,288 @@
-# Earth API Routes
-# These routes provide exact API parity with the original Mantle API
+# Earth API Routes - Exact API Parity with Original Mantle
+# All routes match the v1 API structure from the OpenAPI specification
 
-# Health check endpoint
-earth_api.health:
-  path: '/api/health'
+# General endpoints
+earth_api.v1.hello:
+  path: '/v1/hello'
   defaults:
-    _controller: '\Drupal\earth_api\Controller\HealthController::check'
+    _controller: '\Drupal\earth_api\Controller\GeneralController::hello'
   methods: [GET]
   requirements:
     _access: 'TRUE'
 
-# OpenAPI specification endpoint
-earth_api.openapi:
-  path: '/openapi'
+earth_api.v1.info:
+  path: '/v1/info'
   defaults:
-    _controller: '\Drupal\earth_api\Controller\OpenApiController::spec'
+    _controller: '\Drupal\earth_api\Controller\GeneralController::info'
   methods: [GET]
   requirements:
     _access: 'TRUE'
 
-# Authentication endpoints
-earth_api.auth.login:
-  path: '/api/auth/login'
+earth_api.v1.shard_info:
+  path: '/v1/shard_info'
   defaults:
-    _controller: '\Drupal\earth_api\Controller\AuthController::login'
-  methods: [POST]
+    _controller: '\Drupal\earth_api\Controller\GeneralController::shardInfo'
+  methods: [GET]
   requirements:
     _access: 'TRUE'
 
-earth_api.auth.logout:
-  path: '/api/auth/logout'
+earth_api.v1.health_check:
+  path: '/v1/health_check'
   defaults:
-    _controller: '\Drupal\earth_api\Controller\AuthController::logout'
-  methods: [POST]
+    _controller: '\Drupal\earth_api\Controller\GeneralController::healthCheck'
+  methods: [GET]
   requirements:
-    _access: 'TRUE'
-
-earth_api.auth.refresh:
-  path: '/api/auth/refresh'
-  defaults:
-    _controller: '\Drupal\earth_api\Controller\AuthController::refresh'
-  methods: [POST]
-  requirements:
-    _access: 'TRUE'
+    _custom_access: '\Drupal\earth_api\Access\AdminAccessCheck::access'
 
 # User endpoints
-earth_api.users.me:
-  path: '/api/users/me'
+earth_api.v1.users.list:
+  path: '/v1/users'
   defaults:
-    _controller: '\Drupal\earth_api\Controller\UserController::me'
+    _controller: '\Drupal\earth_api\Controller\UsersController::list'
   methods: [GET]
   requirements:
-    _custom_access: '\Drupal\earth_api\Controller\UserController::accessCheck'
+    _access: 'TRUE'
 
-earth_api.users.profile:
-  path: '/api/users/{id}'
+earth_api.v1.users.login:
+  path: '/v1/users/login'
   defaults:
-    _controller: '\Drupal\earth_api\Controller\UserController::profile'
+    _controller: '\Drupal\earth_api\Controller\UsersController::login'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.v1.users.logout:
+  path: '/v1/users/logout'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::logout'
+  methods: [POST]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.users.create:
+  path: '/v1/users/create'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::create'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.v1.users.current:
+  path: '/v1/users/current'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::current'
+  methods: [GET, PATCH, DELETE]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.users.current.field_privacy:
+  path: '/v1/users/current/field_privacy'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::fieldPrivacy'
+  methods: [PATCH]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.users.current.profile_photo:
+  path: '/v1/users/current/profile_photo'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::profilePhoto'
+  methods: [GET, PUT]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.users.current.account_type:
+  path: '/v1/users/current/account_type'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::accountType'
+  methods: [PUT]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\AdminAccessCheck::access'
+
+earth_api.v1.users.current.activities.add:
+  path: '/v1/users/current/activities/add'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::addActivity'
+  methods: [PUT]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.users.current.activities.remove:
+  path: '/v1/users/current/activities/remove'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::removeActivity'
+  methods: [DELETE]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.users.current.activities.set:
+  path: '/v1/users/current/activities/set'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::setActivities'
+  methods: [PATCH]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.users.current.activities.recommend:
+  path: '/v1/users/current/activities/recommend'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\UsersController::recommendActivities'
   methods: [GET]
   requirements:
-    _custom_access: '\Drupal\earth_api\Controller\UserController::accessCheck'
-    id: '\d+'
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
 
-# Content endpoints (placeholders for now)
-earth_api.prompts.list:
-  path: '/api/prompts'
-  defaults:
-    _controller: '\Drupal\earth_api\Controller\PromptsController::list'
-  methods: [GET]
-  requirements:
-    _custom_access: '\Drupal\earth_api\Controller\PromptsController::accessCheck'
-
-earth_api.activities.list:
-  path: '/api/activities'
+# Activities endpoints
+earth_api.v1.activities.list:
+  path: '/v1/activities'
   defaults:
     _controller: '\Drupal\earth_api\Controller\ActivitiesController::list'
   methods: [GET]
   requirements:
-    _custom_access: '\Drupal\earth_api\Controller\ActivitiesController::accessCheck'
+    _access: 'TRUE'
 
-earth_api.articles.list:
-  path: '/api/articles'
+earth_api.v1.activities.create:
+  path: '/v1/activities/create'
   defaults:
-    _controller: '\Drupal\earth_api\Controller\ArticlesController::list'
-  methods: [GET]
+    _controller: '\Drupal\earth_api\Controller\ActivitiesController::create'
+  methods: [POST]
   requirements:
-    _custom_access: '\Drupal\earth_api\Controller\ArticlesController::accessCheck'
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
 
-earth_api.events.list:
-  path: '/api/events'
+earth_api.v1.activities.by_id:
+  path: '/v1/activities/{activityId}'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\ActivitiesController::byId'
+  methods: [GET, PATCH, DELETE]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+# Events endpoints
+earth_api.v1.events.list:
+  path: '/v1/events'
   defaults:
     _controller: '\Drupal\earth_api\Controller\EventsController::list'
   methods: [GET]
   requirements:
-    _custom_access: '\Drupal\earth_api\Controller\EventsController::accessCheck'
+    _access: 'TRUE'
+
+earth_api.v1.events.create:
+  path: '/v1/events/create'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\EventsController::create'
+  methods: [POST]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.events.by_id:
+  path: '/v1/events/{eventId}'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\EventsController::byId'
+  methods: [GET, PATCH, DELETE]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.events.current:
+  path: '/v1/events/current'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\EventsController::current'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.events.current.signup:
+  path: '/v1/events/current/signup'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\EventsController::signup'
+  methods: [POST]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.events.current.cancel:
+  path: '/v1/events/current/cancel'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\EventsController::cancel'
+  methods: [POST]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+# Prompts endpoints
+earth_api.v1.prompts.list:
+  path: '/v1/prompts'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\PromptsController::list'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.v1.prompts.random:
+  path: '/v1/prompts/random'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\PromptsController::random'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.v1.prompts.create:
+  path: '/v1/prompts/create'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\PromptsController::create'
+  methods: [POST]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.prompts.by_id:
+  path: '/v1/prompts/{promptId}'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\PromptsController::byId'
+  methods: [GET, PATCH, DELETE]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.v1.prompts.responses:
+  path: '/v1/prompts/{promptId}/responses'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\PromptsController::responses'
+  methods: [GET, POST]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.v1.prompts.responses.count:
+  path: '/v1/prompts/{promptId}/responses/count'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\PromptsController::responsesCount'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.v1.prompts.response.by_id:
+  path: '/v1/prompts/{promptId}/responses/{responseId}'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\PromptsController::responseById'
+  methods: [GET, PATCH, DELETE]
+  requirements:
+    _access: 'TRUE'
+
+# Articles endpoints
+earth_api.v1.articles.list:
+  path: '/v1/articles'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\ArticlesController::list'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+
+earth_api.v1.articles.create:
+  path: '/v1/articles/create'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\ArticlesController::create'
+  methods: [POST]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
+
+earth_api.v1.articles.by_id:
+  path: '/v1/articles/{articleId}'
+  defaults:
+    _controller: '\Drupal\earth_api\Controller\ArticlesController::byId'
+  methods: [GET, PATCH, DELETE]
+  requirements:
+    _custom_access: '\Drupal\earth_api\Access\BearerAuthCheck::access'
