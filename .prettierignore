@@ -1,0 +1,7 @@
+.vscode/
+.ddev/
+.config/
+bun.lock
+node_modules/
+LICENSE
+.husky/

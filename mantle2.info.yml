@@ -1,0 +1,4 @@
+name: mantle2
+type: module
+description: Core Mantle2 Implementation
+core_version_requirement: ^11

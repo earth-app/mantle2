@@ -1,0 +1,38 @@
+# OpenAPI & Swagger UI
+mantle2.openapi:
+  path: '/openapi'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\Schema\OpenAPIController::getSchema'
+    _title: 'OpenAPI Schema'
+  requirements:
+    _permission: 'access content'
+mantle2.swaggerui:
+  path: '/'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\Schema\SwaggerController::swaggerPage'
+    _title: 'API Documentation'
+  requirements:
+    _permission: 'access content'
+
+# Routes
+mantle2.info:
+  path: /v2/info
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\GeneralController::getInfo'
+    _title: 'Info JSON'
+  requirements:
+    _permission: 'access content'
+
+## User Routes
+mantle2.user:
+  path: '/v2/user/{user}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UserController::getUser'
+    _title: 'User JSON'
+  requirements:
+    _permission: 'access content'
+    user: \d+
+  options:
+    parameters:
+      user:
+        type: entity:user
