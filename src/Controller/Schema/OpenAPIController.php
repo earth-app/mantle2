@@ -7,6 +7,7 @@ use Drupal\Core\Routing\RouteProviderInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Route;
+use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 
 class OpenAPIController extends ControllerBase
 {
@@ -38,9 +39,34 @@ class OpenAPIController extends ControllerBase
 				continue;
 			}
 
+			$options = $route->getOptions();
 			$methods = $route->getMethods();
+			$responses = [];
 			if (empty($methods)) {
 				$methods = ['GET'];
+				$responses = [
+					'200' => [],
+					'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
+					'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
+					'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found')
+				];
+			} else {
+				if (in_array('POST', $methods) || in_array('PUT', $methods) || in_array('PATCH', $methods)) {
+					$responses = [
+						'201' => ['description' => 'Resource created'],
+						'400' => Mantle2Schemas::E400($options['schema/400'] ?? 'Bad Request'),
+						'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
+						'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
+						'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found')
+					];
+				} else {
+					$responses = [
+						'200' => ['description' => 'Successful response'],
+						'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
+						'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
+						'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found')
+					];
+				}
 			}
 
 			$pathItem = [];
@@ -70,10 +96,42 @@ class OpenAPIController extends ControllerBase
 		}
 
 		$schema = [
-			'openapi' => '3.0.3',
+			'openapi' => '3.1.0',
 			'info' => [
-				'title' => 'My API',
+				'title' => 'mantle2',
+				'description' => 'Backend API for The Earth App, powered by Drupal',
 				'version' => '1.0.0',
+			],
+			'servers' => [
+				[
+					'url' => 'https://api.earth-app.com',
+					'description' => 'Production Server',
+				],
+				[
+					'url' => 'https://127.0.0.1',
+					'description' => 'Local Development Server',
+				],
+			],
+			'components' => [
+				'securitySchemes' => [
+					'BasicAuth' => [
+						'type' => 'http',
+						'scheme' => 'basic',
+					],
+					'BearerAuth' => [
+						'type' => 'http',
+						'scheme' => 'bearer',
+						'bearerFormat' => 'JWT',
+					],
+				],
+			],
+			'security' => [
+				[
+					'BasicAuth' => [],
+				],
+				[
+					'BearerAuth' => [],
+				],
 			],
 			'paths' => $paths,
 		];

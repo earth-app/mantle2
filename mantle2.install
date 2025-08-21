@@ -1,0 +1,111 @@
+<?php
+
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\field\Entity\FieldConfig;
+
+function createField(
+	$entity,
+	$name,
+	$type,
+	$label,
+	$required = false,
+	$default_value = null,
+	$settings = [],
+	$constraints = [],
+	$cardinality = 1,
+) {
+	if (!FieldStorageConfig::loadByName($entity, $name)) {
+		FieldStorageConfig::create([
+			'field_name' => $name,
+			'entity_type' => $entity,
+			'type' => $type,
+			'cardinality' => $cardinality,
+			'settings' => $settings,
+			'default_value' => $default_value !== null ? ['value' => $default_value] : null,
+		])->save();
+	}
+
+	if (!FieldConfig::loadByName($entity, $entity, $name)) {
+		FieldConfig::create([
+			'field_name' => $name,
+			'entity_type' => $entity,
+			'bundle' => $entity,
+			'label' => $label,
+			'required' => $required,
+		])->save();
+	}
+
+	if ($constraints) {
+		$field = \Drupal\field\Entity\FieldConfig::load("$entity.$entity.$name");
+		if ($field) {
+			$field->setSetting('constraints', $constraints);
+			$field->save();
+		}
+	}
+}
+
+function mantle2_install()
+{
+	// User Fields
+
+	/// Visibility
+	createField('user', 'field_visibility', 'list_string', 'Visibility', true, [
+		'allowed_values' => [
+			'PUBLIC' => 'Public',
+			'UNLISTED' => 'Unlisted',
+			'PRIVATE' => 'Private',
+		],
+	]);
+
+	/// Field Privacy
+	createField(
+		'user',
+		'field_privacy',
+		'json',
+		'Field Privacy',
+		true,
+		json_encode([
+			'name' => 'PUBLIC',
+		]),
+		[],
+	);
+
+	/// Phone Number
+	createField(
+		'user',
+		'field_phone',
+		'integer',
+		'Phone Number',
+		false,
+		0,
+		[
+			'min' => 0,
+			'max' => 9999999999,
+		],
+		[
+			'Regex' => [
+				'pattern' => '/^\+?[0-9]{7,15}$/',
+				'message' => 'Enter a valid phone number.',
+			],
+		],
+	);
+
+	/// Country
+	createField(
+		'user',
+		'field_country',
+		'string',
+		'Country',
+		false,
+		'US',
+		[
+			'max_length' => 2,
+		],
+		[
+			'Regex' => [
+				'pattern' => '[A-Z]{2}',
+				'message' => 'Enter a valid country code.',
+			],
+		],
+	);
+}
