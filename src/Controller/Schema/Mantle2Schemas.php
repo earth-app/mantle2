@@ -303,6 +303,33 @@ class Mantle2Schemas
 	];
 
 	// Enum-like Types (as strings with examples)
+	public static $activityTypes = [
+		'HOBBY',
+		'SPORT',
+		'WORK',
+		'STUDY',
+		'TRAVEL',
+		'SOCIAL',
+		'RELAXATION',
+		'HEALTH',
+		'PROJECT',
+		'PERSONAL_GOAL',
+		'COMMUNITY_SERVICE',
+		'CREATIVE',
+		'FAMILY',
+		'HOLIDAY',
+		'ENTERTAINMENT',
+		'LEARNING',
+		'NATURE',
+		'TECHNOLOGY',
+		'ART',
+		'SPIRITUALITY',
+		'FINANCE',
+		'HOME_IMPROVEMENT',
+		'PETS',
+		'FASHION',
+		'OTHER',
+	];
 	public static $activityType = ['type' => 'string', 'example' => 'HIKING'];
 	public static $visibility = ['type' => 'string', 'example' => 'PUBLIC'];
 	public static $userPrivacy = ['type' => 'string', 'example' => 'MUTUAL'];
@@ -376,6 +403,33 @@ class Mantle2Schemas
 				'circle' => self::$userPrivacy,
 			],
 		];
+	}
+
+	public static function userFieldPrivacyJson()
+	{
+		return json_encode([
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'$defs' => [
+				'privacy' => [
+					'type' => 'string',
+					'enum' => ['PUBLIC', 'MUTUAL', 'CIRCLE', 'FRIEND'],
+				],
+			],
+			'properties' => [
+				'name' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
+				'bio' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
+				'phone_number' => ['$ref' => '#/$defs/privacy', 'default' => 'PRIVATE'],
+				'country' => ['$ref' => '#/$defs/privacy', 'default' => 'PRIVATE'],
+				'email' => ['$ref' => '#/$defs/privacy', 'default' => 'MUTUAL'],
+				'address' => ['$ref' => '#/$defs/privacy', 'default' => 'PRIVATE'],
+				'activities' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
+				'events' => ['$ref' => '#/$defs/privacy', 'default' => 'MUTUAL'],
+				'friends' => ['$ref' => '#/$defs/privacy', 'default' => 'MUTUAL'],
+				'last_login' => ['$ref' => '#/$defs/privacy', 'default' => 'CIRCLE'],
+				'account_type' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
+			],
+		]);
 	}
 
 	public static function eventCreate()
@@ -567,7 +621,6 @@ class Mantle2Schemas
 				'account' => [
 					'type' => 'object',
 					'properties' => [
-						'type' => ['type' => 'string', 'example' => 'com.earthapp.account.Account'],
 						'id' => self::$id,
 						'username' => self::$username,
 						'email' => self::$email,
@@ -576,17 +629,7 @@ class Mantle2Schemas
 						'visibility' => self::userFieldPrivacy(),
 					],
 				],
-				'activities' => [
-					'type' => 'array',
-					'items' => [
-						'type' => 'object',
-						'properties' => [
-							'id' => ['type' => 'string', 'example' => 'hiking'],
-							'name' => self::$text,
-							'types' => ['type' => 'array', 'items' => self::$activityType],
-						],
-					],
-				],
+				'activities' => self::activities(),
 			],
 			'required' => ['id', 'username', 'created_at', 'updated_at', 'account', 'activities'],
 		];
@@ -689,6 +732,23 @@ class Mantle2Schemas
 	public static function activities()
 	{
 		return ['type' => 'array', 'items' => self::activity()];
+	}
+	public static function activitiesJson()
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'string'],
+				'name' => ['type' => 'string'],
+				'description' => ['type' => 'string'],
+				'types' => ['type' => 'array', 'items' => ['type' => 'string']],
+				'created_at' => ['type' => 'string', 'format' => 'date-time'],
+				'updated_at' => ['type' => 'string', 'format' => 'date-time'],
+				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
+			],
+			'required' => ['id', 'name', 'types', 'created_at', 'fields'],
+		];
 	}
 
 	public static function prompt()

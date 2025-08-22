@@ -1,18 +1,20 @@
 <?php
 
+use Drupal\node\Entity\NodeType;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\field\Entity\FieldConfig;
+use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 
 function createField(
-	$entity,
-	$name,
-	$type,
-	$label,
-	$required = false,
+	string $entity,
+	string $name,
+	string $type,
+	string $label,
+	bool $required = false,
 	$default_value = null,
-	$settings = [],
-	$constraints = [],
-	$cardinality = 1,
+	array $settings = [],
+	array $constraints = [],
+	int $cardinality = 1,
 ) {
 	if (!FieldStorageConfig::loadByName($entity, $name)) {
 		FieldStorageConfig::create([
@@ -44,6 +46,32 @@ function createField(
 	}
 }
 
+function createContentType(string $name, string $label, string $description, array $fields)
+{
+	if (!NodeType::load($name)) {
+		$type = NodeType::create([
+			'type' => $name,
+			'name' => $label,
+			'description' => $description,
+		]);
+		$type->save();
+	}
+
+	foreach ($fields as $field) {
+		createField(
+			$type->getEntityTypeId(),
+			$field['name'],
+			$field['type'],
+			$field['label'],
+			$field['required'],
+			$field['default_value'],
+			$field['settings'],
+			$field['constraints'],
+			$field['cardinality'],
+		);
+	}
+}
+
 function mantle2_install()
 {
 	// User Fields
@@ -66,8 +94,20 @@ function mantle2_install()
 		true,
 		json_encode([
 			'name' => 'PUBLIC',
+			'bio' => 'PUBLIC',
+			'phone_number' => 'PRIVATE',
+			'country' => 'PRIVATE',
+			'email' => 'MUTUAL',
+			'address' => 'PRIVATE',
+			'activities' => 'PUBLIC',
+			'events' => 'MUTUAL',
+			'friends' => 'MUTUAL',
+			'last_login' => 'CIRCLE',
+			'account_type' => 'PUBLIC',
 		]),
-		[],
+		[
+			'schema' => Mantle2Schemas::userFieldPrivacyJson(),
+		],
 	);
 
 	/// Phone Number
@@ -108,4 +148,40 @@ function mantle2_install()
 			],
 		],
 	);
+
+	/// Activities
+	createField('user', 'field_activities', 'json', 'Activities', false, json_encode([]), [
+		'schema' => Mantle2Schemas::activitiesJson(),
+	]);
+
+	// Activities
+	createContentType('activities', 'Activities', 'Activities content type', [
+		[
+			'name' => 'field_activity_id',
+			'type' => 'integer',
+			'label' => 'Activity ID',
+			'required' => true,
+		],
+		[
+			'name' => 'field_activity_name',
+			'type' => 'string',
+			'label' => 'Activity Name',
+			'required' => true,
+		],
+		[
+			'name' => 'field_activity_description',
+			'type' => 'text',
+			'label' => 'Activity Description',
+			'required' => true,
+		],
+		[
+			'name' => 'field_activity_types',
+			'type' => 'list_string',
+			'label' => 'Activity Types',
+			'required' => true,
+			'settings' => [
+				'allowed_values' => Mantle2Schemas::$activityTypes,
+			],
+		],
+	]);
 }
