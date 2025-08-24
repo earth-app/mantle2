@@ -6,7 +6,8 @@
 		"php": "^7.4 || ^8.0",
 		"drupal/core": "^11.2",
 		"symfony/event-dispatcher": "^7.3",
-		"drupal/json_field": "^1.4"
+		"drupal/json_field": "^1.4",
+		"ext-json": "*"
 	},
 	"autoload": {
 		"psr-4": {
@@ -16,10 +17,10 @@
 	"require-dev": {
 		"drush/drush": "^13.6"
 	},
-    "repositories": [
-        {
-            "type": "composer",
-            "url": "https://packages.drupal.org/8"
-        }
-    ]
+	"repositories": [
+		{
+			"type": "composer",
+			"url": "https://packages.drupal.org/8"
+		}
+	]
 }

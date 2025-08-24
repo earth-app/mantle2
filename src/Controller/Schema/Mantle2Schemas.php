@@ -1,4 +1,4 @@
-<?php
+<?php /** @noinspection PhpUnused */
 
 namespace Drupal\mantle2\Controller\Schema;
 
@@ -6,7 +6,7 @@ class Mantle2Schemas
 {
 	// Error Responses
 
-	public static function E400($description = 'Bad request')
+	public static function E400($description = 'Bad request'): array
 	{
 		return [
 			'400' => [
@@ -33,7 +33,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function E401($description = 'Unauthorized')
+	public static function E401($description = 'Unauthorized'): array
 	{
 		return [
 			'401' => [
@@ -60,7 +60,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function E403($description = 'Forbidden')
+	public static function E403($description = 'Forbidden'): array
 	{
 		return [
 			'403' => [
@@ -87,7 +87,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function E404($description = 'Not found')
+	public static function E404($description = 'Not found'): array
 	{
 		return [
 			'404' => [
@@ -114,7 +114,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function E409($description = 'Duplicate entry')
+	public static function E409($description = 'Duplicate entry'): array
 	{
 		return [
 			'409' => [
@@ -143,7 +143,7 @@ class Mantle2Schemas
 
 	// Root Types (schemas)
 
-	public static $info = [
+	public static array $info = [
 		'type' => 'object',
 		'properties' => [
 			'name' => ['type' => 'string', 'example' => 'mantle'],
@@ -155,7 +155,7 @@ class Mantle2Schemas
 		'required' => ['name', 'title', 'version', 'description', 'date'],
 	];
 
-	public static function paginated($itemSchema)
+	public static function paginated($itemSchema): array
 	{
 		return [
 			'type' => 'object',
@@ -189,7 +189,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static $paginatedParameters = [
+	public static array $paginatedParameters = [
 		[
 			'name' => 'page',
 			'in' => 'query',
@@ -213,7 +213,7 @@ class Mantle2Schemas
 		],
 	];
 
-	public static $paginatedParams = [
+	public static array $paginatedParams = [
 		'type' => 'object',
 		'properties' => [
 			'page' => ['type' => 'integer', 'minimum' => 1, 'default' => 1],
@@ -224,40 +224,44 @@ class Mantle2Schemas
 	];
 
 	// String Types
-	public static $text = ['type' => 'string', 'example' => 'Hello World'];
-	public static $number = [
+	public static array $text = ['type' => 'string', 'example' => 'Hello World'];
+	public static array $number = [
 		'type' => 'number',
 		'minimum' => 0,
 		'maximum' => 9999999999,
 		'example' => 1234567890,
 	];
-	public static $id = [
+	public static array $id = [
 		'type' => 'string',
 		'minLength' => 24,
 		'maxLength' => 24,
 		'example' => 'ebfjwHLdiqBudn3eyd83g1bs',
 	];
-	public static $username = [
+	public static array $username = [
 		'type' => 'string',
 		'minLength' => 3,
 		'maxLength' => 30,
 		'pattern' => '^[a-zA-Z0-9_.-]+$',
 		'example' => 'johndoe',
 	];
-	public static $password = [
+	public static array $password = [
 		'type' => 'string',
 		'minLength' => 8,
 		'maxLength' => 100,
 		'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]+$",
 		'example' => 'password123',
 	];
-	public static $email = ['type' => 'string', 'format' => 'email', 'example' => 'me@company.com'];
-	public static $date = [
+	public static array $email = [
+		'type' => 'string',
+		'format' => 'email',
+		'example' => 'me@company.com',
+	];
+	public static array $date = [
 		'type' => 'string',
 		'format' => 'date-time',
 		'example' => '2025-05-11T10:00:00Z',
 	];
-	public static $hexCode = [
+	public static array $hexCode = [
 		'type' => 'string',
 		'minLength' => 7,
 		'maxLength' => 7,
@@ -265,8 +269,8 @@ class Mantle2Schemas
 		'example' => '#ffd700',
 		'description' => 'A valid hex color code',
 	];
-	public static $bool = ['type' => 'boolean', 'example' => true];
-	public static $uuid = [
+	public static array $bool = ['type' => 'boolean', 'example' => true];
+	public static array $uuid = [
 		'type' => 'string',
 		'format' => 'uuid',
 		'minLength' => 36,
@@ -274,27 +278,27 @@ class Mantle2Schemas
 		'example' => '123e4567-e89b-12d3-a456-426614174000',
 		'description' => 'A valid UUID',
 	];
-	public static $sessionToken = [
+	public static array $sessionToken = [
 		'type' => 'string',
 		'example' => '4bHN3nxwb21bd1sm109s1nan28xm1bab2Js18',
 		'description' => 'The session token for the user',
 	];
 
 	// Parameter Schemas
-	public static $usernameParam = [
+	public static array $usernameParam = [
 		'type' => 'string',
 		'minLength' => 5,
 		'maxLength' => 21,
 		'pattern' => '^@([a-zA-Z0-9_]{3,20})$',
 		'example' => '@johndoe',
 	];
-	public static $idParam = [
+	public static array $idParam = [
 		'type' => 'string',
 		'minLength' => 24,
 		'maxLength' => 24,
 		'example' => 'eyb2cCNwc73b197cnsHbDqiU',
 	];
-	public static $uuidParam = [
+	public static array $uuidParam = [
 		'type' => 'string',
 		'format' => 'uuid',
 		'minLength' => 36,
@@ -303,7 +307,7 @@ class Mantle2Schemas
 	];
 
 	// Enum-like Types (as strings with examples)
-	public static $activityTypes = [
+	public static array $activityTypes = [
 		'HOBBY',
 		'SPORT',
 		'WORK',
@@ -330,18 +334,18 @@ class Mantle2Schemas
 		'FASHION',
 		'OTHER',
 	];
-	public static $activityType = ['type' => 'string', 'example' => 'HIKING'];
-	public static $visibility = ['type' => 'string', 'example' => 'PUBLIC'];
-	public static $userPrivacy = ['type' => 'string', 'example' => 'MUTUAL'];
-	public static $eventType = ['type' => 'string', 'example' => 'IN_PERSON'];
+	public static array $activityType = ['type' => 'string', 'example' => 'HIKING'];
+	public static array $visibility = ['type' => 'string', 'example' => 'PUBLIC'];
+	public static array $userPrivacy = ['type' => 'string', 'example' => 'MUTUAL'];
+	public static array $eventType = ['type' => 'string', 'example' => 'IN_PERSON'];
 
 	// Array Types
-	public static $stringArray = [
+	public static array $stringArray = [
 		'type' => 'array',
 		'items' => ['type' => 'string'],
 		'example' => ['example1', 'example2', 'example3'],
 	];
-	public static function idArray()
+	public static function idArray(): array
 	{
 		return [
 			'type' => 'array',
@@ -351,7 +355,7 @@ class Mantle2Schemas
 	}
 
 	// Request Objects
-	public static function userCreate()
+	public static function userCreate(): array
 	{
 		return [
 			'type' => 'object',
@@ -366,7 +370,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function userUpdate()
+	public static function userUpdate(): array
 	{
 		return [
 			'type' => 'object',
@@ -384,7 +388,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function userFieldPrivacy()
+	public static function userFieldPrivacy(): array
 	{
 		return [
 			'type' => 'object',
@@ -432,7 +436,7 @@ class Mantle2Schemas
 		]);
 	}
 
-	public static function eventCreate()
+	public static function eventCreate(): array
 	{
 		return [
 			'type' => 'object',
@@ -455,7 +459,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function eventUpdate()
+	public static function eventUpdate(): array
 	{
 		return [
 			'type' => 'object',
@@ -479,7 +483,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function promptCreate()
+	public static function promptCreate(): array
 	{
 		return [
 			'type' => 'object',
@@ -491,13 +495,13 @@ class Mantle2Schemas
 		];
 	}
 
-	public static $promptResponseBody = [
+	public static array $promptResponseBody = [
 		'type' => 'object',
 		'properties' => ['content' => ['type' => 'string', 'maxLength' => 700]],
 		'required' => ['content'],
 	];
 
-	public static function oceanArticle()
+	public static function oceanArticle(): array
 	{
 		return [
 			'type' => 'object',
@@ -521,13 +525,17 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function articleCreate()
+	public static function articleCreate(): array
 	{
 		return [
 			'type' => 'object',
 			'properties' => [
 				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
-				'description' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 512],
+				'description' => [
+					'type' => 'string',
+					'example' => 'Hello World',
+					'maxLength' => 512,
+				],
 				'tags' => [
 					'type' => 'array',
 					'items' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 30],
@@ -547,13 +555,17 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function articleUpdate()
+	public static function articleUpdate(): array
 	{
 		return [
 			'type' => 'object',
 			'properties' => [
 				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
-				'description' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 512],
+				'description' => [
+					'type' => 'string',
+					'example' => 'Hello World',
+					'maxLength' => 512,
+				],
 				'tags' => [
 					'type' => 'array',
 					'items' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 30],
@@ -571,7 +583,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function activityCreate()
+	public static function activityCreate(): array
 	{
 		return [
 			'type' => 'object',
@@ -587,7 +599,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function activityUpdate()
+	public static function activityUpdate(): array
 	{
 		return [
 			'type' => 'object',
@@ -601,14 +613,14 @@ class Mantle2Schemas
 		];
 	}
 
-	public static $userActivitiesSet = [
+	public static array $userActivitiesSet = [
 		'type' => 'array',
 		'items' => ['type' => 'string'],
 		'example' => ['hiking', 'swimming', 'cycling'],
 	];
 
 	// Return Objects
-	public static function user()
+	public static function user(): array
 	{
 		return [
 			'type' => 'object',
@@ -634,12 +646,12 @@ class Mantle2Schemas
 			'required' => ['id', 'username', 'created_at', 'updated_at', 'account', 'activities'],
 		];
 	}
-	public static function users()
+	public static function users(): array
 	{
 		return ['type' => 'array', 'items' => self::user()];
 	}
 
-	public static function signupResponse()
+	public static function signupResponse(): array
 	{
 		return [
 			'type' => 'object',
@@ -648,7 +660,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function loginResponse()
+	public static function loginResponse(): array
 	{
 		return [
 			'type' => 'object',
@@ -661,7 +673,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function logoutResponse()
+	public static function logoutResponse(): array
 	{
 		return [
 			'type' => 'object',
@@ -674,7 +686,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function event()
+	public static function event(): array
 	{
 		return [
 			'type' => 'object',
@@ -708,12 +720,12 @@ class Mantle2Schemas
 			],
 		];
 	}
-	public static function events()
+	public static function events(): array
 	{
 		return ['type' => 'array', 'items' => self::event()];
 	}
 
-	public static function activity()
+	public static function activity(): array
 	{
 		return [
 			'type' => 'object',
@@ -729,11 +741,11 @@ class Mantle2Schemas
 			'required' => ['id', 'name', 'types', 'created_at', 'fields'],
 		];
 	}
-	public static function activities()
+	public static function activities(): array
 	{
 		return ['type' => 'array', 'items' => self::activity()];
 	}
-	public static function activitiesJson()
+	public static function activitiesJson(): array
 	{
 		return [
 			'$schema' => 'http://json-schema.org/draft-07/schema#',
@@ -751,7 +763,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function prompt()
+	public static function prompt(): array
 	{
 		return [
 			'type' => 'object',
@@ -765,12 +777,12 @@ class Mantle2Schemas
 			'required' => ['id', 'prompt', 'visibility', 'created_at'],
 		];
 	}
-	public static function prompts()
+	public static function prompts(): array
 	{
 		return ['type' => 'array', 'items' => self::prompt()];
 	}
 
-	public static function promptResponse()
+	public static function promptResponse(): array
 	{
 		return [
 			'type' => 'object',
@@ -784,12 +796,12 @@ class Mantle2Schemas
 			'required' => ['id', 'prompt_id', 'response', 'created_at'],
 		];
 	}
-	public static function promptResponses()
+	public static function promptResponses(): array
 	{
 		return ['type' => 'array', 'items' => self::promptResponse()];
 	}
 
-	public static function article()
+	public static function article(): array
 	{
 		return [
 			'type' => 'object',

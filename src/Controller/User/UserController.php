@@ -8,9 +8,7 @@ use Drupal\user\UserInterface;
 
 class UserController extends ControllerBase
 {
-	private function getAccountFields(UserInterface $user) {
-		
-	}
+	private function getAccountFields(UserInterface $user) {}
 
 	public function getUser(UserInterface $user)
 	{
@@ -21,8 +19,8 @@ class UserController extends ControllerBase
 			'updated_at' => date('c', $user->getChangedTime()),
 			'last_login' => date('c', $user->getLastLoginTime()),
 			'account' => [
-				'email' => $user->getEmail()
-			]
+				'email' => $user->getEmail(),
+			],
 		];
 
 		return new JsonResponse($data);

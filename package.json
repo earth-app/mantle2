@@ -17,6 +17,6 @@
 		"typescript": "^5"
 	},
 	"lint-staged": {
-		"*.{js,css,md}": "prettier --write"
+		"*.{php,install,yml,md}": "prettier --write"
 	}
 }

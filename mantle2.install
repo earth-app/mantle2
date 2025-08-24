@@ -15,7 +15,7 @@ function createField(
 	array $settings = [],
 	array $constraints = [],
 	int $cardinality = 1,
-	?string $bundle = null,
+	?string $bundle = null
 ) {
 	// If no bundle is provided, default to entity (e.g., user entity uses 'user' bundle).
 	$bundle = $bundle ?? $entity;
@@ -47,7 +47,12 @@ function createField(
 	}
 	if ($default_value !== null) {
 		// Field default values are an array of item arrays keyed by property ('value').
-		$field_config->set('default_value', is_array($default_value) && isset($default_value[0]) ? $default_value : [['value' => $default_value]]);
+		$field_config->set(
+			'default_value',
+			is_array($default_value) && isset($default_value[0])
+				? $default_value
+				: [['value' => $default_value]],
+		);
 	}
 	$field_config->save();
 
@@ -96,7 +101,8 @@ function createContentType(string $name, string $label, string $description, arr
 /**
  * Ensure a field is present on the default form and view displays.
  */
-function ensureFieldOnDisplays(string $entity_type, string $bundle, string $field_name): void {
+function ensureFieldOnDisplays(string $entity_type, string $bundle, string $field_name): void
+{
 	$storage = FieldStorageConfig::loadByName($entity_type, $field_name);
 	if (!$storage) {
 		return;
@@ -121,12 +127,14 @@ function ensureFieldOnDisplays(string $entity_type, string $bundle, string $fiel
 
 	$fd_id = $entity_type . '.' . $bundle . '.default';
 	$form_display_storage = \Drupal::entityTypeManager()->getStorage('entity_form_display');
-	$form_display = $form_display_storage->load($fd_id) ?: $form_display_storage->create([
-		'targetEntityType' => $entity_type,
-		'bundle' => $bundle,
-		'mode' => 'default',
-		'id' => $fd_id,
-	]);
+	$form_display =
+		$form_display_storage->load($fd_id) ?:
+		$form_display_storage->create([
+			'targetEntityType' => $entity_type,
+			'bundle' => $bundle,
+			'mode' => 'default',
+			'id' => $fd_id,
+		]);
 	if (!$form_display->getComponent($field_name)) {
 		$widget = $widget_map[$type] ?? 'string_textfield';
 		$form_display->setComponent($field_name, ['type' => $widget]);
@@ -135,12 +143,14 @@ function ensureFieldOnDisplays(string $entity_type, string $bundle, string $fiel
 
 	$vd_id = $entity_type . '.' . $bundle . '.default';
 	$view_display_storage = \Drupal::entityTypeManager()->getStorage('entity_view_display');
-	$view_display = $view_display_storage->load($vd_id) ?: $view_display_storage->create([
-		'targetEntityType' => $entity_type,
-		'bundle' => $bundle,
-		'mode' => 'default',
-		'id' => $vd_id,
-	]);
+	$view_display =
+		$view_display_storage->load($vd_id) ?:
+		$view_display_storage->create([
+			'targetEntityType' => $entity_type,
+			'bundle' => $bundle,
+			'mode' => 'default',
+			'id' => $vd_id,
+		]);
 	if (!$view_display->getComponent($field_name)) {
 		$formatter = $formatter_map[$type] ?? 'string';
 		$view_display->setComponent($field_name, ['type' => $formatter]);
@@ -265,10 +275,14 @@ function mantle2_install()
 /**
  * Update hook to ensure fields are visible on form/view displays after upgrades.
  */
-function mantle2_update_9001(): void {
+function mantle2_update_9001(): void
+{
 	// Ensure user profile fields are on displays.
 	$u = 'user';
-	foreach (['field_visibility', 'field_privacy', 'field_phone', 'field_country', 'field_activities'] as $f) {
+	foreach (
+		['field_visibility', 'field_privacy', 'field_phone', 'field_country', 'field_activities']
+		as $f
+	) {
 		ensureFieldOnDisplays($u, $u, $f);
 	}
 
@@ -298,9 +312,9 @@ function mantle2_update_9001(): void {
 			'label' => 'Activity Types',
 			'required' => true,
 			'settings' => [
-				'allowed_values' => \Drupal\mantle2\Controller\Schema\Mantle2Schemas::$activityTypes,
+				'allowed_values' =>
+					\Drupal\mantle2\Controller\Schema\Mantle2Schemas::$activityTypes,
 			],
 		],
 	]);
 }
-

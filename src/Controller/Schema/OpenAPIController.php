@@ -7,24 +7,23 @@ use Drupal\Core\Routing\RouteProviderInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Route;
-use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 
 class OpenAPIController extends ControllerBase
 {
 	/** @var RouteProviderInterface */
-	protected $routeProvider;
+	protected RouteProviderInterface $routeProvider;
 
 	public function __construct(RouteProviderInterface $route_provider)
 	{
 		$this->routeProvider = $route_provider;
 	}
 
-	public static function create(ContainerInterface $container)
+	public static function create(ContainerInterface $container): OpenAPIController
 	{
 		return new static($container->get('router.route_provider'));
 	}
 
-	public function getSchema()
+	public function getSchema(): JsonResponse
 	{
 		$paths = [];
 
@@ -41,30 +40,33 @@ class OpenAPIController extends ControllerBase
 
 			$options = $route->getOptions();
 			$methods = $route->getMethods();
-			$responses = [];
 			if (empty($methods)) {
 				$methods = ['GET'];
 				$responses = [
 					'200' => [],
 					'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
 					'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
-					'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found')
+					'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found'),
 				];
 			} else {
-				if (in_array('POST', $methods) || in_array('PUT', $methods) || in_array('PATCH', $methods)) {
+				if (
+					in_array('POST', $methods) ||
+					in_array('PUT', $methods) ||
+					in_array('PATCH', $methods)
+				) {
 					$responses = [
 						'201' => ['description' => 'Resource created'],
 						'400' => Mantle2Schemas::E400($options['schema/400'] ?? 'Bad Request'),
 						'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
 						'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
-						'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found')
+						'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found'),
 					];
 				} else {
 					$responses = [
 						'200' => ['description' => 'Successful response'],
 						'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
 						'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
-						'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found')
+						'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found'),
 					];
 				}
 			}
@@ -72,7 +74,7 @@ class OpenAPIController extends ControllerBase
 			$pathItem = [];
 			foreach ($methods as $method) {
 				$parameters = [];
-				preg_match_all('/\{(\w+)\}/', $path, $matches);
+				preg_match_all('/\{(\w+)}/', $path, $matches);
 				foreach ($matches[1] as $param) {
 					$parameters[] = [
 						'name' => $param,
@@ -85,10 +87,7 @@ class OpenAPIController extends ControllerBase
 				$pathItem[strtolower($method)] = [
 					'summary' => $route->getDefault('_title') ?? $name,
 					'parameters' => $parameters,
-					'responses' => [
-						'200' => ['description' => 'Successful response'],
-						'404' => ['description' => 'Not found'],
-					],
+					'responses' => $responses,
 				];
 			}
 

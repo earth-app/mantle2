@@ -1,9 +1,3 @@
-# Drupal Decoupled Project
+# mantle2
 
-## Getting Started
-
-Visit the [docs](https://drupal-decoupled.octahedroid.com/) to see how to use this project.
-
-## Supporting organizations
-
-Development sponsored by [Octahedroid](https://octahedroid.com/)
+> Backend for The Earth App, powered by Drupal 11

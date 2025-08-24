@@ -7,7 +7,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 
 class GeneralController extends ControllerBase
 {
-	public function getInfo()
+	public function getInfo(): JsonResponse
 	{
 		return new JsonResponse([
 			'name' => 'mantle2',
