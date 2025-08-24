@@ -15,11 +15,16 @@ if [ ! -d "$SITE_DIR" ]; then
   cd "$SITE_DIR"
 
   composer require drush/drush
+  composer require drupal/json_field
 
   mkdir -p web/modules/custom/$PROJECT_NAME
   cp -R "$SRC_PATH"/* web/modules/custom/$PROJECT_NAME
 
   ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME"
+
+  ddev drush install json_field
+  ddev drush en json_field -y
+
   ddev start
 
   ddev drush site:install standard \
