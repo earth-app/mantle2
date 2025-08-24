@@ -15,40 +15,59 @@ function createField(
 	array $settings = [],
 	array $constraints = [],
 	int $cardinality = 1,
+	?string $bundle = null,
 ) {
+	// If no bundle is provided, default to entity (e.g., user entity uses 'user' bundle).
+	$bundle = $bundle ?? $entity;
 	if (!FieldStorageConfig::loadByName($entity, $name)) {
 		FieldStorageConfig::create([
 			'field_name' => $name,
 			'entity_type' => $entity,
 			'type' => $type,
 			'cardinality' => $cardinality,
+			// Storage-level settings only. Defaults belong to the bundle-level FieldConfig.
 			'settings' => $settings,
-			'default_value' => $default_value !== null ? ['value' => $default_value] : null,
 		])->save();
 	}
 
-	if (!FieldConfig::loadByName($entity, $entity, $name)) {
-		FieldConfig::create([
+	$field_config = FieldConfig::loadByName($entity, $bundle, $name);
+	if (!$field_config) {
+		$field_config = FieldConfig::create([
 			'field_name' => $name,
 			'entity_type' => $entity,
-			'bundle' => $entity,
+			'bundle' => $bundle,
 			'label' => $label,
 			'required' => $required,
-		])->save();
+		]);
 	}
 
+	// Apply instance-level settings and default value.
+	if (!empty($settings)) {
+		$field_config->set('settings', $settings + ($field_config->get('settings') ?? []));
+	}
+	if ($default_value !== null) {
+		// Field default values are an array of item arrays keyed by property ('value').
+		$field_config->set('default_value', is_array($default_value) && isset($default_value[0]) ? $default_value : [['value' => $default_value]]);
+	}
+	$field_config->save();
+
 	if ($constraints) {
-		$field = \Drupal\field\Entity\FieldConfig::load("$entity.$entity.$name");
+		$field = \Drupal\field\Entity\FieldConfig::load("$entity.$bundle.$name");
 		if ($field) {
 			$field->setSetting('constraints', $constraints);
 			$field->save();
 		}
 	}
+
+	// Place on default form/view displays so it's visible in the UI.
+	ensureFieldOnDisplays($entity, $bundle, $name);
 }
 
 function createContentType(string $name, string $label, string $description, array $fields)
 {
-	if (!NodeType::load($name)) {
+	// Ensure the content type (bundle) exists.
+	$existing = NodeType::load($name);
+	if (!$existing) {
 		$type = NodeType::create([
 			'type' => $name,
 			'name' => $label,
@@ -57,18 +76,75 @@ function createContentType(string $name, string $label, string $description, arr
 		$type->save();
 	}
 
+	// Add fields to the 'node' entity for this bundle.
 	foreach ($fields as $field) {
 		createField(
-			$type->getEntityTypeId(),
+			'node', // Correct entity type for nodes
 			$field['name'],
 			$field['type'],
 			$field['label'],
-			$field['required'],
-			$field['default_value'],
-			$field['settings'],
-			$field['constraints'],
-			$field['cardinality'],
+			$field['required'] ?? false,
+			$field['default_value'] ?? null,
+			$field['settings'] ?? [],
+			$field['constraints'] ?? [],
+			$field['cardinality'] ?? 1,
+			$name, // bundle: machine name of the content type
 		);
+	}
+}
+
+/**
+ * Ensure a field is present on the default form and view displays.
+ */
+function ensureFieldOnDisplays(string $entity_type, string $bundle, string $field_name): void {
+	$storage = FieldStorageConfig::loadByName($entity_type, $field_name);
+	if (!$storage) {
+		return;
+	}
+	$type = $storage->getType();
+
+	// Map field type to a sensible default widget/formatter.
+	$widget_map = [
+		'string' => 'string_textfield',
+		'integer' => 'number',
+		'text' => 'text_textarea',
+		'list_string' => 'options_select',
+		'json' => 'json_textarea',
+	];
+	$formatter_map = [
+		'string' => 'string',
+		'integer' => 'number_integer',
+		'text' => 'text_default',
+		'list_string' => 'list_default',
+		'json' => 'json',
+	];
+
+	$fd_id = $entity_type . '.' . $bundle . '.default';
+	$form_display_storage = \Drupal::entityTypeManager()->getStorage('entity_form_display');
+	$form_display = $form_display_storage->load($fd_id) ?: $form_display_storage->create([
+		'targetEntityType' => $entity_type,
+		'bundle' => $bundle,
+		'mode' => 'default',
+		'id' => $fd_id,
+	]);
+	if (!$form_display->getComponent($field_name)) {
+		$widget = $widget_map[$type] ?? 'string_textfield';
+		$form_display->setComponent($field_name, ['type' => $widget]);
+		$form_display->save();
+	}
+
+	$vd_id = $entity_type . '.' . $bundle . '.default';
+	$view_display_storage = \Drupal::entityTypeManager()->getStorage('entity_view_display');
+	$view_display = $view_display_storage->load($vd_id) ?: $view_display_storage->create([
+		'targetEntityType' => $entity_type,
+		'bundle' => $bundle,
+		'mode' => 'default',
+		'id' => $vd_id,
+	]);
+	if (!$view_display->getComponent($field_name)) {
+		$formatter = $formatter_map[$type] ?? 'string';
+		$view_display->setComponent($field_name, ['type' => $formatter]);
+		$view_display->save();
 	}
 }
 
@@ -77,7 +153,7 @@ function mantle2_install()
 	// User Fields
 
 	/// Visibility
-	createField('user', 'field_visibility', 'list_string', 'Visibility', true, [
+	createField('user', 'field_visibility', 'list_string', 'Visibility', true, null, [
 		'allowed_values' => [
 			'PUBLIC' => 'Public',
 			'UNLISTED' => 'Unlisted',
@@ -155,7 +231,7 @@ function mantle2_install()
 	]);
 
 	// Activities
-	createContentType('activities', 'Activities', 'Activities content type', [
+	createContentType('activity', 'Activity', 'Activity content type', [
 		[
 			'name' => 'field_activity_id',
 			'type' => 'integer',
@@ -185,3 +261,46 @@ function mantle2_install()
 		],
 	]);
 }
+
+/**
+ * Update hook to ensure fields are visible on form/view displays after upgrades.
+ */
+function mantle2_update_9001(): void {
+	// Ensure user profile fields are on displays.
+	$u = 'user';
+	foreach (['field_visibility', 'field_privacy', 'field_phone', 'field_country', 'field_activities'] as $f) {
+		ensureFieldOnDisplays($u, $u, $f);
+	}
+
+	// Ensure Activity content type and its fields exist and are on displays.
+	createContentType('activity', 'Activity', 'Activity content type', [
+		[
+			'name' => 'field_activity_id',
+			'type' => 'integer',
+			'label' => 'Activity ID',
+			'required' => true,
+		],
+		[
+			'name' => 'field_activity_name',
+			'type' => 'string',
+			'label' => 'Activity Name',
+			'required' => true,
+		],
+		[
+			'name' => 'field_activity_description',
+			'type' => 'text',
+			'label' => 'Activity Description',
+			'required' => true,
+		],
+		[
+			'name' => 'field_activity_types',
+			'type' => 'list_string',
+			'label' => 'Activity Types',
+			'required' => true,
+			'settings' => [
+				'allowed_values' => \Drupal\mantle2\Controller\Schema\Mantle2Schemas::$activityTypes,
+			],
+		],
+	]);
+}
+
