@@ -20,7 +20,7 @@ if [ ! -d "$SITE_DIR" ]; then
   mkdir -p web/modules/custom/$PROJECT_NAME
   cp -R "$SRC_PATH"/* web/modules/custom/$PROJECT_NAME
 
-  ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME"
+  ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME" --host-https-post=8787
 
   ddev drush install json_field
   ddev drush en json_field -y

@@ -28,7 +28,7 @@ if not exist "%SITE_DIR%" (
     xcopy "%SRC_PATH%\*" "web\modules\custom\%PROJECT_NAME%\" /E /Y /I
     if errorlevel 1 goto :error
 
-    ddev config --project-type=drupal11 --docroot=web --project-name="%PROJECT_NAME%"
+    ddev config --project-type=drupal11 --docroot=web --project-name="%PROJECT_NAME%" --host-https-post=8787
     if errorlevel 1 goto :error
 
     ddev drush install json_field
