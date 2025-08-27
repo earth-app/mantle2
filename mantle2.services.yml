@@ -1,5 +1,13 @@
 services:
+  # Event Subscribers
   mantle2.api_exception_subscriber:
     class: Drupal\mantle2\EventSubscriber\ApiExceptionSubscriber
     tags:
       - { name: event_subscriber }
+
+  # Utility Classes
+  mantle2.helper:
+    class: Drupal\mantle2\Service\GeneralHelper
+
+  mantle2.helper.user:
+    class: Drupal\mantle2\Service\UsersHelper
