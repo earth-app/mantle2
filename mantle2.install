@@ -4,6 +4,9 @@ use Drupal\node\Entity\NodeType;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
+use Drupal\mantle2\Custom\ActivityType;
+use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\UsersHelper;
 
 function createField(
 	string $entity,
@@ -15,7 +18,7 @@ function createField(
 	array $settings = [],
 	array $constraints = [],
 	int $cardinality = 1,
-	?string $bundle = null
+	?string $bundle = null,
 ) {
 	// If no bundle is provided, default to entity (e.g., user entity uses 'user' bundle).
 	$bundle = $bundle ?? $entity;
@@ -25,36 +28,20 @@ function createField(
 			'entity_type' => $entity,
 			'type' => $type,
 			'cardinality' => $cardinality,
-			// Storage-level settings only. Defaults belong to the bundle-level FieldConfig.
 			'settings' => $settings,
+			'default_value' => $default_value !== null ? ['value' => $default_value] : null,
 		])->save();
 	}
 
-	$field_config = FieldConfig::loadByName($entity, $bundle, $name);
-	if (!$field_config) {
-		$field_config = FieldConfig::create([
+	if (!FieldConfig::loadByName($entity, $bundle, $name)) {
+		FieldConfig::create([
 			'field_name' => $name,
 			'entity_type' => $entity,
 			'bundle' => $bundle,
 			'label' => $label,
 			'required' => $required,
-		]);
+		])->save();
 	}
-
-	// Apply instance-level settings and default value.
-	if (!empty($settings)) {
-		$field_config->set('settings', $settings + ($field_config->get('settings') ?? []));
-	}
-	if ($default_value !== null) {
-		// Field default values are an array of item arrays keyed by property ('value').
-		$field_config->set(
-			'default_value',
-			is_array($default_value) && isset($default_value[0])
-				? $default_value
-				: [['value' => $default_value]],
-		);
-	}
-	$field_config->save();
 
 	if ($constraints) {
 		$field = \Drupal\field\Entity\FieldConfig::load("$entity.$bundle.$name");
@@ -63,9 +50,6 @@ function createField(
 			$field->save();
 		}
 	}
-
-	// Place on default form/view displays so it's visible in the UI.
-	ensureFieldOnDisplays($entity, $bundle, $name);
 }
 
 function createContentType(string $name, string $label, string $description, array $fields)
@@ -98,66 +82,6 @@ function createContentType(string $name, string $label, string $description, arr
 	}
 }
 
-/**
- * Ensure a field is present on the default form and view displays.
- */
-function ensureFieldOnDisplays(string $entity_type, string $bundle, string $field_name): void
-{
-	$storage = FieldStorageConfig::loadByName($entity_type, $field_name);
-	if (!$storage) {
-		return;
-	}
-	$type = $storage->getType();
-
-	// Map field type to a sensible default widget/formatter.
-	$widget_map = [
-		'string' => 'string_textfield',
-		'integer' => 'number',
-		'text' => 'text_textarea',
-		'list_string' => 'options_select',
-		'json' => 'json_textarea',
-	];
-	$formatter_map = [
-		'string' => 'string',
-		'integer' => 'number_integer',
-		'text' => 'text_default',
-		'list_string' => 'list_default',
-		'json' => 'json',
-	];
-
-	$fd_id = $entity_type . '.' . $bundle . '.default';
-	$form_display_storage = \Drupal::entityTypeManager()->getStorage('entity_form_display');
-	$form_display =
-		$form_display_storage->load($fd_id) ?:
-		$form_display_storage->create([
-			'targetEntityType' => $entity_type,
-			'bundle' => $bundle,
-			'mode' => 'default',
-			'id' => $fd_id,
-		]);
-	if (!$form_display->getComponent($field_name)) {
-		$widget = $widget_map[$type] ?? 'string_textfield';
-		$form_display->setComponent($field_name, ['type' => $widget]);
-		$form_display->save();
-	}
-
-	$vd_id = $entity_type . '.' . $bundle . '.default';
-	$view_display_storage = \Drupal::entityTypeManager()->getStorage('entity_view_display');
-	$view_display =
-		$view_display_storage->load($vd_id) ?:
-		$view_display_storage->create([
-			'targetEntityType' => $entity_type,
-			'bundle' => $bundle,
-			'mode' => 'default',
-			'id' => $vd_id,
-		]);
-	if (!$view_display->getComponent($field_name)) {
-		$formatter = $formatter_map[$type] ?? 'string';
-		$view_display->setComponent($field_name, ['type' => $formatter]);
-		$view_display->save();
-	}
-}
-
 function mantle2_install()
 {
 	// User Fields
@@ -178,22 +102,35 @@ function mantle2_install()
 		'json',
 		'Field Privacy',
 		true,
-		json_encode([
-			'name' => 'PUBLIC',
-			'bio' => 'PUBLIC',
-			'phone_number' => 'PRIVATE',
-			'country' => 'PRIVATE',
-			'email' => 'MUTUAL',
-			'address' => 'PRIVATE',
-			'activities' => 'PUBLIC',
-			'events' => 'MUTUAL',
-			'friends' => 'MUTUAL',
-			'last_login' => 'CIRCLE',
-			'account_type' => 'PUBLIC',
-		]),
+		json_encode(UsersHelper::$defaultPrivacy),
 		[
 			'schema' => Mantle2Schemas::userFieldPrivacyJson(),
 		],
+	);
+
+	/// First Name
+	createField('user', 'field_first_name', 'string', 'First Name', false, '', [
+		'max_length' => 50,
+	]);
+
+	/// Last Name
+	createField('user', 'field_last_name', 'string', 'Last Name', false, '', [
+		'max_length' => 50,
+	]);
+
+	/// Bio
+	createField(
+		'user',
+		'field_bio',
+		'text_long',
+		'Biography',
+		false,
+		'',
+		[
+			'max_length' => 700,
+		],
+		[],
+		1,
 	);
 
 	/// Phone Number
@@ -235,9 +172,38 @@ function mantle2_install()
 		],
 	);
 
+	/// Address
+	createField('user', 'field_address', 'string', 'Address', false, '', [
+		'max_length' => 255,
+	]);
+
 	/// Activities
 	createField('user', 'field_activities', 'json', 'Activities', false, json_encode([]), [
 		'schema' => Mantle2Schemas::activitiesJson(),
+	]);
+
+	/// Friends
+	createField('user', 'field_friends', 'json', 'Friends', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'format' => 'number',
+			],
+		],
+	]);
+
+	/// Circle
+	createField('user', 'field_circle', 'json', 'Circle', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'format' => 'number',
+			],
+		],
 	]);
 
 	// Activities
@@ -266,54 +232,242 @@ function mantle2_install()
 			'label' => 'Activity Types',
 			'required' => true,
 			'settings' => [
-				'allowed_values' => Mantle2Schemas::$activityTypes,
+				'allowed_values' => Mantle2Schemas::activityTypes(),
 			],
+			'cardinality' => 5,
 		],
 	]);
-}
 
-/**
- * Update hook to ensure fields are visible on form/view displays after upgrades.
- */
-function mantle2_update_9001(): void
-{
-	// Ensure user profile fields are on displays.
-	$u = 'user';
-	foreach (
-		['field_visibility', 'field_privacy', 'field_phone', 'field_country', 'field_activities']
-		as $f
-	) {
-		ensureFieldOnDisplays($u, $u, $f);
-	}
+	// Events
 
-	// Ensure Activity content type and its fields exist and are on displays.
-	createContentType('activity', 'Activity', 'Activity content type', [
+	createContentType('event', 'Event', 'Event content type', [
 		[
-			'name' => 'field_activity_id',
+			'name' => 'field_host_id',
 			'type' => 'integer',
-			'label' => 'Activity ID',
+			'label' => 'Host ID',
 			'required' => true,
 		],
 		[
-			'name' => 'field_activity_name',
+			'name' => 'field_event_name',
 			'type' => 'string',
-			'label' => 'Activity Name',
+			'label' => 'Event Name',
 			'required' => true,
+			'settings' => [
+				'max_length' => 255,
+			],
 		],
 		[
-			'name' => 'field_activity_description',
-			'type' => 'text',
-			'label' => 'Activity Description',
+			'name' => 'field_event_description',
+			'type' => 'text_long',
+			'label' => 'Event Description',
 			'required' => true,
+			'settings' => [
+				'max_length' => 2048,
+			],
 		],
 		[
-			'name' => 'field_activity_types',
+			'name' => 'field_event_type',
+			'type' => 'list_string',
+			'label' => 'Event Type',
+			'required' => true,
+			'settings' => [
+				'allowed_values' => array_map(fn($case) => $case->value, EventType::cases()),
+			],
+			'cardinality' => 1,
+		],
+		[
+			'name' => 'field_event_activity_types',
 			'type' => 'list_string',
 			'label' => 'Activity Types',
 			'required' => true,
 			'settings' => [
-				'allowed_values' =>
-					\Drupal\mantle2\Controller\Schema\Mantle2Schemas::$activityTypes,
+				'allowed_values' => Mantle2Schemas::activityTypes(),
+			],
+			'cardinality' => 5,
+		],
+		[
+			'name' => 'field_event_location_latitude',
+			'type' => 'float',
+			'label' => 'Location Latitude',
+			'required' => false,
+			'settings' => [
+				'min' => -90,
+				'max' => 90,
+			],
+		],
+		[
+			'name' => 'field_event_location_longitude',
+			'type' => 'float',
+			'label' => 'Location Longitude',
+			'required' => false,
+			'settings' => [
+				'min' => -180,
+				'max' => 180,
+			],
+		],
+		[
+			'name' => 'field_event_date',
+			'type' => 'datetime',
+			'label' => 'Date',
+			'required' => true,
+		],
+		[
+			'name' => 'field_event_enddate',
+			'type' => 'datetime',
+			'label' => 'End Date',
+			'required' => false,
+		],
+	]);
+
+	// Prompts
+
+	createContentType('prompt', 'Prompt', 'Prompt content type', [
+		[
+			'name' => 'field_prompt',
+			'type' => 'text_long',
+			'label' => 'Prompt',
+			'required' => true,
+			'settings' => [
+				'max_length' => 100,
+			],
+		],
+		[
+			'name' => 'field_owner_id',
+			'type' => 'integer',
+			'label' => 'Owner ID',
+			'required' => true,
+			'settings' => [
+				'min' => 1,
+			],
+		],
+		[
+			'name' => 'field_visibility',
+			'type' => 'list_string',
+			'label' => 'Visibility',
+			'required' => true,
+			'settings' => [
+				'allowed_values' => array_map(fn($case) => $case->value, Visibility::cases()),
+			],
+			'cardinality' => 1,
+		],
+	]);
+
+	// Articles
+
+	createContentType('article', 'Article', 'Article content type', [
+		[
+			'name' => 'field_article_id',
+			'type' => 'string',
+			'label' => 'Article ID',
+			'required' => true,
+			'settings' => [
+				'max_length' => 255,
+			],
+		],
+		[
+			'name' => 'field_article_title',
+			'type' => 'string',
+			'label' => 'Title',
+			'required' => true,
+			'settings' => [
+				'max_length' => 255,
+			],
+		],
+		[
+			'name' => 'field_article_description',
+			'type' => 'text_long',
+			'label' => 'Description',
+			'required' => true,
+		],
+		[
+			'name' => 'field_article_tags',
+			'type' => 'json',
+			'label' => 'Tags',
+			'required' => false,
+			'settings' => [
+				'schema' => [
+					'$schema' => 'http://json-schema.org/draft-07/schema#',
+					'type' => 'array',
+					'items' => [
+						'type' => 'string',
+					],
+				],
+			],
+		],
+		[
+			'name' => 'field_article_content',
+			'type' => 'text_long',
+			'label' => 'Content',
+			'required' => true,
+		],
+		[
+			'name' => 'field_article_author',
+			'type' => 'string',
+			'label' => 'Author',
+			'required' => true,
+			'settings' => [
+				'max_length' => 255,
+			],
+		],
+		[
+			'name' => 'field_author_id',
+			'type' => 'string',
+			'label' => 'Author ID',
+			'required' => true,
+			'settings' => [
+				'max_length' => 255,
+			],
+		],
+		[
+			'name' => 'field_article_color',
+			'type' => 'string',
+			'label' => 'Color',
+			'required' => false,
+			'settings' => [
+				'max_length' => 7,
+			],
+		],
+		[
+			'name' => 'field_created_at',
+			'type' => 'datetime',
+			'label' => 'Created At',
+			'required' => true,
+		],
+		[
+			'name' => 'field_updated_at',
+			'type' => 'datetime',
+			'label' => 'Updated At',
+			'required' => false,
+		],
+		[
+			'name' => 'field_ocean_article',
+			'type' => 'json',
+			'label' => 'Ocean Article',
+			'required' => false,
+			'settings' => [
+				'schema' => [
+					'$schema' => 'http://json-schema.org/draft-07/schema#',
+					'type' => 'object',
+					'properties' => [
+						'title' => ['type' => 'string'],
+						'author' => ['type' => 'string'],
+						'source' => ['type' => 'string'],
+						'url' => ['type' => 'string'],
+						'abstract' => ['type' => 'string'],
+						'content' => ['type' => 'string'],
+						'theme_color' => ['type' => 'string'],
+						'keywords' => [
+							'type' => 'array',
+							'items' => ['type' => 'string'],
+						],
+						'date' => ['type' => 'string'],
+						'favicon' => ['type' => 'string'],
+						'links' => [
+							'type' => 'object',
+							'additionalProperties' => ['type' => 'string'],
+						],
+					],
+				],
 			],
 		],
 	]);
