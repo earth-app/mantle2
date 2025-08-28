@@ -11,6 +11,15 @@ mantle2.openapi:
   methods: [GET]
 
 # Routes
+mantle2.hello:
+  path: /v2/hello
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\GeneralController::hi'
+    _title: 'Hello'
+  requirements:
+    _access: 'TRUE'
+  methods: [GET]
+
 mantle2.info:
   path: /v2/info
   defaults:
@@ -21,17 +30,85 @@ mantle2.info:
   methods: [GET]
 
 ## User Routes
-mantle2.user:
-  path: '/v2/user/{user}'
+mantle2.users:
+  path: '/v2/users'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\User\UserController::getUser'
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::users'
+    _title: 'User List'
+  requirements:
+    _access: 'TRUE'
+  options:
+    query:
+      limit: 25
+      page: 1
+      search: ''
+  methods: [GET]
+
+mantle2.users.get:
+  path: '/v2/users/{user}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::getUser'
     _title: 'User JSON'
   requirements:
     _access: 'TRUE'
-    user: \d+
+    user: \d+|@\w+
   options:
     schema/404: User not found
     parameters:
       user:
         type: entity:user
   methods: [GET]
+
+mantle2.users.login:
+  path: '/v2/users/login'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::login'
+    _title: 'User Login'
+  requirements:
+    _access: 'TRUE'
+  methods: [POST]
+
+mantle2.users.logout:
+  path: '/v2/users/logout'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::logout'
+    _title: 'User Logout'
+  requirements:
+    _access: 'TRUE'
+  methods: [POST]
+
+mantle2.users.create:
+  path: '/v2/users/create'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::createUser'
+    _title: 'Create User'
+  requirements:
+    _access: 'TRUE'
+  methods: [POST]
+
+mantle2.users.current.get:
+  path: '/v2/users/current'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::currentGet'
+    _title: 'Current User'
+  requirements:
+    _access: 'TRUE'
+  methods: [GET]
+
+mantle2.users.current.patch:
+  path: '/v2/users/current'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::currentPatch'
+    _title: 'Update Current User'
+  requirements:
+    _access: 'TRUE'
+  methods: [PATCH]
+
+mantle2.users.current.delete:
+  path: '/v2/users/current'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::currentDelete'
+    _title: 'Delete Current User'
+  requirements:
+    _access: 'TRUE'
+  methods: [DELETE]

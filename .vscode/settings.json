@@ -5,5 +5,6 @@
 	"prettier.useTabs": true,
 	"prettier.tabWidth": 4,
 	"prettier.printWidth": 100,
-	"npm.packageManager": "bun"
+	"npm.packageManager": "bun",
+	"php.version": "8.3"
 }

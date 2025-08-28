@@ -29,6 +29,11 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
 		$exception = $event->getThrowable();
 		$statusCode = 500;
 		$message = 'Internal server error';
+		$extra = [
+			'exception' => get_class($exception),
+			'message' => $exception->getMessage(),
+			'stack_trace' => $exception->getTrace(),
+		];
 
 		if ($exception instanceof HttpExceptionInterface) {
 			$statusCode = $exception->getStatusCode();
@@ -38,9 +43,13 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
 			$message = 'Internal server error';
 		}
 
-		$response = new JsonResponse(['error' => $message, 'code' => $statusCode], $statusCode, [
-			'Content-Type' => 'application/json',
-		]);
+		$response = new JsonResponse(
+			['error' => $message, 'code' => $statusCode, 'extra' => $extra],
+			$statusCode,
+			[
+				'Content-Type' => 'application/json',
+			],
+		);
 
 		$event->setResponse($response);
 	}

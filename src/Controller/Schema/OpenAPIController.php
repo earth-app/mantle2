@@ -42,34 +42,32 @@ class OpenAPIController extends ControllerBase
 			$methods = $route->getMethods();
 			if (empty($methods)) {
 				$methods = ['GET'];
-				$responses = [
-					'200' => [],
-					'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
-					'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
-					'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found'),
-				];
-			} else {
-				if (
-					in_array('POST', $methods) ||
-					in_array('PUT', $methods) ||
-					in_array('PATCH', $methods)
-				) {
-					$responses = [
-						'201' => ['description' => 'Resource created'],
-						'400' => Mantle2Schemas::E400($options['schema/400'] ?? 'Bad Request'),
-						'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
-						'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
-						'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found'),
-					];
-				} else {
-					$responses = [
-						'200' => ['description' => 'Successful response'],
-						'401' => Mantle2Schemas::E401($options['schema/401'] ?? 'Unauthorized'),
-						'403' => Mantle2Schemas::E403($options['schema/403'] ?? 'Forbidden'),
-						'404' => Mantle2Schemas::E404($options['schema/404'] ?? 'Entity not found'),
-					];
-				}
 			}
+
+			$responses = array_filter(
+				[
+					'200' => $options['schema/200']
+						? ['description' => 'Successful response']
+						: null,
+					'201' => $options['schema/201'] ? ['description' => 'Resource created'] : null,
+					'400' => $options['schema/400']
+						? Mantle2Schemas::E400($options['schema/400'])
+						: null,
+					'401' => $options['schema/401']
+						? Mantle2Schemas::E401($options['schema/401'])
+						: null,
+					'402' => $options['schema/402']
+						? Mantle2Schemas::E402($options['schema/402'])
+						: null,
+					'403' => $options['schema/403']
+						? Mantle2Schemas::E403($options['schema/403'])
+						: null,
+					'404' => $options['schema/404']
+						? Mantle2Schemas::E404($options['schema/404'])
+						: null,
+				],
+				fn($v) => $v !== null,
+			);
 
 			$pathItem = [];
 			foreach ($methods as $method) {
@@ -88,6 +86,7 @@ class OpenAPIController extends ControllerBase
 					'summary' => $route->getDefault('_title') ?? $name,
 					'parameters' => $parameters,
 					'responses' => $responses,
+					'tags' => $options['tags'] ?? [],
 				];
 			}
 

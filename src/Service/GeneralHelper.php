@@ -41,6 +41,36 @@ class GeneralHelper
 		return new JsonResponse(['code' => 404, 'message' => $message], Response::HTTP_NOT_FOUND);
 	}
 
+	// Response Utilities
+
+	public static function paginatedParameters(Request $request): array|JsonResponse
+	{
+		/** @var int */
+		$limit = $request->query->get('limit') ?? 25;
+		if ($limit < 1 || $limit > 100) {
+			return self::badRequest("Invalid limit '$limit'");
+		}
+
+		/** @var int */
+		$page = $request->query->get('page') ?? 1;
+
+		if ($page < 1) {
+			return self::badRequest("Invalid page '$page'");
+		}
+
+		/** @var string */
+		$search = $request->query->get('search') ?? '';
+		if (strlen($search) > 40) {
+			return self::badRequest("Search term '$search' too long");
+		}
+
+		return [
+			'limit' => $limit,
+			'page' => $page,
+			'search' => $search,
+		];
+	}
+
 	// Network Utilities
 
 	public static function getBearerToken(Request $request): ?string

@@ -78,6 +78,16 @@ class UsersHelper
 		return $user;
 	}
 
+	public static function getOwnerOfRequest(Request $request)
+	{
+		$user = self::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return null;
+		}
+
+		return $user;
+	}
+
 	public static function findByRequestAuthorized(Request $request, string $identifier)
 	{
 		$user = self::findByRequest($request);
@@ -125,8 +135,8 @@ class UsersHelper
 	public static function tryVisible(
 		$value,
 		UserInterface $user,
-		UserInterface $user2,
-		string $required
+		?UserInterface $user2,
+		string $required,
 	) {
 		if (self::isVisible($user, $user2, $required)) {
 			return $value;
@@ -134,9 +144,35 @@ class UsersHelper
 		return null;
 	}
 
+	public static array $defaultPrivacy = [
+		'name' => 'PUBLIC',
+		'bio' => 'PUBLIC',
+		'phone_number' => 'CIRCLE',
+		'country' => 'PRIVATE',
+		'email' => 'MUTUAL',
+		'address' => 'PRIVATE',
+		'activities' => 'PUBLIC',
+		'events' => 'MUTUAL',
+		'friends' => 'MUTUAL',
+		'last_login' => 'PUBLIC',
+		'account_type' => 'PUBLIC',
+	];
+
 	public static function getFieldPrivacy(UserInterface $user)
 	{
-		return json_decode($user->get('field_privacy')->getValue(), true);
+		$privacy = $user->get('field_privacy')->getValue();
+		$privacy0 = [];
+		if ($privacy) {
+			$privacy0 = json_decode($privacy, true);
+		}
+
+		foreach (self::$defaultPrivacy as $key => $value) {
+			if (!isset($privacy0[$key])) {
+				$privacy0[$key] = $value;
+			}
+		}
+
+		return $privacy0;
 	}
 
 	// User Fields
@@ -150,17 +186,39 @@ class UsersHelper
 		return substr($s, 0, 24);
 	}
 
-	public static function getName(UserInterface $user, ?UserInterface $requester = null): ?string
-	{
+	public static function getFirstName(
+		UserInterface $user,
+		?UserInterface $requester = null,
+	): ?string {
 		$privacy = self::getFieldPrivacy($user);
+		$firstNameValue = $user->get('field_first_name')->getValue();
 		return self::tryVisible(
-			$user->get('field_first_name')->getValue() .
-				' ' .
-				$user->get('field_last_name')->getValue(),
+			$firstNameValue ? $firstNameValue[0]['value'] : 'John',
 			$user,
 			$requester,
 			$privacy['name'] ?? 'PUBLIC',
 		);
+	}
+
+	public static function getLastName(
+		UserInterface $user,
+		?UserInterface $requester = null,
+	): ?string {
+		$privacy = self::getFieldPrivacy($user);
+		$lastNameValue = $user->get('field_last_name')->getValue();
+		return self::tryVisible(
+			$lastNameValue ? $lastNameValue[0]['value'] : 'Doe',
+			$user,
+			$requester,
+			$privacy['name'] ?? 'PUBLIC',
+		);
+	}
+
+	public static function getName(UserInterface $user, ?UserInterface $requester = null): ?string
+	{
+		$firstName = self::getFirstName($user, $requester);
+		$lastName = self::getLastName($user, $requester);
+		return trim("$firstName $lastName");
 	}
 
 	public static function getEmail(UserInterface $user, ?UserInterface $requester = null): ?string
@@ -176,24 +234,23 @@ class UsersHelper
 
 	public static function getBiography(
 		UserInterface $user,
-		?UserInterface $requester = null
+		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		return self::tryVisible(
-			$user->get('field_bio')->getValue(),
-			$user,
-			$requester,
-			$privacy['bio'] ?? 'PUBLIC',
-		);
+		$bioValue = $user->get('field_bio')->getValue();
+		$bio = $bioValue ? $bioValue[0]['value'] : '';
+		return self::tryVisible($bio, $user, $requester, $privacy['bio'] ?? 'PUBLIC');
 	}
 
 	public static function getPhoneNumber(
 		UserInterface $user,
-		?UserInterface $requester = null
+		?UserInterface $requester = null,
 	): ?int {
 		$privacy = self::getFieldPrivacy($user);
+		$phoneNumberValue = $user->get('field_phone')->getValue() ?? 0;
+		$phoneNumber = $phoneNumberValue ? $phoneNumberValue[0]['value'] : 0;
 		return self::tryVisible(
-			$user->get('field_phone')->getValue(),
+			$phoneNumber,
 			$user,
 			$requester,
 			$privacy['phone_number'] ?? 'CIRCLE',
@@ -202,33 +259,27 @@ class UsersHelper
 
 	public static function getAddress(
 		UserInterface $user,
-		?UserInterface $requester = null
+		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		return self::tryVisible(
-			$user->get('field_address')->getValue(),
-			$user,
-			$requester,
-			$privacy['address'] ?? 'PRIVATE',
-		);
+		$addressValue = $user->get('field_address')->getValue() ?? null;
+		$address = $addressValue ? $addressValue[0]['value'] : null;
+		return self::tryVisible($address, $user, $requester, $privacy['address'] ?? 'PRIVATE');
 	}
 
 	public static function getCountry(
 		UserInterface $user,
-		?UserInterface $requester = null
+		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		return self::tryVisible(
-			$user->get('field_country')->getValue(),
-			$user,
-			$requester,
-			$privacy['country'] ?? 'PUBLIC',
-		);
+		$countryValue = $user->get('field_country')->getValue() ?? null;
+		$country = $countryValue ? $countryValue[0]['value'] : null;
+		return self::tryVisible($country, $user, $requester, $privacy['country'] ?? 'PUBLIC');
 	}
 
 	public static function serializeUser(
 		UserInterface $user,
-		?UserInterface $requester = null
+		?UserInterface $requester = null,
 	): array {
 		$privacy = self::getFieldPrivacy($user);
 		$serialized = [
@@ -241,18 +292,8 @@ class UsersHelper
 			'account' => [
 				'id' => self::formatId($user->id()),
 				'username' => $user->getAccountName(),
-				'first_name' => self::tryVisible(
-					$user->get('field_first_name')->getValue(),
-					$user,
-					$requester,
-					$privacy['name'] ?? 'PUBLIC',
-				),
-				'last_name' => self::tryVisible(
-					$user->get('field_last_name')->getValue(),
-					$user,
-					$requester,
-					$privacy['name'] ?? 'PUBLIC',
-				),
+				'first_name' => self::getFirstName($user, $requester),
+				'last_name' => self::getLastName($user, $requester),
 				'email' => self::getEmail($user, $requester),
 				'bio' => self::getBiography($user, $requester),
 				'phone_number' => self::getPhoneNumber($user, $requester),
@@ -262,7 +303,7 @@ class UsersHelper
 			],
 			'activities' => [],
 			'friends' => self::tryVisible(
-				json_decode($user->get('field_friends')->getValue(), true),
+				$user->get('field_friends')->getValue(),
 				$user,
 				$requester,
 				$privacy['friends'] ?? 'PUBLIC',

@@ -2,6 +2,11 @@
 
 namespace Drupal\mantle2\Controller\Schema;
 
+use Drupal\mantle2\Custom\ActivityType;
+use Drupal\mantle2\Custom\Visibility;
+use EventType;
+use Privacy;
+
 class Mantle2Schemas
 {
 	// Error Responses
@@ -50,6 +55,33 @@ class Mantle2Schemas
 								'code' => [
 									'type' => 'number',
 									'example' => 401,
+								],
+							],
+							'required' => ['error', 'code'],
+						],
+					],
+				],
+			],
+		];
+	}
+
+	public static function E402($description = 'Payment Required'): array
+	{
+		return [
+			'402' => [
+				'description' => $description,
+				'content' => [
+					'application/json' => [
+						'schema' => [
+							'type' => 'object',
+							'properties' => [
+								'error' => [
+									'type' => 'string',
+									'example' => $description,
+								],
+								'code' => [
+									'type' => 'number',
+									'example' => 402,
 								],
 							],
 							'required' => ['error', 'code'],
@@ -307,37 +339,44 @@ class Mantle2Schemas
 	];
 
 	// Enum-like Types (as strings with examples)
-	public static array $activityTypes = [
-		'HOBBY',
-		'SPORT',
-		'WORK',
-		'STUDY',
-		'TRAVEL',
-		'SOCIAL',
-		'RELAXATION',
-		'HEALTH',
-		'PROJECT',
-		'PERSONAL_GOAL',
-		'COMMUNITY_SERVICE',
-		'CREATIVE',
-		'FAMILY',
-		'HOLIDAY',
-		'ENTERTAINMENT',
-		'LEARNING',
-		'NATURE',
-		'TECHNOLOGY',
-		'ART',
-		'SPIRITUALITY',
-		'FINANCE',
-		'HOME_IMPROVEMENT',
-		'PETS',
-		'FASHION',
-		'OTHER',
-	];
-	public static array $activityType = ['type' => 'string', 'example' => 'HIKING'];
-	public static array $visibility = ['type' => 'string', 'example' => 'PUBLIC'];
-	public static array $userPrivacy = ['type' => 'string', 'example' => 'MUTUAL'];
-	public static array $eventType = ['type' => 'string', 'example' => 'IN_PERSON'];
+	public static function activityTypes(): array
+	{
+		return array_map(fn(ActivityType $t) => $t->value, ActivityType::cases());
+	}
+	public static function activityType(): array
+	{
+		return [
+			'type' => 'string',
+			'example' => 'HOBBY',
+			'enum' => self::activityTypes(),
+		];
+	}
+
+	public static function visibility()
+	{
+		return [
+			'type' => 'string',
+			'example' => 'PUBLIC',
+			'enum' => array_map(fn($case) => $case->value, Visibility::cases()),
+		];
+	}
+
+	public static function userPrivacy()
+	{
+		return [
+			'type' => 'string',
+			'example' => 'MUTUAL',
+			'enum' => array_map(fn($case) => $case->value, Privacy::cases()),
+		];
+	}
+	public static function eventType()
+	{
+		return [
+			'type' => 'string',
+			'example' => 'IN_PERSON',
+			'enum' => array_map(fn($case) => $case->value, EventType::cases()),
+		];
+	}
 
 	// Array Types
 	public static array $stringArray = [
@@ -382,8 +421,8 @@ class Mantle2Schemas
 				'address' => ['type' => 'string', 'maxLength' => 100],
 				'bio' => ['type' => 'string', 'maxLength' => 500],
 				'country' => ['type' => 'string', 'minLength' => 2, 'maxLength' => 2],
-				'phoneNumber' => ['type' => 'integer', 'maximum' => 9999999999],
-				'visibility' => self::$visibility,
+				'phone_number' => ['type' => 'integer', 'maximum' => 9999999999],
+				'visibility' => self::visibility(),
 			],
 		];
 	}
@@ -393,18 +432,18 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'name' => self::$userPrivacy,
-				'bio' => self::$userPrivacy,
-				'phone_number' => self::$userPrivacy,
-				'country' => self::$userPrivacy,
-				'email' => self::$userPrivacy,
-				'address' => self::$userPrivacy,
-				'activities' => self::$userPrivacy,
-				'events' => self::$userPrivacy,
-				'friends' => self::$userPrivacy,
-				'last_login' => self::$userPrivacy,
-				'account_type' => self::$userPrivacy,
-				'circle' => self::$userPrivacy,
+				'name' => self::userPrivacy(),
+				'bio' => self::userPrivacy(),
+				'phone_number' => self::userPrivacy(),
+				'country' => self::userPrivacy(),
+				'email' => self::userPrivacy(),
+				'address' => self::userPrivacy(),
+				'activities' => self::userPrivacy(),
+				'events' => self::userPrivacy(),
+				'friends' => self::userPrivacy(),
+				'last_login' => self::userPrivacy(),
+				'account_type' => self::userPrivacy(),
+				'circle' => self::userPrivacy(),
 			],
 		];
 	}
@@ -417,20 +456,25 @@ class Mantle2Schemas
 			'$defs' => [
 				'privacy' => [
 					'type' => 'string',
-					'enum' => ['PUBLIC', 'MUTUAL', 'CIRCLE', 'FRIEND'],
+					'enum' => ['PUBLIC', 'MUTUAL', 'CIRCLE', 'PRIVATE'],
+				],
+				'never_public_privacy' => [
+					'type' => 'string',
+					'enum' => ['MUTUAL', 'CIRCLE', 'PRIVATE'],
+					'default' => 'PRIVATE',
 				],
 			],
 			'properties' => [
 				'name' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'bio' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
-				'phone_number' => ['$ref' => '#/$defs/privacy', 'default' => 'PRIVATE'],
-				'country' => ['$ref' => '#/$defs/privacy', 'default' => 'PRIVATE'],
+				'phone_number' => ['$ref' => '#/$defs/never_public_privacy', 'default' => 'CIRCLE'],
+				'country' => ['$ref' => '#/$defs/privacy', 'default' => 'MUTUAL'],
 				'email' => ['$ref' => '#/$defs/privacy', 'default' => 'MUTUAL'],
-				'address' => ['$ref' => '#/$defs/privacy', 'default' => 'PRIVATE'],
+				'address' => ['$ref' => '#/$defs/never_public_privacy', 'default' => 'PRIVATE'],
 				'activities' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'events' => ['$ref' => '#/$defs/privacy', 'default' => 'MUTUAL'],
-				'friends' => ['$ref' => '#/$defs/privacy', 'default' => 'MUTUAL'],
-				'last_login' => ['$ref' => '#/$defs/privacy', 'default' => 'CIRCLE'],
+				'friends' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
+				'last_login' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'account_type' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 			],
 		]);
@@ -443,7 +487,7 @@ class Mantle2Schemas
 			'properties' => [
 				'name' => self::$text,
 				'description' => self::$text,
-				'type' => self::$eventType,
+				'type' => self::eventType(),
 				'location' => [
 					'type' => 'object',
 					'properties' => [
@@ -453,7 +497,7 @@ class Mantle2Schemas
 				],
 				'date' => ['type' => 'integer', 'example' => 1736400000000],
 				'end_date' => ['type' => 'integer', 'example' => 1736403600000],
-				'visibility' => self::$visibility,
+				'visibility' => self::visibility(),
 			],
 			'required' => ['name', 'type', 'date', 'visibility'],
 		];
@@ -467,8 +511,8 @@ class Mantle2Schemas
 				'hostId' => self::$id,
 				'name' => self::$text,
 				'description' => self::$text,
-				'type' => self::$eventType,
-				'activities' => ['type' => 'array', 'items' => self::$activityType],
+				'type' => self::eventType(),
+				'activities' => ['type' => 'array', 'items' => self::activityType()],
 				'location' => [
 					'type' => 'object',
 					'properties' => [
@@ -478,7 +522,7 @@ class Mantle2Schemas
 				],
 				'date' => self::$date,
 				'endDate' => self::$date,
-				'visibility' => self::$visibility,
+				'visibility' => self::visibility(),
 			],
 		];
 	}
@@ -489,7 +533,7 @@ class Mantle2Schemas
 			'type' => 'object',
 			'properties' => [
 				'prompt' => self::$text,
-				'visibility' => self::$userPrivacy,
+				'visibility' => self::userPrivacy(),
 			],
 			'required' => ['prompt'],
 		];
@@ -591,7 +635,7 @@ class Mantle2Schemas
 				'id' => ['type' => 'string', 'example' => 'hiking'],
 				'name' => self::$text,
 				'description' => self::$text,
-				'types' => ['type' => 'array', 'items' => self::$activityType],
+				'types' => ['type' => 'array', 'items' => self::activityType()],
 				'aliases' => ['type' => 'array', 'items' => ['type' => 'string']],
 				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
 			],
@@ -606,7 +650,7 @@ class Mantle2Schemas
 			'properties' => [
 				'name' => self::$text,
 				'description' => self::$text,
-				'types' => ['type' => 'array', 'items' => self::$activityType],
+				'types' => ['type' => 'array', 'items' => self::activityType()],
 				'aliases' => ['type' => 'array', 'items' => ['type' => 'string']],
 				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
 			],
@@ -637,8 +681,9 @@ class Mantle2Schemas
 						'username' => self::$username,
 						'email' => self::$email,
 						'country' => ['type' => 'string'],
-						'phoneNumber' => ['type' => 'integer'],
-						'visibility' => self::userFieldPrivacy(),
+						'phone_number' => ['type' => 'integer'],
+						'visibility' => self::visibility(),
+						'field_privacy' => self::userFieldPrivacy(),
 					],
 				],
 				'activities' => self::activities(),
@@ -695,8 +740,8 @@ class Mantle2Schemas
 				'hostId' => self::$id,
 				'name' => self::$text,
 				'description' => self::$text,
-				'type' => self::$eventType,
-				'activities' => ['type' => 'array', 'items' => self::$activityType],
+				'type' => self::eventType(),
+				'activities' => ['type' => 'array', 'items' => self::activityType()],
 				'location' => [
 					'type' => 'object',
 					'properties' => [
@@ -706,7 +751,7 @@ class Mantle2Schemas
 				],
 				'date' => self::$date,
 				'endDate' => self::$date,
-				'visibility' => self::$visibility,
+				'visibility' => self::visibility(),
 			],
 			'required' => [
 				'id',
@@ -733,7 +778,7 @@ class Mantle2Schemas
 				'id' => ['type' => 'string', 'example' => 'hiking'],
 				'name' => self::$text,
 				'description' => self::$text,
-				'types' => ['type' => 'array', 'items' => self::$activityType],
+				'types' => ['type' => 'array', 'items' => self::activityType()],
 				'created_at' => self::$date,
 				'updated_at' => self::$date,
 				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
@@ -770,7 +815,7 @@ class Mantle2Schemas
 			'properties' => [
 				'id' => self::$uuid,
 				'prompt' => self::$text,
-				'visibility' => self::$userPrivacy,
+				'visibility' => self::userPrivacy(),
 				'created_at' => self::$date,
 				'updated_at' => self::$date,
 			],
