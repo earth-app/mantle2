@@ -28,19 +28,19 @@ if not exist "%SITE_DIR%" (
     xcopy "%SRC_PATH%\*" "web\modules\custom\%PROJECT_NAME%\" /E /Y /I
     if errorlevel 1 goto :error
 
-    ddev config --project-type=drupal11 --docroot=web --project-name="%PROJECT_NAME%" --host-https-post=8787
-    if errorlevel 1 goto :error
-
-    ddev drush install json_field
-    if errorlevel 1 goto :error
-
-    ddev drush en json_field -y
+    ddev config --project-type=drupal11 --docroot=web --project-name="%PROJECT_NAME%" --host-webserver-port=8787
     if errorlevel 1 goto :error
 
     ddev start
     if errorlevel 1 goto :error
 
     ddev drush site:install standard --account-name=admin --account-pass=admin --site-name="%SITE_NAME%" -y
+    if errorlevel 1 goto :error
+
+    ddev drush en json_field -y
+    if errorlevel 1 goto :error
+
+    ddev drush en "%PROJECT_NAME%" -y >nul 2>&1
     if errorlevel 1 goto :error
 ) else (
     echo ^>^>^> Reusing existing site at %SITE_DIR%
@@ -54,8 +54,6 @@ if not exist "%SITE_DIR%" (
     ddev restart
     if errorlevel 1 goto :error
 )
-
-ddev drush en "%PROJECT_NAME%" -y >nul 2>&1
 
 echo.
 echo ^>^>^> Drupal site with %PROJECT_NAME% is ready!

@@ -20,17 +20,17 @@ if [ ! -d "$SITE_DIR" ]; then
   mkdir -p web/modules/custom/$PROJECT_NAME
   cp -R "$SRC_PATH"/* web/modules/custom/$PROJECT_NAME
 
-  ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME" --host-https-post=8787
-
-  ddev drush install json_field
-  ddev drush en json_field -y
+  ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME" --host-webserver-port=8787
 
   ddev start
 
-  ddev drush site:install standard \
+  ddev drush -y site:install standard \
     --account-name=admin \
     --account-pass=admin \
-    --site-name="$SITE_NAME" -y
+    --site-name="$SITE_NAME"
+
+  ddev drush -y en json_field
+  ddev drush -y en "$PROJECT_NAME" || true
 else
   echo ">>> Reusing existing site at $SITE_DIR"
   echo ">>> Using Path: $SRC_PATH"
@@ -41,8 +41,6 @@ else
 
   ddev restart
 fi
-
-ddev drush en "$PROJECT_NAME" -y || true
 
 echo
 echo ">>> Drupal site with $PROJECT_NAME is ready!"
