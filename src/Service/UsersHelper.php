@@ -3,11 +3,13 @@
 namespace Drupal\mantle2\Service;
 
 use Drupal\mantle2\Custom\Activity;
+use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class UsersHelper
 {
@@ -18,6 +20,34 @@ class UsersHelper
 		} else {
 			return self::findById((int) $identifier);
 		}
+	}
+
+	public static function findByAuthorized(
+		string $identifier,
+		Request $request,
+	): UserInterface|JsonResponse {
+		// Owner of the request
+		$user = self::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		// User we want to retrieve
+		$user2 = self::findBy($identifier);
+
+		if (!$user2) {
+			return GeneralHelper::notFound();
+		}
+
+		// Authorization Workflow
+		// This assumes that the request is performing a write operation on a user by an identifier.
+		// Only allow if it is themselves, or if $user2 is an administrator
+		if ($user->id() === $user2->id() || $user2->hasPermission('administer users')) {
+			return $user2;
+		}
+
+		// Return forbidden (failed check)
+		return GeneralHelper::forbidden();
 	}
 
 	public static function findById(int $id): ?UserInterface
@@ -41,6 +71,32 @@ class UsersHelper
 		return $users ? reset($users) : null;
 	}
 
+	public static function checkVisibility(
+		UserInterface $user,
+		Request $request,
+	): UserInterface|JsonResponse {
+		$visibilityValue = $user->get('field_visibility')->getValue();
+		$visibility = $visibilityValue ? $visibilityValue[0]['value'] : 'UNLISTED';
+
+		// PUBLIC is visible to everyone
+		if ($visibility === 'PUBLIC') {
+			return $user;
+		}
+
+		// UNLISTED (and PRIVATE, see below) requires login
+		$user2 = self::findByRequest($request);
+		if (!$user2) {
+			return GeneralHelper::notFound();
+		}
+
+		// PRIVATE requires admin
+		if ($visibility === 'PRIVATE' && !$user2->hasPermission('administer users')) {
+			return GeneralHelper::forbidden();
+		}
+
+		return $user;
+	}
+
 	public static function withSessionId(string $sid, callable $fn)
 	{
 		$session = \Drupal::service('session');
@@ -61,6 +117,10 @@ class UsersHelper
 
 	public static function findByRequest(Request $request)
 	{
+		if (!$request->hasSession()) {
+			return GeneralHelper::notFound();
+		}
+
 		$sessionId = GeneralHelper::getBearerToken($request);
 		if (!$sessionId) {
 			return GeneralHelper::unauthorized();
@@ -72,7 +132,7 @@ class UsersHelper
 		});
 
 		if (!$user instanceof UserInterface) {
-			return GeneralHelper::unauthorized();
+			return GeneralHelper::notFound();
 		}
 
 		return $user;
@@ -83,22 +143,6 @@ class UsersHelper
 		$user = self::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			return null;
-		}
-
-		return $user;
-	}
-
-	public static function findByRequestAuthorized(Request $request, string $identifier)
-	{
-		$user = self::findByRequest($request);
-		if ($user instanceof JsonResponse) {
-			return $user;
-		}
-
-		$user2 = self::findBy($identifier);
-
-		if (!$user2) {
-			return GeneralHelper::notFound();
 		}
 
 		return $user;
@@ -312,6 +356,116 @@ class UsersHelper
 
 		return $serialized;
 	}
+
+	public static function patchUser(UserInterface $user, array $data): JsonResponse
+	{
+		if (!$user || !$data) {
+			return GeneralHelper::badRequest('Invalid user or data');
+		}
+
+		if (isset($body['username'])) {
+			$username = (string) $body['username'];
+			$len = strlen($username);
+			if ($len < 3 || $len > 30) {
+				return GeneralHelper::badRequest('Invalid username length');
+			}
+
+			$existing = self::findByUsername($username);
+			if ($existing && $existing->id() !== $user->id()) {
+				return GeneralHelper::badRequest('Username already exists');
+			}
+
+			$user->setUsername($username);
+		}
+
+		if (isset($body['email'])) {
+			$email = (string) $body['email'];
+
+			if (
+				!str_contains($email, '@') || // Missing @
+				!str_contains(explode('@', $email)[1], '.') // Period in domain
+			) {
+				return GeneralHelper::badRequest('Invalid email format: Must contain @ and .');
+			}
+
+			$existing = self::findByEmail($email);
+			if ($existing && $existing->id() !== $user->id()) {
+				return GeneralHelper::badRequest('Email already exists');
+			}
+
+			$user->setEmail($email);
+		}
+
+		if (isset($body['first_name'])) {
+			$firstName = (string) $body['first_name'];
+			$len = strlen($firstName);
+			if ($len < 2 || $len > 50) {
+				return GeneralHelper::badRequest('Invalid first name length');
+			}
+
+			$user->set('field_first_name', $firstName);
+		}
+
+		if (isset($body['last_name'])) {
+			$lastName = (string) $body['last_name'];
+			$len = strlen($lastName);
+			if ($len < 2 || $len > 50) {
+				return GeneralHelper::badRequest('Invalid last name length');
+			}
+
+			$user->set('field_last_name', $lastName);
+		}
+
+		if (isset($body['bio'])) {
+			$bio = (string) $body['bio'];
+			$len = strlen($bio);
+			if ($len > 500) {
+				return GeneralHelper::badRequest(
+					'Invalid biography length: Maximum 500 characters',
+				);
+			}
+
+			$user->set('field_bio', $bio);
+		}
+
+		if (isset($body['country'])) {
+			$country = (string) $body['country'];
+			$len = strlen($country);
+			if ($len < 2 || $len > 2) {
+				return GeneralHelper::badRequest(
+					'Invalid country code length: Must be 2 characters',
+				);
+			}
+
+			$user->set('field_country', $country);
+		}
+
+		if (isset($body['phone_number'])) {
+			$phoneNumber = (int) $body['phone_number'];
+			if ($phoneNumber < 10000 || $phoneNumber > 9999999999) {
+				return GeneralHelper::badRequest(
+					'Invalid phone number: Must be between 10000 and 9999999999',
+				);
+			}
+
+			$user->set('field_phone', $phoneNumber);
+		}
+
+		if (isset($body['visibility'])) {
+			$visibility = (string) $body['visibility'];
+			if (Visibility::tryFrom($visibility) === null) {
+				return GeneralHelper::badRequest('Invalid visibility value');
+			}
+
+			$user->set('field_visibility', $visibility);
+		}
+
+		$user->save();
+
+		return new JsonResponse(self::serializeUser($user), Response::HTTP_OK);
+	}
+
+	// Field Utilities
 
 	/**
 	 * @return UserInterface[]

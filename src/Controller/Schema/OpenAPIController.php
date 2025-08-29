@@ -44,32 +44,71 @@ class OpenAPIController extends ControllerBase
 				$methods = ['GET'];
 			}
 
+			$requestBody = [
+				'description' => $options['body/description'] ?? 'Request object',
+				'required' => $options['body/required'] ?? true,
+				'content' => [
+					'application/json' => [
+						'schema' => $this->resolveSchemaSpecifier($options['body/schema'] ?? null),
+					],
+				],
+			];
+
 			$responses = array_filter(
 				[
-					'200' => $options['schema/200']
-						? ['description' => 'Successful response']
-						: null,
-					'201' => $options['schema/201'] ? ['description' => 'Resource created'] : null,
-					'400' => $options['schema/400']
-						? Mantle2Schemas::E400($options['schema/400'])
-						: null,
-					'401' => $options['schema/401']
-						? Mantle2Schemas::E401($options['schema/401'])
-						: null,
-					'402' => $options['schema/402']
-						? Mantle2Schemas::E402($options['schema/402'])
-						: null,
-					'403' => $options['schema/403']
-						? Mantle2Schemas::E403($options['schema/403'])
-						: null,
-					'404' => $options['schema/404']
-						? Mantle2Schemas::E404($options['schema/404'])
-						: null,
+					'200' =>
+						$options['schema/200'] ?? null
+							? [
+								'description' => 'Successful response',
+								'content' => [
+									$options['schema/200/type'] ?? 'application/json' => [
+										'schema' => $this->resolveSchemaSpecifier(
+											$options['schema/200'],
+										),
+									],
+								],
+							]
+							: null,
+					'201' =>
+						$options['schema/201'] ?? null
+							? [
+								'description' => 'Resource created',
+								'content' => [
+									$options['schema/201/type'] ?? 'application/json' => [
+										'schema' => $this->resolveSchemaSpecifier(
+											$options['schema/201'],
+										),
+									],
+								],
+							]
+							: null,
+					'204' =>
+						$options['schema/204'] ?? null ? ['description' => 'No Content'] : null,
+					'400' =>
+						$options['schema/400'] ?? null
+							? Mantle2Schemas::E400($options['schema/400'])
+							: null,
+					'401' =>
+						$options['schema/401'] ?? null
+							? Mantle2Schemas::E401($options['schema/401'])
+							: null,
+					'402' =>
+						$options['schema/402'] ?? null
+							? Mantle2Schemas::E402($options['schema/402'])
+							: null,
+					'403' =>
+						$options['schema/403'] ?? null
+							? Mantle2Schemas::E403($options['schema/403'])
+							: null,
+					'404' =>
+						$options['schema/404'] ?? null
+							? Mantle2Schemas::E404($options['schema/404'])
+							: null,
 				],
 				fn($v) => $v !== null,
 			);
 
-			$pathItem = [];
+			$pathItem = $paths[$path] ?? [];
 			foreach ($methods as $method) {
 				$parameters = [];
 				preg_match_all('/\{(\w+)}/', $path, $matches);
@@ -82,12 +121,18 @@ class OpenAPIController extends ControllerBase
 					];
 				}
 
-				$pathItem[strtolower($method)] = [
+				$method0 = strtolower($method);
+				$pathItem[$method0] = [
 					'summary' => $route->getDefault('_title') ?? $name,
+					'description' => $options['description'] ?? '',
 					'parameters' => $parameters,
 					'responses' => $responses,
 					'tags' => $options['tags'] ?? [],
 				];
+
+				if ($method !== 'GET' && $requestBody) {
+					$pathItem[$method0]['requestBody'] = $requestBody;
+				}
 			}
 
 			$paths[$path] = $pathItem;
@@ -96,7 +141,7 @@ class OpenAPIController extends ControllerBase
 		$schema = [
 			'openapi' => '3.1.0',
 			'info' => [
-				'title' => 'mantle2',
+				'title' => '@earth-app/mantle2',
 				'description' => 'Backend API for The Earth App, powered by Drupal',
 				'version' => '1.0.0',
 			],
@@ -135,5 +180,37 @@ class OpenAPIController extends ControllerBase
 		];
 
 		return new JsonResponse($schema);
+	}
+
+	private function resolveSchemaSpecifier($spec): array
+	{
+		if (!is_string($spec)) {
+			return ['type' => 'object'];
+		}
+
+		$spec = trim($spec);
+		if ($spec === '') {
+			return ['type' => 'object'];
+		}
+
+		// Property reference: "$propName"
+		if ($spec[0] === '$') {
+			$prop = substr($spec, 1);
+			if ($prop !== '' && property_exists(Mantle2Schemas::class, $prop)) {
+				return Mantle2Schemas::${$prop};
+			}
+		}
+
+		// Method reference: "method" or "method()"
+		$method = $spec;
+		if (substr($method, -2) === '()') {
+			$method = substr($method, 0, -2);
+		}
+		if ($method !== '' && method_exists(Mantle2Schemas::class, $method)) {
+			return Mantle2Schemas::$method();
+		}
+
+		// Fallback
+		return ['type' => 'object'];
 	}
 }

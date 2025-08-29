@@ -4,8 +4,8 @@ namespace Drupal\mantle2\Controller\Schema;
 
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Visibility;
-use EventType;
-use Privacy;
+use Drupal\mantle2\Custom\EventType;
+use Drupal\mantle2\Custom\Privacy;
 
 class Mantle2Schemas
 {
@@ -257,6 +257,16 @@ class Mantle2Schemas
 
 	// String Types
 	public static array $text = ['type' => 'string', 'example' => 'Hello World'];
+	public static function text($maxLength = 100, $minLength = 1): array
+	{
+		return [
+			'type' => 'string',
+			'minLength' => $minLength,
+			'maxLength' => $maxLength,
+			'example' => str_repeat('a', mt_rand($minLength, $maxLength)),
+		];
+	}
+
 	public static array $number = [
 		'type' => 'number',
 		'minimum' => 0,
@@ -267,7 +277,7 @@ class Mantle2Schemas
 		'type' => 'string',
 		'minLength' => 24,
 		'maxLength' => 24,
-		'example' => 'ebfjwHLdiqBudn3eyd83g1bs',
+		'example' => '012345678987654321012345',
 	];
 	public static array $username = [
 		'type' => 'string',
@@ -314,6 +324,12 @@ class Mantle2Schemas
 		'type' => 'string',
 		'example' => '4bHN3nxwb21bd1sm109s1nan28xm1bab2Js18',
 		'description' => 'The session token for the user',
+	];
+	public static array $name = [
+		'type' => 'string',
+		'minLength' => 2,
+		'maxLength' => 50,
+		'example' => 'John',
 	];
 
 	// Parameter Schemas
@@ -402,8 +418,8 @@ class Mantle2Schemas
 				'username' => self::$username,
 				'password' => self::$password,
 				'email' => self::$email,
-				'firstName' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 30],
-				'lastName' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 30],
+				'first_name' => self::text(50),
+				'last_name' => self::text(50),
 			],
 			'required' => ['username', 'password'],
 		];
@@ -416,12 +432,12 @@ class Mantle2Schemas
 			'properties' => [
 				'username' => self::$username,
 				'email' => self::$email,
-				'firstName' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 30],
-				'lastName' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 30],
-				'address' => ['type' => 'string', 'maxLength' => 100],
-				'bio' => ['type' => 'string', 'maxLength' => 500],
-				'country' => ['type' => 'string', 'minLength' => 2, 'maxLength' => 2],
-				'phone_number' => ['type' => 'integer', 'maximum' => 9999999999],
+				'first_name' => self::text(50),
+				'last_name' => self::text(50),
+				'address' => self::text(100),
+				'bio' => self::text(500),
+				'country' => self::text(2),
+				'phone_number' => self::$number,
 				'visibility' => self::visibility(),
 			],
 		];
@@ -456,11 +472,14 @@ class Mantle2Schemas
 			'$defs' => [
 				'privacy' => [
 					'type' => 'string',
-					'enum' => ['PUBLIC', 'MUTUAL', 'CIRCLE', 'PRIVATE'],
+					'enum' => array_map(fn($case) => $case->value, Privacy::cases()),
 				],
 				'never_public_privacy' => [
 					'type' => 'string',
-					'enum' => ['MUTUAL', 'CIRCLE', 'PRIVATE'],
+					'enum' => array_filter(
+						array_map(fn($case) => $case->value, Privacy::cases()),
+						fn($value) => $value !== 'PUBLIC',
+					),
 					'default' => 'PRIVATE',
 				],
 			],
@@ -680,6 +699,10 @@ class Mantle2Schemas
 						'id' => self::$id,
 						'username' => self::$username,
 						'email' => self::$email,
+						'first_name' => self::$name,
+						'last_name' => self::$name,
+						'address' => self::text(100),
+						'bio' => self::text(500),
 						'country' => ['type' => 'string'],
 						'phone_number' => ['type' => 'integer'],
 						'visibility' => self::visibility(),
@@ -693,7 +716,15 @@ class Mantle2Schemas
 	}
 	public static function users(): array
 	{
-		return ['type' => 'array', 'items' => self::user()];
+		return [
+			'type' => 'object',
+			'properties' => [
+				'limit' => ['type' => 'integer', 'example' => 10],
+				'offset' => ['type' => 'integer', 'example' => 0],
+				'total' => ['type' => 'integer', 'example' => 100],
+				'items' => ['type' => 'array', 'items' => self::user()],
+			],
+		];
 	}
 
 	public static function signupResponse(): array

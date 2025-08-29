@@ -4,7 +4,7 @@ use Drupal\node\Entity\NodeType;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
-use Drupal\mantle2\Custom\ActivityType;
+use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\UsersHelper;
 
@@ -88,11 +88,7 @@ function mantle2_install()
 
 	/// Visibility
 	createField('user', 'field_visibility', 'list_string', 'Visibility', true, null, [
-		'allowed_values' => [
-			'PUBLIC' => 'Public',
-			'UNLISTED' => 'Unlisted',
-			'PRIVATE' => 'Private',
-		],
+		'allowed_values' => array_map(fn($case) => $case->value, Visibility::cases()),
 	]);
 
 	/// Field Privacy

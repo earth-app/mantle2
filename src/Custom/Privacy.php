@@ -1,5 +1,7 @@
 <?php
 
+namespace Drupal\mantle2\Custom;
+
 enum Privacy: string
 {
 	case PRIVATE = 'PRIVATE';

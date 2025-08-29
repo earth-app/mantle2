@@ -15,18 +15,23 @@ mantle2.hello:
   path: /v2/hello
   defaults:
     _controller: '\Drupal\mantle2\Controller\GeneralController::hi'
-    _title: 'Hello'
+    _title: 'Hello!'
   requirements:
     _access: 'TRUE'
+  options:
+    description: Say hi to mantle2
+    schema/200/type: text/plain
   methods: [GET]
 
 mantle2.info:
   path: /v2/info
   defaults:
     _controller: '\Drupal\mantle2\Controller\GeneralController::getInfo'
-    _title: 'Info JSON'
+    _title: 'Module Information'
   requirements:
     _access: 'TRUE'
+  options:
+    description: Retrieve information about the mantle2 Module
   methods: [GET]
 
 ## User Routes
@@ -34,29 +39,17 @@ mantle2.users:
   path: '/v2/users'
   defaults:
     _controller: '\Drupal\mantle2\Controller\User\UsersController::users'
-    _title: 'User List'
+    _title: 'Retrieve User List'
   requirements:
     _access: 'TRUE'
   options:
+    description: Retrieves a list of Earth App users
+    schema/200: users()
+    schema/400: Invalid Pagination Parameters
     query:
       limit: 25
       page: 1
       search: ''
-  methods: [GET]
-
-mantle2.users.get:
-  path: '/v2/users/{user}'
-  defaults:
-    _controller: '\Drupal\mantle2\Controller\User\UsersController::getUser'
-    _title: 'User JSON'
-  requirements:
-    _access: 'TRUE'
-    user: \d+|@\w+
-  options:
-    schema/404: User not found
-    parameters:
-      user:
-        type: entity:user
   methods: [GET]
 
 mantle2.users.login:
@@ -66,6 +59,11 @@ mantle2.users.login:
     _title: 'User Login'
   requirements:
     _access: 'TRUE'
+  options:
+    description: 'Log in to your Earth App account'
+    schema/200: loginResponse()
+    schema/400: Invalid login credentials
+    schema/401: Unauthorized
   methods: [POST]
 
 mantle2.users.logout:
@@ -75,6 +73,10 @@ mantle2.users.logout:
     _title: 'User Logout'
   requirements:
     _access: 'TRUE'
+  options:
+    description: Log out of your Earth App account
+    schema/200: logoutResponse()
+    schema/401: Unauthorized
   methods: [POST]
 
 mantle2.users.create:
@@ -84,15 +86,131 @@ mantle2.users.create:
     _title: 'Create User'
   requirements:
     _access: 'TRUE'
+  options:
+    description: Sign up for an Earth App account
+    schema/201: signupResponse()
+    schema/400: Bad User Data
   methods: [POST]
+
+mantle2.users.id.get:
+  path: '/v2/users/{id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::getUser'
+    _title: 'Retrieve User by ID'
+  requirements:
+    _access: 'TRUE'
+    user: \d+
+  options:
+    description: Retrieves user information by their identifier
+    schema/200: user()
+    schema/404: User not found
+    parameters:
+      id:
+        type: entity:user
+  methods: [GET]
+
+mantle2.users.id.patch:
+  path: '/v2/users/{id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::patchUser'
+    _title: 'Update User by ID'
+  requirements:
+    _access: 'TRUE'
+    user: \d+
+  options:
+    description: Updates user information by their identifier
+    schema/200: user()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: entity:user
+  methods: [PATCH]
+
+mantle2.users.id.delete:
+  path: '/v2/users/{id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::deleteUser'
+    _title: 'Delete User by ID'
+  requirements:
+    _access: 'TRUE'
+    user: \d+
+  options:
+    schema/204: User deleted successfully
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: entity:user
+  methods: [DELETE]
+
+mantle2.users.username.get:
+  path: '/v2/users/{username}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::getUser'
+    _title: 'Retrieve User by Username'
+  requirements:
+    _access: 'TRUE'
+    user: '@\w+'
+  options:
+    description: Retrieves user information by their username
+    schema/200: user()
+    schema/404: User not found
+    parameters:
+      username:
+        type: entity:user
+  methods: [GET]
+
+mantle2.users.username.patch:
+  path: '/v2/users/{username}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::patchUser'
+    _title: 'Update User by Username'
+  requirements:
+    _access: 'TRUE'
+    user: '@\w+'
+  options:
+    description: Updates user information by their username
+    schema/200: user()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: entity:user
+  methods: [PATCH]
+
+mantle2.users.username.delete:
+  path: '/v2/users/{username}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::deleteUser'
+    _title: 'Delete User by Username'
+  requirements:
+    _access: 'TRUE'
+    user: '@\w+'
+  options:
+    schema/204: User deleted successfully
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: entity:user
+  methods: [DELETE]
 
 mantle2.users.current.get:
   path: '/v2/users/current'
   defaults:
     _controller: '\Drupal\mantle2\Controller\User\UsersController::currentGet'
-    _title: 'Current User'
+    _title: 'Retrieve Current User'
   requirements:
     _access: 'TRUE'
+  options:
+    schema/200: user()
+    schema/401: Unauthorized
+    schema/404: User not found
   methods: [GET]
 
 mantle2.users.current.patch:
@@ -102,6 +220,10 @@ mantle2.users.current.patch:
     _title: 'Update Current User'
   requirements:
     _access: 'TRUE'
+  options:
+    schema/200: user()
+    schema/400: Bad Request
+    schema/404: User not found
   methods: [PATCH]
 
 mantle2.users.current.delete:
@@ -111,4 +233,6 @@ mantle2.users.current.delete:
     _title: 'Delete Current User'
   requirements:
     _access: 'TRUE'
+  options:
+    schema/204: User deleted successfully
   methods: [DELETE]

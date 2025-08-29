@@ -53,7 +53,13 @@ class UsersController extends ControllerBase
 			->range($page * $limit, $limit)
 			->sort('created', 'DESC')
 			->execute();
-		$users = $storage->loadMultiple($uids);
+		$users = array_filter($storage->loadMultiple($uids), function ($user) use ($request) {
+			$res = UsersHelper::checkVisibility($user, $request);
+			if ($res instanceof JsonResponse) {
+				return false;
+			}
+			return true;
+		});
 		$data = array_map(fn($user) => UsersHelper::serializeUser($user, $requester), $users);
 		return new JsonResponse([
 			'page' => $page + 1,
@@ -75,6 +81,9 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized();
 		}
 		[$name, $pass] = explode(':', $decoded, 2);
+		if (!$name || !$pass) {
+			return GeneralHelper::badRequest('Invalid login credentials');
+		}
 
 		/** @var UserAuthInterface $userAuth */
 		$userAuth = \Drupal::service('user.auth');
@@ -208,16 +217,11 @@ class UsersController extends ControllerBase
 		}
 
 		$body = json_decode((string) $request->getContent(), true) ?: [];
-		if (isset($body['username'])) {
-			$user->setUsername((string) $body['username']);
-		}
-		if (isset($body['email'])) {
-			$user->setEmail((string) $body['email']);
+		if (!$body) {
+			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
-		$user->save();
-
-		return new JsonResponse(UsersHelper::serializeUser($user), Response::HTTP_OK);
+		return UsersHelper::patchUser($user, $body);
 	}
 
 	// DELETE /v2/users/current
@@ -235,14 +239,58 @@ class UsersController extends ControllerBase
 
 	// GET /v2/users/:id
 	// GET /v2/users/:username
-	public function getUser(string $identifier)
+	public function getUser(string $identifier, Request $request)
 	{
 		$user = UsersHelper::findBy($identifier);
 		if (!$user) {
 			return GeneralHelper::notFound('User not found');
 		}
 
+		$user = UsersHelper::checkVisibility($user, $request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
 		return UsersHelper::serializeUser($user);
+	}
+
+	// PATCH /v2/users/:id
+	// PATCH /v2/users/:username
+	public function patchUser(string $identifier, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByAuthorized($identifier, $request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!$user) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		if (!$body) {
+			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		return UsersHelper::patchUser($user, $body);
+	}
+
+	// DELETE /v2/users/:id
+	// DELETE /v2/users/:username
+	public function deleteUser(string $identifier, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByAuthorized($identifier, $request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!$user) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$user->delete();
+
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
 
 	// Utility Functions
