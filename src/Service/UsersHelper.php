@@ -9,6 +9,7 @@ use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
+use Exception;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -91,15 +92,20 @@ class UsersHelper
 		return null;
 	}
 
+	public static function getVisibility(UserInterface $user): Visibility
+	{
+		$visibilityValue = $user->get('field_visibility')->getValue();
+		$visibility = $visibilityValue ? $visibilityValue[0]['value'] : 'UNLISTED';
+		return Visibility::tryFrom($visibility) ?? Visibility::UNLISTED;
+	}
+
 	public static function checkVisibility(
 		UserInterface $user,
 		Request $request,
 	): UserInterface|JsonResponse {
-		$visibilityValue = $user->get('field_visibility')->getValue();
-		$visibility = $visibilityValue ? $visibilityValue[0]['value'] : 'UNLISTED';
-
+		$visibility = self::getVisibility($user);
 		// PUBLIC is visible to everyone
-		if ($visibility === 'PUBLIC') {
+		if ($visibility === Visibility::PUBLIC) {
 			return $user;
 		}
 
@@ -110,7 +116,7 @@ class UsersHelper
 		}
 
 		// PRIVATE requires admin
-		if ($visibility === 'PRIVATE' && !$user2->hasPermission('administer users')) {
+		if ($visibility === Visibility::PRIVATE && !$user2->hasPermission('administer users')) {
 			return GeneralHelper::forbidden();
 		}
 
@@ -529,6 +535,45 @@ class UsersHelper
 		return new JsonResponse(self::serializeUser($user), Response::HTTP_OK);
 	}
 
+	public static function getProfilePhoto(UserInterface $user): string
+	{
+		try {
+			$res = CloudHelper::sendRequest('/users/profile_photo/' . $user->id());
+			$data = $res['data'] ?? null;
+			return $data ?: '';
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to retrieve profile photo: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return '';
+	}
+
+	public static function regenerateProfilePhoto(UserInterface $user): string
+	{
+		try {
+			$res = CloudHelper::sendRequest('/users/profile_photo/' . $user->id(), 'PUT', [
+				'username' => $user->getAccountName(),
+				'bio' => self::getBiography($user),
+				'created_at' => date('c', $user->getCreatedTime()),
+				'visibility' => self::getVisibility($user)->name,
+				'country' => self::getCountry($user),
+				'full_name' => self::getName($user),
+				'activities' => self::getActivities($user),
+			]);
+
+			$data = $res['data'] ?? null;
+			return $data ?: '';
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to regenerate profile photo: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return '';
+	}
+
 	// Field Utilities
 
 	/**
@@ -598,6 +643,10 @@ class UsersHelper
 		return in_array($user2, $circle, true);
 	}
 
+	/**
+	 * @param UserInterface $user
+	 * @return array<Activity>
+	 */
 	public static function getActivities(UserInterface $user): array
 	{
 		$activities = json_decode($user->get('field_activities')->getValue(), true);

@@ -79,6 +79,33 @@ class GeneralHelper
 		];
 	}
 
+	public static function fromDataURL(string $dataUrl): Response
+	{
+		if (!$dataUrl) {
+			return GeneralHelper::notFound('Profile photo not found');
+		}
+
+		[$meta, $data] = explode(',', $dataUrl, 2);
+		if (stripos($meta, 'base64') === false) {
+			return GeneralHelper::internalError('Invalid profile photo data');
+		}
+		$matches = [];
+		if (!preg_match('/data:(.*?);base64/', $meta, $matches) || count($matches) < 2) {
+			return GeneralHelper::internalError('Invalid profile photo data');
+		}
+		$mime = $matches[1];
+		$decoded = base64_decode($data, true);
+		if ($decoded === false) {
+			return GeneralHelper::internalError('Failed to decode profile photo data');
+		}
+
+		return new Response($decoded, Response::HTTP_OK, [
+			'Content-Type' => $mime,
+			'Content-Length' => strlen($decoded),
+			'Cache-Control' => 'public, max-age=86400', // Cache for 1 day
+		]);
+	}
+
 	// Network Utilities
 
 	public static function getBearerToken(Request $request): ?string

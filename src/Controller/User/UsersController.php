@@ -268,6 +268,31 @@ class UsersController extends ControllerBase
 		return UsersHelper::patchFieldPrivacy($user, $body);
 	}
 
+	// GET /v2/users/current/profile_photo
+	// GET /v2/users/current/profile_photo
+	public function currentProfilePhoto(Request $request): Response
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$dataUrl = UsersHelper::getProfilePhoto($user);
+		return GeneralHelper::fromDataURL($dataUrl);
+	}
+
+	// PUT /v2/users/current/profile_photo
+	public function currentUpdateProfilePhoto(Request $request): Response
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$dataUrl = UsersHelper::regenerateProfilePhoto($user);
+		return GeneralHelper::fromDataURL($dataUrl);
+	}
+
 	// GET /v2/users/:id
 	// GET /v2/users/:username
 	public function getUser(string $identifier, Request $request): JsonResponse
@@ -335,6 +360,42 @@ class UsersController extends ControllerBase
 		}
 
 		return UsersHelper::patchFieldPrivacy($user, $body);
+	}
+
+	// GET /v2/users/:id/profile_photo
+	// GET /v2/users/:username/profile_photo
+	public function getProfilePhoto(string $identifier, Request $request): Response
+	{
+		$user = UsersHelper::findBy($identifier);
+		if (!$user) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$user = UsersHelper::checkVisibility($user, $request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$dataUrl = UsersHelper::getProfilePhoto($user);
+		return GeneralHelper::fromDataURL($dataUrl);
+	}
+
+	// PUT /v2/users/:id/profile_photo
+	// PUT /v2/users/:username/profile_photo
+	public function updateProfilePhoto(string $identifier, Request $request): Response
+	{
+		$user = UsersHelper::findBy($identifier);
+		if (!$user) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$user = UsersHelper::checkVisibility($user, $request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$dataUrl = UsersHelper::regenerateProfilePhoto($user);
+		return GeneralHelper::fromDataURL($dataUrl);
 	}
 
 	// Utility Functions
