@@ -2,10 +2,11 @@
 
 namespace Drupal\mantle2\Service;
 
+use Drupal;
+use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\Visibility;
-use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -58,18 +59,36 @@ class UsersHelper
 
 	public static function findByUsername(string $username): ?UserInterface
 	{
-		$users = \Drupal::entityTypeManager()
-			->getStorage('user')
-			->loadByProperties(['name' => $username]);
-		return $users ? reset($users) : null;
+		try {
+			$users = Drupal::entityTypeManager()
+				->getStorage('user')
+				->loadByProperties(['name' => $username]);
+
+			return $users ? reset($users) : null;
+		} catch (Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException | Drupal\Component\Plugin\Exception\PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error('Failed to load user by username: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return null;
 	}
 
 	public static function findByEmail(string $email)
 	{
-		$users = \Drupal::entityTypeManager()
-			->getStorage('user')
-			->loadByProperties(['mail' => $email]);
-		return $users ? reset($users) : null;
+		try {
+			$users = Drupal::entityTypeManager()
+				->getStorage('user')
+				->loadByProperties(['mail' => $email]);
+
+			return $users ? reset($users) : null;
+		} catch (Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException | Drupal\Component\Plugin\Exception\PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error('Failed to load user by email: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return null;
 	}
 
 	public static function checkVisibility(
@@ -100,7 +119,7 @@ class UsersHelper
 
 	public static function withSessionId(string $sid, callable $fn)
 	{
-		$session = \Drupal::service('session');
+		$session = Drupal::service('session');
 		if (method_exists($session, 'isStarted') && $session->isStarted()) {
 			$current = method_exists($session, 'getId') ? $session->getId() : null;
 			if ($current !== $sid && method_exists($session, 'save')) {
@@ -149,8 +168,11 @@ class UsersHelper
 		return $user;
 	}
 
-	public static function isVisible(UserInterface $user, ?UserInterface $user2, string $required)
-	{
+	public static function isVisible(
+		UserInterface $user,
+		?UserInterface $user2,
+		string $required,
+	): bool {
 		if ($required === 'PUBLIC') {
 			return true;
 		}
@@ -332,7 +354,8 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): array {
 		$privacy = self::getFieldPrivacy($user);
-		$serialized = [
+
+		return [
 			'id' => self::formatId($user->id()),
 			'username' => $user->getAccountName(),
 			'fullName' => self::getName($user, $requester),
@@ -359,13 +382,11 @@ class UsersHelper
 				$privacy['friends'] ?? 'PUBLIC',
 			),
 		];
-
-		return $serialized;
 	}
 
 	public static function patchUser(UserInterface $user, array $data): JsonResponse
 	{
-		if (!$user || !$data) {
+		if (!$data) {
 			return GeneralHelper::badRequest('Invalid user or data');
 		}
 
@@ -466,12 +487,19 @@ class UsersHelper
 			$user->set('field_visibility', $visibility);
 		}
 
-		$user->save();
+		try {
+			$user->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to save user: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to save user');
+		}
 
 		return new JsonResponse(self::serializeUser($user), Response::HTTP_OK);
 	}
 
-	private static function validKeys()
+	private static function validKeys(): array
 	{
 		return array_keys(Mantle2Schemas::userFieldPrivacy()['properties']);
 	}
@@ -480,10 +508,6 @@ class UsersHelper
 
 	public static function patchFieldPrivacy(UserInterface $user, array $data): JsonResponse
 	{
-		if (!$user) {
-			return GeneralHelper::badRequest('Invalid user');
-		}
-
 		if (empty($data)) {
 			return GeneralHelper::badRequest('No data provided');
 		}
@@ -512,8 +536,10 @@ class UsersHelper
 	 */
 	public static function getAddedFriends(UserInterface $user): array
 	{
-		/** @var int[] */
-		$friends = json_decode($user->get('field_friends')->getValue(), true);
+		$friendsValue = $user->get('field_friends')->getValue();
+
+		/** @var int[] $friends*/
+		$friends = $friendsValue ? json_decode($friendsValue[0]['value'], true) : [];
 		return array_map(fn($id) => self::findById($id), $friends);
 	}
 
@@ -559,8 +585,10 @@ class UsersHelper
 	 */
 	public static function getCircle(UserInterface $user): array
 	{
-		/** @var int[] */
-		$circle = json_decode($user->get('field_circle')->getValue(), true);
+		$circleValue = $user->get('field_circle')->getValue();
+
+		/** @var int[] $circle */
+		$circle = $circleValue ? json_decode($circleValue[0]['value'], true) : [];
 		return array_map(fn($id) => self::findById($id), $circle);
 	}
 

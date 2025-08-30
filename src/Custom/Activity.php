@@ -1,8 +1,8 @@
-<?php
+<?php /** @noinspection PhpUnused */
 
 namespace Drupal\mantle2\Custom;
 
-use Drupal\mantle2\Custom\ActivityType;
+use InvalidArgumentException;
 
 class Activity
 {
@@ -14,7 +14,7 @@ class Activity
 	protected array $aliases = [];
 	private array $fields = [];
 
-	public const MAX_TYPES = 5;
+	public const int MAX_TYPES = 5;
 
 	public function __construct(string $id, string $name)
 	{
@@ -103,31 +103,31 @@ class Activity
 
 	/**
 	 * Validate invariants similar to the Kotlin model.
-	 * @throws \InvalidArgumentException
+	 * @throws InvalidArgumentException
 	 */
 	public function validate(): void
 	{
 		if ($this->id === '') {
-			throw new \InvalidArgumentException('ID must not be empty.');
+			throw new InvalidArgumentException('ID must not be empty.');
 		}
 		if ($this->name === '') {
-			throw new \InvalidArgumentException('Name must not be empty.');
+			throw new InvalidArgumentException('Name must not be empty.');
 		}
 		if (empty($this->types)) {
-			throw new \InvalidArgumentException('Activity types must not be empty.');
+			throw new InvalidArgumentException('Activity types must not be empty.');
 		}
 		if (count($this->types) > self::MAX_TYPES) {
-			throw new \InvalidArgumentException(
+			throw new InvalidArgumentException(
 				'Activity can have a maximum of ' . self::MAX_TYPES . ' types.',
 			);
 		}
 
 		if ($this->description === null || trim($this->description) === '') {
-			throw new \InvalidArgumentException('Description must not be empty.');
+			throw new InvalidArgumentException('Description must not be empty.');
 		}
 		$len = strlen($this->description);
 		if ($len < 1 || $len > 2500) {
-			throw new \InvalidArgumentException(
+			throw new InvalidArgumentException(
 				'Description must be between 1 and 2500 characters.',
 			);
 		}
@@ -138,7 +138,7 @@ class Activity
 	{
 		if (count($this->types) >= self::MAX_TYPES) {
 			trigger_error(
-				"Cannot add type {$type->value} to activity '{$this->id}': maximum of " .
+				"Cannot add type $type->value to activity '$this->id': maximum of " .
 					self::MAX_TYPES .
 					' types reached.',
 				E_USER_WARNING,
@@ -155,7 +155,7 @@ class Activity
 			trigger_error(
 				'Cannot add types ' .
 					implode(', ', array_map(fn($t) => $t->value, $types)) .
-					" to activity '{$this->id}': maximum of " .
+					" to activity '$this->id': maximum of " .
 					self::MAX_TYPES .
 					' types reached.',
 				E_USER_WARNING,
@@ -171,7 +171,7 @@ class Activity
 		$idx = array_search($type, $this->types, true);
 		if ($idx === false) {
 			trigger_error(
-				"Type {$type->value} is not present in the activity types for activity '{$this->id}'.",
+				"Type $type->value is not present in the activity types for activity '$this->id'.",
 				E_USER_WARNING,
 			);
 			return;
@@ -186,7 +186,7 @@ class Activity
 			$idx = array_search($type, $this->types, true);
 			if ($idx === false) {
 				trigger_error(
-					"Type {$type->value} is not present in the activity types for activity '{$this->id}'.",
+					"Type $type->value is not present in the activity types for activity '$this->id'.",
 					E_USER_WARNING,
 				);
 				continue;
@@ -215,7 +215,7 @@ class Activity
 	{
 		if (in_array($alias, $this->aliases, true)) {
 			trigger_error(
-				"Alias '$alias' is already present in the activity aliases for activity '{$this->id}'.",
+				"Alias '$alias' is already present in the activity aliases for activity '$this->id'.",
 				E_USER_WARNING,
 			);
 			return;
@@ -228,7 +228,7 @@ class Activity
 		foreach ($aliases as $alias) {
 			if (in_array($alias, $this->aliases, true)) {
 				trigger_error(
-					"Alias '$alias' is already present in the activity aliases for activity '{$this->id}'.",
+					"Alias '$alias' is already present in the activity aliases for activity '$this->id'.",
 					E_USER_WARNING,
 				);
 				continue;
@@ -242,7 +242,7 @@ class Activity
 		$idx = array_search($alias, $this->aliases, true);
 		if ($idx === false) {
 			trigger_error(
-				"Alias '$alias' is not present in the activity aliases for activity '{$this->id}'.",
+				"Alias '$alias' is not present in the activity aliases for activity '$this->id'.",
 				E_USER_WARNING,
 			);
 			return;
@@ -256,7 +256,7 @@ class Activity
 			$idx = array_search($alias, $this->aliases, true);
 			if ($idx === false) {
 				trigger_error(
-					"Alias '$alias' is not present in the activity aliases for activity '{$this->id}'.",
+					"Alias '$alias' is not present in the activity aliases for activity '$this->id'.",
 					E_USER_WARNING,
 				);
 				continue;

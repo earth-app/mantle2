@@ -34,7 +34,7 @@ class OpenAPIController extends ControllerBase
 			$path = $route->getPath();
 
 			// Only include /v2/* routes
-			if (strpos($path, '/v2/') !== 0) {
+			if (!str_starts_with($path, '/v2/')) {
 				continue;
 			}
 
@@ -203,7 +203,7 @@ class OpenAPIController extends ControllerBase
 
 		// Method reference: "method" or "method()"
 		$method = $spec;
-		if (substr($method, -2) === '()') {
+		if (str_ends_with($method, '()')) {
 			$method = substr($method, 0, -2);
 		}
 		if ($method !== '' && method_exists(Mantle2Schemas::class, $method)) {

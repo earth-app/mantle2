@@ -10,19 +10,19 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class ApiExceptionSubscriber implements EventSubscriberInterface
 {
-	public static function getSubscribedEvents()
+	public static function getSubscribedEvents(): array
 	{
 		return [
 			KernelEvents::EXCEPTION => ['onException', 100],
 		];
 	}
 
-	public function onException(ExceptionEvent $event)
+	public function onException(ExceptionEvent $event): void
 	{
 		$request = $event->getRequest();
 
 		// Only affect /v2/* requests
-		if (strpos($request->getPathInfo(), '/v2/') !== 0) {
+		if (!str_starts_with($request->getPathInfo(), '/v2/')) {
 			return;
 		}
 
@@ -38,9 +38,6 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
 		if ($exception instanceof HttpExceptionInterface) {
 			$statusCode = $exception->getStatusCode();
 			$message = $exception->getMessage() ?: $this->getDefaultMessage($statusCode);
-		} elseif ($exception instanceof \Exception) {
-			$statusCode = 500;
-			$message = 'Internal server error';
 		}
 
 		$response = new JsonResponse(
@@ -54,15 +51,14 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
 		$event->setResponse($response);
 	}
 
-	private function getDefaultMessage($statusCode)
+	private function getDefaultMessage($statusCode): string
 	{
-		switch ($statusCode) {
-			case 403:
-				return 'Access denied';
-			case 404:
-				return 'Not found';
-			default:
-				return 'Error';
-		}
+		return match ($statusCode) {
+			401 => 'Unauthorized',
+			402 => 'Payment required',
+			403 => 'Access denied',
+			404 => 'Not found',
+			default => 'Error',
+		};
 	}
 }

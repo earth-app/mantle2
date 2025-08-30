@@ -2,13 +2,16 @@
 
 namespace Drupal\mantle2\Controller\User;
 
+use Drupal;
 use Drupal\Core\Controller\ControllerBase;
+use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
-use Drupal\migrate\Plugin\migrate\process\Get;
 use Drupal\user\Entity\User;
 use Drupal\user\UserAuthInterface;
 use Drupal\user\UserInterface;
+use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
+use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -16,10 +19,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 class UsersController extends ControllerBase
 {
-	public static function create(ContainerInterface $container)
+	public static function create(ContainerInterface $container): UsersController|static
 	{
-		$instance = new static();
-		return $instance;
+		return new static();
 	}
 
 	// GET /v2/users
@@ -35,38 +37,42 @@ class UsersController extends ControllerBase
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
 
-		$storage = \Drupal::entityTypeManager()->getStorage('user');
-		$query = $storage->getQuery()->accessCheck(false)->condition('uid', 0, '!='); // Exclude anonymous user
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('user');
+			$query = $storage->getQuery()->accessCheck(false)->condition('uid', 0, '!='); // Exclude anonymous user
 
-		if ($search) {
-			$group = $query
-				->orConditionGroup()
-				->condition('name', $search, 'CONTAINS')
-				->condition('field_first_name', $search, 'CONTAINS')
-				->condition('field_last_name', $search, 'CONTAINS');
-			$query->condition($group);
-		}
-
-		$countQuery = clone $query;
-		$total = $countQuery->count()->execute();
-		$uids = $query
-			->range($page * $limit, $limit)
-			->sort('created', 'DESC')
-			->execute();
-		$users = array_filter($storage->loadMultiple($uids), function ($user) use ($request) {
-			$res = UsersHelper::checkVisibility($user, $request);
-			if ($res instanceof JsonResponse) {
-				return false;
+			if ($search) {
+				$group = $query
+					->orConditionGroup()
+					->condition('name', $search, 'CONTAINS')
+					->condition('field_first_name', $search, 'CONTAINS')
+					->condition('field_last_name', $search, 'CONTAINS');
+				$query->condition($group);
 			}
-			return true;
-		});
-		$data = array_map(fn($user) => UsersHelper::serializeUser($user, $requester), $users);
-		return new JsonResponse([
-			'page' => $page + 1,
-			'total' => $total,
-			'limit' => $limit,
-			'items' => $data,
-		]);
+
+			$countQuery = clone $query;
+			$total = $countQuery->count()->execute();
+			$uids = $query
+				->range($page * $limit, $limit)
+				->sort('created', 'DESC')
+				->execute();
+			$users = array_filter($storage->loadMultiple($uids), function ($user) use ($request) {
+				$res = UsersHelper::checkVisibility($user, $request);
+				if ($res instanceof JsonResponse) {
+					return false;
+				}
+				return true;
+			});
+			$data = array_map(fn($user) => UsersHelper::serializeUser($user, $requester), $users);
+			return new JsonResponse([
+				'page' => $page + 1,
+				'total' => $total,
+				'limit' => $limit,
+				'items' => $data,
+			]);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError('Failed to load user storage: ' . $e->getMessage());
+		}
 	}
 
 	// POST /v2/users/login (Basic auth expected)
@@ -86,7 +92,7 @@ class UsersController extends ControllerBase
 		}
 
 		/** @var UserAuthInterface $userAuth */
-		$userAuth = \Drupal::service('user.auth');
+		$userAuth = Drupal::service('user.auth');
 		$uid = $userAuth->authenticate($name, $pass);
 		if (!$uid) {
 			return GeneralHelper::unauthorized();
@@ -102,7 +108,7 @@ class UsersController extends ControllerBase
 		$this->finalizeLogin($account);
 
 		// Use Drupal session ID as session_token per requirements.
-		$session = \Drupal::service('session');
+		$session = Drupal::service('session');
 		$session_id = method_exists($session, 'getId')
 			? $session->getId()
 			: ($request->getSession()
@@ -135,8 +141,8 @@ class UsersController extends ControllerBase
 		});
 
 		// Destroy that session.
-		UsersHelper::withSessionId($sessionId, function ($session) {
-			\Drupal::service('session_manager')->destroy();
+		UsersHelper::withSessionId($sessionId, function () {
+			Drupal::service('session_manager')->destroy();
 			return null;
 		});
 
@@ -179,11 +185,16 @@ class UsersController extends ControllerBase
 		$user->activate();
 		$user->setPassword($password);
 		$user->enforceIsNew();
-		$user->save();
+
+		try {
+			$user->save();
+		} catch (EntityStorageException $e) {
+			return GeneralHelper::internalError('Failed to create user: ' . $e->getMessage());
+		}
 
 		// Immediately log user in and return session token
 		$this->finalizeLogin($user);
-		$session = \Drupal::service('session');
+		$session = Drupal::service('session');
 		$session_id = method_exists($session, 'getId')
 			? $session->getId()
 			: ($request->getSession()
@@ -232,7 +243,11 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		$user->delete();
+		try {
+			$user->delete();
+		} catch (EntityStorageException $e) {
+			return GeneralHelper::internalError('Failed to delete user: ' . $e->getMessage());
+		}
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
@@ -255,7 +270,7 @@ class UsersController extends ControllerBase
 
 	// GET /v2/users/:id
 	// GET /v2/users/:username
-	public function getUser(string $identifier, Request $request)
+	public function getUser(string $identifier, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findBy($identifier);
 		if (!$user) {
@@ -267,7 +282,7 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		return UsersHelper::serializeUser($user);
+		return new JsonResponse(UsersHelper::serializeUser($user), Response::HTTP_OK);
 	}
 
 	// PATCH /v2/users/:id
@@ -277,10 +292,6 @@ class UsersController extends ControllerBase
 		$user = UsersHelper::findByAuthorized($identifier, $request);
 		if ($user instanceof JsonResponse) {
 			return $user;
-		}
-
-		if (!$user) {
-			return GeneralHelper::notFound('User not found');
 		}
 
 		$body = json_decode((string) $request->getContent(), true) ?: [];
@@ -300,11 +311,11 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		if (!$user) {
-			return GeneralHelper::notFound('User not found');
+		try {
+			$user->delete();
+		} catch (EntityStorageException $e) {
+			return GeneralHelper::internalError('Failed to delete user: ' . $e->getMessage());
 		}
-
-		$user->delete();
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
@@ -316,10 +327,6 @@ class UsersController extends ControllerBase
 		$user = UsersHelper::findByAuthorized($identifier, $request);
 		if ($user instanceof JsonResponse) {
 			return $user;
-		}
-
-		if (!$user) {
-			return GeneralHelper::notFound('User not found');
 		}
 
 		$body = json_decode((string) $request->getContent(), true) ?: [];
@@ -334,19 +341,28 @@ class UsersController extends ControllerBase
 
 	private function finalizeLogin(UserInterface $account): void
 	{
-		\Drupal::currentUser()->setAccount($account);
-		\Drupal::logger('user')->info('Session opened for %name.', [
+		Drupal::currentUser()->setAccount($account);
+		Drupal::logger('user')->info('Session opened for %name.', [
 			'%name' => $account->getAccountName(),
 		]);
-		$account->setLastLoginTime(\Drupal::time()->getRequestTime());
+		$account->setLastLoginTime(Drupal::time()->getRequestTime());
+
 		// Persist the last login time; storage-specific optimization omitted to avoid static analysis issues.
-		$account->save();
-		$session = \Drupal::service('session');
+		try {
+			$account->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('user')->error('Failed to save last login time for %name: %error', [
+				'%name' => $account->getAccountName(),
+				'%error' => $e->getMessage(),
+			]);
+		}
+
+		$session = Drupal::service('session');
 		if (method_exists($session, 'migrate')) {
 			$session->migrate();
 		}
 		$session->set('uid', $account->id());
 		$session->set('check_logged_in', true);
-		\Drupal::moduleHandler()->invokeAll('user_login', [$account]);
+		Drupal::moduleHandler()->invokeAll('user_login', [$account]);
 	}
 }

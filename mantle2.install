@@ -1,5 +1,6 @@
 <?php
 
+use Drupal\Core\Entity\EntityStorageException;
 use Drupal\node\Entity\NodeType;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\field\Entity\FieldConfig;
@@ -19,40 +20,70 @@ function createField(
 	array $constraints = [],
 	int $cardinality = 1,
 	?string $bundle = null,
-) {
+): void {
 	// If no bundle is provided, default to entity (e.g., user entity uses 'user' bundle).
 	$bundle = $bundle ?? $entity;
 	if (!FieldStorageConfig::loadByName($entity, $name)) {
-		FieldStorageConfig::create([
-			'field_name' => $name,
-			'entity_type' => $entity,
-			'type' => $type,
-			'cardinality' => $cardinality,
-			'settings' => $settings,
-			'default_value' => $default_value !== null ? ['value' => $default_value] : null,
-		])->save();
+		try {
+			FieldStorageConfig::create([
+				'field_name' => $name,
+				'entity_type' => $entity,
+				'type' => $type,
+				'cardinality' => $cardinality,
+				'settings' => $settings,
+				'default_value' => $default_value !== null ? ['value' => $default_value] : null,
+			])->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to save field constraints for %field: %message',
+				[
+					'%field' => $name,
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
 	}
 
 	if (!FieldConfig::loadByName($entity, $bundle, $name)) {
-		FieldConfig::create([
-			'field_name' => $name,
-			'entity_type' => $entity,
-			'bundle' => $bundle,
-			'label' => $label,
-			'required' => $required,
-		])->save();
+		try {
+			FieldConfig::create([
+				'field_name' => $name,
+				'entity_type' => $entity,
+				'bundle' => $bundle,
+				'label' => $label,
+				'required' => $required,
+			])->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to save field constraints for %field: %message',
+				[
+					'%field' => $name,
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
 	}
 
 	if ($constraints) {
-		$field = \Drupal\field\Entity\FieldConfig::load("$entity.$bundle.$name");
+		$field = FieldConfig::load("$entity.$bundle.$name");
 		if ($field) {
 			$field->setSetting('constraints', $constraints);
-			$field->save();
+			try {
+				$field->save();
+			} catch (EntityStorageException $e) {
+				Drupal::logger('mantle2')->error(
+					'Failed to save field constraints for %field: %message',
+					[
+						'%field' => $name,
+						'%message' => $e->getMessage(),
+					],
+				);
+			}
 		}
 	}
 }
 
-function createContentType(string $name, string $label, string $description, array $fields)
+function createContentType(string $name, string $label, string $description, array $fields): void
 {
 	// Ensure the content type (bundle) exists.
 	$existing = NodeType::load($name);
@@ -62,7 +93,14 @@ function createContentType(string $name, string $label, string $description, arr
 			'name' => $label,
 			'description' => $description,
 		]);
-		$type->save();
+		try {
+			$type->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to save content type %type: %message', [
+				'%type' => $name,
+				'%message' => $e->getMessage(),
+			]);
+		}
 	}
 
 	// Add fields to the 'node' entity for this bundle.
@@ -82,7 +120,8 @@ function createContentType(string $name, string $label, string $description, arr
 	}
 }
 
-function mantle2_install()
+/** @noinspection PhpUnused */
+function mantle2_install(): void
 {
 	// User Fields
 
@@ -115,19 +154,9 @@ function mantle2_install()
 	]);
 
 	/// Bio
-	createField(
-		'user',
-		'field_bio',
-		'text_long',
-		'Biography',
-		false,
-		'',
-		[
-			'max_length' => 700,
-		],
-		[],
-		1,
-	);
+	createField('user', 'field_bio', 'text_long', 'Biography', false, '', [
+		'max_length' => 700,
+	]);
 
 	/// Phone Number
 	createField(
@@ -138,7 +167,7 @@ function mantle2_install()
 		false,
 		0,
 		[
-			'min' => 0,
+			'min' => 10000,
 			'max' => 9999999999,
 		],
 		[

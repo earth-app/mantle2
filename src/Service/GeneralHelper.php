@@ -36,29 +36,37 @@ class GeneralHelper
 		return new JsonResponse(['code' => 403, 'message' => $message], Response::HTTP_FORBIDDEN);
 	}
 
-	public static function notFound(string $message = 'Not Found')
+	public static function notFound(string $message = 'Not Found'): JsonResponse
 	{
 		return new JsonResponse(['code' => 404, 'message' => $message], Response::HTTP_NOT_FOUND);
+	}
+
+	public static function internalError(string $message = 'Internal Server Error'): JsonResponse
+	{
+		return new JsonResponse(
+			['code' => 500, 'message' => $message],
+			Response::HTTP_INTERNAL_SERVER_ERROR,
+		);
 	}
 
 	// Response Utilities
 
 	public static function paginatedParameters(Request $request): array|JsonResponse
 	{
-		/** @var int */
+		/** @var int $limit */
 		$limit = $request->query->get('limit') ?? 25;
 		if ($limit < 1 || $limit > 100) {
 			return self::badRequest("Invalid limit '$limit'");
 		}
 
-		/** @var int */
+		/** @var int $page */
 		$page = $request->query->get('page') ?? 1;
 
 		if ($page < 1) {
 			return self::badRequest("Invalid page '$page'");
 		}
 
-		/** @var string */
+		/** @var string $search */
 		$search = $request->query->get('search') ?? '';
 		if (strlen($search) > 40) {
 			return self::badRequest("Search term '$search' too long");

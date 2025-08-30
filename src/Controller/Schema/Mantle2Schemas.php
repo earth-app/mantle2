@@ -368,7 +368,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function visibility()
+	public static function visibility(): array
 	{
 		return [
 			'type' => 'string',
@@ -377,7 +377,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function userPrivacy()
+	public static function userPrivacy(): array
 	{
 		return [
 			'type' => 'string',
@@ -385,7 +385,7 @@ class Mantle2Schemas
 			'enum' => array_map(fn($case) => $case->value, Privacy::cases()),
 		];
 	}
-	public static function eventType()
+	public static function eventType(): array
 	{
 		return [
 			'type' => 'string',
@@ -434,7 +434,7 @@ class Mantle2Schemas
 				'email' => self::$email,
 				'first_name' => self::text(50),
 				'last_name' => self::text(50),
-				'address' => self::text(100),
+				'address' => self::text(),
 				'bio' => self::text(500),
 				'country' => self::text(2),
 				'phone_number' => self::$number,
@@ -464,7 +464,7 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function userFieldPrivacyJson()
+	public static function userFieldPrivacyJson(): string
 	{
 		return json_encode([
 			'$schema' => 'http://json-schema.org/draft-07/schema#',
@@ -702,7 +702,7 @@ class Mantle2Schemas
 						'email' => self::$email,
 						'first_name' => self::$name,
 						'last_name' => self::$name,
-						'address' => self::text(100),
+						'address' => self::text(),
 						'bio' => self::text(500),
 						'country' => ['type' => 'string'],
 						'phone_number' => ['type' => 'integer'],
