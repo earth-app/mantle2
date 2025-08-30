@@ -38,6 +38,7 @@ if not exist "%SITE_DIR%" (
     if errorlevel 1 goto :error
 
     ddev drush en json_field -y
+    ddev drush en key -y
     if errorlevel 1 goto :error
 
     ddev drush en "%PROJECT_NAME%" -y >nul 2>&1

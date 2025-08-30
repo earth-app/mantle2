@@ -10,7 +10,7 @@ class CloudHelper
 	public static function getAdminKey(): string
 	{
 		// MANTLE2_ADMIN_KEY
-		return Drupal::service('settings')->get('mantle2.admin_key');
+		return Drupal::service('key.repository')->getKey('mantle2_admin_key')->getKeyValue();
 	}
 
 	public static function getCloudEndpoint(): string
@@ -23,15 +23,24 @@ class CloudHelper
 	/**
 	 * @throws Exception
 	 */
-	public static function sendRequest(string $path, array $data = []): array
-	{
+	public static function sendRequest(
+		string $path,
+		string $method = 'GET',
+		array $data = [],
+	): array {
+		$cloud = self::getCloudEndpoint();
 		$ch = curl_init();
 		$payload = json_encode($data);
 
-		curl_setopt($ch, CURLOPT_URL, self::getCloudEndpoint() . '/' . ltrim($path, '/'));
+		curl_setopt($ch, CURLOPT_URL, $cloud . '/' . ltrim($path, '/'));
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_POST, true);
-		curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+
+		if (in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])) {
+			curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+		}
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 		curl_setopt($ch, CURLOPT_HTTPHEADER, [
 			'Content-Type: application/json',
 			'Content-Length: ' . strlen($payload),
