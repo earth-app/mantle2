@@ -237,6 +237,22 @@ class UsersController extends ControllerBase
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
 
+	// PATCH /v2/users/current/field_privacy
+	public function currentFieldPrivacy(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		if (!$body) {
+			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		return UsersHelper::patchFieldPrivacy($user, $body);
+	}
+
 	// GET /v2/users/:id
 	// GET /v2/users/:username
 	public function getUser(string $identifier, Request $request)
@@ -291,6 +307,27 @@ class UsersController extends ControllerBase
 		$user->delete();
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
+	// PATCH /v2/users/:id/field_privacy
+	// PATCH /v2/users/:username/field_privacy
+	public function patchFieldPrivacy(string $identifier, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByAuthorized($identifier, $request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!$user) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		if (!$body) {
+			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		return UsersHelper::patchFieldPrivacy($user, $body);
 	}
 
 	// Utility Functions

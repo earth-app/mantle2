@@ -495,6 +495,7 @@ class Mantle2Schemas
 				'friends' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'last_login' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'account_type' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
+				'circle' => ['$ref' => '#/$defs/never_public_privacy', 'default' => 'PRIVATE'],
 			],
 		]);
 	}

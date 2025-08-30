@@ -146,6 +146,25 @@ mantle2.users.id.delete:
         type: entity:user
   methods: [DELETE]
 
+mantle2.users.id.patch_field_privacy:
+  path: '/v2/users/{id}/field_privacy'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::patchFieldPrivacy'
+    _title: 'Edit User Field Privacy by ID'
+  requirements:
+    _access: 'TRUE'
+    user: \d+
+  options:
+    description: Updates user field privacy settings by their identifier
+    schema/200: user()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: entity:user
+  methods: [PATCH]
+
 mantle2.users.username.get:
   path: '/v2/users/{username}'
   defaults:
@@ -200,6 +219,25 @@ mantle2.users.username.delete:
         type: entity:user
   methods: [DELETE]
 
+mantle2.users.username.patch_field_privacy:
+  path: '/v2/users/{username}/field_privacy'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::patchFieldPrivacy'
+    _title: 'Edit User Field Privacy by Username'
+  requirements:
+    _access: 'TRUE'
+    user: '@\w+'
+  options:
+    description: Updates user field privacy settings by their username
+    schema/200: user()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: entity:user
+  methods: [PATCH]
+
 mantle2.users.current.get:
   path: '/v2/users/current'
   defaults:
@@ -208,6 +246,7 @@ mantle2.users.current.get:
   requirements:
     _access: 'TRUE'
   options:
+    description: Retrieves the current user according to the session ID
     schema/200: user()
     schema/401: Unauthorized
     schema/404: User not found
@@ -221,6 +260,7 @@ mantle2.users.current.patch:
   requirements:
     _access: 'TRUE'
   options:
+    description: Updates the current user according to the session ID
     schema/200: user()
     schema/400: Bad Request
     schema/404: User not found
@@ -234,5 +274,21 @@ mantle2.users.current.delete:
   requirements:
     _access: 'TRUE'
   options:
+    description: Deletes the current user according to the session ID
+    schema/401: Unauthorized
     schema/204: User deleted successfully
   methods: [DELETE]
+
+mantle2.users.current.patch_field_privacy:
+  path: '/v2/users/current/field_privacy'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\User\UsersController::currentFieldPrivacy'
+    _title: 'Edit Current User Field Privacy'
+  requirements:
+    _access: 'TRUE'
+  options:
+    description: Updates user field privacy settings according to the session ID
+    schema/200: user()
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [PATCH]

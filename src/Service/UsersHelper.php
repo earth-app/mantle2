@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Service;
 
+use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\GeneralHelper;
@@ -217,6 +218,11 @@ class UsersHelper
 		}
 
 		return $privacy0;
+	}
+
+	public static function setFieldPrivacy(UserInterface $user, array $privacy): void
+	{
+		$user->set('field_privacy', json_encode($privacy));
 	}
 
 	// User Fields
@@ -462,6 +468,40 @@ class UsersHelper
 
 		$user->save();
 
+		return new JsonResponse(self::serializeUser($user), Response::HTTP_OK);
+	}
+
+	private static function validKeys()
+	{
+		return array_keys(Mantle2Schemas::userFieldPrivacy()['properties']);
+	}
+
+	private static array $neverPublic = ['address', 'phone_number', 'circle'];
+
+	public static function patchFieldPrivacy(UserInterface $user, array $data): JsonResponse
+	{
+		if (!$user) {
+			return GeneralHelper::badRequest('Invalid user');
+		}
+
+		if (empty($data)) {
+			return GeneralHelper::badRequest('No data provided');
+		}
+
+		$fieldPrivacy = self::getFieldPrivacy($user);
+		foreach ($data as $key => $value) {
+			if (!in_array($key, self::validKeys(), true)) {
+				return GeneralHelper::badRequest("Invalid field: $key");
+			}
+
+			if ($value === 'PUBLIC' && in_array($key, self::$neverPublic, true)) {
+				return GeneralHelper::badRequest("Field $key cannot be made public");
+			}
+
+			$fieldPrivacy[$key] = $value;
+		}
+
+		self::setFieldPrivacy($user, $fieldPrivacy);
 		return new JsonResponse(self::serializeUser($user), Response::HTTP_OK);
 	}
 
