@@ -23,16 +23,18 @@ jobs:
         with:
           host: ${{ secrets.MANTLE2_IP }}
           username: ${{ secrets.MANTLE2_USERNAME }}
-          password: ${{ secrets.MANTLE2_PASSWORD }}
+          key: ${{ secrets.MANTLE2_SSH_KEY}}
+          passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
+          fingerprint: ${{ secrets.MANTLE2_HOST_FINGERPRINT }}
           source: .
           target: /var/www/drupal/web/modules/mantle2
-          fingerprint: ${{ secrets.MANTLE2_HOST_FINGERPRINT }}
       - name: Restart Drupal Service
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.MANTLE2_IP }}
           username: ${{ secrets.MANTLE2_USERNAME }}
-          password: ${{ secrets.MANTLE2_PASSWORD }}
+          key: ${{ secrets.MANTLE2_SSH_KEY }}
+          passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
           fingerprint: ${{ secrets.MANTLE2_HOST_FINGERPRINT }}
           script: |
             cd /var/www/drupal/web/modules/mantle2
