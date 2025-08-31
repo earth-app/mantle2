@@ -43,9 +43,8 @@ class UsersHelper
 		}
 
 		// Authorization Workflow
-		// This assumes that the request is performing a write operation on a user by an identifier.
-		// Only allow if it is themselves, or if $user2 is an administrator
-		if ($user->id() === $user2->id() || $user2->hasPermission('administer users')) {
+		// Allow if requester is the target user or requester has administer users permission
+		if ($user->id() === $user2->id() || $user->hasPermission('administer users')) {
 			return $user2;
 		}
 
@@ -396,8 +395,8 @@ class UsersHelper
 			return GeneralHelper::badRequest('Invalid user or data');
 		}
 
-		if (isset($body['username'])) {
-			$username = (string) $body['username'];
+		if (isset($data['username'])) {
+			$username = (string) $data['username'];
 			$len = strlen($username);
 			if ($len < 3 || $len > 30) {
 				return GeneralHelper::badRequest('Invalid username length');
@@ -411,8 +410,8 @@ class UsersHelper
 			$user->setUsername($username);
 		}
 
-		if (isset($body['email'])) {
-			$email = (string) $body['email'];
+		if (isset($data['email'])) {
+			$email = (string) $data['email'];
 
 			if (
 				!str_contains($email, '@') || // Missing @
@@ -429,8 +428,8 @@ class UsersHelper
 			$user->setEmail($email);
 		}
 
-		if (isset($body['first_name'])) {
-			$firstName = (string) $body['first_name'];
+		if (isset($data['first_name'])) {
+			$firstName = (string) $data['first_name'];
 			$len = strlen($firstName);
 			if ($len < 2 || $len > 50) {
 				return GeneralHelper::badRequest('Invalid first name length');
@@ -439,8 +438,8 @@ class UsersHelper
 			$user->set('field_first_name', $firstName);
 		}
 
-		if (isset($body['last_name'])) {
-			$lastName = (string) $body['last_name'];
+		if (isset($data['last_name'])) {
+			$lastName = (string) $data['last_name'];
 			$len = strlen($lastName);
 			if ($len < 2 || $len > 50) {
 				return GeneralHelper::badRequest('Invalid last name length');
@@ -449,8 +448,8 @@ class UsersHelper
 			$user->set('field_last_name', $lastName);
 		}
 
-		if (isset($body['bio'])) {
-			$bio = (string) $body['bio'];
+		if (isset($data['bio'])) {
+			$bio = (string) $data['bio'];
 			$len = strlen($bio);
 			if ($len > 500) {
 				return GeneralHelper::badRequest(
@@ -461,8 +460,8 @@ class UsersHelper
 			$user->set('field_bio', $bio);
 		}
 
-		if (isset($body['country'])) {
-			$country = (string) $body['country'];
+		if (isset($data['country'])) {
+			$country = (string) $data['country'];
 			$len = strlen($country);
 			if ($len < 2 || $len > 2) {
 				return GeneralHelper::badRequest(
@@ -473,8 +472,8 @@ class UsersHelper
 			$user->set('field_country', $country);
 		}
 
-		if (isset($body['phone_number'])) {
-			$phoneNumber = (int) $body['phone_number'];
+		if (isset($data['phone_number'])) {
+			$phoneNumber = (int) $data['phone_number'];
 			if ($phoneNumber < 10000 || $phoneNumber > 9999999999) {
 				return GeneralHelper::badRequest(
 					'Invalid phone number: Must be between 10000 and 9999999999',
@@ -484,8 +483,8 @@ class UsersHelper
 			$user->set('field_phone', $phoneNumber);
 		}
 
-		if (isset($body['visibility'])) {
-			$visibility = (string) $body['visibility'];
+		if (isset($data['visibility'])) {
+			$visibility = (string) $data['visibility'];
 			if (Visibility::tryFrom($visibility) === null) {
 				return GeneralHelper::badRequest('Invalid visibility value');
 			}
@@ -532,6 +531,14 @@ class UsersHelper
 		}
 
 		self::setFieldPrivacy($user, $fieldPrivacy);
+		try {
+			$user->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to save field privacy: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to save field privacy');
+		}
 		return new JsonResponse(self::serializeUser($user), Response::HTTP_OK);
 	}
 

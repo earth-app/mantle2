@@ -295,9 +295,12 @@ class UsersController extends ControllerBase
 
 	// GET /v2/users/:id
 	// GET /v2/users/:username
-	public function getUser(string $identifier, Request $request): JsonResponse
-	{
-		$user = UsersHelper::findBy($identifier);
+	public function getUser(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = UsersHelper::findBy($id ?? $username);
 		if (!$user) {
 			return GeneralHelper::notFound('User not found');
 		}
@@ -312,9 +315,12 @@ class UsersController extends ControllerBase
 
 	// PATCH /v2/users/:id
 	// PATCH /v2/users/:username
-	public function patchUser(string $identifier, Request $request): JsonResponse
-	{
-		$user = UsersHelper::findByAuthorized($identifier, $request);
+	public function patchUser(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = UsersHelper::findByAuthorized($id ?? $username, $request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
@@ -329,9 +335,12 @@ class UsersController extends ControllerBase
 
 	// DELETE /v2/users/:id
 	// DELETE /v2/users/:username
-	public function deleteUser(string $identifier, Request $request): JsonResponse
-	{
-		$user = UsersHelper::findByAuthorized($identifier, $request);
+	public function deleteUser(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = UsersHelper::findByAuthorized($id ?? $username, $request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
@@ -347,9 +356,12 @@ class UsersController extends ControllerBase
 
 	// PATCH /v2/users/:id/field_privacy
 	// PATCH /v2/users/:username/field_privacy
-	public function patchFieldPrivacy(string $identifier, Request $request): JsonResponse
-	{
-		$user = UsersHelper::findByAuthorized($identifier, $request);
+	public function patchFieldPrivacy(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = UsersHelper::findByAuthorized($id ?? $username, $request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
@@ -364,9 +376,12 @@ class UsersController extends ControllerBase
 
 	// GET /v2/users/:id/profile_photo
 	// GET /v2/users/:username/profile_photo
-	public function getProfilePhoto(string $identifier, Request $request): Response
-	{
-		$user = UsersHelper::findBy($identifier);
+	public function getProfilePhoto(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): Response {
+		$user = UsersHelper::findBy($id ?? $username);
 		if (!$user) {
 			return GeneralHelper::notFound('User not found');
 		}
@@ -381,10 +396,12 @@ class UsersController extends ControllerBase
 	}
 
 	// PUT /v2/users/:id/profile_photo
-	// PUT /v2/users/:username/profile_photo
-	public function updateProfilePhoto(string $identifier, Request $request): Response
-	{
-		$user = UsersHelper::findBy($identifier);
+	public function updateProfilePhoto(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): Response {
+		$user = UsersHelper::findBy($id ?? $username);
 		if (!$user) {
 			return GeneralHelper::notFound('User not found');
 		}
