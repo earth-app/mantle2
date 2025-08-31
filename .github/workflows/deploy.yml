@@ -25,7 +25,6 @@ jobs:
           username: ${{ secrets.MANTLE2_USERNAME }}
           key: ${{ secrets.MANTLE2_SSH_KEY}}
           passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
-          fingerprint: ${{ secrets.MANTLE2_HOST_FINGERPRINT }}
           source: .
           target: /var/www/drupal/web/modules/mantle2
       - name: Restart Drupal Service
@@ -35,7 +34,6 @@ jobs:
           username: ${{ secrets.MANTLE2_USERNAME }}
           key: ${{ secrets.MANTLE2_SSH_KEY }}
           passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
-          fingerprint: ${{ secrets.MANTLE2_HOST_FINGERPRINT }}
           script: |
             cd /var/www/drupal/web/modules/mantle2
             composer update
