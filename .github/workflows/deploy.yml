@@ -37,4 +37,5 @@ jobs:
           script: |
             cd /var/www/drupal/web/modules/mantle2
             composer update
+            drush en mantle2 -y
             systemctl restart apache2
