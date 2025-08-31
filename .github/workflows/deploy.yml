@@ -1,0 +1,40 @@
+name: Deploy Module to mantle2
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring
+      - name: Install Composer Dependencies
+        run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Upload via SSH
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.MANTLE2_IP }}
+          username: ${{ secrets.MANTLE2_USERNAME }}
+          password: ${{ secrets.MANTLE2_PASSWORD }}
+          source: .
+          target: /var/www/drupal/web/modules/mantle2
+          fingerprint: ${{ secrets.MANTLE2_HOST_FINGERPRINT }}
+      - name: Restart Drupal Service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.MANTLE2_IP }}
+          username: ${{ secrets.MANTLE2_USERNAME }}
+          password: ${{ secrets.MANTLE2_PASSWORD }}
+          fingerprint: ${{ secrets.MANTLE2_HOST_FINGERPRINT }}
+          script: |
+            cd /var/www/drupal/web/modules/mantle2
+            composer update
+            systemctl restart apache2
