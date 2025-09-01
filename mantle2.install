@@ -4,7 +4,9 @@ use Drupal\Core\Entity\EntityStorageException;
 use Drupal\node\Entity\NodeType;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\field\Entity\FieldConfig;
+use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
+use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\UsersHelper;
@@ -118,6 +120,65 @@ function createContentType(string $name, string $label, string $description, arr
 			$name, // bundle: machine name of the content type
 		);
 	}
+
+	// Configure form display to make fields visible on add/edit forms
+	$form_display = EntityFormDisplay::load("node.$name.default");
+	if (!$form_display) {
+		$form_display = EntityFormDisplay::create([
+			'targetEntityType' => 'node',
+			'bundle' => $name,
+			'mode' => 'default',
+		]);
+	}
+
+	// Set up form display for each field
+	foreach ($fields as $index => $field) {
+		$field_name = $field['name'];
+		$field_type = $field['type'];
+
+		// Configure widget based on field type
+		$widget_config = [
+			'type' => getWidgetType($field_type),
+			'weight' => $index,
+			'settings' => [],
+		];
+
+		// Add specific widget settings based on field type
+		if ($field_type === 'datetime') {
+			$widget_config['settings']['datetime_type'] = 'datetime';
+		} elseif ($field_type === 'list_string') {
+			$widget_config['type'] = 'options_select';
+		} elseif ($field_type === 'json') {
+			$widget_config['type'] = 'string_textarea';
+		}
+
+		$form_display->setComponent($field_name, $widget_config);
+	}
+
+	try {
+		$form_display->save();
+	} catch (EntityStorageException $e) {
+		Drupal::logger('mantle2')->error('Failed to save form display for %type: %message', [
+			'%type' => $name,
+			'%message' => $e->getMessage(),
+		]);
+	}
+}
+
+function getWidgetType(string $field_type): string
+{
+	$widget_map = [
+		'string' => 'string_textfield',
+		'integer' => 'number',
+		'float' => 'number',
+		'text' => 'text_textarea',
+		'text_long' => 'text_textarea',
+		'datetime' => 'datetime_default',
+		'list_string' => 'options_select',
+		'json' => 'string_textarea',
+	];
+
+	return $widget_map[$field_type] ?? 'string_textfield';
 }
 
 /** @noinspection PhpUnused */
@@ -204,7 +265,14 @@ function mantle2_install(): void
 
 	/// Activities
 	createField('user', 'field_activities', 'json', 'Activities', false, json_encode([]), [
-		'schema' => Mantle2Schemas::activitiesJson(),
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'format' => 'number',
+			],
+		],
 	]);
 
 	/// Friends
@@ -231,7 +299,13 @@ function mantle2_install(): void
 		],
 	]);
 
+	/// Account Type
+	createField('user', 'field_account_type', 'list_string', 'Account Type', true, 'FREE', [
+		'allowed_values' => array_map(fn($case) => $case->value, AccountType::cases()),
+	]);
+
 	// Activities
+
 	createContentType('activity', 'Activity', 'Activity content type', [
 		[
 			'name' => 'field_activity_id',
@@ -260,6 +334,27 @@ function mantle2_install(): void
 				'allowed_values' => Mantle2Schemas::activityTypes(),
 			],
 			'cardinality' => 5,
+		],
+		[
+			'name' => 'field_activity_aliases',
+			'type' => 'json',
+			'label' => 'Activity Aliases',
+			'required' => false,
+			'settings' => [
+				'schema' => [
+					'$schema' => 'http://json-schema.org/draft-07/schema#',
+					'type' => 'array',
+					'items' => [
+						'type' => 'string',
+					],
+				],
+			],
+		],
+		[
+			'name' => 'field_activity_fields',
+			'type' => 'json',
+			'label' => 'Activity Fields',
+			'required' => false,
 		],
 	]);
 

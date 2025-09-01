@@ -19,7 +19,18 @@ if [ ! -d "$SITE_DIR" ]; then
   composer require drupal/key
 
   mkdir -p web/modules/custom/$PROJECT_NAME
-  cp -R "$SRC_PATH"/* web/modules/custom/$PROJECT_NAME
+  find "$SRC_PATH" -maxdepth 1 -name "*.php" \
+    -o -name "*.yml" \
+    -o -name "*.yaml" \
+    -o -name "*.info" \
+    -o -name "*.module" \
+    -o -name "*.install" \
+    -o -name "*.inc" \
+    -o -name "*.json" \
+    | xargs -I {} cp {} web/modules/custom/$PROJECT_NAME/
+  [ -d "$SRC_PATH/src" ] && cp -r "$SRC_PATH/src" web/modules/custom/$PROJECT_NAME/
+  [ -d "$SRC_PATH/config" ] && cp -r "$SRC_PATH/config" web/modules/custom/$PROJECT_NAME/
+  [ -d "$SRC_PATH/templates" ] && cp -r "$SRC_PATH/templates" web/modules/custom/$PROJECT_NAME/
 
   ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME" --host-webserver-port=8787
 
@@ -40,7 +51,18 @@ else
   ddev drush un "$PROJECT_NAME" -y
 
   mkdir -p web/modules/custom/$PROJECT_NAME
-  cp -R "$SRC_PATH"/* web/modules/custom/$PROJECT_NAME
+  find "$SRC_PATH" -maxdepth 1 -name "*.php" \
+    -o -name "*.yml" \
+    -o -name "*.yaml" \
+    -o -name "*.info" \
+    -o -name "*.module" \
+    -o -name "*.install" \
+    -o -name "*.inc" \
+    -o -name "*.json" \
+    | xargs -I {} cp {} web/modules/custom/$PROJECT_NAME/
+  [ -d "$SRC_PATH/src" ] && cp -r "$SRC_PATH/src" web/modules/custom/$PROJECT_NAME/
+  [ -d "$SRC_PATH/config" ] && cp -r "$SRC_PATH/config" web/modules/custom/$PROJECT_NAME/
+  [ -d "$SRC_PATH/templates" ] && cp -r "$SRC_PATH/templates" web/modules/custom/$PROJECT_NAME/
 
   ddev drush en "$PROJECT_NAME" -y
 fi

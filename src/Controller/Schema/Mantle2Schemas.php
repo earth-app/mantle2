@@ -14,24 +14,22 @@ class Mantle2Schemas
 	public static function E400($description = 'Bad request'): array
 	{
 		return [
-			'400' => [
-				'description' => $description,
-				'content' => [
-					'application/json' => [
-						'schema' => [
-							'type' => 'object',
-							'properties' => [
-								'error' => [
-									'type' => 'string',
-									'example' => $description,
-								],
-								'code' => [
-									'type' => 'number',
-									'example' => 400,
-								],
+			'description' => $description,
+			'content' => [
+				'application/json' => [
+					'schema' => [
+						'type' => 'object',
+						'properties' => [
+							'error' => [
+								'type' => 'string',
+								'example' => $description,
 							],
-							'required' => ['error', 'code'],
+							'code' => [
+								'type' => 'number',
+								'example' => 400,
+							],
 						],
+						'required' => ['error', 'code'],
 					],
 				],
 			],
@@ -41,24 +39,22 @@ class Mantle2Schemas
 	public static function E401($description = 'Unauthorized'): array
 	{
 		return [
-			'401' => [
-				'description' => $description,
-				'content' => [
-					'application/json' => [
-						'schema' => [
-							'type' => 'object',
-							'properties' => [
-								'error' => [
-									'type' => 'string',
-									'example' => $description,
-								],
-								'code' => [
-									'type' => 'number',
-									'example' => 401,
-								],
+			'description' => $description,
+			'content' => [
+				'application/json' => [
+					'schema' => [
+						'type' => 'object',
+						'properties' => [
+							'error' => [
+								'type' => 'string',
+								'example' => $description,
 							],
-							'required' => ['error', 'code'],
+							'code' => [
+								'type' => 'number',
+								'example' => 401,
+							],
 						],
+						'required' => ['error', 'code'],
 					],
 				],
 			],
@@ -68,24 +64,22 @@ class Mantle2Schemas
 	public static function E402($description = 'Payment Required'): array
 	{
 		return [
-			'402' => [
-				'description' => $description,
-				'content' => [
-					'application/json' => [
-						'schema' => [
-							'type' => 'object',
-							'properties' => [
-								'error' => [
-									'type' => 'string',
-									'example' => $description,
-								],
-								'code' => [
-									'type' => 'number',
-									'example' => 402,
-								],
+			'description' => $description,
+			'content' => [
+				'application/json' => [
+					'schema' => [
+						'type' => 'object',
+						'properties' => [
+							'error' => [
+								'type' => 'string',
+								'example' => $description,
 							],
-							'required' => ['error', 'code'],
+							'code' => [
+								'type' => 'number',
+								'example' => 402,
+							],
 						],
+						'required' => ['error', 'code'],
 					],
 				],
 			],
@@ -95,24 +89,22 @@ class Mantle2Schemas
 	public static function E403($description = 'Forbidden'): array
 	{
 		return [
-			'403' => [
-				'description' => $description,
-				'content' => [
-					'application/json' => [
-						'schema' => [
-							'type' => 'object',
-							'properties' => [
-								'error' => [
-									'type' => 'string',
-									'example' => $description,
-								],
-								'code' => [
-									'type' => 'number',
-									'example' => 403,
-								],
+			'description' => $description,
+			'content' => [
+				'application/json' => [
+					'schema' => [
+						'type' => 'object',
+						'properties' => [
+							'error' => [
+								'type' => 'string',
+								'example' => $description,
 							],
-							'required' => ['error', 'code'],
+							'code' => [
+								'type' => 'number',
+								'example' => 403,
+							],
 						],
+						'required' => ['error', 'code'],
 					],
 				],
 			],
@@ -122,24 +114,22 @@ class Mantle2Schemas
 	public static function E404($description = 'Not found'): array
 	{
 		return [
-			'404' => [
-				'description' => $description,
-				'content' => [
-					'application/json' => [
-						'schema' => [
-							'type' => 'object',
-							'properties' => [
-								'error' => [
-									'type' => 'string',
-									'example' => $description,
-								],
-								'code' => [
-									'type' => 'number',
-									'example' => 404,
-								],
+			'description' => $description,
+			'content' => [
+				'application/json' => [
+					'schema' => [
+						'type' => 'object',
+						'properties' => [
+							'error' => [
+								'type' => 'string',
+								'example' => $description,
 							],
-							'required' => ['error', 'code'],
+							'code' => [
+								'type' => 'number',
+								'example' => 404,
+							],
 						],
+						'required' => ['error', 'code'],
 					],
 				],
 			],
@@ -149,24 +139,22 @@ class Mantle2Schemas
 	public static function E409($description = 'Duplicate entry'): array
 	{
 		return [
-			'409' => [
-				'description' => $description,
-				'content' => [
-					'application/json' => [
-						'schema' => [
-							'type' => 'object',
-							'properties' => [
-								'error' => [
-									'type' => 'string',
-									'example' => $description,
-								],
-								'code' => [
-									'type' => 'number',
-									'example' => 409,
-								],
+			'description' => $description,
+			'content' => [
+				'application/json' => [
+					'schema' => [
+						'type' => 'object',
+						'properties' => [
+							'error' => [
+								'type' => 'string',
+								'example' => $description,
 							],
-							'required' => ['error', 'code'],
+							'code' => [
+								'type' => 'number',
+								'example' => 409,
+							],
 						],
+						'required' => ['error', 'code'],
 					],
 				],
 			],
@@ -442,6 +430,13 @@ class Mantle2Schemas
 			],
 		];
 	}
+	public static function userUpdateJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			...self::userUpdate(),
+		];
+	}
 
 	public static function userFieldPrivacy(): array
 	{
@@ -464,9 +459,9 @@ class Mantle2Schemas
 		];
 	}
 
-	public static function userFieldPrivacyJson(): string
+	public static function userFieldPrivacyJson(): array
 	{
-		return json_encode([
+		return [
 			'$schema' => 'http://json-schema.org/draft-07/schema#',
 			'type' => 'object',
 			'$defs' => [
@@ -497,7 +492,7 @@ class Mantle2Schemas
 				'account_type' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'circle' => ['$ref' => '#/$defs/never_public_privacy', 'default' => 'PRIVATE'],
 			],
-		]);
+		];
 	}
 
 	public static function eventCreate(): array
@@ -717,15 +712,7 @@ class Mantle2Schemas
 	}
 	public static function users(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'limit' => ['type' => 'integer', 'example' => 10],
-				'offset' => ['type' => 'integer', 'example' => 0],
-				'total' => ['type' => 'integer', 'example' => 100],
-				'items' => ['type' => 'array', 'items' => self::user()],
-			],
-		];
+		return self::paginated(self::user());
 	}
 
 	public static function signupResponse(): array
@@ -820,6 +807,10 @@ class Mantle2Schemas
 	}
 	public static function activities(): array
 	{
+		return self::paginated(self::activity());
+	}
+	public static function activitiesList(): array
+	{
 		return ['type' => 'array', 'items' => self::activity()];
 	}
 	public static function activitiesJson(): array
@@ -837,6 +828,17 @@ class Mantle2Schemas
 				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
 			],
 			'required' => ['id', 'name', 'types', 'created_at', 'fields'],
+		];
+	}
+	public static function activitiesIdList(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'examples' => ['hiking', 'swimming', 'reading', 'coding', 'snowboarding'],
+			],
 		];
 	}
 

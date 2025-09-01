@@ -44,15 +44,21 @@ class OpenAPIController extends ControllerBase
 				$methods = ['GET'];
 			}
 
-			$requestBody = [
-				'description' => $options['body/description'] ?? 'Request object',
-				'required' => $options['body/required'] ?? true,
-				'content' => [
-					'application/json' => [
-						'schema' => $this->resolveSchemaSpecifier($options['body/schema'] ?? null),
+			if ($options['body/description']) {
+				$requestBody = [
+					'description' => $options['body/description'] ?? 'Request object',
+					'required' => $options['body/required'] ?? true,
+					'content' => [
+						'application/json' => [
+							'schema' => $this->resolveSchemaSpecifier(
+								$options['body/schema'] ?? null,
+							),
+						],
 					],
-				],
-			];
+				];
+			} else {
+				$requestBody = [];
+			}
 
 			$responses = array_filter(
 				[
@@ -113,12 +119,48 @@ class OpenAPIController extends ControllerBase
 				$parameters = [];
 				preg_match_all('/\{(\w+)}/', $path, $matches);
 				foreach ($matches[1] as $param) {
+					$paramSettings = $options['parameters'][$param];
+					$schema = ['type' => $paramSettings['type'] ?? 'string'];
+
+					if (isset($paramSettings['enum'])) {
+						$schema['enum'] = $paramSettings['enum'];
+					}
+
 					$parameters[] = [
 						'name' => $param,
 						'in' => 'path',
 						'required' => true,
-						'schema' => ['type' => 'string'],
+						'schema' => $schema,
 					];
+				}
+
+				if ($options['query']) {
+					foreach ($options['query'] as $queryParam => $paramConfig) {
+						$schema = ['type' => $paramConfig['type'] ?? 'string'];
+						if (isset($paramConfig['enum'])) {
+							$schema['enum'] = $paramConfig['enum'];
+						}
+
+						if (isset($paramConfig['minimum'])) {
+							$schema['minimum'] = $paramConfig['minimum'];
+						}
+
+						if (isset($paramConfig['maximum'])) {
+							$schema['maximum'] = $paramConfig['maximum'];
+						}
+
+						if (isset($paramConfig['default'])) {
+							$schema['default'] = $paramConfig['default'];
+						}
+
+						$parameters[] = [
+							'name' => $queryParam,
+							'in' => 'query',
+							'required' => $paramConfig['required'] ?? false,
+							'description' => $paramConfig['description'] ?? '',
+							'schema' => $schema,
+						];
+					}
 				}
 
 				$method0 = strtolower($method);
@@ -127,10 +169,10 @@ class OpenAPIController extends ControllerBase
 					'description' => $options['description'] ?? '',
 					'parameters' => $parameters,
 					'responses' => $responses,
-					'tags' => $options['tags'] ?? [],
+					'tags' => explode(',', $options['tags'] ?? '') ?? [],
 				];
 
-				if ($method !== 'GET' && $requestBody) {
+				if ($method !== 'GET' && !empty($requestBody)) {
 					$pathItem[$method0]['requestBody'] = $requestBody;
 				}
 			}
@@ -153,6 +195,10 @@ class OpenAPIController extends ControllerBase
 				[
 					'url' => 'https://127.0.0.1',
 					'description' => 'Local Development Server',
+				],
+				[
+					'url' => 'https://mantle2.ddev.site',
+					'description' => 'DDEV Development Server',
 				],
 			],
 			'components' => [

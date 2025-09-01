@@ -120,8 +120,12 @@ class UsersHelper
 			return GeneralHelper::notFound();
 		}
 
-		// PRIVATE requires admin
-		if ($visibility === Visibility::PRIVATE && !$user2->hasPermission('administer users')) {
+		// PRIVATE requires admin or as an added friend
+		if (
+			$visibility === Visibility::PRIVATE &&
+			!$user2->hasPermission('administer users') &&
+			!self::isAddedFriend($user2, $user)
+		) {
 			return GeneralHelper::notFound();
 		}
 
@@ -619,13 +623,49 @@ class UsersHelper
 	/**
 	 * @return UserInterface[]
 	 */
-	public static function getAddedFriends(UserInterface $user): array
+	public static function getAddedFriends(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+	): array {
+		$friendsValue = $user->get('field_friends')->getValue();
+
+		/** @var int[] $friends*/
+		$friends = $friendsValue ? json_decode($friendsValue[0]['value'], true) : [];
+		$friends = array_slice($friends, ($page - 1) * $limit, $limit);
+		return array_filter(array_map(fn($id) => self::findById($id), $friends), function ($u) use (
+			$search,
+		) {
+			if (empty($search)) {
+				return true;
+			}
+
+			return str_contains($u->getAccountName(), $search);
+		});
+	}
+
+	public static function getAddedFriendsCount(UserInterface $user, string $search = ''): int
 	{
 		$friendsValue = $user->get('field_friends')->getValue();
 
 		/** @var int[] $friends*/
 		$friends = $friendsValue ? json_decode($friendsValue[0]['value'], true) : [];
-		return array_map(fn($id) => self::findById($id), $friends);
+		if (!empty($search)) {
+			$friends = array_filter(
+				$friends,
+				fn($id) => str_contains(self::findById($id)->getAccountName(), $search),
+			);
+		}
+
+		return count($friends);
+	}
+
+	public static function isAddedFriend(UserInterface $user, UserInterface $friend): bool
+	{
+		$friends = $user->get('field_friends')->getValue();
+		$friends = $friends ? json_decode($friends[0]['value'], true) : [];
+		return in_array($friend->id(), $friends, true);
 	}
 
 	public static function isMutualFriend(UserInterface $user1, UserInterface $user2): bool
@@ -635,8 +675,12 @@ class UsersHelper
 		return !empty(array_intersect($user1Friends, $user2Friends));
 	}
 
-	public static function getMutualFriends(UserInterface $user): array
-	{
+	public static function getMutualFriends(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+	): array {
 		$userFriends = self::getAddedFriends($user);
 		$friendCounts = [];
 
@@ -658,29 +702,157 @@ class UsersHelper
 		foreach ($friendCounts as $personId => $count) {
 			if ($count >= 2) {
 				// Adjust threshold as needed
-				$mutual[] = self::findById($personId);
+				$potentialUser = self::findById($personId);
+				if ($potentialUser) {
+					$mutual[] = $potentialUser;
+				}
 			}
 		}
 
-		return $mutual;
+		// Apply search filter
+		if (!empty($search)) {
+			$mutual = array_filter($mutual, function ($u) use ($search) {
+				return str_contains($u->getAccountName(), $search);
+			});
+		}
+
+		// Apply pagination
+		$offset = ($page - 1) * $limit;
+		return array_slice($mutual, $offset, $limit);
+	}
+
+	public static function getNonMutualFriends(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+	): array {
+		$userFriends = self::getAddedFriends($user);
+		$nonMutual = [];
+
+		foreach ($userFriends as $friend) {
+			$friendsOfFriend = self::getAddedFriends($friend);
+			foreach ($friendsOfFriend as $potentialNonMutual) {
+				if ($potentialNonMutual === $user) {
+					continue;
+				}
+
+				$nonMutual[$potentialNonMutual->id()] =
+					($nonMutual[$potentialNonMutual->id()] ?? 0) + 1;
+			}
+		}
+
+		$nonMutual = array_filter($nonMutual, fn($count) => $count === 1);
+		$nonMutual = array_map(fn($id) => self::findById($id), array_keys($nonMutual));
+
+		// Apply search filter
+		if (!empty($search)) {
+			$nonMutual = array_filter($nonMutual, function ($u) use ($search) {
+				return str_contains($u->getAccountName(), $search);
+			});
+		}
+
+		// Apply pagination
+		$offset = ($page - 1) * $limit;
+		return array_slice($nonMutual, $offset, $limit);
+	}
+
+	public static function addFriend(UserInterface $user, UserInterface $friend): bool
+	{
+		$friends = $user->get('field_friends')->getValue();
+		$friends = $friends ? json_decode($friends[0]['value'], true) : [];
+		if (in_array($friend->id(), $friends, true)) {
+			return false;
+		}
+
+		$friends[] = $friend->id();
+		$user->set('field_friends', json_encode($friends));
+		$user->save();
+		return true;
+	}
+
+	public static function removeFriend(UserInterface $user, UserInterface $friend): bool
+	{
+		$friends = $user->get('field_friends')->getValue();
+		$friends = $friends ? json_decode($friends[0]['value'], true) : [];
+		if (!in_array($friend->id(), $friends, true)) {
+			return false;
+		}
+
+		$friends = array_filter($friends, fn($id) => $id !== $friend->id());
+		$user->set('field_friends', json_encode($friends));
+		$user->save();
+		return true;
 	}
 
 	/**
 	 * @return UserInterface[]
 	 */
-	public static function getCircle(UserInterface $user): array
-	{
+	public static function getCircle(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+	): array {
 		$circleValue = $user->get('field_circle')->getValue();
 
 		/** @var int[] $circle */
 		$circle = $circleValue ? json_decode($circleValue[0]['value'], true) : [];
-		return array_map(fn($id) => self::findById($id), $circle);
+		if (empty($search)) {
+			$circle = array_slice($circle, ($page - 1) * $limit, $limit);
+			return array_map(fn($id) => self::findById($id), $circle);
+		} else {
+			$circleUsers = array_map(fn($id) => self::findById($id), $circle);
+			$circleUsers = array_filter(
+				$circleUsers,
+				fn($u) => str_contains($u->getAccountName(), $search),
+			);
+			$circleUsers = array_slice($circleUsers, ($page - 1) * $limit, $limit);
+			return $circleUsers;
+		}
 	}
 
 	public static function isInCircle(UserInterface $user1, UserInterface $user2): bool
 	{
 		$circle = self::getCircle($user1);
 		return in_array($user2, $circle, true);
+	}
+
+	public static function addToCircle(UserInterface $user, UserInterface $member): bool
+	{
+		if (!self::isAddedFriend($user, $member)) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid is not a friend of %friend_uid and cannot be added to the circle.',
+				[
+					'%uid' => $user->id(),
+					'%friend_uid' => $member->id(),
+				],
+			);
+			return false;
+		}
+
+		$circle = self::getCircle($user);
+		if (in_array($member, $circle, true)) {
+			return false;
+		}
+
+		$circle[] = $member->id();
+		$user->set('field_circle', json_encode($circle));
+		$user->save();
+		return true;
+	}
+
+	public static function removeFromCircle(UserInterface $user, UserInterface $member): bool
+	{
+		$circle = self::getCircle($user);
+		if (!in_array($member, $circle, true)) {
+			return false;
+		}
+
+		$circle = array_filter($circle, fn($id) => $id !== $member->id());
+		$user->set('field_circle', json_encode($circle));
+		$user->save();
+		return true;
 	}
 
 	/**

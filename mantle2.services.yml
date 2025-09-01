@@ -11,3 +11,6 @@ services:
 
   mantle2.helper.user:
     class: Drupal\mantle2\Service\UsersHelper
+
+  mantle2.helper.activities:
+    class: Drupal\mantle2\Service\ActivityHelper
