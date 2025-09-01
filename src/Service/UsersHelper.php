@@ -16,6 +16,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class UsersHelper
 {
+	public static function cloud(): UserInterface
+	{
+		// Load the administrator user
+		return User::load(1);
+	}
+
 	public static function findBy(string $identifier): ?UserInterface
 	{
 		if (str_starts_with($identifier, '@')) {
@@ -116,7 +122,7 @@ class UsersHelper
 
 		// PRIVATE requires admin
 		if ($visibility === Visibility::PRIVATE && !$user2->hasPermission('administer users')) {
-			return GeneralHelper::forbidden();
+			return GeneralHelper::notFound();
 		}
 
 		return $user;
@@ -142,6 +148,13 @@ class UsersHelper
 
 	public static function findByRequest(Request $request)
 	{
+		if ($request->headers->has('X-Admin-Key')) {
+			$adminKey = $request->headers->get('X-Admin-Key');
+			if ($adminKey && $adminKey === CloudHelper::getAdminKey()) {
+				return self::cloud();
+			}
+		}
+
 		if (!$request->hasSession()) {
 			return GeneralHelper::notFound();
 		}
@@ -354,6 +367,19 @@ class UsersHelper
 		return self::tryVisible($country, $user, $requester, $privacy['country'] ?? 'PUBLIC');
 	}
 
+	public static function getAccountType(
+		UserInterface $user,
+		?UserInterface $requester = null,
+	): ?string {
+		$privacy = self::getFieldPrivacy($user);
+		return self::tryVisible(
+			$user->get('field_account_type')->getValue(),
+			$user,
+			$requester,
+			$privacy['account_type'] ?? 'FREE',
+		);
+	}
+
 	public static function serializeUser(
 		UserInterface $user,
 		?UserInterface $requester = null,
@@ -377,6 +403,7 @@ class UsersHelper
 				'phone_number' => self::getPhoneNumber($user, $requester),
 				'address' => self::getAddress($user, $requester),
 				'country' => self::getCountry($user, $requester),
+				'account_type' => self::getAccountType($user, $requester),
 				'field_privacy' => $privacy,
 			],
 			'activities' => [],
@@ -389,8 +416,11 @@ class UsersHelper
 		];
 	}
 
-	public static function patchUser(UserInterface $user, array $data): JsonResponse
-	{
+	public static function patchUser(
+		UserInterface $user,
+		array $data,
+		?UserInterface $requester = null,
+	): JsonResponse {
 		if (!$data) {
 			return GeneralHelper::badRequest('Invalid user or data');
 		}
@@ -501,7 +531,7 @@ class UsersHelper
 			return GeneralHelper::internalError('Failed to save user');
 		}
 
-		return new JsonResponse(self::serializeUser($user), Response::HTTP_OK);
+		return new JsonResponse(self::serializeUser($user, $requester), Response::HTTP_OK);
 	}
 
 	private static function validKeys(): array
@@ -511,8 +541,11 @@ class UsersHelper
 
 	private static array $neverPublic = ['address', 'phone_number', 'circle'];
 
-	public static function patchFieldPrivacy(UserInterface $user, array $data): JsonResponse
-	{
+	public static function patchFieldPrivacy(
+		UserInterface $user,
+		array $data,
+		?UserInterface $requester = null,
+	): JsonResponse {
 		if (empty($data)) {
 			return GeneralHelper::badRequest('No data provided');
 		}
@@ -539,7 +572,7 @@ class UsersHelper
 			]);
 			return GeneralHelper::internalError('Failed to save field privacy');
 		}
-		return new JsonResponse(self::serializeUser($user), Response::HTTP_OK);
+		return new JsonResponse(self::serializeUser($user, $requester), Response::HTTP_OK);
 	}
 
 	public static function getProfilePhoto(UserInterface $user): string
@@ -656,7 +689,59 @@ class UsersHelper
 	 */
 	public static function getActivities(UserInterface $user): array
 	{
+		/** @var array<int> $activities */
 		$activities = json_decode($user->get('field_activities')->getValue(), true);
-		return array_map(fn($data) => Activity::fromArray($data), $activities);
+		return array_map(fn($id) => ActivityHelper::getActivityByNid($id), $activities);
+	}
+
+	/**
+	 * @param UserInterface $user
+	 * @param array<Activity> $activities
+	 */
+	public static function setActivities(UserInterface $user, array $activities): void
+	{
+		if (count($activities) > 10) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid has exceeded the maximum number of activities.',
+				[
+					'%uid' => $user->id(),
+				],
+			);
+			return;
+		}
+
+		$user->set('field_activities', json_encode($activities));
+		$user->save();
+	}
+
+	public static function hasActivity(UserInterface $user, string $id): bool
+	{
+		$activities = self::getActivities($user);
+		return in_array($id, array_map(fn($a) => $a->getId(), $activities), true);
+	}
+
+	public static function addActivity(UserInterface $user, Activity $activity): void
+	{
+		$activities = self::getActivities($user);
+		$activities[] = $activity;
+
+		if (count($activities) + 1 > 10) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid has exceeded the maximum number of activities.',
+				[
+					'%uid' => $user->id(),
+				],
+			);
+			return;
+		}
+
+		self::setActivities($user, $activities);
+	}
+
+	public static function removeActivity(UserInterface $user, Activity $activity): void
+	{
+		$activities = self::getActivities($user);
+		$activities = array_filter($activities, fn($a) => $a !== $activity);
+		self::setActivities($user, $activities);
 	}
 }
