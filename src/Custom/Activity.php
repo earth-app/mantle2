@@ -3,8 +3,9 @@
 namespace Drupal\mantle2\Custom;
 
 use InvalidArgumentException;
+use JsonSerializable;
 
-class Activity
+class Activity implements JsonSerializable
 {
 	protected string $id;
 	protected string $name;
@@ -16,30 +17,22 @@ class Activity
 
 	public const int MAX_TYPES = 5;
 
-	public function __construct(string $id, string $name)
-	{
+	public function __construct(
+		string $id,
+		string $name,
+		array $types = [],
+		?string $description = null,
+		array $aliases = [],
+		array $fields = [],
+	) {
 		$this->id = $id;
 		$this->name = $name;
+		$this->types = $types;
+		$this->description = $description;
+		$this->aliases = $aliases;
+		$this->fields = $fields;
 	}
 
-	/**
-	 * Convenience factory: id from lowercase name.
-	 */
-	public static function create(
-		string $name,
-		?string $description = null,
-		array $types = [],
-	): self {
-		$instance = new self(strtolower($name), $name);
-		$instance->description = $description;
-		$instance->types = array_map(
-			fn($t) => $t instanceof ActivityType ? $t : ActivityType::from((string) $t),
-			array_values($types),
-		);
-		return $instance;
-	}
-
-	// factory method for deserialization
 	public static function fromArray(array $data): self
 	{
 		$clazz = new self($data['id'], $data['name']);
@@ -56,7 +49,7 @@ class Activity
 	/**
 	 * Serialize to array.
 	 */
-	public function toArray(): array
+	public function jsonSerialize(): array
 	{
 		return [
 			'id' => $this->id,
@@ -293,7 +286,6 @@ class Activity
 		$this->fields[$key] = $value;
 	}
 
-	// Basic getters
 	public function getId(): string
 	{
 		return $this->id;
