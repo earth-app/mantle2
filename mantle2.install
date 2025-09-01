@@ -33,7 +33,6 @@ function createField(
 				'type' => $type,
 				'cardinality' => $cardinality,
 				'settings' => $settings,
-				'default_value' => $default_value !== null ? ['value' => $default_value] : null,
 			])->save();
 		} catch (EntityStorageException $e) {
 			Drupal::logger('mantle2')->error(
@@ -66,22 +65,84 @@ function createField(
 		}
 	}
 
-	if ($constraints) {
-		$field = FieldConfig::load("$entity.$bundle.$name");
-		if ($field) {
-			$field->setSetting('constraints', $constraints);
-			try {
-				$field->save();
-			} catch (EntityStorageException $e) {
-				Drupal::logger('mantle2')->error(
-					'Failed to save field constraints for %field: %message',
-					[
-						'%field' => $name,
-						'%message' => $e->getMessage(),
-					],
-				);
-			}
+	// Ensure instance-level settings like default values and constraints are saved.
+	$field = FieldConfig::load("$entity.$bundle.$name");
+	if ($field) {
+		if ($default_value !== null) {
+			$prepared_default = is_array($default_value)
+				? $default_value
+				: [['value' => $default_value]];
+			$field->set('default_value', $prepared_default);
 		}
+		if ($constraints) {
+			$field->setSetting('constraints', $constraints);
+		}
+		try {
+			$field->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to save field configuration for %field: %message',
+				[
+					'%field' => $name,
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+	}
+}
+
+/**
+ * Ensure all fields are visible in the default form display for a bundle.
+ */
+function mantle2_ensure_form_display(string $entity_type, string $bundle): void
+{
+	/** @var \Drupal\Core\Entity\Entity\EntityFormDisplay $display */
+	$display = EntityFormDisplay::load("$entity_type.$bundle.default");
+	if (!$display) {
+		$display = EntityFormDisplay::create([
+			'targetEntityType' => $entity_type,
+			'bundle' => $bundle,
+			'mode' => 'default',
+			'status' => true,
+		]);
+	}
+	$display->setStatus(true);
+
+	// Load all field instances for this bundle.
+	$field_instances = \Drupal::entityTypeManager()
+		->getStorage('field_config')
+		->loadByProperties(['entity_type' => $entity_type, 'bundle' => $bundle]);
+
+	$weight = 0;
+	foreach ($field_instances as $field_config) {
+		/** @var \Drupal\field\Entity\FieldConfig $field_config */
+		$name = $field_config->getName();
+		$type = $field_config->getType();
+
+		$component = $display->getComponent($name) ?? [];
+		$widget = getWidgetType($type);
+		if ($type === 'json') {
+			$widget = 'json_textarea';
+		}
+
+		$display->setComponent(
+			$name,
+			$component + [
+				'type' => $widget,
+				'weight' => $weight++,
+				'settings' => $component['settings'] ?? [],
+				'region' => 'content',
+			],
+		);
+	}
+
+	try {
+		$display->save();
+	} catch (EntityStorageException $e) {
+		Drupal::logger('mantle2')->error('Failed to save form display for %bundle: %message', [
+			'%bundle' => "$entity_type.$bundle",
+			'%message' => $e->getMessage(),
+		]);
 	}
 }
 
@@ -128,8 +189,10 @@ function createContentType(string $name, string $label, string $description, arr
 			'targetEntityType' => 'node',
 			'bundle' => $name,
 			'mode' => 'default',
+			'status' => true,
 		]);
 	}
+	$form_display->setStatus(true);
 
 	// Set up form display for each field
 	foreach ($fields as $index => $field) {
@@ -141,6 +204,7 @@ function createContentType(string $name, string $label, string $description, arr
 			'type' => getWidgetType($field_type),
 			'weight' => $index,
 			'settings' => [],
+			'region' => 'content',
 		];
 
 		// Add specific widget settings based on field type
@@ -149,7 +213,7 @@ function createContentType(string $name, string $label, string $description, arr
 		} elseif ($field_type === 'list_string') {
 			$widget_config['type'] = 'options_select';
 		} elseif ($field_type === 'json') {
-			$widget_config['type'] = 'string_textarea';
+			$widget_config['type'] = 'json_textarea';
 		}
 
 		$form_display->setComponent($field_name, $widget_config);
@@ -163,6 +227,9 @@ function createContentType(string $name, string $label, string $description, arr
 			'%message' => $e->getMessage(),
 		]);
 	}
+
+	// Ensure any fields not explicitly configured above are still made visible.
+	mantle2_ensure_form_display('node', $name);
 }
 
 function getWidgetType(string $field_type): string
@@ -175,7 +242,7 @@ function getWidgetType(string $field_type): string
 		'text_long' => 'text_textarea',
 		'datetime' => 'datetime_default',
 		'list_string' => 'options_select',
-		'json' => 'string_textarea',
+		'json' => 'json_textarea',
 	];
 
 	return $widget_map[$field_type] ?? 'string_textfield';
@@ -304,12 +371,15 @@ function mantle2_install(): void
 		'allowed_values' => array_map(fn($case) => $case->value, AccountType::cases()),
 	]);
 
+	// Make sure the user form display shows all custom fields on fresh install.
+	mantle2_ensure_form_display('user', 'user');
+
 	// Activities
 
 	createContentType('activity', 'Activity', 'Activity content type', [
 		[
 			'name' => 'field_activity_id',
-			'type' => 'integer',
+			'type' => 'string',
 			'label' => 'Activity ID',
 			'required' => true,
 		],
@@ -591,4 +661,22 @@ function mantle2_install(): void
 			],
 		],
 	]);
+}
+
+/**
+ * Update: Ensure node bundle form displays include all fields and are enabled.
+ */
+function mantle2_update_9001(): void
+{
+	foreach (['activity', 'event', 'prompt', 'article'] as $bundle) {
+		mantle2_ensure_form_display('node', $bundle);
+	}
+}
+
+/**
+ * Update: Ensure user form display includes custom fields and is enabled.
+ */
+function mantle2_update_9002(): void
+{
+	mantle2_ensure_form_display('user', 'user');
 }
