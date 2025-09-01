@@ -44,10 +44,14 @@ class OpenAPIController extends ControllerBase
 				$methods = ['GET'];
 			}
 
-			if ($options['body/description']) {
+			if (array_key_exists('body/description', $options)) {
 				$requestBody = [
-					'description' => $options['body/description'] ?? 'Request object',
-					'required' => $options['body/required'] ?? true,
+					'description' => array_key_exists('body/description', $options)
+						? $options['body/description']
+						: 'Request object',
+					'required' => array_key_exists('body/required', $options)
+						? $options['body/required']
+						: true,
 					'content' => [
 						'application/json' => [
 							'schema' => $this->resolveSchemaSpecifier(
@@ -80,7 +84,9 @@ class OpenAPIController extends ControllerBase
 							? [
 								'description' => 'Resource created',
 								'content' => [
-									$options['schema/201/type'] ?? 'application/json' => [
+									array_key_exists('schema/201/type', $options)
+										? $options['schema/201/type']
+										: 'application/json' => [
 										'schema' => $this->resolveSchemaSpecifier(
 											$options['schema/201'],
 										),
@@ -134,7 +140,7 @@ class OpenAPIController extends ControllerBase
 					];
 				}
 
-				if ($options['query']) {
+				if (array_key_exists('query', $options) && is_array($options['query'])) {
 					foreach ($options['query'] as $queryParam => $paramConfig) {
 						$schema = ['type' => $paramConfig['type'] ?? 'string'];
 						if (isset($paramConfig['enum'])) {
