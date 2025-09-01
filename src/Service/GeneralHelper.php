@@ -41,6 +41,11 @@ class GeneralHelper
 		return new JsonResponse(['code' => 404, 'message' => $message], Response::HTTP_NOT_FOUND);
 	}
 
+	public static function conflict(string $message = 'Conflict'): JsonResponse
+	{
+		return new JsonResponse(['code' => 409, 'message' => $message], Response::HTTP_CONFLICT);
+	}
+
 	public static function internalError(string $message = 'Internal Server Error'): JsonResponse
 	{
 		return new JsonResponse(
