@@ -115,7 +115,7 @@ class ActivityController extends ControllerBase
 			return $user;
 		}
 
-		if (!$user->hasPermission('administer users')) {
+		if (!UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You do not have permission to create activities.');
 		}
 

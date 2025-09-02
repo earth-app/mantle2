@@ -306,7 +306,7 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		if (!$user->hasPermission('administer users')) {
+		if (!UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('Insufficient permissions to change account type');
 		}
 
@@ -737,7 +737,7 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized();
 		}
 
-		if (!$requester->hasPermission('administer users')) {
+		if (!UsersHelper::isAdmin($requester)) {
 			return GeneralHelper::forbidden('You do not have permission to perform this action.');
 		}
 

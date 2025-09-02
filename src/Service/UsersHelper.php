@@ -50,7 +50,7 @@ class UsersHelper
 
 		// Authorization Workflow
 		// Allow if requester is the target user or requester has administer users permission
-		if ($user->id() === $user2->id() || $user->hasPermission('administer users')) {
+		if ($user->id() === $user2->id() || UsersHelper::isAdmin($user)) {
 			return $user2;
 		}
 
@@ -123,7 +123,7 @@ class UsersHelper
 		// PRIVATE requires admin or as an added friend
 		if (
 			$visibility === Visibility::PRIVATE &&
-			!$user2->hasPermission('administer users') &&
+			!UsersHelper::isAdmin($user2) &&
 			!self::isAddedFriend($user2, $user)
 		) {
 			return GeneralHelper::notFound();
@@ -203,7 +203,7 @@ class UsersHelper
 			return false;
 		}
 
-		if ($user->id() === $user2->id() || $user2->hasPermission('administer users')) {
+		if ($user->id() === $user2->id() || UsersHelper::isAdmin($user2)) {
 			return true;
 		}
 		if ($required === 'PRIVATE') {
@@ -376,12 +376,21 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
+		$accountTypeValue = $user->get('field_account_type')->getValue() ?? null;
+		$accountType = $accountTypeValue ? $accountTypeValue[0]['value'] : null;
 		return self::tryVisible(
-			$user->get('field_account_type')->getValue(),
+			$accountType,
 			$user,
 			$requester,
-			$privacy['account_type'] ?? 'FREE',
+			$privacy['account_type'] ?? 'PUBLIC',
 		);
+	}
+
+	public static function isAdmin(UserInterface $user): bool
+	{
+		return $user->hasRole('administrator') ||
+			$user->hasPermission('administer users') ||
+			self::getAccountType($user) === 'ADMINISTRATOR';
 	}
 
 	public static function serializeUser(
