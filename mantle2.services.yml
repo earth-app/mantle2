@@ -14,3 +14,6 @@ services:
 
   mantle2.helper.activities:
     class: Drupal\mantle2\Service\ActivityHelper
+
+  mantle2.helper.events:
+    class: Drupal\mantle2\Service\EventsHelper

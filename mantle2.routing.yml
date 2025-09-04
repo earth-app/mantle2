@@ -950,7 +950,7 @@ mantle2.users.username.circle.remove:
 mantle2.users.current.get:
   path: '/v2/users/current'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentGet'
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUser'
     _title: 'Retrieve Current User'
   requirements:
     _access: 'TRUE'
@@ -965,7 +965,7 @@ mantle2.users.current.get:
 mantle2.users.current.patch:
   path: '/v2/users/current'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentPatch'
+    _controller: '\Drupal\mantle2\Controller\UsersController::patchUser'
     _title: 'Update Current User'
   requirements:
     _access: 'TRUE'
@@ -982,7 +982,7 @@ mantle2.users.current.patch:
 mantle2.users.current.delete:
   path: '/v2/users/current'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentDelete'
+    _controller: '\Drupal\mantle2\Controller\UsersController::deleteUser'
     _title: 'Delete Current User'
   requirements:
     _access: 'TRUE'
@@ -996,7 +996,7 @@ mantle2.users.current.delete:
 mantle2.users.current.patch_field_privacy:
   path: '/v2/users/current/field_privacy'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentFieldPrivacy'
+    _controller: '\Drupal\mantle2\Controller\UsersController::patchFieldPrivacy'
     _title: 'Edit Current User Field Privacy'
   requirements:
     _access: 'TRUE'
@@ -1013,7 +1013,7 @@ mantle2.users.current.patch_field_privacy:
 mantle2.users.current.get_profile_photo:
   path: '/v2/users/current/profile_photo'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentProfilePhoto'
+    _controller: '\Drupal\mantle2\Controller\UsersController::getProfilePhoto'
     _title: 'Get Current User Profile Photo'
   requirements:
     _access: 'TRUE'
@@ -1027,7 +1027,7 @@ mantle2.users.current.get_profile_photo:
 mantle2.users.current.set_profile_photo:
   path: '/v2/users/current/profile_photo'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentUpdateProfilePhoto'
+    _controller: '\Drupal\mantle2\Controller\UsersController::updateProfilePhoto'
     _title: 'Set Current User Profile Photo'
   requirements:
     _access: 'TRUE'
@@ -1042,7 +1042,7 @@ mantle2.users.current.set_profile_photo:
 mantle2.users.current.set_account_type:
   path: '/v2/users/current/account_type'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentSetAccountType'
+    _controller: '\Drupal\mantle2\Controller\UsersController::setAccountType'
     _title: 'Set Current User Account Type'
   requirements:
     _access: 'TRUE'
@@ -1064,7 +1064,7 @@ mantle2.users.current.set_account_type:
 mantle2.users.current.activities:
   path: '/v2/users/current/activities'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentUserActivities'
+    controller: '\Drupal\mantle2\Controller\UsersController::userActivities'
     _title: 'Get Current User Activities'
   requirements:
     _access: 'TRUE'
@@ -1079,7 +1079,7 @@ mantle2.users.current.activities:
 mantle2.users.current.activities.set:
   path: '/v2/users/current/activities'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentSetUserActivities'
+    _controller: '\Drupal\mantle2\Controller\UsersController::setUserActivities'
     _title: 'Set Current User Activities'
   requirements:
     _access: 'TRUE'
@@ -1097,7 +1097,7 @@ mantle2.users.current.activities.set:
 mantle2.users.current.activities.add:
   path: '/v2/users/current/activities'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentAddUserActivity'
+    _controller: '\Drupal\mantle2\Controller\UsersController::addUserActivity'
     _title: 'Add Activity to Current User'
   requirements:
     _access: 'TRUE'
@@ -1118,7 +1118,7 @@ mantle2.users.current.activities.add:
 mantle2.users.current.activities.remove:
   path: '/v2/users/current/activities'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentRemoveUserActivity'
+    _controller: '\Drupal\mantle2\Controller\UsersController::removeUserActivity'
     _title: 'Remove Activity from Current User'
   requirements:
     _access: 'TRUE'
@@ -1139,7 +1139,7 @@ mantle2.users.current.activities.remove:
 mantle2.users.current.friends:
   path: '/v2/users/current/friends'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentUserFriends'
+    _controller: '\Drupal\mantle2\Controller\UsersController::userFriends'
     _title: 'Get Current User Friends'
   requirements:
     _access: 'TRUE'
@@ -1175,7 +1175,7 @@ mantle2.users.current.friends:
 mantle2.users.current.friends.add:
   path: '/v2/users/current/friends'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentAddUserFriend'
+    _controller: '\Drupal\mantle2\Controller\UsersController::addUserFriend'
     _title: 'Add Friend to Current User'
   requirements:
     _access: 'TRUE'
@@ -1197,7 +1197,7 @@ mantle2.users.current.friends.add:
 mantle2.users.current.friends.remove:
   path: '/v2/users/current/friends'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentRemoveUserFriend'
+    _controller: '\Drupal\mantle2\Controller\UsersController::removeUserFriend'
     _title: 'Remove Friend from Current User'
   requirements:
     _access: 'TRUE'
@@ -1218,7 +1218,7 @@ mantle2.users.current.friends.remove:
 mantle2.users.current.circle:
   path: '/v2/users/current/circle'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentUserCircle'
+    _controller: '\Drupal\mantle2\Controller\UsersController::userCircle'
     _title: "Get Current User's Circle"
   requirements:
     _access: 'TRUE'
@@ -1250,7 +1250,7 @@ mantle2.users.current.circle:
 mantle2.users.current.circle.add:
   path: '/v2/users/current/circle'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentAddUserToCircle'
+    _controller: '\Drupal\mantle2\Controller\UsersController::addUserToCircle'
     _title: "Add User to Current User's Circle"
   requirements:
     _access: 'TRUE'
@@ -1272,7 +1272,7 @@ mantle2.users.current.circle.add:
 mantle2.users.current.circle.remove:
   path: '/v2/users/current/circle'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::currentRemoveUserFromCircle'
+    _controller: '\Drupal\mantle2\Controller\UsersController::removeUserFromCircle'
     _title: 'Remove User from Current User Circle'
   requirements:
     _access: 'TRUE'
@@ -1354,4 +1354,199 @@ mantle2.activities.create:
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
+  methods: [POST]
+
+## Event Routes
+
+mantle2.events:
+  path: '/v2/events'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::events'
+    _title: 'List Events'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Events
+    description: Retrieves a list of events
+    schema/200: events()
+    schema/400: Invalid Pagination Parameters
+    schema/401: Unauthorized
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+  methods: [GET]
+
+mantle2.events.create:
+  path: '/v2/events'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::createEvent'
+    _title: 'Create Event'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Events
+    description: Creates a new event
+    schema/201: event()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    body/schema: eventCreate()
+    body/description: Event data to create
+  methods: [POST]
+
+mantle2.events.get:
+  path: '/v2/events/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getEvent'
+    _title: 'Get Event'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events
+    description: Retrieves a specific event by ID
+    schema/200: event()
+    schema/404: Event not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to retrieve
+  methods: [GET]
+
+mantle2.events.update:
+  path: '/v2/events/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::updateEvent'
+    _title: 'Update Event'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events
+    description: Updates an existing event
+    schema/200: event()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event not found
+    body/description: Event data to update
+    body/schema: eventUpdate()
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to update
+  methods: [PATCH]
+
+mantle2.events.delete:
+  path: '/v2/events/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteEvent'
+    _title: 'Delete Event'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events
+    description: Deletes an existing event
+    schema/204: Event deleted successfully
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to delete
+  methods: [DELETE]
+
+mantle2.events.get.attendees:
+  path: '/v2/events/{eventId}/attendees'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getEventAttendees'
+    _title: 'Get Event Attendees'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events
+    description: Retrieves a list of attendees for a specific event
+    schema/200: users()
+    schema/404: Event not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to retrieve attendees for
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+  methods: [GET]
+
+mantle2.events.signup:
+  path: '/v2/events/{eventId}/signup'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::signupForEvent'
+    _title: 'Sign Up for Event'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events
+    description: Signs up the logged in user for a specific event
+    schema/200: attendeeResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to sign up for
+  methods: [POST]
+
+mantle2.events.leave:
+  path: '/v2/events/{eventId}/leave'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::leaveEvent'
+    _title: 'Cancel Signup for Event'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events
+    description: Cancels the logged in user's signup for a specific event
+    schema/200: attendeeResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to cancel signup for
   methods: [POST]

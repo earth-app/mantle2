@@ -243,6 +243,7 @@ function getWidgetType(string $field_type): string
 		'datetime' => 'datetime_default',
 		'list_string' => 'options_select',
 		'json' => 'json_textarea',
+		'entity_reference' => 'entity_reference_autocomplete',
 	];
 
 	return $widget_map[$field_type] ?? 'string_textfield';
@@ -679,4 +680,31 @@ function mantle2_update_9001(): void
 function mantle2_update_9002(): void
 {
 	mantle2_ensure_form_display('user', 'user');
+}
+
+/**
+ * Update: Add Event Attendees Field, Field Visibility for Nodes
+ */
+function mantle2_update_9003(): void
+{
+	createField(
+		'node',
+		'field_event_attendees',
+		'entity_reference',
+		'Event Attendees',
+		true,
+		null,
+		[
+			'target_type' => 'user',
+		],
+		[],
+		-1,
+		'event',
+	);
+	mantle2_ensure_form_display('node', 'event');
+
+	createField('node', 'field_visibility', 'list_string', 'Visibility', true, null, [
+		'allowed_values' => array_map(fn($case) => $case->value, Visibility::cases()),
+	]);
+	mantle2_ensure_form_display('node', 'event');
 }

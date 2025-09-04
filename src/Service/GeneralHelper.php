@@ -56,6 +56,15 @@ class GeneralHelper
 
 	// Response Utilities
 
+	public static function formatId($id): string
+	{
+		$s = (string) $id;
+		if (strlen($s) < 24) {
+			$s = str_pad($s, 24, '0', STR_PAD_LEFT);
+		}
+		return substr($s, 0, 24);
+	}
+
 	public static function paginatedParameters(Request $request): array|JsonResponse
 	{
 		/** @var int $limit */

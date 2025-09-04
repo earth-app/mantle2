@@ -43,4 +43,5 @@ jobs:
             cd /var/www/drupal
             ./vendor/bin/drush en mantle2 -y
             ./vendor/bin/drush cr
+            ./vendor/bin/drush updb
             systemctl restart apache2

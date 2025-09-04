@@ -500,8 +500,8 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'name' => self::$text,
-				'description' => self::$text,
+				'name' => self::text(50),
+				'description' => self::text(3000),
 				'type' => self::eventType(),
 				'location' => [
 					'type' => 'object',
@@ -523,9 +523,8 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'hostId' => self::$id,
-				'name' => self::$text,
-				'description' => self::$text,
+				'name' => self::text(50),
+				'description' => self::text(3000),
 				'type' => self::eventType(),
 				'activities' => ['type' => 'array', 'items' => self::activityType()],
 				'location' => [
@@ -757,8 +756,8 @@ class Mantle2Schemas
 			'properties' => [
 				'id' => self::$id,
 				'hostId' => self::$id,
-				'name' => self::$text,
-				'description' => self::$text,
+				'name' => self::text(50),
+				'description' => self::text(3000),
 				'type' => self::eventType(),
 				'activities' => ['type' => 'array', 'items' => self::activityType()],
 				'location' => [
@@ -769,7 +768,7 @@ class Mantle2Schemas
 					],
 				],
 				'date' => self::$date,
-				'endDate' => self::$date,
+				'end_date' => self::$date,
 				'visibility' => self::visibility(),
 			],
 			'required' => [
@@ -786,7 +785,18 @@ class Mantle2Schemas
 	}
 	public static function events(): array
 	{
-		return ['type' => 'array', 'items' => self::event()];
+		return self::paginated(self::event());
+	}
+	public static function attendeeResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'user' => self::user(),
+				'event' => self::event(),
+			],
+			'required' => ['user', 'event'],
+		];
 	}
 
 	public static function activity(): array

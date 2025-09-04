@@ -271,15 +271,6 @@ class UsersHelper
 
 	// User Fields
 
-	public static function formatId($id): string
-	{
-		$s = (string) $id;
-		if (strlen($s) < 24) {
-			$s = str_pad($s, 24, '0', STR_PAD_LEFT);
-		}
-		return substr($s, 0, 24);
-	}
-
 	public static function getFirstName(
 		UserInterface $user,
 		?UserInterface $requester = null,
@@ -400,14 +391,14 @@ class UsersHelper
 		$privacy = self::getFieldPrivacy($user);
 
 		return [
-			'id' => self::formatId($user->id()),
+			'id' => GeneralHelper::formatId($user->id()),
 			'username' => $user->getAccountName(),
 			'fullName' => self::getName($user, $requester),
 			'created_at' => date('c', $user->getCreatedTime()),
 			'updated_at' => date('c', $user->getChangedTime()),
 			'last_login' => date('c', $user->getLastLoginTime()),
 			'account' => [
-				'id' => self::formatId($user->id()),
+				'id' => GeneralHelper::formatId($user->id()),
 				'username' => $user->getAccountName(),
 				'first_name' => self::getFirstName($user, $requester),
 				'last_name' => self::getLastName($user, $requester),
@@ -924,5 +915,62 @@ class UsersHelper
 		$activities = self::getActivities($user);
 		$activities = array_filter($activities, fn($a) => $a !== $activity);
 		self::setActivities($user, $activities);
+	}
+
+	public static function getUserEvents(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+	) {
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('node');
+			$query = $storage
+				->getQuery()
+				->condition('type', 'event')
+				->condition('field_host_id', $user->id());
+
+			if (!empty($search)) {
+				$query->condition('field_event_name', '%' . $search . '%', 'LIKE');
+			}
+
+			$countQuery = clone $query;
+			$count = $countQuery->count()->execute();
+
+			$query->range(($page - 1) * $limit, $limit);
+			$nids = $query->execute();
+			$nodes = $storage->loadMultiple($nids);
+
+			return [
+				'events' => array_values(
+					array_filter(
+						array_map(
+							fn($node) => $node ? EventsHelper::nodeToEvent($node) : null,
+							$nodes,
+						),
+					),
+				),
+				'total' => $count,
+			];
+		} catch (Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException | Drupal\Component\Plugin\Exception\PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error('Failed to retrieve user events: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return [
+				'events' => [],
+				'total' => 0,
+			];
+		}
+	}
+
+	public static function getMaxEventAttendees(UserInterface $user): int
+	{
+		$type = self::getAccountType($user);
+		return match ($type) {
+			'ADMINISTRATOR' => PHP_INT_MAX,
+			'PRO', 'WRITER' => 5000,
+			'ORGANIZER' => 1_000_000,
+			default => 100,
+		};
 	}
 }
