@@ -36,7 +36,7 @@ if [ ! -d "$SITE_DIR" ]; then
 
   ddev start
 
-  ddev drush -y site:install standard \
+  ddev drush -y site:install minimal \
     --account-name=admin \
     --account-pass=admin \
     --site-name="$SITE_NAME"
