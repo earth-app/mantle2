@@ -24,7 +24,7 @@ class EventsHelper
 
 	public static function nodeToEvent(Node $node): Event
 	{
-		$event_id = $node->get('field_event_id')->value;
+		$hostId = (int) $node->get('field_host_id')->value;
 		$name = $node->get('field_event_name')->value;
 		$description = $node->get('field_event_description')->value;
 		$event_type = EventType::cases()[$node->get('field_event_type')->value];
@@ -43,7 +43,7 @@ class EventsHelper
 		$attendees = array_column($node->get('field_event_attendees')->getValue(), 'target_id');
 
 		return new Event(
-			$event_id,
+			$hostId,
 			$name,
 			$description,
 			$event_type,
@@ -57,7 +57,7 @@ class EventsHelper
 		);
 	}
 
-	public static function isVisible(Event $event, UserInterface $user): bool
+	public static function isVisible(Event $event, ?UserInterface $user): bool
 	{
 		$visibility = $event->getVisibility();
 		if ($visibility === Visibility::PUBLIC) {

@@ -1402,6 +1402,7 @@ mantle2.events.create:
     schema/201: event()
     schema/400: Bad Request
     schema/401: Unauthorized
+    schema/402: Account Upgrade Required
     schema/403: Forbidden
     body/schema: eventCreate()
     body/description: Event data to create
@@ -1440,6 +1441,7 @@ mantle2.events.update:
     schema/200: event()
     schema/400: Bad Request
     schema/401: Unauthorized
+    schema/402: Account Upgrade Required
     schema/403: Forbidden
     schema/404: Event not found
     body/description: Event data to update

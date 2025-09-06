@@ -83,7 +83,10 @@ class EventsController extends ControllerBase
 			foreach ($nids as $nid) {
 				$node = Node::load($nid);
 				if ($node) {
-					$data[] = EventsHelper::nodeToEvent($node)->jsonSerialize();
+					$data[] = [
+						'id' => $nid,
+						...EventsHelper::nodeToEvent($node)->jsonSerialize(),
+					];
 				}
 			}
 
@@ -95,7 +98,7 @@ class EventsController extends ControllerBase
 			]);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
-				'Failed to load activity storage: ' . $e->getMessage(),
+				'Failed to load events storage: ' . $e->getMessage(),
 			);
 		}
 	}
