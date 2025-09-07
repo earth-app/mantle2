@@ -6,3 +6,7 @@ core_version_requirement: ^11
 dependencies:
   - drupal:json_field
   - drupal:key
+  - drupal:comment
+  - drupal:field
+  - drupal:options
+  - drupal:datetime

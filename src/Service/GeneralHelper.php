@@ -65,6 +65,11 @@ class GeneralHelper
 		return substr($s, 0, 24);
 	}
 
+	public static function dateToIso(int $timestamp): string
+	{
+		return gmdate('c', $timestamp);
+	}
+
 	public static function paginatedParameters(Request $request): array|JsonResponse
 	{
 		/** @var int $limit */

@@ -300,14 +300,6 @@ class Mantle2Schemas
 		'description' => 'A valid hex color code',
 	];
 	public static array $bool = ['type' => 'boolean', 'example' => true];
-	public static array $uuid = [
-		'type' => 'string',
-		'format' => 'uuid',
-		'minLength' => 36,
-		'maxLength' => 36,
-		'example' => '123e4567-e89b-12d3-a456-426614174000',
-		'description' => 'A valid UUID',
-	];
 	public static array $sessionToken = [
 		'type' => 'string',
 		'example' => '4bHN3nxwb21bd1sm109s1nan28xm1bab2Js18',
@@ -857,7 +849,7 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$uuid,
+				'id' => self::$id,
 				'prompt' => self::$text,
 				'visibility' => self::userPrivacy(),
 				'created_at' => self::$date,
@@ -868,7 +860,7 @@ class Mantle2Schemas
 	}
 	public static function prompts(): array
 	{
-		return ['type' => 'array', 'items' => self::prompt()];
+		return self::paginated(self::prompt());
 	}
 
 	public static function promptResponse(): array
@@ -876,9 +868,10 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$uuid,
-				'prompt_id' => self::$uuid,
+				'id' => self::$id,
+				'prompt_id' => self::$id,
 				'response' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 700],
+				'owner' => self::user(),
 				'created_at' => self::$date,
 				'updated_at' => self::$date,
 			],
@@ -887,7 +880,19 @@ class Mantle2Schemas
 	}
 	public static function promptResponses(): array
 	{
-		return ['type' => 'array', 'items' => self::promptResponse()];
+		return self::paginated(self::promptResponse());
+	}
+
+	public static function promptResponsesCount(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'prompt' => self::prompt(),
+				'count' => ['type' => 'integer', 'example' => 42],
+			],
+			'required' => ['prompt', 'count'],
+		];
 	}
 
 	public static function article(): array

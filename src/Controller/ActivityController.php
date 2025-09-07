@@ -60,7 +60,11 @@ class ActivityController extends ControllerBase
 			foreach ($nids as $nid) {
 				$node = Node::load($nid);
 				if ($node) {
-					$data[] = ActivityHelper::nodeToActivity($node)->jsonSerialize();
+					$res = ActivityHelper::nodeToActivity($node)->jsonSerialize();
+					$res['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+					$res['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+
+					$data[] = $res;
 				}
 			}
 
@@ -99,6 +103,9 @@ class ActivityController extends ControllerBase
 			}
 
 			$data = ActivityHelper::nodeToActivity($node)->jsonSerialize();
+			$data['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+			$data['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+
 			return new JsonResponse($data);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
@@ -165,10 +172,14 @@ class ActivityController extends ControllerBase
 	// GET /v2/activities/:activityId
 	public function getActivity(string $activityId): JsonResponse
 	{
-		$activity = ActivityHelper::getActivity($activityId);
-		if (!$activity) {
+		$node = ActivityHelper::getNodeByActivityId($activityId);
+		if (!$node) {
 			return GeneralHelper::notFound("Activity '$activityId' not found");
 		}
+
+		$activity = ActivityHelper::nodeToActivity($node)->jsonSerialize();
+		$activity['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+		$activity['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
 		return new JsonResponse($activity, Response::HTTP_OK);
 	}

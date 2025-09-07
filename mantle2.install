@@ -1,5 +1,6 @@
 <?php
 
+use Drupal\comment\Entity\CommentType;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\node\Entity\NodeType;
 use Drupal\field\Entity\FieldStorageConfig;
@@ -707,4 +708,25 @@ function mantle2_update_9003(): void
 		'allowed_values' => array_map(fn($case) => $case->value, Visibility::cases()),
 	]);
 	mantle2_ensure_form_display('node', 'event');
+}
+
+/**
+ * Update: Add comments for prompts and articles
+ */
+function mantle2_update_9004(): void
+{
+	if (!CommentType::load('comment')) {
+		CommentType::create([
+			'id' => 'comment',
+			'label' => 'Comment',
+			'target_entity_type_id' => 'node',
+		])->save();
+	}
+
+	createField('node', 'comment', 'comment', 'Comments', false, null, [
+		'comment_type' => 'comment',
+		'cardinality' => -1,
+	]);
+	mantle2_ensure_form_display('node', 'prompt');
+	mantle2_ensure_form_display('node', 'article');
 }

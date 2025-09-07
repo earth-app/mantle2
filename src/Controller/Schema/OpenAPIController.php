@@ -126,7 +126,12 @@ class OpenAPIController extends ControllerBase
 				preg_match_all('/\{(\w+)}/', $path, $matches);
 				foreach ($matches[1] as $param) {
 					$paramSettings = $options['parameters'][$param];
-					$schema = ['type' => $paramSettings['type'] ?? 'string'];
+					$type = $paramSettings['type'] ?? 'string';
+					if (str_starts_with($type, 'entity:')) {
+						$type = 'integer';
+					}
+
+					$schema = ['type' => $type];
 
 					if (isset($paramSettings['enum'])) {
 						$schema['enum'] = $paramSettings['enum'];

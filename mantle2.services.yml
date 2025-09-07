@@ -17,3 +17,6 @@ services:
 
   mantle2.helper.events:
     class: Drupal\mantle2\Service\EventsHelper
+
+  mantle2.helper.prompts:
+    class: Drupal\mantle2\Service\PromptsHelper

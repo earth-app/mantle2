@@ -9,6 +9,11 @@ class ActivityHelper
 {
 	public static function getActivity(string $id): ?Activity
 	{
+		return self::nodeToActivity(self::getNodeByActivityId($id));
+	}
+
+	public static function getNodeByActivityId(string $id): ?Node
+	{
 		$query = \Drupal::entityQuery('node')
 			->condition('type', 'activity')
 			->condition('field_activity_id', $id)
@@ -22,13 +27,7 @@ class ActivityHelper
 		}
 
 		$nid = reset($nids);
-		$node = Node::load($nid);
-
-		if (!$node) {
-			return null;
-		}
-
-		return self::nodeToActivity($node);
+		return Node::load($nid);
 	}
 
 	public static function nodeToActivity(Node $node): Activity

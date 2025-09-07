@@ -41,7 +41,7 @@ if [ ! -d "$SITE_DIR" ]; then
     --account-pass=admin \
     --site-name="$SITE_NAME"
 
-  ddev drush -y en json_field key
+  ddev drush -y en field datetime options json_field key
   ddev drush -y en "$PROJECT_NAME" || true
 else
   echo ">>> Reusing existing site at $SITE_DIR"

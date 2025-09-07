@@ -1552,3 +1552,255 @@ mantle2.events.leave:
         type: integer
         description: The ID of the event to cancel signup for
   methods: [POST]
+
+## Prompt Routes
+mantle2.prompts:
+  path: '/v2/prompts'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::prompts'
+    _title: 'List Prompts'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Prompts
+    description: Retrieves a list of prompts
+    schema/200: prompts()
+    schema/401: Unauthorized
+  methods: [GET]
+
+mantle2.prompts.create:
+  path: '/v2/prompts'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::createPrompt'
+    _title: 'Create Prompt'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Prompts
+    description: Creates a new prompt
+    schema/201: prompt()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/402: Account Upgrade Required
+    schema/403: Forbidden
+    body/schema: promptCreate()
+    body/description: Prompt data to create
+  methods: [POST]
+
+mantle2.prompts.random:
+  path: '/v2/prompts/random'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::randomPrompt'
+    _title: 'Get Random Prompt'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Prompts
+    description: Retrieves a random prompt
+    schema/200: prompt()
+    schema/404: Not Found
+  methods: [GET]
+
+mantle2.prompts.get:
+  path: '/v2/prompts/{promptId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::getPrompt'
+    _title: 'Get Prompt'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+  options:
+    tags: Prompts
+    description: Retrieves a specific prompt
+    schema/200: prompt()
+    schema/404: Not Found
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to retrieve
+  methods: [GET]
+
+mantle2.prompts.update:
+  path: '/v2/prompts/{promptId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::updatePrompt'
+    _title: 'Update Prompt'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+  options:
+    tags: Prompts
+    description: Updates a specific prompt
+    schema/200: prompt()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+    body/schema: promptCreate()
+    body/description: Prompt data to update
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to update
+  methods: [PATCH]
+
+mantle2.prompts.delete:
+  path: '/v2/prompts/{promptId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::deletePrompt'
+    _title: 'Delete Prompt'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+  options:
+    tags: Prompts
+    description: Deletes a specific prompt
+    schema/204: No Content
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to delete
+  methods: [DELETE]
+
+mantle2.prompts.responses:
+  path: '/v2/prompts/{promptId}/responses'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::getPromptResponses'
+    _title: 'Get Prompt Responses'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+  options:
+    tags: Prompts
+    description: Retrieves responses for a specific prompt
+    schema/200: promptResponses()
+    schema/404: Not Found
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to retrieve responses for
+  methods: [GET]
+
+mantle2.prompts.responses.create:
+  path: '/v2/prompts/{promptId}/responses'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::createPromptResponse'
+    _title: 'Create Prompt Response'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+  options:
+    tags: Prompts
+    description: Creates a new response for a specific prompt
+    schema/201: promptResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+    body/schema: $promptResponseBody
+    body/description: Prompt response data to create
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to create a response for
+  methods: [POST]
+
+mantle2.prompts.responses.count:
+  path: '/v2/prompts/{promptId}/responses/count'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::getPromptResponsesCount'
+    _title: 'Count Prompt Responses'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+  options:
+    tags: Prompts
+    description: Counts responses for a specific prompt
+    schema/200: promptResponsesCount()
+    schema/404: Not Found
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to count responses for
+  methods: [GET]
+
+mantle2.prompts.responses.get:
+  path: '/v2/prompts/{promptId}/responses/{responseId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::getPromptResponse'
+    _title: 'Get Prompt Response'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+    responseId: \d+
+  options:
+    tags: Prompts
+    description: Retrieves a specific response for a prompt
+    schema/200: promptResponse()
+    schema/404: Not Found
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to retrieve a response for
+      responseId:
+        type: entity:node
+        description: The ID of the response to retrieve
+  methods: [GET]
+
+mantle2.prompts.responses.update:
+  path: '/v2/prompts/{promptId}/responses/{responseId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::updatePromptResponse'
+    _title: 'Update Prompt Response'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+    responseId: \d+
+  options:
+    tags: Prompts
+    description: Updates a specific response for a prompt
+    schema/200: promptResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+    body/schema: $promptResponseBody
+    body/description: Prompt response data to update
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to update a response for
+      responseId:
+        type: entity:node
+        description: The ID of the response to update
+  methods: [PATCH]
+
+mantle2.prompts.responses.delete:
+  path: '/v2/prompts/{promptId}/responses/{responseId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::deletePromptResponse'
+    _title: 'Delete Prompt Response'
+  requirements:
+    _access: 'TRUE'
+    promptId: \d+
+    responseId: \d+
+  options:
+    tags: Prompts
+    description: Deletes a specific response for a prompt
+    schema/204: No Content
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+    parameters:
+      promptId:
+        type: entity:node
+        description: The ID of the prompt to delete a response for
+      responseId:
+        type: entity:node
+        description: The ID of the response to delete
+  methods: [DELETE]

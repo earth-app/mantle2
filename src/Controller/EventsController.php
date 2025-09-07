@@ -237,6 +237,8 @@ class EventsController extends ControllerBase
 
 		$result = $event->jsonSerialize();
 		$result['id'] = GeneralHelper::formatId($node->id());
+		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
 		return new JsonResponse($result, Response::HTTP_CREATED);
 	}
@@ -249,9 +251,14 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
+		$node = Node::load($eventId);
+		if (!$node) {
 			return GeneralHelper::notFound('Event not found');
+		}
+
+		$event = EventsHelper::nodeToEvent($node);
+		if (!$event) {
+			return GeneralHelper::internalError('Failed to load event');
 		}
 
 		if (!EventsHelper::isVisible($event, $user)) {
@@ -260,6 +267,8 @@ class EventsController extends ControllerBase
 
 		$result = $event->jsonSerialize();
 		$result['id'] = GeneralHelper::formatId($eventId);
+		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
 		return new JsonResponse($result, Response::HTTP_OK);
 	}
@@ -426,6 +435,8 @@ class EventsController extends ControllerBase
 		EventsHelper::updateEvent($node, $event);
 		$result = $event->jsonSerialize();
 		$result['id'] = GeneralHelper::formatId($eventId);
+		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
 		return new JsonResponse($result, Response::HTTP_OK);
 	}
