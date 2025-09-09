@@ -1804,3 +1804,101 @@ mantle2.prompts.responses.delete:
         type: entity:node
         description: The ID of the response to delete
   methods: [DELETE]
+
+## Articles Routes
+mantle2.articles:
+  path: '/v2/articles'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::articles'
+    _title: 'List Articles'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Articles
+    description: Lists all articles
+    schema/200: articlesList()
+    schema/404: Not Found
+  methods: [GET]
+
+mantle2.articles.create:
+  path: '/v2/articles'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::createArticle'
+    _title: 'Create Article'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Articles
+    description: Creates a new article
+    schema/201: article()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    body/schema: $articleBody
+    body/description: Article data to create
+  methods: [POST]
+
+mantle2.articles.get:
+  path: '/v2/articles/{articleId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::getArticle'
+    _title: 'Get Article'
+  requirements:
+    _access: 'TRUE'
+    articleId: \d+
+  options:
+    tags: Articles
+    description: Retrieves a specific article
+    schema/200: article()
+    schema/404: Not Found
+    parameters:
+      articleId:
+        type: entity:node
+        description: The ID of the article to retrieve
+  methods: [GET]
+
+mantle2.articles.update:
+  path: '/v2/articles/{articleId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::updateArticle'
+    _title: 'Update Article'
+  requirements:
+    _access: 'TRUE'
+    articleId: \d+
+  options:
+    tags: Articles
+    description: Updates a specific article
+    schema/200: article()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+    body/schema: $articleBody
+    body/description: Article data to update
+    parameters:
+      articleId:
+        type: entity:node
+        description: The ID of the article to update
+  methods: [PATCH]
+
+mantle2.articles.delete:
+  path: '/v2/articles/{articleId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::deleteArticle'
+    _title: 'Delete Article'
+  requirements:
+    _access: 'TRUE'
+    articleId: \d+
+  options:
+    tags: Articles
+    description: Deletes a specific article
+    schema/204: No Content
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+    parameters:
+      articleId:
+        type: entity:node
+        description: The ID of the article to delete
+  methods: [DELETE]
