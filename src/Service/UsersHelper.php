@@ -517,7 +517,7 @@ class UsersHelper
 				'address' => self::getAddress($user, $requester),
 				'country' => self::getCountry($user, $requester),
 				'account_type' => self::tryVisible(
-					self::getAccountType($user),
+					self::getAccountType($user)->name,
 					$user,
 					$requester,
 					$privacy['account_type'] ?? 'PUBLIC',
