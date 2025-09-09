@@ -125,6 +125,12 @@ class GeneralHelper
 		]);
 	}
 
+	public static function findOrdinal(array $array, $value): int
+	{
+		$index = array_search($value, $array, true);
+		return $index === false ? -1 : $index;
+	}
+
 	// Network Utilities
 
 	public static function getBearerToken(Request $request): ?string

@@ -63,7 +63,11 @@ class EventsController extends ControllerBase
 				}
 			} else {
 				// only public events for anonymous users
-				$query->condition('field_visibility', Visibility::PUBLIC->value);
+				$query->condition(
+					'field_visibility',
+					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+					'IN',
+				);
 			}
 
 			if ($search) {

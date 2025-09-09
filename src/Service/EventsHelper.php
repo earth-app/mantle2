@@ -108,7 +108,10 @@ class EventsHelper
 		$node->set('field_event_location_longitude', $event->getLongitude());
 		$node->set('field_event_date', $event->getDate());
 		$node->set('field_event_end_date', $event->getEndDate());
-		$node->set('field_visibility', $event->getVisibility()->value);
+		$node->set(
+			'field_visibility',
+			GeneralHelper::findOrdinal(Visibility::cases(), $event->getVisibility()),
+		);
 		$node->save();
 
 		return $node;

@@ -5,6 +5,7 @@ namespace Drupal\mantle2\Service;
 use Drupal;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
+use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\user\Entity\User;
@@ -454,45 +455,42 @@ class UsersHelper
 		return self::tryVisible($country, $user, $requester, $privacy['country'] ?? 'PUBLIC');
 	}
 
-	public static function getAccountType(
-		UserInterface $user,
-		?UserInterface $requester = null,
-	): ?string {
-		$privacy = self::getFieldPrivacy($user);
-		$accountType = $user->get('field_account_type')->value ?? 'FREE';
-		return self::tryVisible(
-			strtoupper($accountType),
-			$user,
-			$requester,
-			$privacy['account_type'] ?? 'PUBLIC',
-		);
+	public static function getAccountType(UserInterface $user): AccountType
+	{
+		$accountType = $user->get('field_account_type')->value ?? '0';
+		$type = AccountType::cases()[(int) $accountType] ?? AccountType::FREE;
+		return $type;
 	}
 
 	public static function isPro(UserInterface $user): bool
 	{
-		$accountType = strtoupper($user->get('field_account_type')->value ?? 'FREE');
-		return $accountType !== 'FREE';
+		$accountType = self::getAccountType($user);
+		return $accountType !== AccountType::FREE;
 	}
 
 	public static function isWriter(UserInterface $user): bool
 	{
-		$accountType = strtoupper($user->get('field_account_type')->value ?? 'FREE');
-		return in_array($accountType, ['WRITER', 'ORGANIZER', 'ADMINISTRATOR'], true);
+		$accountType = self::getAccountType($user);
+		return in_array(
+			$accountType,
+			[AccountType::WRITER, AccountType::ORGANIZER, AccountType::ADMINISTRATOR],
+			true,
+		);
 	}
 
 	public static function isOrganizer(UserInterface $user): bool
 	{
-		$accountType = strtoupper($user->get('field_account_type')->value ?? 'FREE');
-		return in_array($accountType, ['ORGANIZER', 'ADMINISTRATOR'], true);
+		$accountType = self::getAccountType($user);
+		return in_array($accountType, [AccountType::ORGANIZER, AccountType::ADMINISTRATOR], true);
 	}
 
 	public static function isAdmin(UserInterface $user): bool
 	{
-		$accountType = strtoupper($user->get('field_account_type')->value ?? 'FREE');
+		$accountType = self::getAccountType($user);
 
 		return $user->hasRole('administrator') ||
 			$user->hasPermission('administer users') ||
-			$accountType === 'ADMINISTRATOR';
+			$accountType === AccountType::ADMINISTRATOR;
 	}
 
 	public static function serializeUser(
@@ -518,15 +516,24 @@ class UsersHelper
 				'phone_number' => self::getPhoneNumber($user, $requester),
 				'address' => self::getAddress($user, $requester),
 				'country' => self::getCountry($user, $requester),
-				'account_type' => self::getAccountType($user, $requester),
+				'account_type' => self::tryVisible(
+					self::getAccountType($user),
+					$user,
+					$requester,
+					$privacy['account_type'] ?? 'PUBLIC',
+				),
+				'visibility' => self::getVisibility($user)->name,
 				'field_privacy' => $privacy,
 			],
 			'activities' => [],
-			'friends' => self::tryVisible(
-				$user->get('field_friends')->value ?? [],
-				$user,
-				$requester,
-				$privacy['friends'] ?? 'PUBLIC',
+			'friends' => json_decode(
+				self::tryVisible(
+					$user->get('field_friends')->value ?? '[]',
+					$user,
+					$requester,
+					$privacy['friends'] ?? 'PUBLIC',
+				),
+				true,
 			),
 		];
 	}
@@ -630,11 +637,15 @@ class UsersHelper
 
 		if (isset($data['visibility'])) {
 			$visibility = (string) $data['visibility'];
-			if (Visibility::tryFrom($visibility) === null) {
+			$visibility0 = Visibility::tryFrom($visibility);
+			if ($visibility0 === null) {
 				return GeneralHelper::badRequest('Invalid visibility value');
 			}
 
-			$user->set('field_visibility', $visibility);
+			$user->set(
+				'field_visibility',
+				GeneralHelper::findOrdinal(Visibility::cases(), $visibility0),
+			);
 		}
 
 		try {
@@ -740,7 +751,7 @@ class UsersHelper
 		int $page = 1,
 		string $search = '',
 	): array {
-		$friendsValue = $user->get('field_friends')->value ?? '{}';
+		$friendsValue = $user->get('field_friends')->value ?? '[]';
 
 		/** @var int[] $friends*/
 		$friends = $friendsValue ? json_decode($friendsValue, true) : [];
@@ -758,7 +769,7 @@ class UsersHelper
 
 	public static function getAddedFriendsCount(UserInterface $user, string $search = ''): int
 	{
-		$friendsValue = $user->get('field_friends')->value ?? '{}';
+		$friendsValue = $user->get('field_friends')->value ?? '[]';
 
 		/** @var int[] $friends*/
 		$friends = $friendsValue ? json_decode($friendsValue, true) : [];
@@ -774,7 +785,7 @@ class UsersHelper
 
 	public static function isAddedFriend(UserInterface $user, UserInterface $friend): bool
 	{
-		$friends = $user->get('field_friends')->value ?? '{}';
+		$friends = $user->get('field_friends')->value ?? '[]';
 		$friends = $friends ? json_decode($friends, true) : [];
 		return in_array($friend->id(), $friends, true);
 	}
@@ -870,7 +881,7 @@ class UsersHelper
 
 	public static function addFriend(UserInterface $user, UserInterface $friend): bool
 	{
-		$friends = $user->get('field_friends')->value ?? '{}';
+		$friends = $user->get('field_friends')->value ?? '[]';
 		$friends0 = $friends ? json_decode($friends, true) : [];
 		if (in_array($friend->id(), $friends0, true)) {
 			return false;
@@ -884,7 +895,7 @@ class UsersHelper
 
 	public static function removeFriend(UserInterface $user, UserInterface $friend): bool
 	{
-		$friends = $user->get('field_friends')->value ?? '{}';
+		$friends = $user->get('field_friends')->value ?? '[]';
 		$friends0 = $friends ? json_decode($friends, true) : [];
 		if (!in_array($friend->id(), $friends0, true)) {
 			return false;
@@ -1232,7 +1243,7 @@ class UsersHelper
 
 	public static function getMaxEventAttendees(UserInterface $user): int
 	{
-		$type = strtoupper($user->get('field_account_type')->value ?? 'FREE');
+		$type = self::getAccountType($user)->name;
 		return match ($type) {
 			'ADMINISTRATOR' => PHP_INT_MAX,
 			'PRO', 'WRITER' => 5000,

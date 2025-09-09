@@ -4,6 +4,7 @@ use Drupal\comment\Entity\Comment;
 use Drupal\mantle2\Custom\Prompt;
 use Drupal\mantle2\Custom\PromptResponse;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\node\Entity\Node;
 use Drupal\user\UserInterface;
 
@@ -57,7 +58,10 @@ class PromptsHelper
 
 		$node->set('field_prompt', $prompt->getPrompt());
 		$node->set('field_owner_id', $prompt->getOwnerId());
-		$node->set('field_visibility', $prompt->getVisibility()->value);
+		$node->set(
+			'field_visibility',
+			GeneralHelper::findOrdinal(Visibility::cases(), $prompt->getVisibility()),
+		);
 
 		$node->save();
 
@@ -75,7 +79,10 @@ class PromptsHelper
 		}
 
 		$node->set('field_prompt', $prompt->getPrompt());
-		$node->set('field_visibility', $prompt->getVisibility()->value);
+		$node->set(
+			'field_visibility',
+			GeneralHelper::findOrdinal(Visibility::cases(), $prompt->getVisibility()),
+		);
 
 		$node->save();
 

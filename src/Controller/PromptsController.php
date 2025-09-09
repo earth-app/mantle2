@@ -13,6 +13,7 @@ use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\Entity\Node;
+use Generator;
 use PromptsHelper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -156,7 +157,10 @@ class PromptsController extends ControllerBase
 					$group = $query->orConditionGroup();
 					$group->condition(
 						'field_visibility',
-						[Visibility::PUBLIC->value, Visibility::UNLISTED->value],
+						[
+							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::UNLISTED),
+						],
 						'IN',
 					);
 
@@ -166,7 +170,10 @@ class PromptsController extends ControllerBase
 				}
 			} else {
 				// only public events for anonymous users
-				$query->condition('field_visibility', Visibility::PUBLIC->value);
+				$query->condition(
+					'field_visibility',
+					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+				);
 			}
 
 			$query->sort('RAND()');

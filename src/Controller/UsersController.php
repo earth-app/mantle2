@@ -376,7 +376,8 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid account_type');
 		}
 
-		$user->set('field_account_type', $type->value);
+		$ordinal = GeneralHelper::findOrdinal(AccountType::cases(), $type);
+		$user->set('field_account_type', $ordinal);
 		$user->save();
 
 		return new JsonResponse(UsersHelper::serializeUser($user, $requester), Response::HTTP_OK);
@@ -823,10 +824,6 @@ class UsersController extends ControllerBase
 		Drupal::moduleHandler()->invokeAll('user_login', [$account]);
 	}
 
-	/**
-	 * Resolve a target user by id/username or fall back to the current user from the request.
-	 * Returns JsonResponse on auth/visibility errors, null if not found.
-	 */
 	private function resolveUser(
 		Request $request,
 		?string $id,
@@ -837,6 +834,7 @@ class UsersController extends ControllerBase
 			$user = UsersHelper::findBy($identifier);
 			return $user ?: null;
 		}
+
 		// Fallback to current user via session/bearer.
 		return UsersHelper::findByRequest($request);
 	}
