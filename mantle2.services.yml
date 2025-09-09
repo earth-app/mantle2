@@ -5,6 +5,17 @@ services:
     tags:
       - { name: event_subscriber }
 
+  mantle2.rate_limit_subscriber:
+    class: Drupal\mantle2\EventSubscriber\RateLimitSubscriber
+    arguments: ['@keyvalue.expirable']
+    tags:
+      - { name: event_subscriber }
+
+  mantle2.rate_limit_response_subscriber:
+    class: Drupal\mantle2\EventSubscriber\RateLimitResponseSubscriber
+    tags:
+      - { name: event_subscriber }
+
   # Utility Classes
   mantle2.helper:
     class: Drupal\mantle2\Service\GeneralHelper
@@ -20,3 +31,6 @@ services:
 
   mantle2.helper.prompts:
     class: Drupal\mantle2\Service\PromptsHelper
+
+  mantle2.helper.articles:
+    class: Drupal\mantle2\Service\ArticlesHelper
