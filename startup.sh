@@ -14,9 +14,7 @@ if [ ! -d "$SITE_DIR" ]; then
 
   cd "$SITE_DIR"
 
-  composer require drush/drush
-  composer require drupal/json_field
-  composer require drupal/key
+  composer require drush/drush drupal/json_field drupal/key
 
   mkdir -p web/modules/custom/$PROJECT_NAME
   find "$SRC_PATH" -maxdepth 1 -name "*.php" \
