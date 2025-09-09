@@ -90,11 +90,12 @@ class EventsHelper
 		return true;
 	}
 
-	public static function createEvent(Event $event): Node
+	public static function createEvent(Event $event, ?UserInterface $author = null): Node
 	{
 		$node = Node::create([
 			'type' => 'event',
 			'title' => $event->getName(),
+			'author' => $author ? $author->id() : 1,
 		]);
 		$node->set('field_host_id', $event->getHostId());
 		$node->set('field_event_name', $event->getName());

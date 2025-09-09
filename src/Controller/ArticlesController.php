@@ -119,6 +119,7 @@ class ArticlesController extends ControllerBase
 		$node = Node::create([
 			'type' => 'article',
 			'title' => $body['title'],
+			'author' => $user->id(),
 			'field_article_title' => $body['title'],
 			'field_article_description' => $body['description'],
 			'field_article_tags' => json_encode($body['tags']),

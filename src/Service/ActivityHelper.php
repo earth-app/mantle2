@@ -3,7 +3,9 @@
 namespace Drupal\mantle2\Service;
 
 use Drupal\mantle2\Custom\Activity;
+use Drupal\mantle2\Custom\ActivityType;
 use Drupal\node\Entity\Node;
+use Drupal\user\UserInterface;
 
 class ActivityHelper
 {
@@ -17,6 +19,24 @@ class ActivityHelper
 		$query = \Drupal::entityQuery('node')
 			->condition('type', 'activity')
 			->condition('field_activity_id', $id)
+			->accessCheck(false)
+			->range(0, 1);
+
+		$nids = $query->execute();
+
+		if (empty($nids)) {
+			return null;
+		}
+
+		$nid = reset($nids);
+		return Node::load($nid);
+	}
+
+	public static function getNodeByActivityAlias(string $alias): ?Node
+	{
+		$query = \Drupal::entityQuery('node')
+			->condition('type', 'activity')
+			->condition('field_activity_aliases', $alias, 'CONTAINS')
 			->accessCheck(false)
 			->range(0, 1);
 
@@ -68,18 +88,25 @@ class ActivityHelper
 		return self::nodeToActivity($node);
 	}
 
-	public static function createActivity(Activity $activity): Node
+	public static function createActivity(Activity $activity, ?UserInterface $author = null): Node
 	{
 		$node = Node::create([
 			'type' => 'activity',
 			'title' => $activity->getName(),
+			'author' => $author ? $author->id() : 1,
 		]);
 
 		$node->set('field_activity_id', $activity->getId());
 		$node->set('field_activity_name', $activity->getName());
 		$node->set('field_activity_description', $activity->getDescription());
 
-		$typeValues = array_map(fn($type) => $type->value, $activity->getTypes());
+		$typeValues = array_map(
+			fn(string $type) => GeneralHelper::findOrdinal(
+				ActivityType::cases(),
+				ActivityType::from($type),
+			),
+			$activity->getTypes(),
+		);
 		$node->set('field_activity_types', $typeValues);
 
 		$node->set('field_activity_aliases', json_encode($activity->getAliases()));
