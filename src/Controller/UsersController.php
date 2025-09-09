@@ -107,21 +107,14 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized();
 		}
 
-		// Log the user in and migrate session.
+		// Log the user in for Drupal bookkeeping (last login, hooks) then issue API token.
 		$this->finalizeLogin($account);
-
-		// Use Drupal session ID as session_token per requirements.
-		$session = Drupal::service('session');
-		$session_id = method_exists($session, 'getId')
-			? $session->getId()
-			: ($request->getSession()
-				? $request->getSession()->getId()
-				: null);
+		$token = UsersHelper::issueToken($account);
 
 		$data = [
 			'id' => GeneralHelper::formatId($account->id()),
 			'username' => $account->getAccountName(),
-			'session_token' => $session_id,
+			'session_token' => $token,
 		];
 		return new JsonResponse($data, Response::HTTP_OK);
 	}
@@ -134,20 +127,28 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized();
 		}
 
-		$payloadUser = UsersHelper::withSessionId($sessionId, function ($session) {
-			$uid = $session->get('uid');
-			if (!$uid) {
-				return null;
-			}
-			$user = User::load($uid);
-			return $user ? UsersHelper::serializeUser($user, $user) : null;
-		});
+		// Prefer API token revocation; fall back to PHP session destruction if needed.
+		$payloadUser = null;
+		$tokenUser = UsersHelper::getUserByToken($sessionId);
+		if ($tokenUser) {
+			$payloadUser = UsersHelper::serializeUser($tokenUser, $tokenUser);
+			UsersHelper::revokeToken($sessionId);
+		} else {
+			$payloadUser = UsersHelper::withSessionId($sessionId, function ($session) {
+				$uid = $session->get('uid');
+				if (!$uid) {
+					return null;
+				}
+				$user = User::load($uid);
+				return $user ? UsersHelper::serializeUser($user, $user) : null;
+			});
 
-		// Destroy that session.
-		UsersHelper::withSessionId($sessionId, function () {
-			Drupal::service('session_manager')->destroy();
-			return null;
-		});
+			// Destroy that session (legacy behavior).
+			UsersHelper::withSessionId($sessionId, function () {
+				Drupal::service('session_manager')->destroy();
+				return null;
+			});
+		}
 
 		$data = [
 			'message' => 'Logout successful',
@@ -195,18 +196,12 @@ class UsersController extends ControllerBase
 			return GeneralHelper::internalError('Failed to create user: ' . $e->getMessage());
 		}
 
-		// Immediately log user in and return session token
+		// Immediately log user in (hooks/metadata) and return persistent API token
 		$this->finalizeLogin($user);
-		$session = Drupal::service('session');
-		$session_id = method_exists($session, 'getId')
-			? $session->getId()
-			: ($request->getSession()
-				? $request->getSession()->getId()
-				: null);
-
+		$token = UsersHelper::issueToken($user);
 		$data = [
 			'user' => UsersHelper::serializeUser($user, $user),
-			'session_token' => $session_id,
+			'session_token' => $token,
 		];
 		return new JsonResponse($data, Response::HTTP_CREATED);
 	}
@@ -258,6 +253,10 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
 		return UsersHelper::patchUser($user, $body, $requester);
 	}
 
@@ -300,6 +299,10 @@ class UsersController extends ControllerBase
 		$body = json_decode((string) $request->getContent(), true) ?: [];
 		if (!$body) {
 			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
 		return UsersHelper::patchFieldPrivacy($user, $body, $requester);
@@ -419,6 +422,10 @@ class UsersController extends ControllerBase
 		$activityIds = json_decode((string) $request->getContent(), true) ?: [];
 		if (!$activityIds) {
 			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
 		if (empty($activityIds)) {
@@ -801,11 +808,18 @@ class UsersController extends ControllerBase
 		}
 
 		$session = Drupal::service('session');
+		// Ensure session is started before migrating to get/keep a valid ID.
+		if (method_exists($session, 'start') && !$session->isStarted()) {
+			$session->start();
+		}
 		if (method_exists($session, 'migrate')) {
 			$session->migrate();
 		}
 		$session->set('uid', $account->id());
 		$session->set('check_logged_in', true);
+		if (method_exists($session, 'save')) {
+			$session->save();
+		}
 		Drupal::moduleHandler()->invokeAll('user_login', [$account]);
 	}
 

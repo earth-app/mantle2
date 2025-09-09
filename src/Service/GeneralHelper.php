@@ -135,4 +135,23 @@ class GeneralHelper
 		}
 		return null;
 	}
+
+	public static function getBasicAuth(Request $request): array|null
+	{
+		$header = $request->headers->get('Authorization');
+		if ($header && stripos($header, 'Basic ') === 0) {
+			$encoded = substr($header, 6);
+			$decoded = base64_decode($encoded, true);
+			if ($decoded !== false) {
+				$parts = explode(':', $decoded, 2);
+				if (count($parts) === 2) {
+					return [
+						'username' => $parts[0],
+						'password' => $parts[1],
+					];
+				}
+			}
+		}
+		return null;
+	}
 }

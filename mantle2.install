@@ -11,6 +11,7 @@ use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\UsersHelper;
+use Drupal\node\NodeInterface;
 
 function createField(
 	string $entity,
@@ -548,15 +549,6 @@ function mantle2_install(): void
 
 	createContentType('article', 'Article', 'Article content type', [
 		[
-			'name' => 'field_article_id',
-			'type' => 'string',
-			'label' => 'Article ID',
-			'required' => true,
-			'settings' => [
-				'max_length' => 255,
-			],
-		],
-		[
 			'name' => 'field_article_title',
 			'type' => 'string',
 			'label' => 'Title',
@@ -618,18 +610,6 @@ function mantle2_install(): void
 			'settings' => [
 				'max_length' => 7,
 			],
-		],
-		[
-			'name' => 'field_created_at',
-			'type' => 'datetime',
-			'label' => 'Created At',
-			'required' => true,
-		],
-		[
-			'name' => 'field_updated_at',
-			'type' => 'datetime',
-			'label' => 'Updated At',
-			'required' => false,
 		],
 		[
 			'name' => 'field_ocean_article',
@@ -729,4 +709,242 @@ function mantle2_update_9004(): void
 	]);
 	mantle2_ensure_form_display('node', 'prompt');
 	mantle2_ensure_form_display('node', 'article');
+}
+
+/**
+ * Update: Convert article fields
+ * - field_author_id: string -> entity_reference(user)
+ * - field_article_color: string -> integer (hex color as decimal)
+ */
+function mantle2_update_9005(): void
+{
+	$etm = \Drupal::entityTypeManager();
+	$node_storage = $etm->getStorage('node');
+
+	// Load all article nodes once for both migrations.
+	$nids = $node_storage->getQuery()->condition('type', 'article')->accessCheck(false)->execute();
+	/** @var NodeInterface[] $nodes */
+	$nodes = $node_storage->loadMultiple($nids);
+
+	// 1) Migrate field_author_id from string to entity_reference(user)
+	$author_storage = FieldStorageConfig::loadByName('node', 'field_author_id');
+	if ($author_storage && $author_storage->getType() !== 'entity_reference') {
+		// Create temporary entity reference field to hold migrated values.
+		if (!FieldStorageConfig::loadByName('node', 'field_author_id_tmp')) {
+			FieldStorageConfig::create([
+				'field_name' => 'field_author_id_tmp',
+				'entity_type' => 'node',
+				'type' => 'entity_reference',
+				'settings' => [
+					'target_type' => 'user',
+				],
+				'cardinality' => 1,
+			])->save();
+		}
+		if (!FieldConfig::loadByName('node', 'article', 'field_author_id_tmp')) {
+			FieldConfig::create([
+				'field_name' => 'field_author_id_tmp',
+				'entity_type' => 'node',
+				'bundle' => 'article',
+				'label' => 'Author (temp)',
+				'required' => false,
+			])->save();
+		}
+
+		// Migrate values into temp field.
+		$user_storage = $etm->getStorage('user');
+		foreach ($nodes as $node) {
+			/** @var NodeInterface $node */
+			if (!$node->hasField('field_author_id')) {
+				continue;
+			}
+			$raw = $node->get('field_author_id')->value;
+			if ($raw === null || $raw === '') {
+				continue;
+			}
+			$uid = null;
+			if (is_numeric($raw)) {
+				$uid = (int) $raw;
+			} else {
+				// Fallback: try by username if a string was stored.
+				$users = $user_storage->loadByProperties(['name' => $raw]);
+				if ($users) {
+					$user = reset($users);
+					$uid = (int) $user->id();
+				}
+			}
+			if ($uid && $user_storage->load($uid)) {
+				$node->set('field_author_id_tmp', $uid);
+				try {
+					$node->save();
+				} catch (\Exception $e) {
+				}
+			}
+		}
+
+		// Remove old field instance and storage.
+		if ($fc = FieldConfig::loadByName('node', 'article', 'field_author_id')) {
+			try {
+				$fc->delete();
+			} catch (\Exception $e) {
+			}
+		}
+		try {
+			$author_storage->delete();
+		} catch (\Exception $e) {
+		}
+
+		// Recreate field_author_id as entity_reference(user).
+		FieldStorageConfig::create([
+			'field_name' => 'field_author_id',
+			'entity_type' => 'node',
+			'type' => 'entity_reference',
+			'settings' => [
+				'target_type' => 'user',
+			],
+			'cardinality' => 1,
+		])->save();
+		FieldConfig::create([
+			'field_name' => 'field_author_id',
+			'entity_type' => 'node',
+			'bundle' => 'article',
+			'label' => 'Author ID',
+			'required' => true,
+		])->save();
+
+		// Move values from temp into the new field and clean up temp.
+		foreach ($nodes as $node) {
+			/** @var NodeInterface $node */
+			if (
+				$node->hasField('field_author_id_tmp') &&
+				!$node->get('field_author_id_tmp')->isEmpty()
+			) {
+				$node->set('field_author_id', $node->get('field_author_id_tmp')->target_id);
+				$node->set('field_author_id_tmp', null);
+				try {
+					$node->save();
+				} catch (\Exception $e) {
+				}
+			}
+		}
+		if ($fc = FieldConfig::loadByName('node', 'article', 'field_author_id_tmp')) {
+			try {
+				$fc->delete();
+			} catch (\Exception $e) {
+			}
+		}
+		if ($fs = FieldStorageConfig::loadByName('node', 'field_author_id_tmp')) {
+			try {
+				$fs->delete();
+			} catch (\Exception $e) {
+			}
+		}
+
+		mantle2_ensure_form_display('node', 'article');
+	}
+
+	// 2) Migrate field_article_color from string (#RRGGBB) to integer (0..16777215)
+	$color_storage = FieldStorageConfig::loadByName('node', 'field_article_color');
+	if ($color_storage && $color_storage->getType() !== 'integer') {
+		// Create temp integer field.
+		if (!FieldStorageConfig::loadByName('node', 'field_article_color_tmp')) {
+			FieldStorageConfig::create([
+				'field_name' => 'field_article_color_tmp',
+				'entity_type' => 'node',
+				'type' => 'integer',
+				'cardinality' => 1,
+			])->save();
+		}
+		if (!FieldConfig::loadByName('node', 'article', 'field_article_color_tmp')) {
+			FieldConfig::create([
+				'field_name' => 'field_article_color_tmp',
+				'entity_type' => 'node',
+				'bundle' => 'article',
+				'label' => 'Color (temp)',
+				'required' => false,
+			])->save();
+		}
+
+		// Migrate values into temp (convert #RRGGBB -> int).
+		foreach ($nodes as $node) {
+			/** @var NodeInterface $node */
+			if (!$node->hasField('field_article_color')) {
+				continue;
+			}
+			$raw = (string) $node->get('field_article_color')->value;
+			if ($raw === '') {
+				continue;
+			}
+			$hex = ltrim(trim($raw), '#');
+			// Accept 3 or 6 length hex; expand 3-digit format if encountered.
+			if (strlen($hex) === 3) {
+				$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+			}
+			if (preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
+				$int = intval($hex, 16);
+				$node->set('field_article_color_tmp', $int);
+				try {
+					$node->save();
+				} catch (\Exception $e) {
+				}
+			}
+		}
+
+		// Remove old field instance and storage.
+		if ($fc = FieldConfig::loadByName('node', 'article', 'field_article_color')) {
+			try {
+				$fc->delete();
+			} catch (\Exception $e) {
+			}
+		}
+		try {
+			$color_storage->delete();
+		} catch (\Exception $e) {
+		}
+
+		// Recreate field_article_color as integer.
+		FieldStorageConfig::create([
+			'field_name' => 'field_article_color',
+			'entity_type' => 'node',
+			'type' => 'integer',
+			'cardinality' => 1,
+		])->save();
+		FieldConfig::create([
+			'field_name' => 'field_article_color',
+			'entity_type' => 'node',
+			'bundle' => 'article',
+			'label' => 'Color',
+			'required' => false,
+		])->save();
+
+		// Move values from temp into the new field and clean up temp.
+		foreach ($nodes as $node) {
+			/** @var NodeInterface $node */
+			if (
+				$node->hasField('field_article_color_tmp') &&
+				!$node->get('field_article_color_tmp')->isEmpty()
+			) {
+				$node->set('field_article_color', $node->get('field_article_color_tmp')->value);
+				$node->set('field_article_color_tmp', null);
+				try {
+					$node->save();
+				} catch (\Exception $e) {
+				}
+			}
+		}
+		if ($fc = FieldConfig::loadByName('node', 'article', 'field_article_color_tmp')) {
+			try {
+				$fc->delete();
+			} catch (\Exception $e) {
+			}
+		}
+		if ($fs = FieldStorageConfig::loadByName('node', 'field_article_color_tmp')) {
+			try {
+				$fs->delete();
+			} catch (\Exception $e) {
+			}
+		}
+
+		mantle2_ensure_form_display('node', 'article');
+	}
 }

@@ -119,8 +119,8 @@ class PromptsHelper
 		if ($search) {
 			$query->condition(
 				'comment_body.value',
-				'%' . Drupal::database()->escapeLike($search) . '%',
-				'LIKE',
+				Drupal::database()->escapeLike($search),
+				'CONTAINS',
 			);
 		}
 
@@ -165,8 +165,8 @@ class PromptsHelper
 		if ($search) {
 			$query->condition(
 				'comment_body.value',
-				'%' . Drupal::database()->escapeLike($search) . '%',
-				'LIKE',
+				Drupal::database()->escapeLike($search),
+				'CONTAINS',
 			);
 		}
 

@@ -131,6 +131,10 @@ class ActivityController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
 		$id = $body['id'] ?? null;
 		$name = $body['name'] ?? null;
 		$description = $body['description'] ?? null;

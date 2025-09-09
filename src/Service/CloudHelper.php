@@ -10,7 +10,12 @@ class CloudHelper
 	public static function getAdminKey(): string
 	{
 		// MANTLE2_ADMIN_KEY
-		return Drupal::service('key.repository')->getKey('mantle2_admin_key')->getKeyValue();
+		$key = Drupal::service('key.repository')->getKey('mantle2_admin_key');
+		if ($key === null) {
+			return '';
+		}
+
+		return $key->getKeyValue() ?? '';
 	}
 
 	public static function getCloudEndpoint(): string

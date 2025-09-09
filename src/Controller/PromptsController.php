@@ -105,13 +105,16 @@ class PromptsController extends ControllerBase
 			return $user;
 		}
 
-		$accountType = UsersHelper::getAccountType($user);
-		if ($accountType === 'FREE' || $accountType === 'PRO') {
-			return GeneralHelper::paymentRequired('Must be at least WRITER to create prompts');
+		if (!UsersHelper::isWriter($user)) {
+			return GeneralHelper::paymentRequired('Upgrade to Writer required');
 		}
 
 		$body = json_decode($request->getContent(), true);
 		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
+		if (json_last_error() !== JSON_ERROR_NONE) {
 			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
@@ -360,6 +363,10 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
 		$content = $body['content'] ?? null;
 		if (!is_string($content) || trim($content) === '') {
 			return GeneralHelper::badRequest('Missing or invalid content');
@@ -468,6 +475,10 @@ class PromptsController extends ControllerBase
 
 		$body = json_decode($request->getContent(), true);
 		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
+		if (json_last_error() !== JSON_ERROR_NONE) {
 			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 

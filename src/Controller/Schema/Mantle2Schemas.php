@@ -302,7 +302,10 @@ class Mantle2Schemas
 	public static array $bool = ['type' => 'boolean', 'example' => true];
 	public static array $sessionToken = [
 		'type' => 'string',
-		'example' => '4bHN3nxwb21bd1sm109s1nan28xm1bab2Js18',
+		'example' => '6401d132d5663c98c3a1e3796085a7b37cd0e9d3ec81b40dcf19a86c1df81c30',
+		'minLength' => 64,
+		'maxLength' => 64,
+		'pattern' => '^[a-f0-9]{64}$',
 		'description' => 'The session token for the user',
 	];
 	public static array $name = [
@@ -696,7 +699,8 @@ class Mantle2Schemas
 						'field_privacy' => self::userFieldPrivacy(),
 					],
 				],
-				'activities' => self::activities(),
+				'activities' => self::activitiesList(),
+				'friends' => self::idArray(),
 			],
 			'required' => ['id', 'username', 'created_at', 'updated_at', 'account', 'activities'],
 		];

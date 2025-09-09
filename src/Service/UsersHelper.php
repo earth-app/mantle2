@@ -99,8 +99,7 @@ class UsersHelper
 
 	public static function getVisibility(UserInterface $user): Visibility
 	{
-		$visibilityValue = $user->get('field_visibility')->getValue();
-		$visibility = $visibilityValue ? $visibilityValue[0]['value'] : 'UNLISTED';
+		$visibility = strtoupper($user->get('field_visibility')->value ?? 'UNLISTED');
 		return Visibility::tryFrom($visibility) ?? Visibility::UNLISTED;
 	}
 
@@ -115,7 +114,7 @@ class UsersHelper
 		}
 
 		// UNLISTED (and PRIVATE, see below) requires login
-		$user2 = self::findByRequest($request);
+		$user2 = self::findByRequestSilent($request);
 		if (!$user2) {
 			return GeneralHelper::notFound();
 		}
@@ -135,19 +134,52 @@ class UsersHelper
 	public static function withSessionId(string $sid, callable $fn)
 	{
 		$session = Drupal::service('session');
+		$currentSessionId = null;
+
+		// Get current session ID if session is started
 		if (method_exists($session, 'isStarted') && $session->isStarted()) {
-			$current = method_exists($session, 'getId') ? $session->getId() : null;
-			if ($current !== $sid && method_exists($session, 'save')) {
+			$currentSessionId = method_exists($session, 'getId') ? $session->getId() : null;
+			// Save current session if it's different
+			if ($currentSessionId !== $sid && method_exists($session, 'save')) {
 				$session->save();
 			}
 		}
+
+		// Set the session ID we want to work with
 		if (method_exists($session, 'setId')) {
 			$session->setId($sid);
 		}
-		if (method_exists($session, 'start')) {
-			$session->start();
+
+		// Start session if not started
+		if (
+			method_exists($session, 'start') &&
+			(!method_exists($session, 'isStarted') || !$session->isStarted())
+		) {
+			try {
+				$session->start();
+			} catch (\Exception $e) {
+				// If session start fails, return null
+				return null;
+			}
 		}
-		return $fn($session);
+
+		$result = $fn($session);
+
+		// Restore original session ID if it was different
+		if ($currentSessionId && $currentSessionId !== $sid) {
+			if (method_exists($session, 'setId')) {
+				$session->setId($currentSessionId);
+			}
+			if (method_exists($session, 'start')) {
+				try {
+					$session->start();
+				} catch (\Exception $e) {
+					// Ignore restore errors
+				}
+			}
+		}
+
+		return $result;
 	}
 
 	public static function findByRequest(Request $request)
@@ -159,25 +191,47 @@ class UsersHelper
 			}
 		}
 
-		if (!$request->hasSession()) {
-			return GeneralHelper::notFound();
-		}
-
 		$sessionId = GeneralHelper::getBearerToken($request);
-		if (!$sessionId) {
-			return GeneralHelper::unauthorized();
+		if ($sessionId) {
+			// First, try persistent API token lookup.
+			$user = self::getUserByToken($sessionId);
+			if ($user instanceof UserInterface) {
+				return $user;
+			}
+
+			// Back-compat: attempt to treat bearer as a PHP session id.
+			$user = self::withSessionId($sessionId, function ($session) {
+				$uid = $session->get('uid');
+				return $uid ? User::load($uid) : null;
+			});
+			if ($user instanceof UserInterface) {
+				return $user;
+			}
+
+			return GeneralHelper::unauthorized('Invalid or expired session token');
 		}
 
-		$user = self::withSessionId($sessionId, function ($session) {
-			$uid = $session->get('uid');
-			return $uid ? User::load($uid) : null;
-		});
+		$basicAuth = GeneralHelper::getBasicAuth($request);
+		if ($basicAuth) {
+			$username = $basicAuth['username'] ?? null;
+			$password = $basicAuth['password'] ?? null;
 
-		if (!$user instanceof UserInterface) {
-			return GeneralHelper::notFound();
+			if ($username && $password) {
+				/** @var \Drupal\user\UserAuthInterface $userAuth */
+				$userAuth = Drupal::service('user.auth');
+				$uid = $userAuth->authenticate($username, $password);
+				if ($uid) {
+					$user = User::load($uid);
+					if ($user && !$user->isBlocked()) {
+						return $user;
+					}
+				}
+			}
+
+			return GeneralHelper::unauthorized('Invalid username or password');
 		}
 
-		return $user;
+		return GeneralHelper::unauthorized('Authentication required');
 	}
 
 	public static function getOwnerOfRequest(Request $request)
@@ -188,6 +242,57 @@ class UsersHelper
 		}
 
 		return $user;
+	}
+
+	/**
+	 * Get user from request without error responses - returns null if not authenticated
+	 */
+	public static function findByRequestSilent(Request $request): ?UserInterface
+	{
+		if ($request->headers->has('X-Admin-Key')) {
+			$adminKey = $request->headers->get('X-Admin-Key');
+			if ($adminKey && $adminKey === CloudHelper::getAdminKey()) {
+				return self::cloud();
+			}
+		}
+
+		$sessionId = GeneralHelper::getBearerToken($request);
+		if ($sessionId) {
+			// Try persistent API token lookup first.
+			$user = self::getUserByToken($sessionId);
+			if ($user instanceof UserInterface) {
+				return $user;
+			}
+
+			// Fallback to PHP session id semantics for legacy tokens.
+			$user = self::withSessionId($sessionId, function ($session) {
+				$uid = $session->get('uid');
+				return $uid ? User::load($uid) : null;
+			});
+			if ($user instanceof UserInterface) {
+				return $user;
+			}
+		}
+
+		$basicAuth = GeneralHelper::getBasicAuth($request);
+		if ($basicAuth) {
+			$username = $basicAuth['username'] ?? null;
+			$password = $basicAuth['password'] ?? null;
+
+			if ($username && $password) {
+				/** @var \Drupal\user\UserAuthInterface $userAuth */
+				$userAuth = Drupal::service('user.auth');
+				$uid = $userAuth->authenticate($username, $password);
+				if ($uid) {
+					$user = User::load($uid);
+					if ($user && !$user->isBlocked()) {
+						return $user;
+					}
+				}
+			}
+		}
+
+		return null;
 	}
 
 	public static function isVisible(
@@ -206,6 +311,7 @@ class UsersHelper
 		if ($user->id() === $user2->id() || UsersHelper::isAdmin($user2)) {
 			return true;
 		}
+
 		if ($required === 'PRIVATE') {
 			return false;
 		}
@@ -276,13 +382,8 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		$firstNameValue = $user->get('field_first_name')->getValue();
-		return self::tryVisible(
-			$firstNameValue ? $firstNameValue[0]['value'] : 'John',
-			$user,
-			$requester,
-			$privacy['name'] ?? 'PUBLIC',
-		);
+		$firstName = $user->get('field_first_name')->value ?? 'John';
+		return self::tryVisible($firstName, $user, $requester, $privacy['name'] ?? 'PUBLIC');
 	}
 
 	public static function getLastName(
@@ -290,13 +391,8 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		$lastNameValue = $user->get('field_last_name')->getValue();
-		return self::tryVisible(
-			$lastNameValue ? $lastNameValue[0]['value'] : 'Doe',
-			$user,
-			$requester,
-			$privacy['name'] ?? 'PUBLIC',
-		);
+		$lastName = $user->get('field_last_name')->value ?? 'Doe';
+		return self::tryVisible($lastName, $user, $requester, $privacy['name'] ?? 'PUBLIC');
 	}
 
 	public static function getName(UserInterface $user, ?UserInterface $requester = null): ?string
@@ -322,8 +418,7 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		$bioValue = $user->get('field_bio')->getValue();
-		$bio = $bioValue ? $bioValue[0]['value'] : '';
+		$bio = $user->get('field_bio')->value ?? '';
 		return self::tryVisible($bio, $user, $requester, $privacy['bio'] ?? 'PUBLIC');
 	}
 
@@ -332,8 +427,7 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?int {
 		$privacy = self::getFieldPrivacy($user);
-		$phoneNumberValue = $user->get('field_phone')->getValue() ?? 0;
-		$phoneNumber = $phoneNumberValue ? $phoneNumberValue[0]['value'] : 0;
+		$phoneNumber = $user->get('field_phone')->value ?? 0;
 		return self::tryVisible(
 			$phoneNumber,
 			$user,
@@ -347,8 +441,7 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		$addressValue = $user->get('field_address')->getValue() ?? null;
-		$address = $addressValue ? $addressValue[0]['value'] : null;
+		$address = $user->get('field_address')->value ?? '';
 		return self::tryVisible($address, $user, $requester, $privacy['address'] ?? 'PRIVATE');
 	}
 
@@ -357,8 +450,7 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		$countryValue = $user->get('field_country')->getValue() ?? null;
-		$country = $countryValue ? $countryValue[0]['value'] : null;
+		$country = $user->get('field_country')->value ?? '';
 		return self::tryVisible($country, $user, $requester, $privacy['country'] ?? 'PUBLIC');
 	}
 
@@ -367,21 +459,40 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		$accountTypeValue = $user->get('field_account_type')->getValue() ?? null;
-		$accountType = $accountTypeValue ? $accountTypeValue[0]['value'] : null;
+		$accountType = $user->get('field_account_type')->value ?? 'FREE';
 		return self::tryVisible(
-			$accountType,
+			strtoupper($accountType),
 			$user,
 			$requester,
 			$privacy['account_type'] ?? 'PUBLIC',
 		);
 	}
 
+	public static function isPro(UserInterface $user): bool
+	{
+		$accountType = strtoupper($user->get('field_account_type')->value ?? 'FREE');
+		return $accountType !== 'FREE';
+	}
+
+	public static function isWriter(UserInterface $user): bool
+	{
+		$accountType = strtoupper($user->get('field_account_type')->value ?? 'FREE');
+		return in_array($accountType, ['WRITER', 'ORGANIZER', 'ADMINISTRATOR'], true);
+	}
+
+	public static function isOrganizer(UserInterface $user): bool
+	{
+		$accountType = strtoupper($user->get('field_account_type')->value ?? 'FREE');
+		return in_array($accountType, ['ORGANIZER', 'ADMINISTRATOR'], true);
+	}
+
 	public static function isAdmin(UserInterface $user): bool
 	{
+		$accountType = strtoupper($user->get('field_account_type')->value ?? 'FREE');
+
 		return $user->hasRole('administrator') ||
 			$user->hasPermission('administer users') ||
-			self::getAccountType($user) === 'ADMINISTRATOR';
+			$accountType === 'ADMINISTRATOR';
 	}
 
 	public static function serializeUser(
@@ -412,7 +523,7 @@ class UsersHelper
 			],
 			'activities' => [],
 			'friends' => self::tryVisible(
-				$user->get('field_friends')->getValue(),
+				$user->get('field_friends')->value ?? [],
 				$user,
 				$requester,
 				$privacy['friends'] ?? 'PUBLIC',
@@ -629,10 +740,10 @@ class UsersHelper
 		int $page = 1,
 		string $search = '',
 	): array {
-		$friendsValue = $user->get('field_friends')->getValue();
+		$friendsValue = $user->get('field_friends')->value ?? '{}';
 
 		/** @var int[] $friends*/
-		$friends = $friendsValue ? json_decode($friendsValue[0]['value'], true) : [];
+		$friends = $friendsValue ? json_decode($friendsValue, true) : [];
 		$friends = array_slice($friends, ($page - 1) * $limit, $limit);
 		return array_filter(array_map(fn($id) => self::findById($id), $friends), function ($u) use (
 			$search,
@@ -647,10 +758,10 @@ class UsersHelper
 
 	public static function getAddedFriendsCount(UserInterface $user, string $search = ''): int
 	{
-		$friendsValue = $user->get('field_friends')->getValue();
+		$friendsValue = $user->get('field_friends')->value ?? '{}';
 
 		/** @var int[] $friends*/
-		$friends = $friendsValue ? json_decode($friendsValue[0]['value'], true) : [];
+		$friends = $friendsValue ? json_decode($friendsValue, true) : [];
 		if (!empty($search)) {
 			$friends = array_filter(
 				$friends,
@@ -663,8 +774,8 @@ class UsersHelper
 
 	public static function isAddedFriend(UserInterface $user, UserInterface $friend): bool
 	{
-		$friends = $user->get('field_friends')->getValue();
-		$friends = $friends ? json_decode($friends[0]['value'], true) : [];
+		$friends = $user->get('field_friends')->value ?? '{}';
+		$friends = $friends ? json_decode($friends, true) : [];
 		return in_array($friend->id(), $friends, true);
 	}
 
@@ -759,28 +870,28 @@ class UsersHelper
 
 	public static function addFriend(UserInterface $user, UserInterface $friend): bool
 	{
-		$friends = $user->get('field_friends')->getValue();
-		$friends = $friends ? json_decode($friends[0]['value'], true) : [];
-		if (in_array($friend->id(), $friends, true)) {
+		$friends = $user->get('field_friends')->value ?? '{}';
+		$friends0 = $friends ? json_decode($friends, true) : [];
+		if (in_array($friend->id(), $friends0, true)) {
 			return false;
 		}
 
-		$friends[] = $friend->id();
-		$user->set('field_friends', json_encode($friends));
+		$friends0[] = $friend->id();
+		$user->set('field_friends', json_encode($friends0));
 		$user->save();
 		return true;
 	}
 
 	public static function removeFriend(UserInterface $user, UserInterface $friend): bool
 	{
-		$friends = $user->get('field_friends')->getValue();
-		$friends = $friends ? json_decode($friends[0]['value'], true) : [];
-		if (!in_array($friend->id(), $friends, true)) {
+		$friends = $user->get('field_friends')->value ?? '{}';
+		$friends0 = $friends ? json_decode($friends, true) : [];
+		if (!in_array($friend->id(), $friends0, true)) {
 			return false;
 		}
 
-		$friends = array_filter($friends, fn($id) => $id !== $friend->id());
-		$user->set('field_friends', json_encode($friends));
+		$friends0 = array_filter($friends0, fn($id) => $id !== $friend->id());
+		$user->set('field_friends', json_encode($friends0));
 		$user->save();
 		return true;
 	}
@@ -794,10 +905,10 @@ class UsersHelper
 		int $page = 1,
 		string $search = '',
 	): array {
-		$circleValue = $user->get('field_circle')->getValue();
+		$circleValue = $user->get('field_circle')->value ?? '{}';
 
 		/** @var int[] $circle */
-		$circle = $circleValue ? json_decode($circleValue[0]['value'], true) : [];
+		$circle = $circleValue ? json_decode($circleValue, true) : [];
 		if (empty($search)) {
 			$circle = array_slice($circle, ($page - 1) * $limit, $limit);
 			return array_map(fn($id) => self::findById($id), $circle);
@@ -862,7 +973,7 @@ class UsersHelper
 	public static function getActivities(UserInterface $user): array
 	{
 		/** @var array<int> $activities */
-		$activities = json_decode($user->get('field_activities')->getValue(), true);
+		$activities = json_decode($user->get('field_activities')->value ?? '[]', true);
 		return array_map(fn($id) => ActivityHelper::getActivityByNid($id), $activities);
 	}
 
@@ -917,6 +1028,162 @@ class UsersHelper
 		self::setActivities($user, $activities);
 	}
 
+	// Token-based authentication helpers
+	/**
+	 * Lifetime for API bearer tokens (seconds).
+	 */
+	private const TOKEN_TTL = 2592000; // 30 days
+	private const MAX_SESSIONS = 5;
+
+	/**
+	 * Issue a persistent API bearer token for a user.
+	 */
+	public static function issueToken(UserInterface $user, ?int $ttlSeconds = null): string
+	{
+		$ttl = $ttlSeconds ?? self::TOKEN_TTL;
+		$uid = (int) $user->id();
+		$token = bin2hex(random_bytes(32));
+		$now = time();
+		$tokenStore = Drupal::service('keyvalue')->get('mantle2_tokens');
+		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
+
+		// Prune expired/old tokens so that after adding, the user has <= 5 tokens.
+		self::pruneUserTokens($uid, self::MAX_SESSIONS - 1);
+
+		$tokenStore->set($token, [
+			'uid' => $uid,
+			'created' => $now,
+			'exp' => $now + $ttl,
+		]);
+
+		$tokens = $indexStore->get((string) $uid) ?? [];
+		if (!in_array($token, $tokens, true)) {
+			$tokens[] = $token;
+			$indexStore->set((string) $uid, $tokens);
+		}
+
+		// ensure max 5 even under race conditions.
+		self::pruneUserTokens($uid, self::MAX_SESSIONS);
+
+		return $token;
+	}
+
+	/**
+	 * Resolve a user by bearer token, extending the expiry (sliding window).
+	 */
+	public static function getUserByToken(string $token): ?UserInterface
+	{
+		if ($token === '') {
+			return null;
+		}
+		$store = Drupal::service('keyvalue')->get('mantle2_tokens');
+		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
+		$data = $store->get($token);
+		if (!$data || !is_array($data)) {
+			return null;
+		}
+		$exp = (int) ($data['exp'] ?? 0);
+		if ($exp < time()) {
+			// Expired: cleanup and reject.
+			$store->delete($token);
+			$uid = (int) ($data['uid'] ?? 0);
+			if ($uid > 0) {
+				$tokens = $indexStore->get((string) $uid) ?? [];
+				$tokens = array_values(array_filter($tokens, fn($t) => $t !== $token));
+				$indexStore->set((string) $uid, $tokens);
+			}
+			return null;
+		}
+		// Sliding expiration: extend when half-life passed.
+		if ($exp - time() < self::TOKEN_TTL / 2) {
+			$data['exp'] = time() + self::TOKEN_TTL;
+			$store->set($token, $data);
+		}
+		$uid = (int) ($data['uid'] ?? 0);
+		if ($uid <= 0) {
+			return null;
+		}
+
+		// Ensure index consistency.
+		$tokens = $indexStore->get((string) $uid) ?? [];
+		if (!in_array($token, $tokens, true)) {
+			$tokens[] = $token;
+			$indexStore->set((string) $uid, $tokens);
+		}
+
+		return User::load($uid);
+	}
+
+	/**
+	 * Revoke a bearer token.
+	 */
+	public static function revokeToken(string $token): void
+	{
+		if ($token === '') {
+			return;
+		}
+		$tokenStore = Drupal::service('keyvalue')->get('mantle2_tokens');
+		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
+		$data = $tokenStore->get($token);
+		$tokenStore->delete($token);
+		$uid = is_array($data) ? (int) ($data['uid'] ?? 0) : 0;
+		if ($uid > 0) {
+			$tokens = $indexStore->get((string) $uid) ?? [];
+			$tokens = array_values(array_filter($tokens, fn($t) => $t !== $token));
+			$indexStore->set((string) $uid, $tokens);
+		}
+	}
+
+	/**
+	 * Prune tokens for a user to ensure at most $keep remain (by created ASC),
+	 * and remove any expired or orphaned tokens.
+	 */
+	private static function pruneUserTokens(int $uid, int $keep): void
+	{
+		$tokenStore = Drupal::service('keyvalue')->get('mantle2_tokens');
+		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
+		$tokens = $indexStore->get((string) $uid) ?? [];
+		if (!is_array($tokens)) {
+			$tokens = [];
+		}
+
+		// Load token data and filter invalid/expired/mismatched.
+		$valid = [];
+		foreach ($tokens as $tok) {
+			$data = $tokenStore->get($tok);
+			if (!is_array($data)) {
+				// Orphaned index entry.
+				continue;
+			}
+			if ((int) ($data['uid'] ?? 0) !== $uid) {
+				// Mismatched uid; drop.
+				continue;
+			}
+			if ((int) ($data['exp'] ?? 0) < time()) {
+				// Expired; drop and cleanup store.
+				$tokenStore->delete($tok);
+				continue;
+			}
+			$valid[$tok] = (int) ($data['created'] ?? 0);
+		}
+
+		// Sort by created ASC (oldest first), then trim to $keep.
+		asort($valid, SORT_NUMERIC);
+		$toKeep = array_keys($valid);
+		if (count($toKeep) > $keep) {
+			$excess = array_slice($toKeep, 0, count($toKeep) - $keep);
+			foreach ($excess as $tok) {
+				$tokenStore->delete($tok);
+				unset($valid[$tok]);
+			}
+			$toKeep = array_keys($valid);
+		}
+
+		$indexStore->set((string) $uid, array_values($toKeep));
+	}
+
+	// User field utilities
+
 	public static function getUserEvents(
 		UserInterface $user,
 		int $limit = 25,
@@ -931,7 +1198,7 @@ class UsersHelper
 				->condition('field_host_id', $user->id());
 
 			if (!empty($search)) {
-				$query->condition('field_event_name', '%' . $search . '%', 'LIKE');
+				$query->condition('field_event_name', $search, 'CONTAINS');
 			}
 
 			$countQuery = clone $query;
@@ -965,7 +1232,7 @@ class UsersHelper
 
 	public static function getMaxEventAttendees(UserInterface $user): int
 	{
-		$type = self::getAccountType($user);
+		$type = strtoupper($user->get('field_account_type')->value ?? 'FREE');
 		return match ($type) {
 			'ADMINISTRATOR' => PHP_INT_MAX,
 			'PRO', 'WRITER' => 5000,

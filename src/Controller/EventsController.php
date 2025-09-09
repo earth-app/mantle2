@@ -79,14 +79,17 @@ class EventsController extends ControllerBase
 			$query->range($page * $limit, $limit);
 			$nids = $query->execute();
 
+			/** @var Node[] $nodes */
+			$nodes = $storage->loadMultiple($nids);
 			$data = [];
-			foreach ($nids as $nid) {
-				$node = Node::load($nid);
-				if ($node) {
-					$data[] = [
-						'id' => $nid,
-						...EventsHelper::nodeToEvent($node)->jsonSerialize(),
-					];
+			foreach ($nodes as $node) {
+				$event = EventsHelper::nodeToEvent($node);
+				if ($event) {
+					$item = $event->jsonSerialize();
+					$item['id'] = GeneralHelper::formatId($node->id());
+					$item['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+					$item['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+					$data[] = $item;
 				}
 			}
 
@@ -114,6 +117,10 @@ class EventsController extends ControllerBase
 		$body = json_decode($request->getContent(), true);
 		if (!is_array($body)) {
 			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
 		$name = $body['name'] ?? null;
@@ -159,8 +166,7 @@ class EventsController extends ControllerBase
 		}
 
 		if ($visibility0 === Visibility::PUBLIC) {
-			$type = UsersHelper::getAccountType($user);
-			if ($type === AccountType::FREE->value) {
+			if (!UsersHelper::isPro($user)) {
 				return GeneralHelper::paymentRequired(
 					'Public events are not available on free accounts',
 				);
@@ -295,6 +301,10 @@ class EventsController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
 		$name = $body['name'] ?? null;
 		$description = $body['description'] ?? null;
 		$type = $body['type'] ?? null;
@@ -416,8 +426,7 @@ class EventsController extends ControllerBase
 			}
 
 			if ($visibility0 === Visibility::PUBLIC) {
-				$type = UsersHelper::getAccountType($user);
-				if ($type === AccountType::FREE->value) {
+				if (!UsersHelper::isPro($user)) {
 					return GeneralHelper::paymentRequired(
 						'Public events are not available on free accounts',
 					);
