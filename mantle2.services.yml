@@ -16,6 +16,11 @@ services:
     tags:
       - { name: event_subscriber }
 
+  mantle2.cors_subscriber:
+    class: Drupal\mantle2\EventSubscriber\CorsSubscriber
+    tags:
+      - { name: event_subscriber }
+
   # Utility Classes
   mantle2.helper:
     class: Drupal\mantle2\Service\GeneralHelper
