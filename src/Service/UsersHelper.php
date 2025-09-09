@@ -355,7 +355,7 @@ class UsersHelper
 
 	public static function getFieldPrivacy(UserInterface $user)
 	{
-		$privacy = $user->get('field_privacy')->getValue();
+		$privacy = $user->get('field_privacy')->value ?? '{}';
 		$privacy0 = [];
 		if ($privacy) {
 			$privacy0 = json_decode($privacy, true);
