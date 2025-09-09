@@ -135,7 +135,7 @@ class PromptsController extends ControllerBase
 		}
 
 		$result = $obj->jsonSerialize();
-		$result['id'] = $node->id();
+		$result['id'] = GeneralHelper::formatId($node->id());
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -146,8 +146,12 @@ class PromptsController extends ControllerBase
 	public function randomPrompt(Request $request)
 	{
 		try {
-			$storage = Drupal::entityTypeManager()->getStorage('node');
-			$query = $storage->getQuery()->accessCheck(false)->condition('type', 'prompt');
+			$connection = Drupal::database();
+			$query = $connection
+				->select('node_field_data', 'n')
+				->fields('n', ['nid'])
+				->condition('status', 1)
+				->condition('type', 'prompt');
 
 			// Check visibility
 			$user = UsersHelper::getOwnerOfRequest($request);
@@ -176,9 +180,9 @@ class PromptsController extends ControllerBase
 				);
 			}
 
-			$query->sort('RAND()');
-			$query->range(0, 1);
-			$nids = $query->execute();
+			$query->orderRandom();
+			$nids = $query->execute()->fetchCol();
+
 			if (empty($nids)) {
 				return GeneralHelper::notFound('No prompts found');
 			}
@@ -190,7 +194,7 @@ class PromptsController extends ControllerBase
 			}
 
 			$result = PromptsHelper::nodeToPrompt($node)->jsonSerialize();
-			$result['id'] = $node->id();
+			$result['id'] = GeneralHelper::formatId($randomNid);
 			$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 			$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -216,7 +220,7 @@ class PromptsController extends ControllerBase
 		}
 
 		$result = $prompt->jsonSerialize();
-		$result['id'] = $node->id();
+		$result['id'] = GeneralHelper::formatId($node->id());
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -273,7 +277,7 @@ class PromptsController extends ControllerBase
 		}
 
 		$result = $prompt->jsonSerialize();
-		$result['id'] = $node->id();
+		$result['id'] = GeneralHelper::formatId($node->id());
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -415,7 +419,7 @@ class PromptsController extends ControllerBase
 
 		$count = PromptsHelper::getCommentsCount($node);
 		$result = $prompt->jsonSerialize();
-		$result['id'] = $node->id();
+		$result['id'] = GeneralHelper::formatId($node->id());
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 		return new JsonResponse(['count' => $count, 'prompt' => $result]);

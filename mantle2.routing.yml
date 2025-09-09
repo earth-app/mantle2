@@ -1064,7 +1064,7 @@ mantle2.users.current.set_account_type:
 mantle2.users.current.activities:
   path: '/v2/users/current/activities'
   defaults:
-    controller: '\Drupal\mantle2\Controller\UsersController::userActivities'
+    _controller: '\Drupal\mantle2\Controller\UsersController::userActivities'
     _title: 'Get Current User Activities'
   requirements:
     _access: 'TRUE'
@@ -1328,7 +1328,7 @@ mantle2.activities.get:
     _title: 'Get Activity'
   requirements:
     _access: 'TRUE'
-    activityId: \s+
+    activityId: '[^/]+'
   options:
     tags: Activities
     description: Retrieves a specific activity by ID
@@ -1338,6 +1338,11 @@ mantle2.activities.get:
       activityId:
         type: string
         description: The ID of the activity to retrieve
+    query:
+      include_aliases:
+        type: boolean
+        default: false
+        description: Whether to include activity aliases in the response
   methods: [GET]
 
 mantle2.activities.create:
@@ -1354,6 +1359,8 @@ mantle2.activities.create:
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
+    body/schema: activityCreate()
+    body/description: Activity data to create
   methods: [POST]
 
 ## Event Routes

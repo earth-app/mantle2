@@ -243,7 +243,7 @@ class EventsController extends ControllerBase
 			$visibility0,
 		);
 
-		$node = EventsHelper::createEvent($event);
+		$node = EventsHelper::createEvent($event, $user);
 
 		$result = $event->jsonSerialize();
 		$result['id'] = GeneralHelper::formatId($node->id());

@@ -27,23 +27,25 @@ class Activity implements JsonSerializable
 	) {
 		$this->id = $id;
 		$this->name = $name;
+
+		if (count($types) > self::MAX_TYPES) {
+			throw new InvalidArgumentException(
+				'Too many activity types, max is ' . self::MAX_TYPES,
+			);
+		}
+
+		foreach ($types as $t) {
+			if (!is_string($t)) {
+				throw new InvalidArgumentException(
+					'Activity type must be a string, found ' . get_debug_type($t),
+				);
+			}
+		}
+
 		$this->types = $types;
 		$this->description = $description;
 		$this->aliases = $aliases;
 		$this->fields = $fields;
-	}
-
-	public static function fromArray(array $data): self
-	{
-		$clazz = new self($data['id'], $data['name']);
-		$clazz->types = array_map(
-			fn($t) => $t instanceof ActivityType ? $t : ActivityType::from((string) $t),
-			$data['types'] ?? [],
-		);
-		$clazz->description = $data['description'] ?? null;
-		$clazz->aliases = $data['aliases'] ?? [];
-		$clazz->fields = $data['fields'] ?? [];
-		return $clazz;
 	}
 
 	/**
@@ -56,7 +58,7 @@ class Activity implements JsonSerializable
 			'name' => $this->name,
 			'description' => $this->description,
 			'types' => array_map(
-				fn($t) => $t instanceof ActivityType ? $t->name : ActivityType::cases()[$t],
+				fn($t) => $t instanceof ActivityType ? $t->name : $t,
 				$this->types,
 			),
 			'aliases' => array_values($this->aliases),
@@ -90,11 +92,14 @@ class Activity implements JsonSerializable
 	{
 		return $this->description;
 	}
-	/** @return ActivityType[] */
+
+	/** @return array<ActivityType> */
 	public function getTypes(): array
 	{
 		return $this->types;
 	}
+
+	/** @return array<string> */
 	public function getAliases(): array
 	{
 		return $this->aliases;

@@ -7,6 +7,7 @@ use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\mantle2\Custom\Activity;
+use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Service\ActivityHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
@@ -85,19 +86,22 @@ class ActivityController extends ControllerBase
 	public function randomActivity(): JsonResponse
 	{
 		try {
-			$storage = Drupal::entityTypeManager()->getStorage('node');
-			$query = $storage
-				->getQuery()
-				->accessCheck(false)
+			$connection = Drupal::database();
+			$query = $connection
+				->select('node_field_data', 'n')
+				->fields('n', ['nid'])
+				->condition('status', 1)
 				->condition('type', 'activity')
+				->orderRandom()
 				->range(0, 1);
-			$nids = $query->execute();
+
+			$nids = $query->execute()->fetchCol();
 
 			if (empty($nids)) {
 				return new JsonResponse(['error' => 'No activities found'], 404);
 			}
 
-			$node = Node::load($nids[0]);
+			$node = Node::load(reset($nids));
 			if (!$node) {
 				return new JsonResponse(['error' => 'Activity not found'], 404);
 			}
@@ -114,7 +118,7 @@ class ActivityController extends ControllerBase
 		}
 	}
 
-	// POST /v1/activities
+	// POST /v2/activities
 	public function createActivity(Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
@@ -148,6 +152,12 @@ class ActivityController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid required field types');
 		}
 
+		foreach ($types as $type) {
+			if (!is_string($type) || !ActivityType::tryFrom($type)) {
+				return GeneralHelper::badRequest('Invalid activity type: ' . (string) $type);
+			}
+		}
+
 		$fields = $body['fields'] ?? [];
 		$aliases = $body['aliases'] ?? [];
 
@@ -168,17 +178,24 @@ class ActivityController extends ControllerBase
 		}
 
 		$activity = new Activity($id, $name, $types, $description, $aliases, $fields);
-		ActivityHelper::createActivity($activity);
+		ActivityHelper::createActivity($activity, $user);
 
 		return new JsonResponse($activity, Response::HTTP_CREATED);
 	}
 
 	// GET /v2/activities/:activityId
-	public function getActivity(string $activityId): JsonResponse
+	public function getActivity(Request $request, string $activityId): JsonResponse
 	{
 		$node = ActivityHelper::getNodeByActivityId($activityId);
+		$includeAliases = $request->query->getBoolean('include_aliases', false);
 		if (!$node) {
-			return GeneralHelper::notFound("Activity '$activityId' not found");
+			if ($includeAliases) {
+				$node = ActivityHelper::getNodeByActivityAlias($activityId);
+			}
+
+			if (!$node) {
+				return GeneralHelper::notFound("Activity '$activityId' not found");
+			}
 		}
 
 		$activity = ActivityHelper::nodeToActivity($node)->jsonSerialize();
