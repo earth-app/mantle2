@@ -502,7 +502,7 @@ class UsersHelper
 		return [
 			'id' => GeneralHelper::formatId($user->id()),
 			'username' => $user->getAccountName(),
-			'fullName' => self::getName($user, $requester),
+			'full_name' => self::getName($user, $requester),
 			'created_at' => date('c', $user->getCreatedTime()),
 			'updated_at' => date('c', $user->getChangedTime()),
 			'last_login' => date('c', $user->getLastLoginTime()),
