@@ -39,7 +39,7 @@ class EventsHelper
 
 		$date = $node->get('field_event_date')->value;
 		$end_date = $node->get('field_event_end_date')->value;
-		$visibility = Visibility::cases()[$node->get('field_visibility')->value ?? 0];
+		$visibility = Visibility::cases()[$node->get('field_visibility')->value ?? 1];
 		$attendees = array_column($node->get('field_event_attendees')->getValue(), 'target_id');
 
 		return new Event(
@@ -140,7 +140,10 @@ class EventsHelper
 		$node->set('field_event_location_longitude', $event->getLongitude());
 		$node->set('field_event_date', $event->getDate());
 		$node->set('field_event_end_date', $event->getEndDate());
-		$node->set('field_visibility', $event->getVisibility()->value);
+		$node->set(
+			'field_visibility',
+			GeneralHelper::findOrdinal(Visibility::cases(), $event->getVisibility()),
+		);
 		$node->save();
 	}
 }

@@ -100,8 +100,8 @@ class UsersHelper
 
 	public static function getVisibility(UserInterface $user): Visibility
 	{
-		$visibility = strtoupper($user->get('field_visibility')->value ?? 'UNLISTED');
-		return Visibility::tryFrom($visibility) ?? Visibility::UNLISTED;
+		$visibility = $user->get('field_visibility')->value ?? 1;
+		return Visibility::cases()[$visibility] ?? Visibility::UNLISTED;
 	}
 
 	public static function checkVisibility(
