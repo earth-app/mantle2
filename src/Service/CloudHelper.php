@@ -46,11 +46,13 @@ class CloudHelper
 		}
 
 		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-		curl_setopt($ch, CURLOPT_HTTPHEADER, [
-			'Content-Type: application/json',
-			'Content-Length: ' . strlen($payload),
-			'Authorization: Bearer ' . self::getAdminKey(),
-		]);
+
+		$headers = ['Content-Type: application/json', 'Content-Length: ' . strlen($payload)];
+
+		if (!empty(($adminKey = self::getAdminKey()))) {
+			$headers[] = 'Authorization: Bearer ' . $adminKey;
+		}
+		curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
 		$response = curl_exec($ch);
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

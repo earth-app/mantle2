@@ -1039,6 +1039,43 @@ class UsersHelper
 		self::setActivities($user, $activities);
 	}
 
+	/**
+	 * @return array<Activity>
+	 */
+	public static function recommendActivities(UserInterface $user, int $poolLimit = 25): array
+	{
+		try {
+			$connection = Drupal::database();
+			$query = $connection
+				->select('node_field_data', 'n')
+				->fields('n', ['nid'])
+				->condition('status', 1)
+				->condition('type', 'activity')
+				->orderRandom()
+				->range(0, $poolLimit);
+			$nids = $query->execute()->fetchCol();
+
+			$activitiesPool = array_map(fn($nid) => ActivityHelper::getActivityByNid($nid), $nids);
+			$userActivities = self::getActivities($user);
+
+			$res = CloudHelper::sendRequest('/users/recommend_activities', 'POST', [
+				'all' => $activitiesPool,
+				'user' => $userActivities,
+			]);
+
+			return array_map(function ($a) {
+				$id = $a['id'] ?? null;
+				return $id ? ActivityHelper::getActivity($id) : null;
+			}, $res);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to recommend activities: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return [];
+	}
+
 	// Token-based authentication helpers
 	/**
 	 * Lifetime for API bearer tokens (seconds).

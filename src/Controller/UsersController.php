@@ -509,6 +509,34 @@ class UsersController extends ControllerBase
 		return new JsonResponse(UsersHelper::serializeUser($user, $user), Response::HTTP_OK);
 	}
 
+	// GET /v2/users/current/activities/recommend
+	// GET /v2/users/:id/activities/recommend
+	// GET /v2/users/:username/activities/recommend
+	public function recommendUserActivities(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$resolved = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		if (!$resolved) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$poolLimit = (int) $request->query->get('pool_limit', 25);
+		if (!is_int($poolLimit) || $poolLimit <= 0 || $poolLimit > 100) {
+			return GeneralHelper::badRequest(
+				'Invalid pool_limit; must be an integer between 1 and 100',
+			);
+		}
+
+		$activities = UsersHelper::recommendActivities($resolved, $poolLimit);
+		return new JsonResponse($activities, Response::HTTP_OK);
+	}
+
 	// GET /v2/users/current/friends
 	// GET /v2/users/:id/friends
 	// GET /v2/users/:username/friends

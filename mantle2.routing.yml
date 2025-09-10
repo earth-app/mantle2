@@ -351,6 +351,24 @@ mantle2.users.id.activities.remove:
         description: The ID of the activity to remove for the user
   methods: [DELETE]
 
+mantle2.users.id.activities.recommend:
+  path: '/v2/users/{id}/activities/recommend'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::recommendUserActivities'
+    _title: 'Recommend Activities for User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Activities
+    description: Recommends activities for the user by their identifier
+    schema/200: activitiesList()
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
 mantle2.users.id.friends:
   path: '/v2/users/{id}/friends'
   defaults:
@@ -768,6 +786,24 @@ mantle2.users.username.activities.remove:
         description: The ID of the activity to remove for the user
   methods: [DELETE]
 
+mantle2.users.username.activities.recommend:
+  path: '/v2/users/{username}/activities/recommend'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::recommendUserActivities'
+    _title: 'Recommend Activities for User by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Activities
+    description: Recommends activities for the user by their username
+    schema/200: activitiesList()
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
 mantle2.users.username.friends:
   path: '/v2/users/{username}/friends'
   defaults:
@@ -1135,6 +1171,27 @@ mantle2.users.current.activities.remove:
         type: string
         description: The ID of the activity to remove for the user
   methods: [DELETE]
+
+mantle2.users.current.activities.recommend:
+  path: '/v2/users/current/activities/recommend'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::recommendUserActivities'
+    _title: 'Recommend Activities for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Activities
+    description: Recommends activities for the user according to the session ID
+    schema/200: activitiesList()
+    schema/404: User not found
+    query:
+      poolLimit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of activities to consider for recommendation
+  methods: [GET]
 
 mantle2.users.current.friends:
   path: '/v2/users/current/friends'

@@ -394,9 +394,12 @@ function mantle2_install(): void
 		],
 		[
 			'name' => 'field_activity_description',
-			'type' => 'text',
+			'type' => 'text_long',
 			'label' => 'Activity Description',
 			'required' => true,
+			'settings' => [
+				'max_length' => 2048,
+			],
 		],
 		[
 			'name' => 'field_activity_types',
