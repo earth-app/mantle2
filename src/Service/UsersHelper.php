@@ -704,7 +704,7 @@ class UsersHelper
 	public static function getProfilePhoto(UserInterface $user): string
 	{
 		try {
-			$res = CloudHelper::sendRequest('/users/profile_photo/' . $user->id());
+			$res = CloudHelper::sendRequest('/v1/users/profile_photo/' . $user->id());
 			$data = $res['data'] ?? null;
 			return $data ?: '';
 		} catch (Exception $e) {
@@ -719,7 +719,7 @@ class UsersHelper
 	public static function regenerateProfilePhoto(UserInterface $user): string
 	{
 		try {
-			$res = CloudHelper::sendRequest('/users/profile_photo/' . $user->id(), 'PUT', [
+			$res = CloudHelper::sendRequest('/v1/users/profile_photo/' . $user->id(), 'PUT', [
 				'username' => $user->getAccountName(),
 				'bio' => self::getBiography($user),
 				'created_at' => date('c', $user->getCreatedTime()),
@@ -1058,7 +1058,7 @@ class UsersHelper
 			$activitiesPool = array_map(fn($nid) => ActivityHelper::getActivityByNid($nid), $nids);
 			$userActivities = self::getActivities($user);
 
-			$res = CloudHelper::sendRequest('/users/recommend_activities', 'POST', [
+			$res = CloudHelper::sendRequest('/v1/users/recommend_activities', 'POST', [
 				'all' => $activitiesPool,
 				'user' => $userActivities,
 			]);
