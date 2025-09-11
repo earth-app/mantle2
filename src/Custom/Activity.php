@@ -66,6 +66,18 @@ class Activity implements JsonSerializable
 		];
 	}
 
+	public static function fromArray(array $data): self
+	{
+		return new self(
+			$data['id'],
+			$data['name'],
+			$data['types'] ?? [],
+			$data['description'] ?? null,
+			$data['aliases'] ?? [],
+			$data['fields'] ?? [],
+		);
+	}
+
 	public function getAllFields(): array
 	{
 		return $this->fields; // return copy not necessary for scalars

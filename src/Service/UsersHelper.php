@@ -525,7 +525,7 @@ class UsersHelper
 				'visibility' => self::getVisibility($user)->name,
 				'field_privacy' => $privacy,
 			],
-			'activities' => [],
+			'activities' => self::getActivities($user),
 			'friends' => json_decode(
 				self::tryVisible(
 					$user->get('field_friends')->value ?? '[]',
@@ -983,9 +983,8 @@ class UsersHelper
 	 */
 	public static function getActivities(UserInterface $user): array
 	{
-		/** @var array<int> $activities */
 		$activities = json_decode($user->get('field_activities')->value ?? '[]', true);
-		return array_map(fn($id) => ActivityHelper::getActivityByNid($id), $activities);
+		return array_map(fn(array $data) => Activity::fromArray($data), $activities);
 	}
 
 	/**
