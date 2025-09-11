@@ -526,14 +526,11 @@ class UsersHelper
 				'field_privacy' => $privacy,
 			],
 			'activities' => self::getActivities($user),
-			'friends' => json_decode(
-				self::tryVisible(
-					$user->get('field_friends')->value ?? '[]',
-					$user,
-					$requester,
-					$privacy['friends'] ?? 'PUBLIC',
-				),
-				true,
+			'friends' => self::tryVisible(
+				json_decode($user->get('field_friends')->value ?? '[]', true),
+				$user,
+				$requester,
+				$privacy['friends'] ?? 'MUTUAL',
 			),
 		];
 	}

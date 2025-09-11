@@ -10,8 +10,11 @@ class CloudHelper
 	public static function getAdminKey(): string
 	{
 		// MANTLE2_ADMIN_KEY
-		$key = Drupal::service('key.repository')->getKey('mantle2_admin_key');
-		if ($key === null) {
+		$key = Drupal::service('key.repository')->getKey('mantle2_api_key');
+		if (!$key) {
+			Drupal::logger('mantle2')->warning(
+				'Admin API key not found. Please create a key named "mantle2_api_key".',
+			);
 			return '';
 		}
 
@@ -52,6 +55,7 @@ class CloudHelper
 		if (!empty(($adminKey = self::getAdminKey()))) {
 			$headers[] = 'Authorization: Bearer ' . $adminKey;
 		}
+
 		curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
 		$response = curl_exec($ch);
