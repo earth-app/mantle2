@@ -38,19 +38,32 @@ class CloudHelper
 	): array {
 		$cloud = self::getCloudEndpoint();
 		$ch = curl_init();
-		$payload = json_encode($data);
+		$method = strtoupper($method);
 
-		curl_setopt($ch, CURLOPT_URL, $cloud . '/' . ltrim($path, '/'));
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
-
-		if (in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])) {
+		$url = rtrim($cloud, '/') . '/' . ltrim($path, '/');
+		$payload = '';
+		if ($method === 'GET') {
+			if (!empty($data)) {
+				$query = http_build_query($data);
+				$url .= (str_contains($url, '?') ? '&' : '?') . $query;
+			}
+			curl_setopt($ch, CURLOPT_HTTPGET, true);
+		} elseif (!empty($data)) {
+			$payload = json_encode($data);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
 		}
 
+		curl_setopt($ch, CURLOPT_URL, $url);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
-		$headers = ['Content-Type: application/json', 'Content-Length: ' . strlen($payload)];
+		$headers = ['Accept: application/json'];
+
+		if ($payload !== '') {
+			$headers[] = 'Content-Type: application/json';
+			$headers[] = 'Content-Length: ' . strlen($payload);
+		}
 
 		if (!empty(($adminKey = self::getAdminKey()))) {
 			$headers[] = 'Authorization: Bearer ' . $adminKey;
