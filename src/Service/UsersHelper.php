@@ -718,12 +718,12 @@ class UsersHelper
 		try {
 			$res = CloudHelper::sendRequest('/v1/users/profile_photo/' . $user->id(), 'PUT', [
 				'username' => $user->getAccountName(),
-				'bio' => self::getBiography($user),
+				'bio' => self::getBiography($user, $user),
 				'created_at' => date('c', $user->getCreatedTime()),
 				'visibility' => self::getVisibility($user)->name,
-				'country' => self::getCountry($user),
-				'full_name' => self::getName($user),
-				'activities' => self::getActivities($user),
+				'country' => self::getCountry($user, $user),
+				'full_name' => self::getName($user, $user),
+				'activities' => self::getActivities($user, $user),
 			]);
 
 			$data = $res['data'] ?? null;
