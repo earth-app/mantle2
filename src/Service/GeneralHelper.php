@@ -72,21 +72,30 @@ class GeneralHelper
 
 	public static function paginatedParameters(Request $request): array|JsonResponse
 	{
-		/** @var int $limit */
-		$limit = $request->query->get('limit') ?? 25;
+		$limit = (int) ($request->query->get('limit') ?? 25);
+		if (!is_int($limit) && !ctype_digit($limit)) {
+			return self::badRequest("Invalid limit '$limit'");
+		}
+
 		if ($limit < 1 || $limit > 100) {
 			return self::badRequest("Invalid limit '$limit'");
 		}
 
-		/** @var int $page */
-		$page = $request->query->get('page') ?? 1;
+		$page = (int) ($request->query->get('page') ?? 1);
+		if (!is_int($page) && !ctype_digit($page)) {
+			return self::badRequest("Invalid page '$page'");
+		}
 
 		if ($page < 1) {
 			return self::badRequest("Invalid page '$page'");
 		}
 
-		/** @var string $search */
 		$search = $request->query->get('search') ?? '';
+		if (!is_string($search)) {
+			return self::badRequest('Invalid search term');
+		}
+
+		$search = trim($search);
 		if (strlen($search) > 40) {
 			return self::badRequest("Search term '$search' too long");
 		}

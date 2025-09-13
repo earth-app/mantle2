@@ -1420,6 +1420,20 @@ mantle2.activities.create:
     body/description: Activity data to create
   methods: [POST]
 
+mantle2.activities.list:
+  path: '/v2/activities/list'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ActivityController::listActivities'
+    _title: 'List Activities as an array of IDs'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Activities
+    description: Retrieves a list of activities as an array of IDs
+    schema/200: activitiesIdList()
+    schema/404: Activities not found
+  methods: [GET]
+
 ## Event Routes
 
 mantle2.events:

@@ -204,4 +204,30 @@ class ActivityController extends ControllerBase
 
 		return new JsonResponse($activity, Response::HTTP_OK);
 	}
+
+	// GET /v2/activities/list
+	public function listActivities(): JsonResponse
+	{
+		try {
+			$connection = Drupal::database();
+			$query = $connection->select('node_field_data', 'n');
+
+			$f = $query->join('node__field_activity_id', 'f', 'n.nid = f.entity_id');
+			$query
+				->fields($f, ['field_activity_id_value'])
+				->condition('n.type', 'activity')
+				->condition('n.status', 1);
+
+			$ids = $query->execute()->fetchCol();
+			if (empty($ids)) {
+				return GeneralHelper::notFound('No activities found');
+			}
+
+			return new JsonResponse($ids, Response::HTTP_OK);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load activity storage: ' . $e->getMessage(),
+			);
+		}
+	}
 }
