@@ -205,6 +205,128 @@ class ActivityController extends ControllerBase
 		return new JsonResponse($activity, Response::HTTP_OK);
 	}
 
+	// PATCH /v2/activities/:activityId
+	public function updateActivity(Request $request, string $activityId): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('You do not have permission to update activities.');
+		}
+
+		$node = ActivityHelper::getNodeByActivityId($activityId);
+		if (!$node) {
+			return GeneralHelper::notFound("Activity '$activityId' not found");
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
+		$name = $body['name'] ?? null;
+		$description = $body['description'] ?? null;
+		$types = $body['types'] ?? null;
+		$fields = $body['fields'] ?? null;
+		$aliases = $body['aliases'] ?? null;
+
+		if ($name !== null && !is_string($name)) {
+			return GeneralHelper::badRequest('Invalid name type');
+		}
+
+		if ($description !== null && !is_string($description)) {
+			return GeneralHelper::badRequest('Invalid description type');
+		}
+
+		if ($types !== null) {
+			if (!is_array($types) || empty($types)) {
+				return GeneralHelper::badRequest('Invalid types');
+			}
+
+			foreach ($types as $type) {
+				if (!is_string($type) || !ActivityType::tryFrom($type)) {
+					return GeneralHelper::badRequest('Invalid activity type: ' . (string) $type);
+				}
+			}
+		}
+
+		if ($fields !== null) {
+			if (!is_array($fields)) {
+				return GeneralHelper::badRequest('Invalid fields type');
+			}
+
+			foreach ($fields as $key => $value) {
+				if (!is_string($key) || !is_string($value)) {
+					return GeneralHelper::badRequest('Invalid field entry types');
+				}
+			}
+		}
+
+		if ($aliases !== null) {
+			if (!is_array($aliases)) {
+				return GeneralHelper::badRequest('Invalid aliases type');
+			}
+
+			foreach ($aliases as $alias) {
+				if (!is_string($alias)) {
+					return GeneralHelper::badRequest('Invalid alias entry type');
+				}
+			}
+		}
+
+		$activity = ActivityHelper::nodeToActivity($node);
+		if ($name !== null) {
+			$activity->setName($name);
+		}
+
+		if ($description !== null) {
+			$activity->setDescription($description);
+		}
+
+		if ($types !== null) {
+			$activity->setTypes($types);
+		}
+
+		if ($fields !== null) {
+			$activity->setFields($fields);
+		}
+
+		if ($aliases !== null) {
+			$activity->setAliases($aliases);
+		}
+
+		ActivityHelper::updateActivity($node, $activity);
+		return new JsonResponse($activity, Response::HTTP_OK);
+	}
+
+	// DELETE /v2/activities/:activityId
+	public function deleteActivity(Request $request, string $activityId): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('You do not have permission to delete activities.');
+		}
+
+		$node = ActivityHelper::getNodeByActivityId($activityId);
+		if (!$node) {
+			return GeneralHelper::notFound("Activity '$activityId' not found");
+		}
+
+		ActivityHelper::deleteActivity($node);
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
 	// GET /v2/activities/list
 	public function listActivities(Request $request): JsonResponse
 	{

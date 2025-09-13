@@ -92,6 +92,23 @@ class Activity implements JsonSerializable
 		}
 		return $this->fields[$key] ?? null;
 	}
+	public function setFields(array $fields): void
+	{
+		$this->fields = $fields;
+	}
+	public function setField(string $key, ?string $value): void
+	{
+		if ($key === '') {
+			trigger_error('Key for field cannot be empty.', E_USER_WARNING);
+			return;
+		}
+
+		if ($value === null) {
+			unset($this->fields[$key]);
+		} else {
+			$this->fields[$key] = $value;
+		}
+	}
 
 	public function getId(): string
 	{
@@ -101,9 +118,17 @@ class Activity implements JsonSerializable
 	{
 		return $this->name;
 	}
+	public function setName(string $name): void
+	{
+		$this->name = $name;
+	}
 	public function getDescription(): ?string
 	{
 		return $this->description;
+	}
+	public function setDescription(?string $description): void
+	{
+		$this->description = $description;
 	}
 
 	/** @return array<ActivityType|string> */
@@ -111,11 +136,19 @@ class Activity implements JsonSerializable
 	{
 		return $this->types;
 	}
+	public function setTypes(array $types): void
+	{
+		$this->types = $types;
+	}
 
 	/** @return array<string> */
 	public function getAliases(): array
 	{
 		return $this->aliases;
+	}
+	public function setAliases(array $aliases): void
+	{
+		$this->aliases = $aliases;
 	}
 
 	public function __toString(): string

@@ -125,4 +125,41 @@ class ActivityHelper
 
 		return $node;
 	}
+
+	public static function updateActivity(Node $node, Activity $activity): Node
+	{
+		if ($node->getType() !== 'activity') {
+			throw new \InvalidArgumentException('Node is not of type activity');
+		}
+
+		$node->setTitle($activity->getName());
+		$node->set('field_activity_id', $activity->getId());
+		$node->set('field_activity_name', $activity->getName());
+		$node->set('field_activity_description', $activity->getDescription());
+
+		$typeValues = array_map(
+			fn(string $type) => GeneralHelper::findOrdinal(
+				ActivityType::cases(),
+				ActivityType::from($type),
+			),
+			$activity->getTypes(),
+		);
+		$node->set('field_activity_types', $typeValues);
+
+		$node->set('field_activity_aliases', json_encode($activity->getAliases()));
+		$node->set('field_activity_fields', json_encode($activity->getAllFields()));
+
+		$node->save();
+
+		return $node;
+	}
+
+	public static function deleteActivity(Node $node): void
+	{
+		if ($node->getType() !== 'activity') {
+			throw new \InvalidArgumentException('Node is not of type activity');
+		}
+
+		$node->delete();
+	}
 }

@@ -1382,7 +1382,7 @@ mantle2.activities.get:
   path: '/v2/activities/{activityId}'
   defaults:
     _controller: '\Drupal\mantle2\Controller\ActivityController::getActivity'
-    _title: 'Get Activity'
+    _title: 'Get Activity by ID'
   requirements:
     _access: 'TRUE'
     activityId: '[^/]+'
@@ -1401,6 +1401,53 @@ mantle2.activities.get:
         default: false
         description: Whether to include activity aliases in the response
   methods: [GET]
+
+mantle2.activities.update:
+  path: '/v2/activities/{activityId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ActivityController::updateActivity'
+    _title: 'Update Activity [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    activityId: \d+
+  options:
+    tags: Activities
+    description: Updates an existing activity
+    schema/200: activity()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/402: Account Upgrade Required
+    schema/403: Forbidden
+    schema/404: Activity not found
+    body/description: Activity data to update
+    body/schema: activityUpdate()
+    parameters:
+      activityId:
+        type: integer
+        description: The ID of the activity to update
+  methods: [PATCH]
+
+mantle2.activities.delete:
+  path: '/v2/activities/{activityId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ActivityController::deleteActivity'
+    _title: 'Delete Activity [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    activityId: \d+
+  options:
+    tags: Activities
+    description: Deletes an existing activity
+    schema/204: No Content
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Activity not found
+    parameters:
+      activityId:
+        type: integer
+        description: The ID of the activity to delete
+  methods: [DELETE]
 
 mantle2.activities.create:
   path: '/v2/activities'
