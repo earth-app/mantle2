@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Service;
 
+use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -74,39 +75,39 @@ class GeneralHelper
 		Request $request,
 		int $maxLimit = 100,
 	): array|JsonResponse {
-		$limit = (int) ($request->query->get('limit') ?? 25);
-		if (!is_int($limit) && !ctype_digit($limit)) {
-			return self::badRequest("Invalid limit '$limit'");
-		}
+		try {
+			$limit = $request->query->getInt('limit', 25);
+			if ($limit < 1 || $limit > $maxLimit) {
+				return self::badRequest("Invalid limit '$limit': must be between 1 and $maxLimit");
+			}
 
-		if ($limit < 1 || $limit > $maxLimit) {
-			return self::badRequest("Invalid limit '$limit': must be between 1 and $maxLimit");
-		}
+			if ($limit < 1 || $limit > $maxLimit) {
+				return self::badRequest("Invalid limit '$limit': must be between 1 and $maxLimit");
+			}
 
-		$page = (int) ($request->query->get('page') ?? 1);
-		if (!is_int($page) && !ctype_digit($page)) {
-			return self::badRequest("Invalid page '$page'");
-		}
+			$page = $request->query->getInt('page', 1);
+			if ($page < 1) {
+				return self::badRequest("Invalid page '$page'");
+			}
 
-		if ($page < 1) {
-			return self::badRequest("Invalid page '$page'");
-		}
+			$search = $request->query->get('search') ?? '';
+			if (!is_string($search)) {
+				return self::badRequest('Invalid search term');
+			}
 
-		$search = $request->query->get('search') ?? '';
-		if (!is_string($search)) {
-			return self::badRequest('Invalid search term');
-		}
+			$search = trim($search);
+			if (strlen($search) > 40) {
+				return self::badRequest("Search term '$search' too long");
+			}
 
-		$search = trim($search);
-		if (strlen($search) > 40) {
-			return self::badRequest("Search term '$search' too long");
+			return [
+				'limit' => $limit,
+				'page' => $page,
+				'search' => $search,
+			];
+		} catch (UnexpectedValueException $e) {
+			return self::badRequest('Invalid pagination parameters: ' . $e->getMessage());
 		}
-
-		return [
-			'limit' => $limit,
-			'page' => $page,
-			'search' => $search,
-		];
 	}
 
 	public static function fromDataURL(string $dataUrl): Response

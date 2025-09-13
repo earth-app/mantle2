@@ -93,7 +93,7 @@ class ActivityHelper
 		$node = Node::create([
 			'type' => 'activity',
 			'title' => $activity->getName(),
-			'author' => $author ? $author->id() : 1,
+			'uid' => $author ? $author->id() : 1,
 		]);
 
 		$node->set('field_activity_id', $activity->getId());

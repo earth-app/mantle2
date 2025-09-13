@@ -54,7 +54,7 @@ class PromptsHelper
 		$node = Node::create([
 			'type' => 'prompt',
 			'title' => substr($prompt->getPrompt(), 0, 255),
-			'author' => $author ? $author->id() : 1,
+			'uid' => $author ? $author->id() : 1,
 		]);
 
 		$node->set('field_prompt', $prompt->getPrompt());
