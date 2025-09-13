@@ -254,7 +254,7 @@ mantle2.users.id.set_account_type:
       id:
         type: string
     query:
-      account_type:
+      type:
         type: enum
         required: true
         enum: [free, pro, writer, organizer, administrator]
@@ -688,7 +688,7 @@ mantle2.users.username.set_account_type:
       username:
         type: string
     query:
-      account_type:
+      type:
         type: enum
         required: true
         enum: [free, pro, writer, organizer, administrator]
@@ -1090,7 +1090,7 @@ mantle2.users.current.set_account_type:
     schema/403: Forbidden
     schema/404: User not found
     query:
-      account_type:
+      type:
         type: enum
         required: true
         enum: [free, pro, writer, organizer, administrator]

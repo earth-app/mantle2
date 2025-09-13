@@ -14,7 +14,6 @@ use Drupal\user\UserInterface;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\mantle2\Service\ActivityHelper;
-use Drupal\user\Plugin\views\wizard\Users;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -371,9 +370,9 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		$type = AccountType::tryFrom(strtoupper($request->query->get('account_type')));
+		$type = AccountType::tryFrom(strtolower($request->query->get('type')));
 		if (!$type) {
-			return GeneralHelper::badRequest('Invalid account_type');
+			return GeneralHelper::badRequest("Invalid type: $type");
 		}
 
 		$ordinal = GeneralHelper::findOrdinal(AccountType::cases(), $type);
