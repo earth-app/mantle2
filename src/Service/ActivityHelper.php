@@ -56,19 +56,10 @@ class ActivityHelper
 		$name = $node->get('field_activity_name')->value;
 		$description = $node->get('field_activity_description')->value;
 
-		$activity_types_raw = $node->get('field_activity_types')->value;
-
-		/** @var array<string> $activity_types */
-		$activity_types = [];
-
-		if (is_array($activity_types_raw)) {
-			/** @var string $item */
-			foreach ($activity_types_raw as $item) {
-				$activity_types[] = ActivityType::cases()[(int) $item]->name;
-			}
-		} else {
-			$activity_types[] = ActivityType::cases()[(int) $activity_types_raw]->name;
-		}
+		$activity_types = array_map(
+			fn(int $ordinal) => ActivityType::cases()[$ordinal]->name,
+			array_column($node->get('field_activity_types')->getValue(), 'value'),
+		);
 
 		$activity_aliases_raw = $node->get('field_activity_aliases')->value;
 		$activity_aliases = $activity_aliases_raw ? json_decode($activity_aliases_raw, true) : [];

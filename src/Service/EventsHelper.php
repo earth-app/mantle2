@@ -29,10 +29,10 @@ class EventsHelper
 		$description = $node->get('field_event_description')->value;
 		$event_type = EventType::cases()[$node->get('field_event_type')->value];
 
-		$activity_types = [];
-		foreach ($node->get('field_event_activity_types') as $item) {
-			$activity_types[] = $item->value;
-		}
+		$activity_types = array_map(
+			fn(int $ordinal) => ActivityType::cases()[$ordinal],
+			array_column($node->get('field_event_activity_types')->getValue(), 'value'),
+		);
 
 		$latitude = (float) $node->get('field_event_location_latitude')->value;
 		$longitude = (float) $node->get('field_event_location_longitude')->value;
@@ -101,10 +101,15 @@ class EventsHelper
 		$node->set('field_event_name', $event->getName());
 		$node->set('field_event_description', $event->getDescription());
 		$node->set('field_event_type', $event->getType()->value);
+
 		$node->set(
 			'field_event_activity_types',
-			array_map(fn(ActivityType $type) => $type->value, $event->getActivityTypes()),
+			array_map(
+				fn(ActivityType $type) => GeneralHelper::findOrdinal(ActivityType::cases(), $type),
+				$event->getActivityTypes(),
+			),
 		);
+
 		$node->set('field_event_location_latitude', $event->getLatitude());
 		$node->set('field_event_location_longitude', $event->getLongitude());
 		$node->set('field_event_date', $event->getDate());
@@ -132,10 +137,15 @@ class EventsHelper
 		$node->set('field_event_name', $event->getName());
 		$node->set('field_event_description', $event->getDescription());
 		$node->set('field_event_type', $event->getType()->value);
+
 		$node->set(
 			'field_event_activity_types',
-			array_map(fn(ActivityType $type) => $type->value, $event->getActivityTypes()),
+			array_map(
+				fn(ActivityType $type) => GeneralHelper::findOrdinal(ActivityType::cases(), $type),
+				$event->getActivityTypes(),
+			),
 		);
+
 		$node->set('field_event_location_latitude', $event->getLatitude());
 		$node->set('field_event_location_longitude', $event->getLongitude());
 		$node->set('field_event_date', $event->getDate());
