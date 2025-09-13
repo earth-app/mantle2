@@ -1722,14 +1722,21 @@ mantle2.prompts.random:
   path: '/v2/prompts/random'
   defaults:
     _controller: '\Drupal\mantle2\Controller\PromptsController::randomPrompt'
-    _title: 'Get Random Prompt'
+    _title: 'Get Random Prompts'
   requirements:
     _access: 'TRUE'
   options:
     tags: Prompts
-    description: Retrieves a random prompt
-    schema/200: prompt()
+    description: Retrieves random prompts
+    schema/200: promptsList()
     schema/404: Not Found
+    query:
+      count:
+        type: integer
+        minimum: 1
+        maximum: 25
+        default: 10
+        description: The number of random prompts to retrieve
   methods: [GET]
 
 mantle2.prompts.get:

@@ -9,13 +9,12 @@ use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\mantle2\Custom\Prompt;
 use Drupal\mantle2\Custom\Visibility;
-use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\Entity\Node;
-use Generator;
 use PromptsHelper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -152,6 +151,11 @@ class PromptsController extends ControllerBase
 	public function randomPrompt(Request $request)
 	{
 		try {
+			$count = $request->query->getInt('count', 10);
+			if ($count < 1 || $count > 25) {
+				return GeneralHelper::badRequest('Count must be between 1 and 25');
+			}
+
 			$connection = Drupal::database();
 			$query = $connection
 				->select('node_field_data', 'n')
@@ -209,6 +213,8 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::internalError(
 				'Failed to load prompts storage: ' . $e->getMessage(),
 			);
+		} catch (UnexpectedValueException $e) {
+			return GeneralHelper::badRequest('Invalid count parameter: ' . $e->getMessage());
 		}
 	}
 

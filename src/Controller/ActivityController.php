@@ -16,6 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use UnexpectedValueException;
 
 class ActivityController extends ControllerBase
 {
@@ -85,9 +86,9 @@ class ActivityController extends ControllerBase
 	// GET /v2/activities/random
 	public function randomActivity(Request $request): JsonResponse
 	{
-		$count = (int) $request->query->get('count', 3);
-
 		try {
+			$count = $request->query->getInt('count', 3);
+
 			$connection = Drupal::database();
 			$query = $connection
 				->select('node_field_data', 'n')
@@ -122,6 +123,8 @@ class ActivityController extends ControllerBase
 			return GeneralHelper::internalError(
 				'Failed to load activity storage: ' . $e->getMessage(),
 			);
+		} catch (UnexpectedValueException $e) {
+			return GeneralHelper::badRequest('Invalid count parameter: ' . $e->getMessage());
 		}
 	}
 

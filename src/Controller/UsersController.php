@@ -15,6 +15,7 @@ use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\mantle2\Service\ActivityHelper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -530,15 +531,19 @@ class UsersController extends ControllerBase
 			return GeneralHelper::notFound('User not found');
 		}
 
-		$poolLimit = (int) $request->query->get('pool_limit', 25);
-		if (!is_int($poolLimit) || $poolLimit <= 0 || $poolLimit > 100) {
-			return GeneralHelper::badRequest(
-				'Invalid pool_limit; must be an integer between 1 and 100',
-			);
-		}
+		try {
+			$poolLimit = $request->query->getInt('pool_limit', 25);
+			if ($poolLimit <= 0 || $poolLimit > 100) {
+				return GeneralHelper::badRequest(
+					'Invalid pool_limit; must be an integer between 1 and 100',
+				);
+			}
 
-		$activities = UsersHelper::recommendActivities($resolved, $poolLimit);
-		return new JsonResponse($activities, Response::HTTP_OK);
+			$activities = UsersHelper::recommendActivities($resolved, $poolLimit);
+			return new JsonResponse($activities, Response::HTTP_OK);
+		} catch (UnexpectedValueException $e) {
+			return GeneralHelper::badRequest('Invalid pool_limit parameter: ' . $e->getMessage());
+		}
 	}
 
 	// GET /v2/users/current/friends

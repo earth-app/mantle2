@@ -876,6 +876,10 @@ class Mantle2Schemas
 	{
 		return self::paginated(self::prompt());
 	}
+	public static function promptsList(): array
+	{
+		return ['type' => 'array', 'items' => self::prompt()];
+	}
 
 	public static function promptResponse(): array
 	{
