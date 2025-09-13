@@ -836,6 +836,16 @@ class Mantle2Schemas
 			'required' => ['id', 'name', 'types', 'created_at', 'fields'],
 		];
 	}
+	public static function activitiesIds(): array
+	{
+		return self::paginated([
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'examples' => ['hiking', 'swimming', 'reading', 'coding', 'snowboarding'],
+			],
+		]);
+	}
 	public static function activitiesIdList(): array
 	{
 		return [

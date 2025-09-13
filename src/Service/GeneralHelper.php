@@ -70,15 +70,17 @@ class GeneralHelper
 		return gmdate('c', $timestamp);
 	}
 
-	public static function paginatedParameters(Request $request): array|JsonResponse
-	{
+	public static function paginatedParameters(
+		Request $request,
+		int $maxLimit = 100,
+	): array|JsonResponse {
 		$limit = (int) ($request->query->get('limit') ?? 25);
 		if (!is_int($limit) && !ctype_digit($limit)) {
 			return self::badRequest("Invalid limit '$limit'");
 		}
 
-		if ($limit < 1 || $limit > 100) {
-			return self::badRequest("Invalid limit '$limit'");
+		if ($limit < 1 || $limit > $maxLimit) {
+			return self::badRequest("Invalid limit '$limit': must be between 1 and $maxLimit");
 		}
 
 		$page = (int) ($request->query->get('page') ?? 1);

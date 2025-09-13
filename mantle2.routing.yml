@@ -1430,7 +1430,7 @@ mantle2.activities.list:
   options:
     tags: Activities
     description: Retrieves a list of activities as an array of IDs
-    schema/200: activitiesIdList()
+    schema/200: activitiesIds()
     schema/404: Activities not found
   methods: [GET]
 

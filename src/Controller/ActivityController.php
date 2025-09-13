@@ -206,8 +206,17 @@ class ActivityController extends ControllerBase
 	}
 
 	// GET /v2/activities/list
-	public function listActivities(): JsonResponse
+	public function listActivities(Request $request): JsonResponse
 	{
+		$pagination = GeneralHelper::paginatedParameters($request, 1000);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		$limit = $pagination['limit'];
+		$page = $pagination['page'] - 1;
+		$search = $pagination['search'];
+
 		try {
 			$connection = Drupal::database();
 			$query = $connection->select('node_field_data', 'n');
@@ -218,12 +227,32 @@ class ActivityController extends ControllerBase
 				->condition('n.type', 'activity')
 				->condition('n.status', 1);
 
-			$ids = $query->execute()->fetchCol();
+			if ($search) {
+				$group = $query
+					->orConditionGroup()
+					->condition('f.field_activity_id_value', $search, 'CONTAINS');
+				$query->condition($group);
+			}
+
+			$countQuery = clone $query;
+			$total = (int) $countQuery->countQuery()->execute()->fetchField();
+			$ids = $query
+				->range($page * $limit, $limit)
+				->execute()
+				->fetchCol();
 			if (empty($ids)) {
 				return GeneralHelper::notFound('No activities found');
 			}
 
-			return new JsonResponse($ids, Response::HTTP_OK);
+			return new JsonResponse(
+				[
+					'page' => $page + 1,
+					'total' => $total,
+					'limit' => $limit,
+					'items' => $ids,
+				],
+				Response::HTTP_OK,
+			);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
 				'Failed to load activity storage: ' . $e->getMessage(),
