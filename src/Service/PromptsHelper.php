@@ -1,5 +1,8 @@
 <?php
 
+namespace Drupal\mantle2\Service;
+
+use Drupal;
 use Drupal\comment\Entity\Comment;
 use Drupal\mantle2\Custom\Prompt;
 use Drupal\mantle2\Custom\PromptResponse;
@@ -7,6 +10,7 @@ use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\node\Entity\Node;
 use Drupal\user\UserInterface;
+use InvalidArgumentException;
 
 class PromptsHelper
 {
