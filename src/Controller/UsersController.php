@@ -370,7 +370,12 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		$type = AccountType::tryFrom(strtolower($request->query->get('type')));
+		$account_type = $request->query->get('type');
+		if (!$account_type) {
+			return GeneralHelper::badRequest('Missing type');
+		}
+
+		$type = AccountType::tryFrom(strtolower($account_type));
 		if (!$type) {
 			return GeneralHelper::badRequest("Invalid type: $type");
 		}
