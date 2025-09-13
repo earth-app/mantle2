@@ -1045,7 +1045,7 @@ class UsersHelper
 			'description' => $activity->getDescription(),
 			'aliases' => $activity->getAliases(),
 			'activity_types' => array_map(
-				fn(ActivityType $type) => (string) $type,
+				fn($t) => $t instanceof ActivityType ? $t->name : $t,
 				$activity->getTypes(),
 			),
 		];

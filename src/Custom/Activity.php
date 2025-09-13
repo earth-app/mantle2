@@ -9,7 +9,7 @@ class Activity implements JsonSerializable
 {
 	protected string $id;
 	protected string $name;
-	/** @var array<ActivityType> */
+	/** @var array<ActivityType|string> */
 	protected array $types = [];
 	protected ?string $description = null;
 	/** @var array<string> */
@@ -106,7 +106,7 @@ class Activity implements JsonSerializable
 		return $this->description;
 	}
 
-	/** @return array<ActivityType> */
+	/** @return array<ActivityType|string> */
 	public function getTypes(): array
 	{
 		return $this->types;
