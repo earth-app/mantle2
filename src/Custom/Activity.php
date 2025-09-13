@@ -9,9 +9,10 @@ class Activity implements JsonSerializable
 {
 	protected string $id;
 	protected string $name;
-	/** @var ActivityType[] */
+	/** @var array<ActivityType> */
 	protected array $types = [];
 	protected ?string $description = null;
+	/** @var array<string> */
 	protected array $aliases = [];
 	private array $fields = [];
 

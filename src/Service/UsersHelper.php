@@ -7,6 +7,7 @@ use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
+use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
@@ -1035,6 +1036,21 @@ class UsersHelper
 		self::setActivities($user, $activities);
 	}
 
+	private static function serializeForCloud(Activity $activity): array
+	{
+		return [
+			'type' => 'com.earthapp.activity.Activity',
+			'id' => $activity->getId(),
+			'name' => $activity->getName(),
+			'description' => $activity->getDescription(),
+			'aliases' => $activity->getAliases(),
+			'activity_types' => array_map(
+				fn(ActivityType $type) => (string) $type,
+				$activity->getTypes(),
+			),
+		];
+	}
+
 	/**
 	 * @return array<Activity>
 	 */
@@ -1051,8 +1067,14 @@ class UsersHelper
 				->range(0, $poolLimit);
 			$nids = $query->execute()->fetchCol();
 
-			$activitiesPool = array_map(fn($nid) => ActivityHelper::getActivityByNid($nid), $nids);
-			$userActivities = self::getActivities($user);
+			$activitiesPool = array_map(
+				fn($nid) => self::serializeForCloud(ActivityHelper::getActivityByNid($nid)),
+				$nids,
+			);
+			$userActivities = array_map(
+				fn(Activity $activity) => self::serializeForCloud($activity),
+				self::getActivities($user),
+			);
 
 			$res = CloudHelper::sendRequest('/v1/users/recommend_activities', 'POST', [
 				'all' => $activitiesPool,
