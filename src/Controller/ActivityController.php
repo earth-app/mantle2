@@ -83,8 +83,10 @@ class ActivityController extends ControllerBase
 	}
 
 	// GET /v2/activities/random
-	public function randomActivity(): JsonResponse
+	public function randomActivity(Request $request): JsonResponse
 	{
+		$count = (int) $request->query->get('count', 3);
+
 		try {
 			$connection = Drupal::database();
 			$query = $connection
@@ -93,24 +95,29 @@ class ActivityController extends ControllerBase
 				->condition('status', 1)
 				->condition('type', 'activity')
 				->orderRandom()
-				->range(0, 1);
+				->range(0, $count);
 
 			$nids = $query->execute()->fetchCol();
 
 			if (empty($nids)) {
-				return new JsonResponse(['error' => 'No activities found'], 404);
+				return GeneralHelper::notFound('No activities found');
 			}
 
-			$node = Node::load(reset($nids));
-			if (!$node) {
-				return new JsonResponse(['error' => 'Activity not found'], 404);
+			$activities = [];
+			foreach ($nids as $nid) {
+				$node = Node::load($nid);
+
+				if (!$node) {
+					return GeneralHelper::internalError("Failed to load activity node $nid");
+				}
+
+				$data = ActivityHelper::nodeToActivity($node)->jsonSerialize();
+				$data['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+				$data['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+				$activities[] = $data;
 			}
 
-			$data = ActivityHelper::nodeToActivity($node)->jsonSerialize();
-			$data['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-			$data['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
-
-			return new JsonResponse($data);
+			return new JsonResponse($activities);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
 				'Failed to load activity storage: ' . $e->getMessage(),

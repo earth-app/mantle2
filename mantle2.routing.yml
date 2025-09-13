@@ -1373,9 +1373,16 @@ mantle2.activities.random:
     _access: 'TRUE'
   options:
     tags: Activities
-    description: Retrieves a random activity
-    schema/200: activity()
+    description: Retrieves random activities
+    schema/200: activitiesList()
     schema/404: Activity not found
+    query:
+      count:
+        type: integer
+        minimum: 1
+        maximum: 10
+        default: 3
+        description: The number of random activities to retrieve
   methods: [GET]
 
 mantle2.activities.get:
