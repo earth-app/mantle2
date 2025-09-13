@@ -1469,6 +1469,7 @@ mantle2.activities.create:
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
+    schema/409: Activity already exists
     body/schema: activityCreate()
     body/description: Activity data to create
   methods: [POST]

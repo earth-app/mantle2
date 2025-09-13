@@ -158,6 +158,10 @@ class ActivityController extends ControllerBase
 			return GeneralHelper::badRequest('Missing required fields');
 		}
 
+		if (ActivityHelper::getNodeByActivityId($id)) {
+			return GeneralHelper::conflict("Activity with ID '$id' already exists");
+		}
+
 		if (!is_string($id) || !is_string($name) || !is_string($description) || !is_array($types)) {
 			return GeneralHelper::badRequest('Invalid required field types');
 		}
