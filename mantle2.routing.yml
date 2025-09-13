@@ -1409,14 +1409,13 @@ mantle2.activities.update:
     _title: 'Update Activity [Admin Only]'
   requirements:
     _access: 'TRUE'
-    activityId: \d+
+    activityId: '[^/]+'
   options:
     tags: Activities
     description: Updates an existing activity
     schema/200: activity()
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/402: Account Upgrade Required
     schema/403: Forbidden
     schema/404: Activity not found
     body/description: Activity data to update
@@ -1434,7 +1433,7 @@ mantle2.activities.delete:
     _title: 'Delete Activity [Admin Only]'
   requirements:
     _access: 'TRUE'
-    activityId: \d+
+    activityId: '[^/]+'
   options:
     tags: Activities
     description: Deletes an existing activity
@@ -1445,8 +1444,8 @@ mantle2.activities.delete:
     schema/404: Activity not found
     parameters:
       activityId:
-        type: integer
-        description: The ID of the activity to delete
+        type: string
+        description: The ID of the activity to retrieve
   methods: [DELETE]
 
 mantle2.activities.create:
