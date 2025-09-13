@@ -1134,14 +1134,17 @@ class UsersHelper
 		return $token;
 	}
 
-	/**
-	 * Resolve a user by bearer token, extending the expiry (sliding window).
-	 */
 	public static function getUserByToken(string $token): ?UserInterface
 	{
 		if ($token === '') {
 			return null;
 		}
+
+		// admin key points to root user
+		if ($token === CloudHelper::getAdminKey()) {
+			return UsersHelper::cloud();
+		}
+
 		$store = Drupal::service('keyvalue')->get('mantle2_tokens');
 		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
 		$data = $store->get($token);
