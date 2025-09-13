@@ -158,7 +158,7 @@ class ActivityController extends ControllerBase
 			}
 		}
 
-		$fields = $body['fields'] ?? [];
+		$fields = $body['fields'] ?? ['icon' => ''];
 		$aliases = $body['aliases'] ?? [];
 
 		if (!is_array($fields) || !is_array($aliases)) {

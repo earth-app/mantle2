@@ -75,7 +75,7 @@ class Activity implements JsonSerializable
 			$data['types'] ?? [],
 			$data['description'] ?? null,
 			$data['aliases'] ?? [],
-			$data['fields'] ?? [],
+			$data['fields'] ?? ['icon' => ''],
 		);
 	}
 
