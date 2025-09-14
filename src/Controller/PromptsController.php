@@ -134,7 +134,7 @@ class PromptsController extends ControllerBase
 		}
 
 		$obj = new Prompt($data, $user->id(), Visibility::from($visibility));
-		$node = PromptsHelper::createPrompt($obj);
+		$node = PromptsHelper::createPrompt($obj, $user);
 		if (!$node) {
 			return GeneralHelper::internalError('Failed to create prompt');
 		}

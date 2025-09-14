@@ -98,7 +98,7 @@ function createField(
  */
 function mantle2_ensure_form_display(string $entity_type, string $bundle): void
 {
-	/** @var \Drupal\Core\Entity\Entity\EntityFormDisplay $display */
+	/** @var Drupal\Core\Entity\Entity\EntityFormDisplay $display */
 	$display = EntityFormDisplay::load("$entity_type.$bundle.default");
 	if (!$display) {
 		$display = EntityFormDisplay::create([
@@ -111,13 +111,13 @@ function mantle2_ensure_form_display(string $entity_type, string $bundle): void
 	$display->setStatus(true);
 
 	// Load all field instances for this bundle.
-	$field_instances = \Drupal::entityTypeManager()
+	$field_instances = Drupal::entityTypeManager()
 		->getStorage('field_config')
 		->loadByProperties(['entity_type' => $entity_type, 'bundle' => $bundle]);
 
 	$weight = 0;
 	foreach ($field_instances as $field_config) {
-		/** @var \Drupal\field\Entity\FieldConfig $field_config */
+		/** @var Drupal\field\Entity\FieldConfig $field_config */
 		$name = $field_config->getName();
 		$type = $field_config->getType();
 
@@ -647,6 +647,75 @@ function mantle2_install(): void
 			],
 		],
 	]);
+
+	// Ensure comments are configured for prompts on fresh install.
+	$module_handler = Drupal::moduleHandler();
+	if (!$module_handler->moduleExists('comment')) {
+		/** @var Drupal\Core\Extension\ModuleInstallerInterface $installer */
+		$installer = Drupal::service('module_installer');
+		try {
+			$installer->install(['comment']);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to enable comment module during install: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
+	}
+
+	if (!CommentType::load('comment')) {
+		try {
+			CommentType::create([
+				'id' => 'comment',
+				'label' => 'Comment',
+				'target_entity_type_id' => 'node',
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to create Comment type during install: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
+	}
+
+	$storage = FieldStorageConfig::loadByName('node', 'comment');
+	if (!$storage) {
+		try {
+			FieldStorageConfig::create([
+				'field_name' => 'comment',
+				'entity_type' => 'node',
+				'type' => 'comment',
+				'cardinality' => -1,
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to create comment field storage during install: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
+	}
+
+	if (!FieldConfig::loadByName('node', 'prompt', 'comment')) {
+		try {
+			FieldConfig::create([
+				'field_name' => 'comment',
+				'entity_type' => 'node',
+				'bundle' => 'prompt',
+				'label' => 'Comments',
+				'required' => false,
+				'settings' => [
+					'comment_type' => 'comment',
+				],
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to attach comment field to prompt during install: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
+	}
+
+	mantle2_ensure_form_display('node', 'prompt');
 }
 
 /**
@@ -695,7 +764,7 @@ function mantle2_update_9003(): void
 }
 
 /**
- * Update: Add comments for prompts and articles
+ * Update: Add comments for prompts (deprecated)
  */
 function mantle2_update_9004(): void
 {
@@ -711,8 +780,8 @@ function mantle2_update_9004(): void
 		'comment_type' => 'comment',
 		'cardinality' => -1,
 	]);
+
 	mantle2_ensure_form_display('node', 'prompt');
-	mantle2_ensure_form_display('node', 'article');
 }
 
 /**
@@ -722,7 +791,7 @@ function mantle2_update_9004(): void
  */
 function mantle2_update_9005(): void
 {
-	$etm = \Drupal::entityTypeManager();
+	$etm = Drupal::entityTypeManager();
 	$node_storage = $etm->getStorage('node');
 
 	// Load all article nodes once for both migrations.
@@ -781,7 +850,7 @@ function mantle2_update_9005(): void
 				$node->set('field_author_id_tmp', $uid);
 				try {
 					$node->save();
-				} catch (\Exception $e) {
+				} catch (Exception $e) {
 				}
 			}
 		}
@@ -790,12 +859,12 @@ function mantle2_update_9005(): void
 		if ($fc = FieldConfig::loadByName('node', 'article', 'field_author_id')) {
 			try {
 				$fc->delete();
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 			}
 		}
 		try {
 			$author_storage->delete();
-		} catch (\Exception $e) {
+		} catch (Exception $e) {
 		}
 
 		// Recreate field_author_id as entity_reference(user).
@@ -827,20 +896,20 @@ function mantle2_update_9005(): void
 				$node->set('field_author_id_tmp', null);
 				try {
 					$node->save();
-				} catch (\Exception $e) {
+				} catch (Exception $e) {
 				}
 			}
 		}
 		if ($fc = FieldConfig::loadByName('node', 'article', 'field_author_id_tmp')) {
 			try {
 				$fc->delete();
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 			}
 		}
 		if ($fs = FieldStorageConfig::loadByName('node', 'field_author_id_tmp')) {
 			try {
 				$fs->delete();
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 			}
 		}
 
@@ -889,7 +958,7 @@ function mantle2_update_9005(): void
 				$node->set('field_article_color_tmp', $int);
 				try {
 					$node->save();
-				} catch (\Exception $e) {
+				} catch (Exception $e) {
 				}
 			}
 		}
@@ -898,12 +967,12 @@ function mantle2_update_9005(): void
 		if ($fc = FieldConfig::loadByName('node', 'article', 'field_article_color')) {
 			try {
 				$fc->delete();
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 			}
 		}
 		try {
 			$color_storage->delete();
-		} catch (\Exception $e) {
+		} catch (Exception $e) {
 		}
 
 		// Recreate field_article_color as integer.
@@ -932,58 +1001,122 @@ function mantle2_update_9005(): void
 				$node->set('field_article_color_tmp', null);
 				try {
 					$node->save();
-				} catch (\Exception $e) {
+				} catch (Exception $e) {
 				}
 			}
 		}
 		if ($fc = FieldConfig::loadByName('node', 'article', 'field_article_color_tmp')) {
 			try {
 				$fc->delete();
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 			}
 		}
 		if ($fs = FieldStorageConfig::loadByName('node', 'field_article_color_tmp')) {
 			try {
 				$fs->delete();
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 			}
 		}
 
 		mantle2_ensure_form_display('node', 'article');
 	}
 }
-
-function mantle2_update_9006(): void
+/**
+ * Update: Force-create comment type and attach to prompt bundle
+ * - Ensures 'comment' module is enabled
+ * - Ensures CommentType 'comment' exists
+ * - Ensures field storage node.comment exists and is unlimited
+ * - Cleans up bad 'node' bundle instance if it exists
+ * - Attaches 'comment' field to 'prompt' bundle
+ */
+function mantle2_update_9007(): void
 {
-	if (!CommentType::load('comment')) {
-		CommentType::create([
-			'id' => 'comment',
-			'label' => 'Comment',
-			'target_entity_type_id' => 'node',
-		])->save();
+	// Ensure the comment module is enabled.
+	$module_handler = Drupal::moduleHandler();
+	if (!$module_handler->moduleExists('comment')) {
+		/** @var Drupal\Core\Extension\ModuleInstallerInterface $installer */
+		$installer = Drupal::service('module_installer');
+		try {
+			$installer->install(['comment']);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to enable comment module: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
 	}
 
+	// Ensure base comment type exists.
+	if (!CommentType::load('comment')) {
+		try {
+			CommentType::create([
+				'id' => 'comment',
+				'label' => 'Comment',
+				'target_entity_type_id' => 'node',
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to create Comment type: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+	}
+
+	// Ensure shared storage exists for the 'comment' field on nodes with unlimited cardinality.
 	$storage = FieldStorageConfig::loadByName('node', 'comment');
 	if (!$storage) {
-		FieldStorageConfig::create([
-			'field_name' => 'comment',
-			'entity_type' => 'node',
-			'type' => 'comment',
-			'cardinality' => -1,
-		])->save();
+		try {
+			FieldStorageConfig::create([
+				'field_name' => 'comment',
+				'entity_type' => 'node',
+				'type' => 'comment',
+				'cardinality' => -1,
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to create comment field storage: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+	} else {
+		try {
+			if (method_exists($storage, 'getCardinality') && $storage->getCardinality() !== -1) {
+				if (method_exists($storage, 'setCardinality')) {
+					$storage->setCardinality(-1);
+					$storage->save();
+				}
+			}
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to adjust comment field storage cardinality: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
 	}
 
+	if ($bad = FieldConfig::loadByName('node', 'node', 'comment')) {
+		try {
+			$bad->delete();
+		} catch (Exception $e) {
+			// Ignore.
+		}
+	}
+
+	// Attach the comment field to the 'prompt' bundle if missing.
 	if (!FieldConfig::loadByName('node', 'prompt', 'comment')) {
-		FieldConfig::create([
-			'field_name' => 'comment',
-			'entity_type' => 'node',
-			'bundle' => 'prompt',
-			'label' => 'Comments',
-			'required' => false,
-			'settings' => [
-				'comment_type' => 'comment',
-			],
-		])->save();
+		try {
+			FieldConfig::create([
+				'field_name' => 'comment',
+				'entity_type' => 'node',
+				'bundle' => 'prompt',
+				'label' => 'Comments',
+				'required' => false,
+				'settings' => [
+					'comment_type' => 'comment',
+				],
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to attach comment field to prompt: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
 	}
 
 	mantle2_ensure_form_display('node', 'prompt');
