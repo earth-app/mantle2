@@ -1868,14 +1868,14 @@ mantle2.prompts.responses.count:
   methods: [GET]
 
 mantle2.prompts.responses.get:
-  path: '/v2/prompts/{prompt}/responses/{responseId}'
+  path: '/v2/prompts/{prompt}/responses/{response}'
   defaults:
     _controller: '\Drupal\mantle2\Controller\PromptsController::getPromptResponse'
     _title: 'Get Prompt Response'
   requirements:
     _access: 'TRUE'
     prompt: \d+
-    responseId: \d+
+    response: \d+
   options:
     tags: Prompts
     description: Retrieves a specific response for a prompt
@@ -1885,20 +1885,20 @@ mantle2.prompts.responses.get:
       prompt:
         type: entity:node
         description: The ID of the prompt to retrieve a response for
-      responseId:
+      response:
         type: entity:node
         description: The ID of the response to retrieve
   methods: [GET]
 
 mantle2.prompts.responses.update:
-  path: '/v2/prompts/{prompt}/responses/{responseId}'
+  path: '/v2/prompts/{prompt}/responses/{response}'
   defaults:
     _controller: '\Drupal\mantle2\Controller\PromptsController::updatePromptResponse'
     _title: 'Update Prompt Response'
   requirements:
     _access: 'TRUE'
     prompt: \d+
-    responseId: \d+
+    response: \d+
   options:
     tags: Prompts
     description: Updates a specific response for a prompt
@@ -1913,20 +1913,20 @@ mantle2.prompts.responses.update:
       prompt:
         type: entity:node
         description: The ID of the prompt to update a response for
-      responseId:
+      response:
         type: entity:node
         description: The ID of the response to update
   methods: [PATCH]
 
 mantle2.prompts.responses.delete:
-  path: '/v2/prompts/{prompt}/responses/{responseId}'
+  path: '/v2/prompts/{prompt}/responses/{response}'
   defaults:
     _controller: '\Drupal\mantle2\Controller\PromptsController::deletePromptResponse'
     _title: 'Delete Prompt Response'
   requirements:
     _access: 'TRUE'
     prompt: \d+
-    responseId: \d+
+    response: \d+
   options:
     tags: Prompts
     description: Deletes a specific response for a prompt
@@ -1939,7 +1939,7 @@ mantle2.prompts.responses.delete:
       prompt:
         type: entity:node
         description: The ID of the prompt to delete a response for
-      responseId:
+      response:
         type: entity:node
         description: The ID of the response to delete
   methods: [DELETE]

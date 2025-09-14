@@ -471,7 +471,7 @@ class PromptsController extends ControllerBase
 		return new JsonResponse(['count' => $count, 'prompt' => $result], Response::HTTP_OK);
 	}
 
-	// GET /v2/prompts/{prompt}/responses/{responseId}
+	// GET /v2/prompts/{prompt}/responses/{response}
 	public function getPromptResponse(Request $request, Node $prompt, Comment $response)
 	{
 		if (!$prompt || $prompt->getType() !== 'prompt') {
@@ -508,7 +508,7 @@ class PromptsController extends ControllerBase
 		return new JsonResponse($res, Response::HTTP_OK);
 	}
 
-	// PATCH /v2/prompts/{prompt}/responses/{responseId}
+	// PATCH /v2/prompts/{prompt}/responses/{response}
 	public function updatePromptResponse(Request $request, Node $prompt, Comment $response)
 	{
 		if (!$prompt || $prompt->getType() !== 'prompt') {
@@ -573,7 +573,7 @@ class PromptsController extends ControllerBase
 		return new JsonResponse($res, Response::HTTP_OK);
 	}
 
-	// DELETE /v2/prompts/{prompt}/responses/{responseId}
+	// DELETE /v2/prompts/{prompt}/responses/{response}
 	public function deletePromptResponse(Request $request, Node $prompt, Comment $response)
 	{
 		$user = UsersHelper::findByRequest($request);
