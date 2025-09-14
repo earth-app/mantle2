@@ -160,55 +160,69 @@ class PromptsController extends ControllerBase
 			$query = $connection
 				->select('node_field_data', 'n')
 				->fields('n', ['nid'])
-				->condition('status', 1)
-				->condition('type', 'prompt');
+				->condition('n.status', 1)
+				->condition('n.type', 'prompt');
+
+			$fv = $query->leftJoin('node__field_visibility', 'fv', 'fv.entity_id = n.nid');
+			$query->condition("$fv.delta", 0);
 
 			// Check visibility
 			$user = UsersHelper::getOwnerOfRequest($request);
 			if ($user) {
 				if (!UsersHelper::isAdmin($user)) {
-					// non-private events for logged in users
-					$group = $query->orConditionGroup();
-					$group->condition(
-						'field_visibility',
-						[
-							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
-							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::UNLISTED),
-						],
-						'IN',
-					);
+					// Non-private prompts for logged-in users OR prompts owned by the user.
+					$fo = $query->leftJoin('node__field_owner_id', 'fo', 'fo.entity_id = n.nid');
+					$query->condition("$fo.delta", 0);
 
-					// is owner
-					$group->condition('field_owner_id', $user->id());
+					$group = $query
+						->orConditionGroup()
+						->condition(
+							"$fv.field_visibility_value",
+							[
+								GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+								GeneralHelper::findOrdinal(
+									Visibility::cases(),
+									Visibility::UNLISTED,
+								),
+							],
+							'IN',
+						)
+						->condition("$fo.field_owner_id_value", $user->id());
 					$query->condition($group);
 				}
 			} else {
-				// only public events for anonymous users
+				// Only public prompts for anonymous users
 				$query->condition(
-					'field_visibility',
+					"$fv.field_visibility_value",
 					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
 				);
 			}
 
-			$query->orderRandom();
+			$query->orderRandom()->range(0, $count);
 			$nids = $query->execute()->fetchCol();
 
 			if (empty($nids)) {
 				return GeneralHelper::notFound('No prompts found');
 			}
 
-			$randomNid = reset($nids);
-			$node = Node::load($randomNid);
-			if (!$node) {
-				return GeneralHelper::internalError('Failed to load random prompt');
+			$results = [];
+
+			foreach ($nids as $randomNid) {
+				$node = Node::load($randomNid);
+
+				if (!$node) {
+					return GeneralHelper::internalError('Failed to load random prompt');
+				}
+
+				$result = PromptsHelper::nodeToPrompt($node)->jsonSerialize();
+				$result['id'] = GeneralHelper::formatId($randomNid);
+				$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+				$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+
+				$results[] = $result;
 			}
 
-			$result = PromptsHelper::nodeToPrompt($node)->jsonSerialize();
-			$result['id'] = GeneralHelper::formatId($randomNid);
-			$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-			$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
-
-			return new JsonResponse($result);
+			return new JsonResponse($results);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
 				'Failed to load prompts storage: ' . $e->getMessage(),
