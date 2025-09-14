@@ -29,6 +29,24 @@ class PromptsHelper
 		return null;
 	}
 
+	/**
+	 * Resolve the comment type (bundle) configured on the comment field instance.
+	 */
+	private static function getCommentTypeForField(Node $node, string $fieldName): ?string
+	{
+		$definitions = \Drupal::service('entity_field.manager')->getFieldDefinitions(
+			'node',
+			$node->bundle(),
+		);
+		if (
+			isset($definitions[$fieldName]) &&
+			method_exists($definitions[$fieldName], 'getSetting')
+		) {
+			return $definitions[$fieldName]->getSetting('comment_type') ?: null;
+		}
+		return null;
+	}
+
 	public static function loadPromptNode(int $nid)
 	{
 		$node = Node::load($nid);
@@ -170,10 +188,14 @@ class PromptsHelper
 			throw new InvalidArgumentException('No comment field configured for this content type');
 		}
 
+		$commentType = self::getCommentTypeForField($response, $fieldName) ?? 'comment';
+
 		$comment = Comment::create([
 			'entity_type' => 'node',
 			'entity_id' => $response->id(),
 			'field_name' => $fieldName,
+			// Explicitly set bundle to avoid "Missing bundle" when instance settings are broken.
+			'comment_type' => $commentType,
 			'uid' => $owner->id(),
 			'name' => $owner->getDisplayName(),
 			'mail' => $owner->getEmail(),

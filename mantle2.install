@@ -1121,3 +1121,77 @@ function mantle2_update_9007(): void
 
 	mantle2_ensure_form_display('node', 'prompt');
 }
+
+/**
+ * Update: Ensure prompt comment instance has correct comment_type setting and exists.
+ */
+function mantle2_update_9008(): void
+{
+	// Ensure Comment type exists.
+	if (!CommentType::load('comment')) {
+		try {
+			CommentType::create([
+				'id' => 'comment',
+				'label' => 'Comment',
+				'target_entity_type_id' => 'node',
+			])->save();
+		} catch (\Exception $e) {
+			\Drupal::logger('mantle2')->error('Failed to create Comment type: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+	}
+
+	// Ensure field storage exists.
+	if (!FieldStorageConfig::loadByName('node', 'comment')) {
+		try {
+			FieldStorageConfig::create([
+				'field_name' => 'comment',
+				'entity_type' => 'node',
+				'type' => 'comment',
+				'cardinality' => -1,
+			])->save();
+		} catch (\Exception $e) {
+			\Drupal::logger('mantle2')->error('Failed to create comment field storage: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+	}
+
+	// Ensure the instance exists and has the correct comment_type.
+	$instance = FieldConfig::loadByName('node', 'prompt', 'comment');
+	if (!$instance) {
+		try {
+			$instance = FieldConfig::create([
+				'field_name' => 'comment',
+				'entity_type' => 'node',
+				'bundle' => 'prompt',
+				'label' => 'Comments',
+				'required' => false,
+				'settings' => [
+					'comment_type' => 'comment',
+				],
+			]);
+			$instance->save();
+		} catch (\Exception $e) {
+			\Drupal::logger('mantle2')->error('Failed to create comment field instance: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+	} else {
+		try {
+			$settings = $instance->getSettings();
+			$settings['comment_type'] = 'comment';
+			$instance->set('settings', $settings);
+			$instance->save();
+		} catch (\Exception $e) {
+			\Drupal::logger('mantle2')->warning(
+				'Failed to update comment_type setting on prompt comment field: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
+	}
+
+	// Ensure form display includes the widget.
+	mantle2_ensure_form_display('node', 'prompt');
+}
