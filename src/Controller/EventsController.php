@@ -253,7 +253,7 @@ class EventsController extends ControllerBase
 		return new JsonResponse($result, Response::HTTP_CREATED);
 	}
 
-	// GET /v2/events/:eventId
+	// GET /v2/events/{eventId}
 	public function getEvent(int $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
@@ -283,7 +283,7 @@ class EventsController extends ControllerBase
 		return new JsonResponse($result, Response::HTTP_OK);
 	}
 
-	// PATCH /v2/events/:eventId
+	// PATCH /v2/events/{eventId}
 	public function updateEvent(int $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
@@ -454,7 +454,7 @@ class EventsController extends ControllerBase
 		return new JsonResponse($result, Response::HTTP_OK);
 	}
 
-	// DELETE /v2/events/:eventId
+	// DELETE /v2/events/{eventId}
 	public function deleteEvent(int $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
@@ -481,7 +481,7 @@ class EventsController extends ControllerBase
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
 
-	// GET /v2/events/:eventId/attendees
+	// GET /v2/events/{eventId}/attendees
 	public function getEventAttendees(int $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
@@ -533,7 +533,7 @@ class EventsController extends ControllerBase
 		);
 	}
 
-	// POST /v2/events/:eventId/signup
+	// POST /v2/events/{eventId}/signup
 	public function signUpForEvent(int $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
@@ -574,7 +574,7 @@ class EventsController extends ControllerBase
 		);
 	}
 
-	// POST /v2/events/:eventId/leave
+	// POST /v2/events/{eventId}/leave
 	public function leaveEvent(int $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);

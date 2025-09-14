@@ -84,7 +84,7 @@ class PromptsController extends ControllerBase
 				$node = Node::load($nid);
 				if ($node) {
 					$data[] = [
-						'id' => $nid,
+						'id' => (int) $nid,
 						...PromptsHelper::nodeToPrompt($node)->jsonSerialize(),
 					];
 				}
@@ -124,16 +124,16 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
-		$prompt = $body['prompt'] ?? null;
+		$data = $body['prompt'] ?? null;
 		$visibility = $body['visibility'] ?? null;
 		if (
-			!is_string($prompt) ||
+			!is_string($data) ||
 			!in_array($visibility, array_map(fn($v) => $v->value, Visibility::cases()), true)
 		) {
 			return GeneralHelper::badRequest('Missing or invalid fields');
 		}
 
-		$obj = new Prompt($prompt, $user->id(), Visibility::from($visibility));
+		$obj = new Prompt($data, $user->id(), Visibility::from($visibility));
 		$node = PromptsHelper::createPrompt($obj);
 		if (!$node) {
 			return GeneralHelper::internalError('Failed to create prompt');
@@ -232,41 +232,49 @@ class PromptsController extends ControllerBase
 		}
 	}
 
-	// GET /v2/prompts/{promptId}
-	public function getPrompt(Request $request, Node $node)
+	// GET /v2/prompts/{prompt}
+	public function getPrompt(Request $request, Node $prompt)
 	{
-		$user = UsersHelper::getOwnerOfRequest($request);
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
-			return GeneralHelper::internalError('Failed to load prompt');
-		}
-
-		if (!PromptsHelper::isVisible($prompt, $user)) {
+		if (!$prompt || $prompt->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		$result = $prompt->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($node->id());
-		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+		$user = UsersHelper::getOwnerOfRequest($request);
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
+			return GeneralHelper::internalError('Failed to load prompt');
+		}
+
+		if (!PromptsHelper::isVisible($data, $user)) {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
+		$result = $data->jsonSerialize();
+		$result['id'] = GeneralHelper::formatId($prompt->id());
+		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
+		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
 
 		return new JsonResponse($result);
 	}
 
-	// PATCH /v2/prompts/{promptId}
-	public function updatePrompt(Request $request, Node $node)
+	// PATCH /v2/prompts/{prompt}
+	public function updatePrompt(Request $request, Node $prompt)
 	{
+		if (!$prompt || $prompt->getType() !== 'prompt') {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
 
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
 
-		if ($prompt->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($data->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to update this prompt');
 		}
 
@@ -278,8 +286,8 @@ class PromptsController extends ControllerBase
 		$updated = false;
 
 		$newPrompt = $body['prompt'] ?? null;
-		if (is_string($newPrompt) && $newPrompt !== $prompt->getPrompt()) {
-			$prompt->setPrompt($newPrompt);
+		if (is_string($newPrompt) && $newPrompt !== $data->getPrompt()) {
+			$data->setPrompt($newPrompt);
 			$updated = true;
 		}
 
@@ -287,9 +295,9 @@ class PromptsController extends ControllerBase
 		if (
 			is_string($newVisibility) &&
 			in_array($newVisibility, array_map(fn($v) => $v->value, Visibility::cases()), true) &&
-			$newVisibility !== $prompt->getVisibility()->value
+			$newVisibility !== $data->getVisibility()->value
 		) {
-			$prompt->setVisibility(Visibility::from($newVisibility));
+			$data->setVisibility(Visibility::from($newVisibility));
 			$updated = true;
 		}
 
@@ -297,53 +305,58 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('No changes provided');
 		}
 
-		$node = PromptsHelper::updatePrompt($node, $prompt);
-		if (!$node) {
-			return GeneralHelper::internalError('Failed to update prompt');
-		}
+		PromptsHelper::updatePrompt($prompt, $data);
 
-		$result = $prompt->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($node->id());
-		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+		$result = $data->jsonSerialize();
+		$result['id'] = GeneralHelper::formatId($prompt->id());
+		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
+		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
 
 		return new JsonResponse($result);
 	}
 
-	// DELETE /v2/prompts/{promptId}
-	public function deletePrompt(Request $request, Node $node)
+	// DELETE /v2/prompts/{prompt}
+	public function deletePrompt(Request $request, Node $prompt)
 	{
+		if (!$prompt || $prompt->getType() !== 'prompt') {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
 
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
 
-		if ($prompt->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($data->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to delete this prompt');
 		}
 
-		if (!$node->delete()) {
+		if (!$prompt->delete()) {
 			return GeneralHelper::internalError('Failed to delete prompt');
 		}
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
 
-	// GET /v2/prompts/{promptId}/responses
-	public function getPromptResponses(Request $request, Node $node)
+	// GET /v2/prompts/{prompt}/responses
+	public function getPromptResponses(Request $request, Node $prompt)
 	{
+		if (!$prompt || $prompt->getType() !== 'prompt') {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
 		$user = UsersHelper::getOwnerOfRequest($request);
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
 
-		if (!PromptsHelper::isVisible($prompt, $user)) {
+		if (!PromptsHelper::isVisible($data, $user)) {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
@@ -356,8 +369,8 @@ class PromptsController extends ControllerBase
 		$page = $paginated['page'];
 		$search = $paginated['search'];
 
-		$responses = PromptsHelper::getResponses($node, $page, $limit, $search);
-		$total = PromptsHelper::getCommentsCount($node);
+		$responses = PromptsHelper::getResponses($prompt, $page, $limit, $search);
+		$total = PromptsHelper::getCommentsCount($prompt);
 
 		return new JsonResponse([
 			'page' => $page,
@@ -378,20 +391,24 @@ class PromptsController extends ControllerBase
 		]);
 	}
 
-	// POST /v2/prompts/{promptId}/responses
-	public function createPromptResponse(Request $request, Node $node)
+	// POST /v2/prompts/{prompt}/responses
+	public function createPromptResponse(Request $request, Node $prompt)
 	{
+		if (!$prompt || $prompt->getType() !== 'prompt') {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
 
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
 
-		if (!PromptsHelper::isVisible($prompt, $user)) {
+		if (!PromptsHelper::isVisible($data, $user)) {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
@@ -413,7 +430,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::forbidden('You do not have permission to post responses');
 		}
 
-		$response = PromptsHelper::addComment($user, $node, $content);
+		$response = PromptsHelper::addComment($user, $prompt, $content);
 		if (!$response) {
 			return GeneralHelper::internalError('Failed to create response');
 		}
@@ -423,48 +440,57 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load created response');
 		}
 
-		$data = $result->jsonSerialize();
-		$data['id'] = $response->id();
-		$data['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
-		$data['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
+		$res = $result->jsonSerialize();
+		$res['id'] = $response->id();
+		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
+		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
-		return new JsonResponse($data, Response::HTTP_CREATED);
+		return new JsonResponse($res, Response::HTTP_CREATED);
 	}
 
-	// GET /v2/prompts/{promptId}/responses/count
-	public function getPromptResponsesCount(Request $request, Node $node)
+	// GET /v2/prompts/{prompt}/responses/count
+	public function getPromptResponsesCount(Request $request, Node $prompt)
 	{
-		$user = UsersHelper::getOwnerOfRequest($request);
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
-			return GeneralHelper::internalError('Failed to load prompt');
-		}
-		if (!PromptsHelper::isVisible($prompt, $user)) {
+		if (!$prompt || $prompt->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		$count = PromptsHelper::getCommentsCount($node);
-		$result = $prompt->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($node->id());
-		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
-		return new JsonResponse(['count' => $count, 'prompt' => $result]);
-	}
-
-	// GET /v2/prompts/{promptId}/responses/{responseId}
-	public function getPromptResponse(Request $request, Node $node, Comment $response)
-	{
 		$user = UsersHelper::getOwnerOfRequest($request);
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
-
-		if (!PromptsHelper::isVisible($prompt, $user)) {
+		if (!PromptsHelper::isVisible($data, $user)) {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		if ($response->getCommentedEntityId() != $node->id()) {
+		$count = PromptsHelper::getCommentsCount($prompt);
+		$result = $data->jsonSerialize();
+		$result['id'] = GeneralHelper::formatId($prompt->id());
+		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
+		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
+
+		return new JsonResponse(['count' => $count, 'prompt' => $result], Response::HTTP_OK);
+	}
+
+	// GET /v2/prompts/{prompt}/responses/{responseId}
+	public function getPromptResponse(Request $request, Node $prompt, Comment $response)
+	{
+		if (!$prompt || $prompt->getType() !== 'prompt') {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
+		$user = UsersHelper::getOwnerOfRequest($request);
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
+			return GeneralHelper::internalError('Failed to load prompt');
+		}
+
+		if (!PromptsHelper::isVisible($data, $user)) {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
+		if ($response->getCommentedEntityId() != $prompt->id()) {
 			return GeneralHelper::notFound('Response not found');
 		}
 
@@ -477,32 +503,36 @@ class PromptsController extends ControllerBase
 			$result->hideOwnerId();
 		}
 
-		$data = $result->jsonSerialize();
-		$data['id'] = $response->id();
-		$data['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
-		$data['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
+		$res = $result->jsonSerialize();
+		$res['id'] = $response->id();
+		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
+		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
-		return new JsonResponse($data);
+		return new JsonResponse($res, Response::HTTP_OK);
 	}
 
-	// PATCH /v2/prompts/{promptId}/responses/{responseId}
-	public function updatePromptResponse(Request $request, Node $node, Comment $response)
+	// PATCH /v2/prompts/{prompt}/responses/{responseId}
+	public function updatePromptResponse(Request $request, Node $prompt, Comment $response)
 	{
+		if (!$prompt || $prompt->getType() !== 'prompt') {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
 
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
 
-		if (!PromptsHelper::isVisible($prompt, $user)) {
+		if (!PromptsHelper::isVisible($data, $user)) {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		if ($response->getCommentedEntityId() != $node->id()) {
+		if ($response->getCommentedEntityId() != $prompt->id()) {
 			return GeneralHelper::notFound('Response not found');
 		}
 
@@ -539,32 +569,32 @@ class PromptsController extends ControllerBase
 			$result->hideOwnerId();
 		}
 
-		$data = $result->jsonSerialize();
-		$data['id'] = $response->id();
-		$data['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
-		$data['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
+		$res = $result->jsonSerialize();
+		$res['id'] = $response->id();
+		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
+		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
-		return new JsonResponse($data);
+		return new JsonResponse($res, Response::HTTP_OK);
 	}
 
-	// DELETE /v2/prompts/{promptId}/responses/{responseId}
-	public function deletePromptResponse(Request $request, Node $node, Comment $response)
+	// DELETE /v2/prompts/{prompt}/responses/{responseId}
+	public function deletePromptResponse(Request $request, Node $prompt, Comment $response)
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
 
-		$prompt = PromptsHelper::nodeToPrompt($node);
-		if (!$prompt) {
+		$data = PromptsHelper::nodeToPrompt($prompt);
+		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
 
-		if (!PromptsHelper::isVisible($prompt, $user)) {
+		if (!PromptsHelper::isVisible($data, $user)) {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		if ($response->getCommentedEntityId() != $node->id()) {
+		if ($response->getCommentedEntityId() != $prompt->id()) {
 			return GeneralHelper::notFound('Response not found');
 		}
 
