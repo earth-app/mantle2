@@ -3,6 +3,7 @@
 namespace Drupal\mantle2\Custom;
 
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use JsonSerializable;
@@ -24,7 +25,7 @@ class Prompt implements JsonSerializable
 	{
 		return [
 			'prompt' => $this->prompt,
-			'ownerId' => $this->ownerId,
+			'ownerId' => GeneralHelper::formatId($this->ownerId),
 			'visibility' => $this->visibility->value,
 		];
 	}

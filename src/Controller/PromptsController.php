@@ -441,7 +441,7 @@ class PromptsController extends ControllerBase
 		}
 
 		$res = $result->jsonSerialize();
-		$res['id'] = $response->id();
+		$res['id'] = GeneralHelper::formatId($response->id());
 		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
 		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
@@ -504,7 +504,7 @@ class PromptsController extends ControllerBase
 		}
 
 		$res = $result->jsonSerialize();
-		$res['id'] = $response->id();
+		$res['id'] = GeneralHelper::formatId($response->id());
 		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
 		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
@@ -570,7 +570,7 @@ class PromptsController extends ControllerBase
 		}
 
 		$res = $result->jsonSerialize();
-		$res['id'] = $response->id();
+		$res['id'] = GeneralHelper::formatId($response->id());
 		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
 		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
