@@ -130,7 +130,12 @@ class PromptsHelper
 	public static function entityToPromptResponse(Comment $response): ?PromptResponse
 	{
 		$promptId = $response->getCommentedEntityId();
-		$body = $response->get('comment_body')->value;
+
+		// Try to get comment body, handling cases where field doesn't exist
+		$body = '';
+		if ($response->hasField('comment_body') && !$response->get('comment_body')->isEmpty()) {
+			$body = $response->get('comment_body')->value;
+		}
 
 		return new PromptResponse(
 			$promptId,

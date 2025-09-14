@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Custom;
 
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
@@ -48,14 +49,14 @@ class PromptResponse implements JsonSerializable
 	{
 		if ($this->ownerId === -1) {
 			return [
-				'prompt_id' => $this->promptId,
+				'prompt_id' => GeneralHelper::formatId($this->promptId),
 				'response' => $this->response,
 			];
 		}
 
 		$owner = UsersHelper::serializeUser($this->getOwner());
 		return [
-			'prompt_id' => $this->promptId,
+			'prompt_id' => GeneralHelper::formatId($this->promptId),
 			'response' => $this->response,
 			'owner' => $owner,
 		];

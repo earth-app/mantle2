@@ -678,6 +678,41 @@ function mantle2_install(): void
 		}
 	}
 
+	// Ensure comment_body field storage exists for comments.
+	if (!FieldStorageConfig::loadByName('comment', 'comment_body')) {
+		try {
+			FieldStorageConfig::create([
+				'field_name' => 'comment_body',
+				'entity_type' => 'comment',
+				'type' => 'text_long',
+				'cardinality' => 1,
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to create comment_body field storage during install: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
+	}
+
+	// Ensure comment_body field instance exists for comment type.
+	if (!FieldConfig::loadByName('comment', 'comment', 'comment_body')) {
+		try {
+			FieldConfig::create([
+				'field_name' => 'comment_body',
+				'entity_type' => 'comment',
+				'bundle' => 'comment',
+				'label' => 'Comment',
+				'required' => true,
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to create comment_body field instance during install: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
+	}
+
 	$storage = FieldStorageConfig::loadByName('node', 'comment');
 	if (!$storage) {
 		try {
@@ -716,6 +751,7 @@ function mantle2_install(): void
 	}
 
 	mantle2_ensure_form_display('node', 'prompt');
+	mantle2_ensure_form_display('comment', 'comment');
 }
 
 /**
@@ -1022,14 +1058,15 @@ function mantle2_update_9005(): void
 	}
 }
 /**
- * Update: Force-create comment type and attach to prompt bundle
+ * Update: Complete comment system setup for prompts
  * - Ensures 'comment' module is enabled
- * - Ensures CommentType 'comment' exists
+ * - Ensures CommentType 'comment' exists with comment_body field
  * - Ensures field storage node.comment exists and is unlimited
  * - Cleans up bad 'node' bundle instance if it exists
- * - Attaches 'comment' field to 'prompt' bundle
+ * - Attaches 'comment' field to 'prompt' bundle with correct settings
+ * - Ensures comment_body field is properly configured
  */
-function mantle2_update_9007(): void
+function mantle2_update_9009(): void
 {
 	// Ensure the comment module is enabled.
 	$module_handler = Drupal::moduleHandler();
@@ -1057,6 +1094,45 @@ function mantle2_update_9007(): void
 			Drupal::logger('mantle2')->error('Failed to create Comment type: %message', [
 				'%message' => $e->getMessage(),
 			]);
+		}
+	}
+
+	// Ensure comment_body field storage exists for comments.
+	if (!FieldStorageConfig::loadByName('comment', 'comment_body')) {
+		try {
+			FieldStorageConfig::create([
+				'field_name' => 'comment_body',
+				'entity_type' => 'comment',
+				'type' => 'text_long',
+				'cardinality' => 1,
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to create comment_body field storage: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+	}
+
+	// Ensure comment_body field instance exists for comment type.
+	if (!FieldConfig::loadByName('comment', 'comment', 'comment_body')) {
+		try {
+			FieldConfig::create([
+				'field_name' => 'comment_body',
+				'entity_type' => 'comment',
+				'bundle' => 'comment',
+				'label' => 'Comment',
+				'required' => true,
+			])->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to create comment_body field instance: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
 		}
 	}
 
@@ -1091,6 +1167,7 @@ function mantle2_update_9007(): void
 		}
 	}
 
+	// Clean up bad 'node' bundle instance if it exists.
 	if ($bad = FieldConfig::loadByName('node', 'node', 'comment')) {
 		try {
 			$bad->delete();
@@ -1099,66 +1176,7 @@ function mantle2_update_9007(): void
 		}
 	}
 
-	// Attach the comment field to the 'prompt' bundle if missing.
-	if (!FieldConfig::loadByName('node', 'prompt', 'comment')) {
-		try {
-			FieldConfig::create([
-				'field_name' => 'comment',
-				'entity_type' => 'node',
-				'bundle' => 'prompt',
-				'label' => 'Comments',
-				'required' => false,
-				'settings' => [
-					'comment_type' => 'comment',
-				],
-			])->save();
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error('Failed to attach comment field to prompt: %message', [
-				'%message' => $e->getMessage(),
-			]);
-		}
-	}
-
-	mantle2_ensure_form_display('node', 'prompt');
-}
-
-/**
- * Update: Ensure prompt comment instance has correct comment_type setting and exists.
- */
-function mantle2_update_9008(): void
-{
-	// Ensure Comment type exists.
-	if (!CommentType::load('comment')) {
-		try {
-			CommentType::create([
-				'id' => 'comment',
-				'label' => 'Comment',
-				'target_entity_type_id' => 'node',
-			])->save();
-		} catch (\Exception $e) {
-			\Drupal::logger('mantle2')->error('Failed to create Comment type: %message', [
-				'%message' => $e->getMessage(),
-			]);
-		}
-	}
-
-	// Ensure field storage exists.
-	if (!FieldStorageConfig::loadByName('node', 'comment')) {
-		try {
-			FieldStorageConfig::create([
-				'field_name' => 'comment',
-				'entity_type' => 'node',
-				'type' => 'comment',
-				'cardinality' => -1,
-			])->save();
-		} catch (\Exception $e) {
-			\Drupal::logger('mantle2')->error('Failed to create comment field storage: %message', [
-				'%message' => $e->getMessage(),
-			]);
-		}
-	}
-
-	// Ensure the instance exists and has the correct comment_type.
+	// Ensure the comment field instance exists for prompt bundle and has correct settings.
 	$instance = FieldConfig::loadByName('node', 'prompt', 'comment');
 	if (!$instance) {
 		try {
@@ -1173,10 +1191,13 @@ function mantle2_update_9008(): void
 				],
 			]);
 			$instance->save();
-		} catch (\Exception $e) {
-			\Drupal::logger('mantle2')->error('Failed to create comment field instance: %message', [
-				'%message' => $e->getMessage(),
-			]);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to create comment field instance for prompt: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
 		}
 	} else {
 		try {
@@ -1184,14 +1205,15 @@ function mantle2_update_9008(): void
 			$settings['comment_type'] = 'comment';
 			$instance->set('settings', $settings);
 			$instance->save();
-		} catch (\Exception $e) {
-			\Drupal::logger('mantle2')->warning(
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
 				'Failed to update comment_type setting on prompt comment field: %message',
 				['%message' => $e->getMessage()],
 			);
 		}
 	}
 
-	// Ensure form display includes the widget.
+	// Ensure form displays are properly configured.
 	mantle2_ensure_form_display('node', 'prompt');
+	mantle2_ensure_form_display('comment', 'comment');
 }
