@@ -10,6 +10,7 @@ use JsonSerializable;
 
 class PromptResponse implements JsonSerializable
 {
+	private int $id;
 	private int $promptId;
 	private string $response;
 	private int $ownerId;
@@ -17,12 +18,14 @@ class PromptResponse implements JsonSerializable
 	private int $updatedAt;
 
 	public function __construct(
+		int $id,
 		int $promptId,
 		string $response,
 		?int $ownerId = -1,
 		?int $createdAt = null,
 		?int $updatedAt = null,
 	) {
+		$this->id = $id;
 		$this->promptId = $promptId;
 		$this->response = $response;
 
@@ -49,6 +52,7 @@ class PromptResponse implements JsonSerializable
 	{
 		if ($this->ownerId === -1) {
 			return [
+				'id' => GeneralHelper::formatId($this->id),
 				'prompt_id' => GeneralHelper::formatId($this->promptId),
 				'response' => $this->response,
 			];
@@ -56,10 +60,16 @@ class PromptResponse implements JsonSerializable
 
 		$owner = UsersHelper::serializeUser($this->getOwner());
 		return [
+			'id' => GeneralHelper::formatId($this->id),
 			'prompt_id' => GeneralHelper::formatId($this->promptId),
 			'response' => $this->response,
 			'owner' => $owner,
 		];
+	}
+
+	public function getId(): int
+	{
+		return $this->id;
 	}
 
 	public function getPromptId(): int

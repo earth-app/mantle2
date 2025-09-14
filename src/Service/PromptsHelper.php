@@ -138,6 +138,7 @@ class PromptsHelper
 		}
 
 		return new PromptResponse(
+			$response->id(),
 			$promptId,
 			$body,
 			$response->getOwnerId(),
@@ -199,7 +200,6 @@ class PromptsHelper
 			'entity_type' => 'node',
 			'entity_id' => $response->id(),
 			'field_name' => $fieldName,
-			// Explicitly set bundle to avoid "Missing bundle" when instance settings are broken.
 			'comment_type' => $commentType,
 			'uid' => $owner->id(),
 			'name' => $owner->getDisplayName(),
