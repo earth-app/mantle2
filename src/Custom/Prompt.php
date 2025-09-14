@@ -25,7 +25,7 @@ class Prompt implements JsonSerializable
 	{
 		return [
 			'prompt' => $this->prompt,
-			'ownerId' => GeneralHelper::formatId($this->ownerId),
+			'owner_id' => GeneralHelper::formatId($this->ownerId),
 			'visibility' => $this->visibility->value,
 		];
 	}
