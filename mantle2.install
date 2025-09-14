@@ -246,6 +246,7 @@ function getWidgetType(string $field_type): string
 		'list_string' => 'options_select',
 		'json' => 'json_textarea',
 		'entity_reference' => 'entity_reference_autocomplete',
+		'comment' => 'comment_default',
 	];
 
 	return $widget_map[$field_type] ?? 'string_textfield';
@@ -950,4 +951,40 @@ function mantle2_update_9005(): void
 
 		mantle2_ensure_form_display('node', 'article');
 	}
+}
+
+function mantle2_update_9006(): void
+{
+	if (!CommentType::load('comment')) {
+		CommentType::create([
+			'id' => 'comment',
+			'label' => 'Comment',
+			'target_entity_type_id' => 'node',
+		])->save();
+	}
+
+	$storage = FieldStorageConfig::loadByName('node', 'comment');
+	if (!$storage) {
+		FieldStorageConfig::create([
+			'field_name' => 'comment',
+			'entity_type' => 'node',
+			'type' => 'comment',
+			'cardinality' => -1,
+		])->save();
+	}
+
+	if (!FieldConfig::loadByName('node', 'prompt', 'comment')) {
+		FieldConfig::create([
+			'field_name' => 'comment',
+			'entity_type' => 'node',
+			'bundle' => 'prompt',
+			'label' => 'Comments',
+			'required' => false,
+			'settings' => [
+				'comment_type' => 'comment',
+			],
+		])->save();
+	}
+
+	mantle2_ensure_form_display('node', 'prompt');
 }
