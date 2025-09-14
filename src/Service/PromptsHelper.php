@@ -14,6 +14,21 @@ use InvalidArgumentException;
 
 class PromptsHelper
 {
+	private static function getCommentFieldName(Node $node): ?string
+	{
+		$definitions = Drupal::service('entity_field.manager')->getFieldDefinitions(
+			'node',
+			$node->bundle(),
+		);
+		foreach ($definitions as $name => $definition) {
+			if (method_exists($definition, 'getType') && $definition->getType() === 'comment') {
+				return $name;
+			}
+		}
+
+		return null;
+	}
+
 	public static function loadPromptNode(int $nid)
 	{
 		$node = Node::load($nid);
@@ -117,13 +132,19 @@ class PromptsHelper
 		int $limit = 25,
 		string $search = '',
 	): array {
+		$fieldName = self::getCommentFieldName($node);
+		if (!$fieldName) {
+			// No comment field configured for this bundle; nothing to return.
+			return [];
+		}
+
 		$storage = Drupal::entityTypeManager()->getStorage('comment');
 		$query = $storage
 			->getQuery()
 			->accessCheck(false)
 			->condition('entity_id', $node->id())
 			->condition('entity_type', 'node')
-			->condition('field_name', 'comment')
+			->condition('field_name', $fieldName)
 			->condition('status', 1)
 			->range(($page - 1) * $limit, $limit)
 			->sort('created', 'DESC');
@@ -144,10 +165,15 @@ class PromptsHelper
 
 	public static function addComment(UserInterface $owner, Node $response, string $body): Comment
 	{
+		$fieldName = self::getCommentFieldName($response);
+		if (!$fieldName) {
+			throw new InvalidArgumentException('No comment field configured for this content type');
+		}
+
 		$comment = Comment::create([
 			'entity_type' => 'node',
 			'entity_id' => $response->id(),
-			'field_name' => 'comment',
+			'field_name' => $fieldName,
 			'uid' => $owner->id(),
 			'name' => $owner->getDisplayName(),
 			'mail' => $owner->getEmail(),
@@ -165,13 +191,18 @@ class PromptsHelper
 
 	public static function getCommentsCount(Node $node, string $search = ''): int
 	{
+		$fieldName = self::getCommentFieldName($node);
+		if (!$fieldName) {
+			return 0;
+		}
+
 		$storage = Drupal::entityTypeManager()->getStorage('comment');
 		$query = $storage
 			->getQuery()
 			->accessCheck(false)
 			->condition('entity_id', $node->id())
 			->condition('entity_type', 'node')
-			->condition('field_name', 'comment')
+			->condition('field_name', $fieldName)
 			->condition('status', 1);
 
 		if ($search) {
@@ -188,9 +219,13 @@ class PromptsHelper
 	/**
 	 * @return array<PromptResponse>
 	 */
-	public static function getResponses(Node $node): array
-	{
-		$comments = self::getComments($node);
+	public static function getResponses(
+		Node $node,
+		int $page = 1,
+		int $limit = 25,
+		string $search = '',
+	): array {
+		$comments = self::getComments($node, $page, $limit, $search);
 		$responses = [];
 
 		foreach ($comments as $comment) {
