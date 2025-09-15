@@ -1886,7 +1886,7 @@ mantle2.prompts.responses.get:
         type: entity:node
         description: The ID of the prompt to retrieve a response for
       response:
-        type: entity:node
+        type: entity:comment
         description: The ID of the response to retrieve
   methods: [GET]
 
@@ -1914,7 +1914,7 @@ mantle2.prompts.responses.update:
         type: entity:node
         description: The ID of the prompt to update a response for
       response:
-        type: entity:node
+        type: entity:comment
         description: The ID of the response to update
   methods: [PATCH]
 
@@ -1940,7 +1940,7 @@ mantle2.prompts.responses.delete:
         type: entity:node
         description: The ID of the prompt to delete a response for
       response:
-        type: entity:node
+        type: entity:comment
         description: The ID of the response to delete
   methods: [DELETE]
 
