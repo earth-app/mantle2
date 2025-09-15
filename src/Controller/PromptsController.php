@@ -336,9 +336,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::forbidden('You are not allowed to delete this prompt');
 		}
 
-		if (!$prompt->delete()) {
-			return GeneralHelper::internalError('Failed to delete prompt');
-		}
+		$prompt->delete();
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
@@ -598,9 +596,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::forbidden('You are not allowed to delete this response');
 		}
 
-		if (!$response->delete()) {
-			return GeneralHelper::internalError('Failed to delete response');
-		}
+		$response->delete();
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
