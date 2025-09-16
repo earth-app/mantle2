@@ -438,6 +438,10 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('No activity IDs provided');
 		}
 
+		if (count($activityIds) > 10) {
+			return GeneralHelper::badRequest('Cannot set more than 10 activities');
+		}
+
 		$activities = array_filter(
 			array_map(fn($id) => ActivityHelper::getActivity($id), $activityIds),
 			fn($a) => $a !== null,
@@ -476,6 +480,10 @@ class UsersController extends ControllerBase
 		$activities = UsersHelper::getActivities($user);
 		if (in_array($activityId, array_map(fn($a) => $a->getId(), $activities))) {
 			return GeneralHelper::conflict('Activity already added');
+		}
+
+		if (count($activities) >= 10) {
+			return GeneralHelper::badRequest('Cannot have more than 10 activities');
 		}
 
 		UsersHelper::addActivity($user, $activity);
