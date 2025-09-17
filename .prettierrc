@@ -9,7 +9,7 @@
 	"endOfLine": "lf",
 	"overrides": [
 		{
-			"files": "*.install",
+			"files": "*.{install,module,php}",
 			"options": {
 				"parser": "php"
 			}
