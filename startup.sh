@@ -14,7 +14,7 @@ if [ ! -d "$SITE_DIR" ]; then
 
   cd "$SITE_DIR"
 
-  composer require drush/drush drupal/json_field drupal/key
+  composer require drush/drush drupal/json_field drupal/key drupal/smtp
 
   mkdir -p web/modules/custom/$PROJECT_NAME
   find "$SRC_PATH" -maxdepth 1 -name "*.php" \
@@ -39,7 +39,7 @@ if [ ! -d "$SITE_DIR" ]; then
     --account-pass=admin \
     --site-name="$SITE_NAME"
 
-  ddev drush -y en field datetime options json_field key
+  ddev drush -y en field datetime options json_field key smtp
   ddev drush -y en "$PROJECT_NAME" || true
 else
   echo ">>> Reusing existing site at $SITE_DIR"

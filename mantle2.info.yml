@@ -10,3 +10,4 @@ dependencies:
   - drupal:field
   - drupal:options
   - drupal:datetime
+  - drupal:smtp
