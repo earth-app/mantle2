@@ -547,6 +547,56 @@ mantle2.users.id.circle.remove:
         description: "The ID or Username of the friend to remove for the user. Example: '1', '@friend'"
   methods: [DELETE]
 
+mantle2.users.id.send_email_verification:
+  path: '/v2/users/{id}/send_email_verification'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::sendEmailVerification'
+    _title: 'Send Email Verification for User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Email
+    description: Sends an email verification code to the specified user's email address
+    schema/200: emailVerificationSent()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    schema/409: Email already verified
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.verify_email:
+  path: '/v2/users/{id}/verify_email'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::verifyEmail'
+    _title: 'Verify Email for User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Email
+    description: Verifies the specified user's email using an 8-digit verification code
+    schema/200: emailVerified()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    schema/409: Email already verified
+    parameters:
+      id:
+        type: string
+    query:
+      code:
+        type: string
+        pattern: '^\d{8}$'
+        description: 8-digit verification code received via email
+        example: '12345678'
+  methods: [POST]
+
 #endregion
 #region User - By Username
 
@@ -980,6 +1030,56 @@ mantle2.users.username.circle.remove:
         description: "The ID or Username of the friend to remove for the user. Example: '1', '@friend'"
   methods: [DELETE]
 
+mantle2.users.username.send_email_verification:
+  path: '/v2/users/{username}/send_email_verification'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::sendEmailVerification'
+    _title: 'Send Email Verification for User by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Email
+    description: Sends an email verification code to the specified user's email address
+    schema/200: emailVerificationSent()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    schema/409: Email already verified
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.verify_email:
+  path: '/v2/users/{username}/verify_email'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::verifyEmail'
+    _title: 'Verify Email for User by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Email
+    description: Verifies the specified user's email using an 8-digit verification code
+    schema/200: emailVerified()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    schema/409: Email already verified
+    parameters:
+      username:
+        type: string
+    query:
+      code:
+        type: string
+        pattern: '^\d{8}$'
+        description: 8-digit verification code received via email
+        example: '12345678'
+  methods: [POST]
+
 #endregion
 #region User - Current User
 
@@ -1346,6 +1446,44 @@ mantle2.users.current.circle.remove:
         type: string
         description: "The ID or Username of the friend to remove for the user. Example: '1', '@friend'"
   methods: [DELETE]
+
+mantle2.users.current.send_email_verification:
+  path: '/v2/users/current/send_email_verification'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::sendEmailVerification'
+    _title: 'Send Email Verification for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Email
+    description: Sends an email verification code to the current user's email address
+    schema/200: emailVerificationSent()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/409: Email already verified
+  methods: [POST]
+
+mantle2.users.current.verify_email:
+  path: '/v2/users/current/verify_email'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::verifyEmail'
+    _title: 'Verify Email for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Email
+    description: Verifies the current user's email using an 8-digit verification code
+    schema/200: emailVerified()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/409: Email already verified
+    query:
+      code:
+        type: string
+        pattern: '^\d{8}$'
+        description: 8-digit verification code received via email
+        example: '12345678'
+  methods: [POST]
 
 #endregion
 

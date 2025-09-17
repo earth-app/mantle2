@@ -1229,3 +1229,15 @@ function mantle2_update_9009(): void
 	mantle2_ensure_form_display('node', 'prompt');
 	mantle2_ensure_form_display('comment', 'comment');
 }
+
+/**
+ * Update: Add email verification field
+ */
+function mantle2_update_9010(): void
+{
+	// Add email verification field to users
+	createField('user', 'field_email_verified', 'boolean', 'Email Verified', false, false);
+
+	// Ensure user form display is updated
+	mantle2_ensure_form_display('user', 'user');
+}

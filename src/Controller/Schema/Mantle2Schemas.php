@@ -745,6 +745,36 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function emailVerificationSent(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'message' => [
+					'type' => 'string',
+					'example' => 'Verification email sent to user@example.com',
+				],
+				'email' => self::$email,
+			],
+			'required' => ['message'],
+		];
+	}
+
+	public static function emailVerified(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'message' => [
+					'type' => 'string',
+					'example' => 'Email verified successfully for user@example.com',
+				],
+				'email' => self::$email,
+			],
+			'required' => ['message'],
+		];
+	}
+
 	public static function event(): array
 	{
 		return [

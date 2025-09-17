@@ -39,3 +39,10 @@ services:
 
   mantle2.helper.articles:
     class: Drupal\mantle2\Service\ArticlesHelper
+
+  # Email Verification Tempstore
+  mantle2.tempstore.email_verification:
+    class: Drupal\Core\TempStore\PrivateTempStoreFactory
+    arguments: ['@keyvalue.expirable', '@lock', '@current_user', '@request_stack', 900]
+    tags:
+      - { name: backend_overridable }

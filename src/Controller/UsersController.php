@@ -3,6 +3,7 @@
 namespace Drupal\mantle2\Controller;
 
 use Drupal;
+use Exception;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Service\GeneralHelper;
@@ -797,6 +798,184 @@ class UsersController extends ControllerBase
 		}
 
 		return new JsonResponse(UsersHelper::serializeUser($user, $requester), Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/send_email_verification
+	// POST /v2/users/:id/send_email_verification
+	// POST /v2/users/:username/send_email_verification
+	public function sendEmailVerification(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (UsersHelper::isEmailVerified($user)) {
+			return GeneralHelper::conflict('Email is already verified');
+		}
+
+		// Generate 8-digit verification code
+		$code = str_pad((string) random_int(10000000, 99999999), 8, '0', STR_PAD_LEFT);
+
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
+		$tempstore = \Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$codeKey = 'email_verification_' . $user->id();
+		$codeData = [
+			'code' => $code,
+			'timestamp' => time(),
+			'user_id' => $user->id(),
+		];
+
+		try {
+			$tempstore->set($codeKey, $codeData);
+		} catch (\Exception $e) {
+			\Drupal::logger('mantle2')->error('Failed to store email verification code: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to generate verification code');
+		}
+
+		$userEmail = $user->getEmail();
+		if (!$userEmail) {
+			return GeneralHelper::badRequest('User has no email address');
+		}
+
+		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
+		$mailManager = Drupal::service('plugin.manager.mail');
+		$module = 'mantle2';
+		$key = 'email_verification';
+		$to = $userEmail;
+		$langcode = $user->getPreferredLangcode();
+		$params = [
+			'verification_code' => $code,
+			'user' => $user,
+		];
+
+		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
+
+		if (!$result['result']) {
+			Drupal::logger('mantle2')->error('Failed to send email verification to %email', [
+				'%email' => $userEmail,
+			]);
+			return GeneralHelper::internalError('Failed to send verification email');
+		}
+
+		return new JsonResponse(
+			[
+				'message' => 'Verification email sent successfully',
+				'email' => $userEmail,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// POST /v2/users/current/verify_email
+	// POST /v2/users/:id/verify_email
+	// POST /v2/users/:username/verify_email
+	public function verifyEmail(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (UsersHelper::isEmailVerified($user)) {
+			return GeneralHelper::conflict('Email is already verified');
+		}
+
+		$code = $request->query->get('code');
+		if (!$code) {
+			return GeneralHelper::badRequest('Verification code is required');
+		}
+
+		// Validate code format (8 digits)
+		if (!preg_match('/^\d{8}$/', $code)) {
+			return GeneralHelper::badRequest('Invalid verification code format');
+		}
+
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
+		$tempstore = \Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$codeKey = 'email_verification_' . $user->id();
+
+		try {
+			$storedData = $tempstore->get($codeKey);
+		} catch (\Exception $e) {
+			\Drupal::logger('mantle2')->error(
+				'Failed to retrieve email verification code: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+			return GeneralHelper::internalError('Failed to verify code');
+		}
+
+		if (!$storedData) {
+			return GeneralHelper::badRequest('No verification code found or code has expired');
+		}
+
+		// Check if code has expired (15 minutes = 900 seconds)
+		$currentTime = time();
+		if ($currentTime - $storedData['timestamp'] > 900) {
+			// Clean up expired code
+			try {
+				$tempstore->delete($codeKey);
+			} catch (\Exception $e) {
+				// Log but don't fail the request
+				\Drupal::logger('mantle2')->warning(
+					'Failed to delete expired verification code: %message',
+					[
+						'%message' => $e->getMessage(),
+					],
+				);
+			}
+			return GeneralHelper::badRequest('Verification code has expired');
+		}
+
+		// Verify the code matches
+		if ($storedData['code'] !== $code) {
+			return GeneralHelper::badRequest('Invalid verification code');
+		}
+
+		// Set email as verified
+		try {
+			$user->set('field_email_verified', true);
+			$user->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to update email verification status: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+			return GeneralHelper::internalError('Failed to verify email');
+		}
+
+		// Clean up used verification code
+		try {
+			$tempstore->delete($codeKey);
+		} catch (\Exception $e) {
+			// Log but don't fail the request since verification was successful
+			\Drupal::logger('mantle2')->warning(
+				'Failed to delete used verification code: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
+		return new JsonResponse(
+			[
+				'message' => 'Email verified successfully',
+				'email_verified' => true,
+			],
+			Response::HTTP_OK,
+		);
 	}
 
 	#endregion

@@ -494,6 +494,11 @@ class UsersHelper
 			$accountType === AccountType::ADMINISTRATOR;
 	}
 
+	public static function isEmailVerified(UserInterface $user): bool
+	{
+		return (bool) $user->get('field_email_verified')->value;
+	}
+
 	public static function serializeUser(
 		UserInterface $user,
 		?UserInterface $requester = null,
@@ -523,6 +528,7 @@ class UsersHelper
 					$requester,
 					$privacy['account_type'] ?? 'PUBLIC',
 				),
+				'email_verified' => self::isEmailVerified($user),
 				'visibility' => self::getVisibility($user)->name,
 				'field_privacy' => $privacy,
 			],
