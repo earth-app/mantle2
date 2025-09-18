@@ -9,6 +9,7 @@ use Drupal\mantle2\Custom\PromptResponse;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\node\Entity\Node;
+use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use InvalidArgumentException;
 
@@ -263,5 +264,48 @@ class PromptsHelper
 		}
 
 		return $responses;
+	}
+
+	public const EXPIRED_PROMPTS_TTL = 14400; // 4 hours
+
+	public static function checkExpiredPrompts(): void
+	{
+		$timeNow = time();
+		$storage = Drupal::entityTypeManager()->getStorage('node');
+
+		$query = $storage
+			->getQuery()
+			->accessCheck(false)
+			->condition('type', 'prompt')
+			->condition(
+				'field_visibility',
+				GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+			)
+			->condition('created', $timeNow - self::EXPIRED_PROMPTS_TTL, '<');
+
+		$nids = $query->execute();
+		if (empty($nids)) {
+			return;
+		}
+
+		$nodes = $storage->loadMultiple($nids);
+
+		/** @var Node $node */
+		foreach ($nodes as $node) {
+			$owner = User::load($node->get('field_owner_id')->value);
+			$prompt = self::nodeToPrompt($node);
+			if ($owner) {
+				UsersHelper::addNotification(
+					$owner,
+					Drupal::translation()->translate(
+						"Your prompt \"{$prompt->getPrompt()}\" has expired and been deleted.",
+					),
+				);
+			}
+
+			$node->delete();
+		}
+
+		return;
 	}
 }
