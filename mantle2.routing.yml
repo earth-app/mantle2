@@ -597,6 +597,88 @@ mantle2.users.id.verify_email:
         example: '12345678'
   methods: [POST]
 
+mantle2.users.id.notifications:
+  path: '/v2/users/{id}/notifications'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userNotifications'
+    _title: 'Get User Notifications by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Notifications
+    description: Retrieves a list of notifications for a user by their ID
+    schema/200: notifications()
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.notifications.get:
+  path: '/v2/users/{id}/notifications/{notificationId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserNotification'
+    _title: 'Get User Notification by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    notificationId: '\d+'
+  options:
+    tags: Users,Notifications
+    description: Retrieves a specific notification for a user by their ID
+    schema/200: notification()
+    schema/404: User or notification not found
+    parameters:
+      id:
+        type: string
+      notificationId:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.notifications.mark_read:
+  path: '/v2/users/{id}/notifications/{notificationId}/mark_read'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markUserNotificationRead'
+    _title: 'Mark User Notification as Read by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    notificationId: '\d+'
+  options:
+    tags: Users,Notifications
+    description: Marks a specific notification for a user as read
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      id:
+        type: string
+      notificationId:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.notifications.clear:
+  path: '/v2/users/{id}/notifications/clear'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::clearUserNotifications'
+    _title: 'Clear User Notifications by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Notifications
+    description: Clears all notifications for a user by their ID
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [DELETE]
+
 #endregion
 #region User - By Username
 
@@ -1080,6 +1162,88 @@ mantle2.users.username.verify_email:
         example: '12345678'
   methods: [POST]
 
+mantle2.users.username.notifications:
+  path: '/v2/users/{username}/notifications'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userNotifications'
+    _title: 'Get User Notifications by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Notifications
+    description: Retrieves a list of notifications for a user by their username
+    schema/200: notifications()
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.notifications.get:
+  path: '/v2/users/{username}/notifications/{notificationId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserNotification'
+    _title: 'Get User Notification by ID'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+    notificationId: '\d+'
+  options:
+    tags: Users,Notifications
+    description: Retrieves a specific notification for a user by their ID
+    schema/200: notification()
+    schema/404: User or notification not found
+    parameters:
+      username:
+        type: string
+      notificationId:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.notifications.mark_read:
+  path: '/v2/users/{username}/notifications/{notificationId}/mark_read'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markUserNotificationRead'
+    _title: 'Mark User Notification as Read by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+    notificationId: '\d+'
+  options:
+    tags: Users,Notifications
+    description: Marks a specific notification for a user as read
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      username:
+        type: string
+      notificationId:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.notifications.clear:
+  path: '/v2/users/{username}/notifications/clear'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::clearUserNotifications'
+    _title: 'Clear User Notifications by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Notifications
+    description: Clears all notifications for a user by their username
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [DELETE]
+
 #endregion
 #region User - Current User
 
@@ -1484,6 +1648,77 @@ mantle2.users.current.verify_email:
         description: 8-digit verification code received via email
         example: '12345678'
   methods: [POST]
+
+mantle2.users.current.notifications:
+  path: '/v2/users/current/notifications'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userNotifications'
+    _title: 'Get Current User Notifications'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Notifications
+    description: Retrieves a list of notifications for the current user
+    schema/200: notifications()
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.current.notifications.get:
+  path: '/v2/users/current/notifications/{notificationId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserNotification'
+    _title: 'Get Current User Notification by ID'
+  requirements:
+    _access: 'TRUE'
+    notificationId: '\d+'
+  options:
+    tags: Users,Notifications
+    description: Retrieves a specific notification for the current user by their ID
+    schema/200: notification()
+    schema/404: User or notification not found
+    parameters:
+      notificationId:
+        type: string
+  methods: [GET]
+
+mantle2.users.current.notifications.mark_read:
+  path: '/v2/users/current/notifications/{notificationId}/mark_read'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markUserNotificationRead'
+    _title: 'Mark Current User Notifications as Read by ID'
+  requirements:
+    _access: 'TRUE'
+    notificationId: '\d+'
+  options:
+    tags: Users,Notifications
+    description: Marks a specific notification for the current user as read
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      notificationId:
+        type: string
+  methods: [POST]
+
+mantle2.users.current.notifications.clear:
+  path: '/v2/users/current/notifications/clear'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::clearUserNotifications'
+    _title: 'Clear Current User Notifications'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Notifications
+    description: Clears all notifications for the current user
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [DELETE]
 
 #endregion
 

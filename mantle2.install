@@ -1241,3 +1241,33 @@ function mantle2_update_9010(): void
 	// Ensure user form display is updated
 	mantle2_ensure_form_display('user', 'user');
 }
+
+/**
+ * Update: Add user notifications field
+ */
+function mantle2_update_9011(): void
+{
+	// Add notifications field to users as JSON array
+	createField('user', 'field_notifications', 'json', 'Notifications', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'object',
+				'properties' => [
+					'user_id' => ['type' => 'integer'],
+					'message' => ['type' => 'string'],
+					'timestamp' => ['type' => 'integer'],
+					'link' => ['type' => ['string', 'null']],
+					'type' => ['type' => 'string'],
+					'source' => ['type' => 'string'],
+					'read' => ['type' => 'boolean'],
+				],
+				'required' => ['user_id', 'message', 'type', 'source', 'read', 'timestamp'],
+			],
+		],
+	]);
+
+	// Ensure user form display is updated
+	mantle2_ensure_form_display('user', 'user');
+}

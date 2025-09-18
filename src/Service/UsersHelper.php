@@ -8,6 +8,7 @@ use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
+use Drupal\mantle2\Custom\Notification;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
@@ -1314,5 +1315,155 @@ class UsersHelper
 			'ORGANIZER' => 1_000_000,
 			default => 100,
 		};
+	}
+
+	// Notification System Utilities
+
+	private const MAX_NOTIFICATIONS = 50;
+
+	/**
+	 * @param UserInterface $user
+	 * @return array<Notification>
+	 */
+	public static function getNotifications(UserInterface $user): array
+	{
+		$notifications = json_decode($user->get('field_notifications')->value ?? '[]', true);
+		return array_map(
+			fn(array $data) => new Notification(
+				$data['id'],
+				$data['user_id'],
+				$data['message'],
+				$data['timestamp'],
+				$data['link'] ?? null,
+				$data['type'] ?? 'info',
+				$data['source'] ?? 'system',
+				$data['read'] ?? false,
+			),
+			$notifications,
+		);
+	}
+
+	public static function getNotification(UserInterface $user, string $id): ?Notification
+	{
+		$notifications = self::getNotifications($user);
+		foreach ($notifications as $notification) {
+			if ($notification->getId() === $id) {
+				return $notification;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @param UserInterface $user
+	 * @param array<Notification> $notifications
+	 */
+	private static function setNotifications(UserInterface $user, array $notifications): void
+	{
+		if (count($notifications) > self::MAX_NOTIFICATIONS) {
+			Drupal::logger('mantle2')->warning(
+				'Internal Warning: User %uid has exceeded the maximum number of notifications.',
+				[
+					'%uid' => $user->id(),
+				],
+			);
+			return;
+		}
+
+		$serialized = array_map(
+			fn(Notification $notification) => $notification->jsonSerialize(),
+			$notifications,
+		);
+		$user->set('field_notifications', json_encode($serialized));
+		$user->save();
+	}
+
+	public static function addNotification(
+		UserInterface $user,
+		string $message,
+		?string $link = null,
+		string $type = 'info',
+		string $source = 'system',
+	): void {
+		$id = bin2hex(random_bytes(16));
+		$notification = new Notification(
+			$id,
+			$user->id(),
+			$message,
+			time(),
+			$link,
+			$type,
+			$source,
+			false,
+		);
+
+		$notifications = self::getNotifications($user);
+		$notifications[] = $notification;
+
+		if (count($notifications) > self::MAX_NOTIFICATIONS) {
+			$notifications = array_slice($notifications, -self::MAX_NOTIFICATIONS); // remove oldest notification
+		}
+
+		self::setNotifications($user, $notifications);
+	}
+
+	public static function markNotificationAsRead(UserInterface $user, string $id): bool
+	{
+		$notification = self::getNotification($user, $id);
+		if ($notification === null || $notification->isRead()) {
+			return false;
+		}
+
+		$notification->setRead(true);
+		self::setNotifications($user, self::getNotifications($user));
+		return true;
+	}
+
+	public static function removeNotification(UserInterface $user, string $id): bool
+	{
+		$notification = self::getNotification($user, $id);
+		if ($notification !== null) {
+			$notifications = self::getNotifications($user);
+			$notifications = array_filter($notifications, fn($n) => $n->getId() !== $id);
+			self::setNotifications($user, $notifications);
+			return true;
+		}
+
+		Drupal::logger('mantle2')->warning(
+			'Internal Warning: User %uid attempted to remove a non-existent notification %id.',
+			[
+				'%uid' => $user->id(),
+				'%id' => $id,
+			],
+		);
+
+		return false;
+	}
+
+	public static function updateNotification(UserInterface $user, string $id, array $updates): bool
+	{
+		$notification = self::getNotification($user, $id);
+		if ($notification === null) {
+			return false;
+		}
+
+		if (isset($updates['message'])) {
+			$notification->setMessage((string) $updates['message']);
+		}
+		if (array_key_exists('link', $updates)) {
+			$notification->setLink($updates['link'] !== null ? (string) $updates['link'] : null);
+		}
+
+		if (isset($updates['read'])) {
+			$notification->setRead((bool) $updates['read']);
+		}
+
+		self::setNotifications($user, self::getNotifications($user));
+		return true;
+	}
+
+	public static function clearNotifications(UserInterface $user): void
+	{
+		self::setNotifications($user, []);
 	}
 }

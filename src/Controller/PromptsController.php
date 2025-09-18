@@ -600,4 +600,20 @@ class PromptsController extends ControllerBase
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
+
+	// POST /v2/prompts/check_expired
+	public function checkExpiredPrompts(Request $request)
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('You are not allowed to perform this action');
+		}
+
+		$count = PromptsHelper::checkExpiredPrompts();
+		return new JsonResponse(['expired_prompts_checked' => $count]);
+	}
 }

@@ -210,8 +210,8 @@ class UsersController extends ControllerBase
 	#region User Routes
 
 	// GET /v2/users/current
-	// GET /v2/users/:id
-	// GET /v2/users/:username
+	// GET /v2/users/{id}
+	// GET /v2/users/{username}
 	public function getUser(
 		Request $request,
 		?string $id = null,
@@ -236,8 +236,8 @@ class UsersController extends ControllerBase
 	}
 
 	// PATCH /v2/users/current
-	// PATCH /v2/users/:id
-	// PATCH /v2/users/:username
+	// PATCH /v2/users/{id}
+	// PATCH /v2/users/{username}
 	public function patchUser(
 		Request $request,
 		?string $id = null,
@@ -262,8 +262,8 @@ class UsersController extends ControllerBase
 	}
 
 	// DELETE /v2/users/current
-	// DELETE /v2/users/:id
-	// DELETE /v2/users/:username
+	// DELETE /v2/users/{id}
+	// DELETE /v2/users/{username}
 	public function deleteUser(
 		Request $request,
 		?string $id = null,
@@ -284,8 +284,8 @@ class UsersController extends ControllerBase
 	}
 
 	// PATCH /v2/users/current/field_privacy
-	// PATCH /v2/users/:id/field_privacy
-	// PATCH /v2/users/:username/field_privacy
+	// PATCH /v2/users/{id}/field_privacy
+	// PATCH /v2/users/{username}/field_privacy
 	public function patchFieldPrivacy(
 		Request $request,
 		?string $id = null,
@@ -310,8 +310,8 @@ class UsersController extends ControllerBase
 	}
 
 	// GET /v2/users/current/profile_photo
-	// GET /v2/users/:id/profile_photo
-	// GET /v2/users/:username/profile_photo
+	// GET /v2/users/{id}/profile_photo
+	// GET /v2/users/{username}/profile_photo
 	public function getProfilePhoto(
 		Request $request,
 		?string $id = null,
@@ -334,8 +334,8 @@ class UsersController extends ControllerBase
 	}
 
 	// PUT /v2/users/current/profile_photo
-	// PUT /v2/users/:id/profile_photo
-	// PUT /v2/users/:username/profile_photo
+	// PUT /v2/users/{id}/profile_photo
+	// PUT /v2/users/{username}/profile_photo
 	public function updateProfilePhoto(
 		Request $request,
 		?string $id = null,
@@ -351,8 +351,8 @@ class UsersController extends ControllerBase
 	}
 
 	// PUT /v2/users/current/account_type
-	// PUT /v2/users/:id/account_type
-	// PUT /v2/users/:username/account_type
+	// PUT /v2/users/{id}/account_type
+	// PUT /v2/users/{username}/account_type
 	public function setAccountType(
 		Request $request,
 		?string $id = null,
@@ -390,8 +390,8 @@ class UsersController extends ControllerBase
 	}
 
 	// GET /v2/users/current/activities
-	// GET /v2/users/:id/activities
-	// GET /v2/users/:username/activities
+	// GET /v2/users/{id}/activities
+	// GET /v2/users/{username}/activities
 	public function userActivities(
 		Request $request,
 		?string $id = null,
@@ -414,8 +414,8 @@ class UsersController extends ControllerBase
 	}
 
 	// PATCH /v2/users/current/activities
-	// PATCH /v2/users/:id/activities
-	// PATCH /v2/users/:username/activities
+	// PATCH /v2/users/{id}/activities
+	// PATCH /v2/users/{username}/activities
 	public function setUserActivities(
 		Request $request,
 		?string $id = null,
@@ -456,8 +456,8 @@ class UsersController extends ControllerBase
 	}
 
 	// PUT /v2/users/current/activities
-	// PUT /v2/users/:id/activities
-	// PUT /v2/users/:username/activities
+	// PUT /v2/users/{id}/activities
+	// PUT /v2/users/{username}/activities
 	public function addUserActivity(
 		Request $request,
 		?string $id = null,
@@ -492,8 +492,8 @@ class UsersController extends ControllerBase
 	}
 
 	// DELETE /v2/users/current/activities
-	// DELETE /v2/users/:id/activities
-	// DELETE /v2/users/:username/activities
+	// DELETE /v2/users/{id}/activities
+	// DELETE /v2/users/{username}/activities
 	public function removeUserActivity(
 		Request $request,
 		?string $id = null,
@@ -524,8 +524,8 @@ class UsersController extends ControllerBase
 	}
 
 	// GET /v2/users/current/activities/recommend
-	// GET /v2/users/:id/activities/recommend
-	// GET /v2/users/:username/activities/recommend
+	// GET /v2/users/{id}/activities/recommend
+	// GET /v2/users/{username}/activities/recommend
 	public function recommendUserActivities(
 		Request $request,
 		?string $id = null,
@@ -556,8 +556,8 @@ class UsersController extends ControllerBase
 	}
 
 	// GET /v2/users/current/friends
-	// GET /v2/users/:id/friends
-	// GET /v2/users/:username/friends
+	// GET /v2/users/{id}/friends
+	// GET /v2/users/{username}/friends
 	public function userFriends(
 		Request $request,
 		?string $id = null,
@@ -615,8 +615,8 @@ class UsersController extends ControllerBase
 	}
 
 	// PUT /v2/users/current/friends
-	// PUT /v2/users/:id/friends
-	// PUT /v2/users/:username/friends
+	// PUT /v2/users/{id}/friends
+	// PUT /v2/users/{username}/friends
 	public function addUserFriend(
 		Request $request,
 		?string $id = null,
@@ -653,8 +653,8 @@ class UsersController extends ControllerBase
 	}
 
 	// DELETE /v2/users/current/friends
-	// DELETE /v2/users/:id/friends
-	// DELETE /v2/users/:username/friends
+	// DELETE /v2/users/{id}/friends
+	// DELETE /v2/users/{username}/friends
 	public function removeUserFriend(
 		Request $request,
 		?string $id = null,
@@ -685,8 +685,8 @@ class UsersController extends ControllerBase
 	}
 
 	// GET /v2/users/current/circle
-	// GET /v2/users/:id/circle
-	// GET /v2/users/:username/circle
+	// GET /v2/users/{id}/circle
+	// GET /v2/users/{username}/circle
 	public function userCircle(
 		Request $request,
 		?string $id = null,
@@ -729,8 +729,8 @@ class UsersController extends ControllerBase
 	}
 
 	// PUT /v2/users/current/circle
-	// PUT /v2/users/:id/circle
-	// PUT /v2/users/:username/circle
+	// PUT /v2/users/{id}/circle
+	// PUT /v2/users/{username}/circle
 	public function addUserToCircle(
 		Request $request,
 		?string $id = null,
@@ -765,8 +765,8 @@ class UsersController extends ControllerBase
 	}
 
 	// DELETE /v2/users/current/circle
-	// DELETE /v2/users/:id/circle
-	// DELETE /v2/users/:username/circle
+	// DELETE /v2/users/{id}/circle
+	// DELETE /v2/users/{username}/circle
 	public function removeUserFromCircle(
 		Request $request,
 		?string $id = null,
@@ -800,9 +800,13 @@ class UsersController extends ControllerBase
 		return new JsonResponse(UsersHelper::serializeUser($user, $requester), Response::HTTP_OK);
 	}
 
+	#endregion
+
+	#region Email Verification
+
 	// POST /v2/users/current/send_email_verification
-	// POST /v2/users/:id/send_email_verification
-	// POST /v2/users/:username/send_email_verification
+	// POST /v2/users/{id}/send_email_verification
+	// POST /v2/users/{username}/send_email_verification
 	public function sendEmailVerification(
 		Request $request,
 		?string $id = null,
@@ -873,8 +877,8 @@ class UsersController extends ControllerBase
 	}
 
 	// POST /v2/users/current/verify_email
-	// POST /v2/users/:id/verify_email
-	// POST /v2/users/:username/verify_email
+	// POST /v2/users/{id}/verify_email
+	// POST /v2/users/{username}/verify_email
 	public function verifyEmail(
 		Request $request,
 		?string $id = null,
@@ -976,6 +980,109 @@ class UsersController extends ControllerBase
 			],
 			Response::HTTP_OK,
 		);
+	}
+
+	#endregion
+
+	#region User Notifications
+
+	// GET /v2/users/current/notifications
+	// GET /v2/users/{id}/notifications
+	// GET /v2/users/{username}/notifications
+	public function userNotifications(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$resolved = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		$notifications = UsersHelper::getNotifications($resolved);
+		$unreadCount = count(array_filter($notifications, fn($n) => !$n['read']));
+		$hasWarnings = count(array_filter($notifications, fn($n) => $n['type'] === 'warning')) > 0;
+		$hasErrors = count(array_filter($notifications, fn($n) => $n['type'] === 'error')) > 0;
+
+		return new JsonResponse(
+			[
+				'unread_count' => $unreadCount,
+				'has_warnings' => $hasWarnings,
+				'has_errors' => $hasErrors,
+				'items' => $notifications,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// GET /v2/users/current/notifications/{notificationId}
+	// GET /v2/users/{id}/notifications/{notificationId}
+	// GET /v2/users/{username}/notifications/{notificationId}
+	public function getUserNotification(
+		Request $request,
+		string $notificationId,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$notification = UsersHelper::getNotification($user, $notificationId);
+		if (!$notification) {
+			return GeneralHelper::notFound('Notification not found');
+		}
+
+		return new JsonResponse($notification, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/notifications/{notificationId}/read
+	// POST /v2/users/{id}/notifications/{notificationId}/read
+	// POST /v2/users/{username}/notifications/{notificationId}/read
+	public function markUserNotificationRead(
+		Request $request,
+		string $notificationId,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$notification = UsersHelper::getNotification($user, $notificationId);
+		if (!$notification) {
+			return GeneralHelper::notFound('Notification not found');
+		}
+
+		if ($notification['read']) {
+			return GeneralHelper::conflict('Notification is already marked as read');
+		}
+
+		$result = UsersHelper::markNotificationAsRead($user, $notificationId);
+		if (!$result) {
+			return GeneralHelper::internalError('Failed to mark notification as read');
+		}
+
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
+	// DELETE /v2/users/current/notifications/clear
+	// DELETE /v2/users/{id}/notifications/clear
+	// DELETE /v2/users/{username}/notifications/clear
+	public function clearUserNotifications(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		UsersHelper::clearNotifications($user);
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
 
 	#endregion

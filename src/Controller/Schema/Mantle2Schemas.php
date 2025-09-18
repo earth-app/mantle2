@@ -775,6 +775,39 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function notification(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'user_id' => self::$id,
+				'type' => ['type' => 'string', 'example' => 'info'],
+				'message' => self::text(500),
+				'source' => ['type' => 'string', 'example' => 'system'],
+				'created_at' => ['type' => 'integer', 'example' => 1736400000000],
+				'link' => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
+				'read' => self::$bool,
+			],
+			'required' => ['id', 'type', 'source', 'message', 'created_at', 'read'],
+		];
+	}
+
+	public static function notifications(): array
+	{
+		return self::paginated([
+			'type' => 'object',
+			'properties' => [
+				'unread_count' => self::$number,
+				'has_warnings' => self::$bool,
+				'has_errors' => self::$bool,
+				'items' => [
+					'type' => 'array',
+					'items' => self::notification(),
+				],
+			],
+		]);
+	}
+
 	public static function event(): array
 	{
 		return [
