@@ -1,6 +1,5 @@
 <?php
 
-use Drupal;
 use Drupal\Core\Routing\RouteMatchInterface;
 
 function mantle2_help($route_name, RouteMatchInterface $route_match)
