@@ -269,7 +269,7 @@ class PromptsHelper
 		return $responses;
 	}
 
-	public const EXPIRED_PROMPTS_TTL = 14400; // 4 hours
+	public const EXPIRED_PROMPTS_TTL = 172800; // 2 days
 
 	public static function checkExpiredPrompts(): void
 	{
