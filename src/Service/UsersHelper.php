@@ -1385,6 +1385,11 @@ class UsersHelper
 		string $type = 'info',
 		string $source = 'system',
 	): void {
+		// ignore notifications for root user
+		if ($user->id() === self::cloud()->id()) {
+			return;
+		}
+
 		$id = bin2hex(random_bytes(16));
 		$notification = new Notification(
 			$id,

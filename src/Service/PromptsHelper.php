@@ -89,6 +89,9 @@ class PromptsHelper
 
 	public static function createPrompt(Prompt $prompt, ?UserInterface $author = null): Node
 	{
+		// check expired prompts
+		self::checkExpiredPrompts();
+
 		$node = Node::create([
 			'type' => 'prompt',
 			'title' => substr($prompt->getPrompt(), 0, 255),
