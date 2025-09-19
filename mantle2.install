@@ -460,6 +460,30 @@ function mantle2_install(): void
 		'allowed_values' => array_map(fn($case) => $case->value, AccountType::cases()),
 	]);
 
+	/// Email Verified
+	createField('user', 'field_email_verified', 'boolean', 'Email Verified', false, false);
+
+	/// Notifications
+	createField('user', 'field_notifications', 'json', 'Notifications', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'object',
+				'properties' => [
+					'user_id' => ['type' => 'integer'],
+					'message' => ['type' => 'string'],
+					'timestamp' => ['type' => 'integer'],
+					'link' => ['type' => ['string', 'null']],
+					'type' => ['type' => 'string'],
+					'source' => ['type' => 'string'],
+					'read' => ['type' => 'boolean'],
+				],
+				'required' => ['user_id', 'message', 'type', 'source', 'read', 'timestamp'],
+			],
+		],
+	]);
+
 	// Make sure the user form display shows all custom fields on fresh install.
 	mantle2_ensure_form_display('user', 'user');
 
@@ -601,6 +625,27 @@ function mantle2_install(): void
 		],
 	]);
 
+	// Add Event Attendees Field (from update 9003)
+	createField(
+		'node',
+		'field_event_attendees',
+		'entity_reference',
+		'Event Attendees',
+		true,
+		null,
+		[
+			'target_type' => 'user',
+		],
+		[],
+		-1,
+		'event',
+	);
+
+	// Add Visibility Field for Nodes (from update 9003)
+	createField('node', 'field_visibility', 'list_string', 'Visibility', true, null, [
+		'allowed_values' => array_map(fn($case) => $case->value, Visibility::cases()),
+	]);
+
 	// Prompts
 
 	createContentType('prompt', 'Prompt', 'Prompt content type', [
@@ -634,7 +679,7 @@ function mantle2_install(): void
 		],
 	]);
 
-	// Articles
+	// Articles (with corrected field types from update 9005)
 
 	createContentType('article', 'Article', 'Article content type', [
 		[
@@ -684,21 +729,18 @@ function mantle2_install(): void
 		],
 		[
 			'name' => 'field_author_id',
-			'type' => 'string',
+			'type' => 'entity_reference',
 			'label' => 'Author ID',
 			'required' => true,
 			'settings' => [
-				'max_length' => 255,
+				'target_type' => 'user',
 			],
 		],
 		[
 			'name' => 'field_article_color',
-			'type' => 'string',
+			'type' => 'integer',
 			'label' => 'Color',
 			'required' => false,
-			'settings' => [
-				'max_length' => 7,
-			],
 		],
 		[
 			'name' => 'field_ocean_article',
@@ -733,7 +775,7 @@ function mantle2_install(): void
 		],
 	]);
 
-	// Ensure comments are configured for prompts on fresh install.
+	// Complete comment system setup (consolidated from updates 9004 and 9009)
 	$module_handler = Drupal::moduleHandler();
 	if (!$module_handler->moduleExists('comment')) {
 		/** @var Drupal\Core\Extension\ModuleInstallerInterface $installer */
@@ -748,6 +790,7 @@ function mantle2_install(): void
 		}
 	}
 
+	// Ensure base comment type exists.
 	if (!CommentType::load('comment')) {
 		try {
 			CommentType::create([
@@ -763,424 +806,6 @@ function mantle2_install(): void
 		}
 	}
 
-	// Ensure comment_body field storage exists for comments.
-	if (!FieldStorageConfig::loadByName('comment', 'comment_body')) {
-		try {
-			FieldStorageConfig::create([
-				'field_name' => 'comment_body',
-				'entity_type' => 'comment',
-				'type' => 'text_long',
-				'cardinality' => 1,
-			])->save();
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error(
-				'Failed to create comment_body field storage during install: %message',
-				['%message' => $e->getMessage()],
-			);
-		}
-	}
-
-	// Ensure comment_body field instance exists for comment type.
-	if (!FieldConfig::loadByName('comment', 'comment', 'comment_body')) {
-		try {
-			FieldConfig::create([
-				'field_name' => 'comment_body',
-				'entity_type' => 'comment',
-				'bundle' => 'comment',
-				'label' => 'Comment',
-				'required' => true,
-			])->save();
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error(
-				'Failed to create comment_body field instance during install: %message',
-				['%message' => $e->getMessage()],
-			);
-		}
-	}
-
-	$storage = FieldStorageConfig::loadByName('node', 'comment');
-	if (!$storage) {
-		try {
-			FieldStorageConfig::create([
-				'field_name' => 'comment',
-				'entity_type' => 'node',
-				'type' => 'comment',
-				'cardinality' => -1,
-			])->save();
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error(
-				'Failed to create comment field storage during install: %message',
-				['%message' => $e->getMessage()],
-			);
-		}
-	}
-
-	if (!FieldConfig::loadByName('node', 'prompt', 'comment')) {
-		try {
-			FieldConfig::create([
-				'field_name' => 'comment',
-				'entity_type' => 'node',
-				'bundle' => 'prompt',
-				'label' => 'Comments',
-				'required' => false,
-				'settings' => [
-					'comment_type' => 'comment',
-				],
-			])->save();
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error(
-				'Failed to attach comment field to prompt during install: %message',
-				['%message' => $e->getMessage()],
-			);
-		}
-	}
-
-	mantle2_ensure_form_display('node', 'prompt');
-	mantle2_ensure_form_display('comment', 'comment');
-}
-
-/**
- * Update: Ensure node bundle form displays include all fields and are enabled.
- */
-function mantle2_update_9001(): void
-{
-	foreach (['activity', 'event', 'prompt', 'article'] as $bundle) {
-		mantle2_ensure_form_display('node', $bundle);
-	}
-}
-
-/**
- * Update: Ensure user form display includes custom fields and is enabled.
- */
-function mantle2_update_9002(): void
-{
-	mantle2_ensure_form_display('user', 'user');
-}
-
-/**
- * Update: Add Event Attendees Field, Field Visibility for Nodes
- */
-function mantle2_update_9003(): void
-{
-	createField(
-		'node',
-		'field_event_attendees',
-		'entity_reference',
-		'Event Attendees',
-		true,
-		null,
-		[
-			'target_type' => 'user',
-		],
-		[],
-		-1,
-		'event',
-	);
-	mantle2_ensure_form_display('node', 'event');
-
-	createField('node', 'field_visibility', 'list_string', 'Visibility', true, null, [
-		'allowed_values' => array_map(fn($case) => $case->value, Visibility::cases()),
-	]);
-	mantle2_ensure_form_display('node', 'event');
-}
-
-/**
- * Update: Add comments for prompts (deprecated)
- */
-function mantle2_update_9004(): void
-{
-	if (!CommentType::load('comment')) {
-		CommentType::create([
-			'id' => 'comment',
-			'label' => 'Comment',
-			'target_entity_type_id' => 'node',
-		])->save();
-	}
-
-	createField('node', 'comment', 'comment', 'Comments', false, null, [
-		'comment_type' => 'comment',
-		'cardinality' => -1,
-	]);
-
-	mantle2_ensure_form_display('node', 'prompt');
-}
-
-/**
- * Update: Convert article fields
- * - field_author_id: string -> entity_reference(user)
- * - field_article_color: string -> integer (hex color as decimal)
- */
-function mantle2_update_9005(): void
-{
-	$etm = Drupal::entityTypeManager();
-	$node_storage = $etm->getStorage('node');
-
-	// Load all article nodes once for both migrations.
-	$nids = $node_storage->getQuery()->condition('type', 'article')->accessCheck(false)->execute();
-	/** @var NodeInterface[] $nodes */
-	$nodes = $node_storage->loadMultiple($nids);
-
-	// 1) Migrate field_author_id from string to entity_reference(user)
-	$author_storage = FieldStorageConfig::loadByName('node', 'field_author_id');
-	if ($author_storage && $author_storage->getType() !== 'entity_reference') {
-		// Create temporary entity reference field to hold migrated values.
-		if (!FieldStorageConfig::loadByName('node', 'field_author_id_tmp')) {
-			FieldStorageConfig::create([
-				'field_name' => 'field_author_id_tmp',
-				'entity_type' => 'node',
-				'type' => 'entity_reference',
-				'settings' => [
-					'target_type' => 'user',
-				],
-				'cardinality' => 1,
-			])->save();
-		}
-		if (!FieldConfig::loadByName('node', 'article', 'field_author_id_tmp')) {
-			FieldConfig::create([
-				'field_name' => 'field_author_id_tmp',
-				'entity_type' => 'node',
-				'bundle' => 'article',
-				'label' => 'Author (temp)',
-				'required' => false,
-			])->save();
-		}
-
-		// Migrate values into temp field.
-		$user_storage = $etm->getStorage('user');
-		foreach ($nodes as $node) {
-			/** @var NodeInterface $node */
-			if (!$node->hasField('field_author_id')) {
-				continue;
-			}
-			$raw = $node->get('field_author_id')->value;
-			if ($raw === null || $raw === '') {
-				continue;
-			}
-			$uid = null;
-			if (is_numeric($raw)) {
-				$uid = (int) $raw;
-			} else {
-				// Fallback: try by username if a string was stored.
-				$users = $user_storage->loadByProperties(['name' => $raw]);
-				if ($users) {
-					$user = reset($users);
-					$uid = (int) $user->id();
-				}
-			}
-			if ($uid && $user_storage->load($uid)) {
-				$node->set('field_author_id_tmp', $uid);
-				try {
-					$node->save();
-				} catch (Exception $e) {
-				}
-			}
-		}
-
-		// Remove old field instance and storage.
-		if ($fc = FieldConfig::loadByName('node', 'article', 'field_author_id')) {
-			try {
-				$fc->delete();
-			} catch (Exception $e) {
-			}
-		}
-		try {
-			$author_storage->delete();
-		} catch (Exception $e) {
-		}
-
-		// Recreate field_author_id as entity_reference(user).
-		FieldStorageConfig::create([
-			'field_name' => 'field_author_id',
-			'entity_type' => 'node',
-			'type' => 'entity_reference',
-			'settings' => [
-				'target_type' => 'user',
-			],
-			'cardinality' => 1,
-		])->save();
-		FieldConfig::create([
-			'field_name' => 'field_author_id',
-			'entity_type' => 'node',
-			'bundle' => 'article',
-			'label' => 'Author ID',
-			'required' => true,
-		])->save();
-
-		// Move values from temp into the new field and clean up temp.
-		foreach ($nodes as $node) {
-			/** @var NodeInterface $node */
-			if (
-				$node->hasField('field_author_id_tmp') &&
-				!$node->get('field_author_id_tmp')->isEmpty()
-			) {
-				$node->set('field_author_id', $node->get('field_author_id_tmp')->target_id);
-				$node->set('field_author_id_tmp', null);
-				try {
-					$node->save();
-				} catch (Exception $e) {
-				}
-			}
-		}
-		if ($fc = FieldConfig::loadByName('node', 'article', 'field_author_id_tmp')) {
-			try {
-				$fc->delete();
-			} catch (Exception $e) {
-			}
-		}
-		if ($fs = FieldStorageConfig::loadByName('node', 'field_author_id_tmp')) {
-			try {
-				$fs->delete();
-			} catch (Exception $e) {
-			}
-		}
-
-		mantle2_ensure_form_display('node', 'article');
-	}
-
-	// 2) Migrate field_article_color from string (#RRGGBB) to integer (0..16777215)
-	$color_storage = FieldStorageConfig::loadByName('node', 'field_article_color');
-	if ($color_storage && $color_storage->getType() !== 'integer') {
-		// Create temp integer field.
-		if (!FieldStorageConfig::loadByName('node', 'field_article_color_tmp')) {
-			FieldStorageConfig::create([
-				'field_name' => 'field_article_color_tmp',
-				'entity_type' => 'node',
-				'type' => 'integer',
-				'cardinality' => 1,
-			])->save();
-		}
-		if (!FieldConfig::loadByName('node', 'article', 'field_article_color_tmp')) {
-			FieldConfig::create([
-				'field_name' => 'field_article_color_tmp',
-				'entity_type' => 'node',
-				'bundle' => 'article',
-				'label' => 'Color (temp)',
-				'required' => false,
-			])->save();
-		}
-
-		// Migrate values into temp (convert #RRGGBB -> int).
-		foreach ($nodes as $node) {
-			/** @var NodeInterface $node */
-			if (!$node->hasField('field_article_color')) {
-				continue;
-			}
-			$raw = (string) $node->get('field_article_color')->value;
-			if ($raw === '') {
-				continue;
-			}
-			$hex = ltrim(trim($raw), '#');
-			// Accept 3 or 6 length hex; expand 3-digit format if encountered.
-			if (strlen($hex) === 3) {
-				$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
-			}
-			if (preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
-				$int = intval($hex, 16);
-				$node->set('field_article_color_tmp', $int);
-				try {
-					$node->save();
-				} catch (Exception $e) {
-				}
-			}
-		}
-
-		// Remove old field instance and storage.
-		if ($fc = FieldConfig::loadByName('node', 'article', 'field_article_color')) {
-			try {
-				$fc->delete();
-			} catch (Exception $e) {
-			}
-		}
-		try {
-			$color_storage->delete();
-		} catch (Exception $e) {
-		}
-
-		// Recreate field_article_color as integer.
-		FieldStorageConfig::create([
-			'field_name' => 'field_article_color',
-			'entity_type' => 'node',
-			'type' => 'integer',
-			'cardinality' => 1,
-		])->save();
-		FieldConfig::create([
-			'field_name' => 'field_article_color',
-			'entity_type' => 'node',
-			'bundle' => 'article',
-			'label' => 'Color',
-			'required' => false,
-		])->save();
-
-		// Move values from temp into the new field and clean up temp.
-		foreach ($nodes as $node) {
-			/** @var NodeInterface $node */
-			if (
-				$node->hasField('field_article_color_tmp') &&
-				!$node->get('field_article_color_tmp')->isEmpty()
-			) {
-				$node->set('field_article_color', $node->get('field_article_color_tmp')->value);
-				$node->set('field_article_color_tmp', null);
-				try {
-					$node->save();
-				} catch (Exception $e) {
-				}
-			}
-		}
-		if ($fc = FieldConfig::loadByName('node', 'article', 'field_article_color_tmp')) {
-			try {
-				$fc->delete();
-			} catch (Exception $e) {
-			}
-		}
-		if ($fs = FieldStorageConfig::loadByName('node', 'field_article_color_tmp')) {
-			try {
-				$fs->delete();
-			} catch (Exception $e) {
-			}
-		}
-
-		mantle2_ensure_form_display('node', 'article');
-	}
-}
-
-/**
- * Update: Complete comment system setup for prompts
- * - Ensures 'comment' module is enabled
- * - Ensures CommentType 'comment' exists
- * - Ensures comment_body field storage + instance exists
- * - Ensures field storage node.comment exists and is unlimited
- * - Cleans up bad 'node' bundle instance if it exists
- * - Attaches 'comment' field to 'prompt' bundle with correct settings
- * - Ensures displays are configured
- */
-function mantle2_update_9009(): void
-{
-	// Ensure the comment module is enabled.
-	if (!Drupal::moduleHandler()->moduleExists('comment')) {
-		try {
-			Drupal::service('module_installer')->install(['comment']);
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error('Failed to enable comment module: %message', [
-				'%message' => $e->getMessage(),
-			]);
-		}
-	}
-
-	// Ensure base comment type exists.
-	if (!CommentType::load('comment')) {
-		try {
-			CommentType::create([
-				'id' => 'comment',
-				'label' => 'Comment',
-				'target_entity_type_id' => 'node',
-			])->save();
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error('Failed to create Comment type: %message', [
-				'%message' => $e->getMessage(),
-			]);
-		}
-	}
-
 	// Ensure comment_body field storage exists.
 	if (!FieldStorageConfig::loadByName('comment', 'comment_body')) {
 		try {
@@ -1193,7 +818,7 @@ function mantle2_update_9009(): void
 			])->save();
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error(
-				'Failed to create comment_body field storage: %message',
+				'Failed to create comment_body field storage during install: %message',
 				['%message' => $e->getMessage()],
 			);
 		}
@@ -1211,7 +836,7 @@ function mantle2_update_9009(): void
 			])->save();
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error(
-				'Failed to create comment_body field instance: %message',
+				'Failed to create comment_body field instance during install: %message',
 				['%message' => $e->getMessage()],
 			);
 		}
@@ -1244,6 +869,7 @@ function mantle2_update_9009(): void
 		]);
 	}
 
+	// Ensure comment field storage exists for nodes.
 	$storage = FieldStorageConfig::loadByName('node', 'comment');
 	if (!$storage) {
 		try {
@@ -1254,9 +880,10 @@ function mantle2_update_9009(): void
 				'cardinality' => -1,
 			])->save();
 		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error('Failed to create comment field storage: %message', [
-				'%message' => $e->getMessage(),
-			]);
+			Drupal::logger('mantle2')->error(
+				'Failed to create comment field storage during install: %message',
+				['%message' => $e->getMessage()],
+			);
 		}
 	} elseif ($storage->getCardinality() !== -1) {
 		try {
@@ -1292,7 +919,7 @@ function mantle2_update_9009(): void
 			])->save();
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error(
-				'Failed to create comment field instance for prompt: %message',
+				'Failed to attach comment field to prompt during install: %message',
 				['%message' => $e->getMessage()],
 			);
 		}
@@ -1309,49 +936,10 @@ function mantle2_update_9009(): void
 		}
 	}
 
-	// Ensure form displays exist.
-	mantle2_ensure_form_display('node', 'prompt');
+	foreach (['activity', 'event', 'prompt', 'article'] as $bundle) {
+		mantle2_ensure_form_display('node', $bundle);
+	}
+
+	mantle2_ensure_form_display('user', 'user');
 	mantle2_ensure_form_display('comment', 'comment');
-}
-
-/**
- * Update: Add email verification field
- */
-function mantle2_update_9010(): void
-{
-	// Add email verification field to users
-	createField('user', 'field_email_verified', 'boolean', 'Email Verified', false, false);
-
-	// Ensure user form display is updated
-	mantle2_ensure_form_display('user', 'user');
-}
-
-/**
- * Update: Add user notifications field
- */
-function mantle2_update_9011(): void
-{
-	// Add notifications field to users as JSON array
-	createField('user', 'field_notifications', 'json', 'Notifications', false, json_encode([]), [
-		'schema' => [
-			'$schema' => 'http://json-schema.org/draft-07/schema#',
-			'type' => 'array',
-			'items' => [
-				'type' => 'object',
-				'properties' => [
-					'user_id' => ['type' => 'integer'],
-					'message' => ['type' => 'string'],
-					'timestamp' => ['type' => 'integer'],
-					'link' => ['type' => ['string', 'null']],
-					'type' => ['type' => 'string'],
-					'source' => ['type' => 'string'],
-					'read' => ['type' => 'boolean'],
-				],
-				'required' => ['user_id', 'message', 'type', 'source', 'read', 'timestamp'],
-			],
-		],
-	]);
-
-	// Ensure user form display is updated
-	mantle2_ensure_form_display('user', 'user');
 }
