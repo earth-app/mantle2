@@ -1,6 +1,8 @@
 <?php
 
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\mantle2\Service\ArticlesHelper;
+use Drupal\mantle2\Service\PromptsHelper;
 
 function mantle2_help($route_name, RouteMatchInterface $route_match)
 {
@@ -40,4 +42,12 @@ function mantle2_mail($key, &$message, $params)
 			);
 			break;
 	}
+}
+
+function mantle2_cron()
+{
+	// Delete expired prompts and articles
+	PromptsHelper::checkExpiredPrompts();
+	ArticlesHelper::checkExpiredArticles();
+	Drupal::logger('mantle2')->notice('[cron] mantle2 cron executed.');
 }
