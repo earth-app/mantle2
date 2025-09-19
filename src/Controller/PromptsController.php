@@ -613,7 +613,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::forbidden('You are not allowed to perform this action');
 		}
 
-		$count = PromptsHelper::checkExpiredPrompts();
-		return new JsonResponse(['expired_prompts_checked' => $count]);
+		PromptsHelper::checkExpiredPrompts();
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
 }

@@ -2317,6 +2317,23 @@ mantle2.prompts.responses.delete:
         description: The ID of the response to delete
   methods: [DELETE]
 
+mantle2.prompts.check_expired:
+  path: '/v2/prompts/check_expired'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\PromptsController::checkExpiredPrompts'
+    _title: 'Check Expired Prompts [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Prompts
+    description: Checks for expired prompts
+    schema/204: No Content
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+  methods: [POST]
+
 ## Articles Routes
 mantle2.articles:
   path: '/v2/articles'
@@ -2414,3 +2431,20 @@ mantle2.articles.delete:
         type: entity:node
         description: The ID of the article to delete
   methods: [DELETE]
+
+mantle2.articles.check_expired:
+  path: '/v2/articles/check_expired'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::checkExpiredArticles'
+    _title: 'Check Expired Articles [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Articles
+    description: Checks for expired articles
+    schema/204: No Content
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+  methods: [POST]

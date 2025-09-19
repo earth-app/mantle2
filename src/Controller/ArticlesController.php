@@ -263,4 +263,20 @@ class ArticlesController extends ControllerBase
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
+
+	// POST /v2/articles/check_expired
+	public function checkExpiredArticles(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('You do not have permission to perform this action.');
+		}
+
+		ArticlesHelper::checkExpiredArticles();
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
 }
