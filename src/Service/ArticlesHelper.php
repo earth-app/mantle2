@@ -50,9 +50,10 @@ class ArticlesHelper
 
 	public static function checkExpiredArticles(): void
 	{
-		$expirationThreshold = \Drupal::time()->getRequestTime() - self::EXPIRED_ARTICLES_TTL;
+		$expirationThreshold = Drupal::time()->getRequestTime() - self::EXPIRED_ARTICLES_TTL;
 
-		$query = \Drupal::entityQuery('node')
+		$query = Drupal::entityQuery('node')
+			->accessCheck(false)
 			->condition('type', 'article')
 			->condition('status', 1)
 			->condition('created', $expirationThreshold, '<');
