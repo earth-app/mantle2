@@ -28,6 +28,8 @@ function createField(
 ): void {
 	// If no bundle is provided, default to entity (e.g., user entity uses 'user' bundle).
 	$bundle = $bundle ?? $entity;
+	$field_is_new = false;
+
 	if (!FieldStorageConfig::loadByName($entity, $name)) {
 		try {
 			FieldStorageConfig::create([
@@ -37,6 +39,7 @@ function createField(
 				'cardinality' => $cardinality,
 				'settings' => $settings,
 			])->save();
+			$field_is_new = true;
 		} catch (EntityStorageException $e) {
 			Drupal::logger('mantle2')->error(
 				'Failed to save field constraints for %field: %message',
@@ -57,6 +60,7 @@ function createField(
 				'label' => $label,
 				'required' => $required,
 			])->save();
+			$field_is_new = true;
 		} catch (EntityStorageException $e) {
 			Drupal::logger('mantle2')->error(
 				'Failed to save field constraints for %field: %message',
@@ -91,6 +95,86 @@ function createField(
 				],
 			);
 		}
+	}
+
+	// if new field and has default value, populate existing entities with default
+	if ($field_is_new && $default_value !== null) {
+		populateExistingEntitiesWithFieldDefault($entity, $bundle, $name, $default_value);
+	}
+}
+
+/**
+ * Populate existing entities with default values for a newly created field.
+ */
+function populateExistingEntitiesWithFieldDefault(
+	string $entity_type,
+	string $bundle,
+	string $field_name,
+	$default_value,
+): void {
+	try {
+		$entity_storage = Drupal::entityTypeManager()->getStorage($entity_type);
+
+		// Build query based on entity type
+		$query = $entity_storage->getQuery()->accessCheck(false);
+
+		// For node entities, filter by bundle (content type)
+		if ($entity_type === 'node') {
+			$query->condition('type', $bundle);
+		} elseif ($entity_type === 'comment') {
+			$query->condition('comment_type', $bundle);
+		}
+
+		$entity_ids = $query->execute();
+
+		if (empty($entity_ids)) {
+			return;
+		}
+
+		// Load entities in batches to avoid memory issues
+		$batch_size = 50;
+		$batches = array_chunk($entity_ids, $batch_size);
+
+		foreach ($batches as $batch_ids) {
+			$entities = $entity_storage->loadMultiple($batch_ids);
+
+			foreach ($entities as $entity) {
+				/** @var \Drupal\Core\Entity\FieldableEntityInterface $entity */
+				if ($entity->hasField($field_name) && $entity->get($field_name)->isEmpty()) {
+					$entity->set($field_name, $default_value);
+					try {
+						$entity->save();
+					} catch (Exception $e) {
+						Drupal::logger('mantle2')->warning(
+							'Failed to populate field %field on %entity_type %id: %message',
+							[
+								'%field' => $field_name,
+								'%entity_type' => $entity_type,
+								'%id' => $entity->id(),
+								'%message' => $e->getMessage(),
+							],
+						);
+					}
+				}
+			}
+		}
+
+		Drupal::logger('mantle2')->info(
+			'Populated %count existing %entity_type entities with default value for field %field',
+			[
+				'%count' => count($entity_ids),
+				'%entity_type' => $entity_type,
+				'%field' => $field_name,
+			],
+		);
+	} catch (Exception $e) {
+		Drupal::logger('mantle2')->error(
+			'Failed to populate existing entities with field %field: %message',
+			[
+				'%field' => $field_name,
+				'%message' => $e->getMessage(),
+			],
+		);
 	}
 }
 
