@@ -556,7 +556,7 @@ mantle2.users.id.send_email_verification:
     _access: 'TRUE'
     id: '\d+'
   options:
-    tags: Users,Email
+    tags: Users,Email Verification
     description: Sends an email verification code to the specified user's email address
     schema/200: emailVerificationSent()
     schema/400: Bad Request
@@ -578,7 +578,7 @@ mantle2.users.id.verify_email:
     _access: 'TRUE'
     id: '\d+'
   options:
-    tags: Users,Email
+    tags: Users,Email Verification
     description: Verifies the specified user's email using an 8-digit verification code
     schema/200: emailVerified()
     schema/400: Bad Request
@@ -606,7 +606,7 @@ mantle2.users.id.notifications:
     _access: 'TRUE'
     id: '\d+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Retrieves a list of notifications for a user by their ID
     schema/200: notifications()
     schema/404: User not found
@@ -625,7 +625,7 @@ mantle2.users.id.notifications.get:
     id: '\d+'
     notificationId: '\d+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Retrieves a specific notification for a user by their ID
     schema/200: notification()
     schema/404: User or notification not found
@@ -646,7 +646,7 @@ mantle2.users.id.notifications.mark_read:
     id: '\d+'
     notificationId: '\d+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Marks a specific notification for a user as read
     schema/204: No Content
     schema/401: Unauthorized
@@ -668,7 +668,7 @@ mantle2.users.id.notifications.clear:
     _access: 'TRUE'
     id: '\d+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Clears all notifications for a user by their ID
     schema/204: No Content
     schema/401: Unauthorized
@@ -1121,7 +1121,7 @@ mantle2.users.username.send_email_verification:
     _access: 'TRUE'
     username: '@\w+'
   options:
-    tags: Users,Email
+    tags: Users,Email Verification
     description: Sends an email verification code to the specified user's email address
     schema/200: emailVerificationSent()
     schema/400: Bad Request
@@ -1143,7 +1143,7 @@ mantle2.users.username.verify_email:
     _access: 'TRUE'
     username: '@\w+'
   options:
-    tags: Users,Email
+    tags: Users,Email Verification
     description: Verifies the specified user's email using an 8-digit verification code
     schema/200: emailVerified()
     schema/400: Bad Request
@@ -1171,7 +1171,7 @@ mantle2.users.username.notifications:
     _access: 'TRUE'
     username: '@\w+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Retrieves a list of notifications for a user by their username
     schema/200: notifications()
     schema/404: User not found
@@ -1190,7 +1190,7 @@ mantle2.users.username.notifications.get:
     username: '@\w+'
     notificationId: '\d+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Retrieves a specific notification for a user by their ID
     schema/200: notification()
     schema/404: User or notification not found
@@ -1211,7 +1211,7 @@ mantle2.users.username.notifications.mark_read:
     username: '@\w+'
     notificationId: '\d+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Marks a specific notification for a user as read
     schema/204: No Content
     schema/401: Unauthorized
@@ -1233,7 +1233,7 @@ mantle2.users.username.notifications.clear:
     _access: 'TRUE'
     username: '@\w+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Clears all notifications for a user by their username
     schema/204: No Content
     schema/401: Unauthorized
@@ -1619,7 +1619,7 @@ mantle2.users.current.send_email_verification:
   requirements:
     _access: 'TRUE'
   options:
-    tags: Users,Email
+    tags: Users,Email Verification
     description: Sends an email verification code to the current user's email address
     schema/200: emailVerificationSent()
     schema/400: Bad Request
@@ -1635,7 +1635,7 @@ mantle2.users.current.verify_email:
   requirements:
     _access: 'TRUE'
   options:
-    tags: Users,Email
+    tags: Users,Email Verification
     description: Verifies the current user's email using an 8-digit verification code
     schema/200: emailVerified()
     schema/400: Bad Request
@@ -1657,7 +1657,7 @@ mantle2.users.current.notifications:
   requirements:
     _access: 'TRUE'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Retrieves a list of notifications for the current user
     schema/200: notifications()
     schema/404: User not found
@@ -1672,7 +1672,7 @@ mantle2.users.current.notifications.get:
     _access: 'TRUE'
     notificationId: '\d+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Retrieves a specific notification for the current user by their ID
     schema/200: notification()
     schema/404: User or notification not found
@@ -1690,7 +1690,7 @@ mantle2.users.current.notifications.mark_read:
     _access: 'TRUE'
     notificationId: '\d+'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Marks a specific notification for the current user as read
     schema/204: No Content
     schema/401: Unauthorized
@@ -1709,7 +1709,7 @@ mantle2.users.current.notifications.clear:
   requirements:
     _access: 'TRUE'
   options:
-    tags: Users,Notifications
+    tags: Users,User Notifications
     description: Clears all notifications for the current user
     schema/204: No Content
     schema/401: Unauthorized
