@@ -736,15 +736,6 @@ function mantle2_install(): void
 			'required' => true,
 		],
 		[
-			'name' => 'field_article_author',
-			'type' => 'string',
-			'label' => 'Author',
-			'required' => true,
-			'settings' => [
-				'max_length' => 255,
-			],
-		],
-		[
 			'name' => 'field_author_id',
 			'type' => 'entity_reference',
 			'label' => 'Author ID',
