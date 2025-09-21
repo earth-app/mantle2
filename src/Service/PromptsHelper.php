@@ -107,6 +107,20 @@ class PromptsHelper
 
 		$node->save();
 
+		// Notify the user that their prompt was published
+		if ($author) {
+			UsersHelper::addNotification(
+				$author,
+				Drupal::translation()->translate('Prompt Published'),
+				Drupal::translation()->translate(
+					"Your prompt \"{$prompt->getPrompt()}\" has been successfully published.",
+				),
+				null,
+				'info',
+				'system',
+			);
+		}
+
 		return $node;
 	}
 
@@ -300,6 +314,7 @@ class PromptsHelper
 			if ($owner) {
 				UsersHelper::addNotification(
 					$owner,
+					Drupal::translation()->translate('Prompt Expired'),
 					Drupal::translation()->translate(
 						"Your prompt \"{$prompt->getPrompt()}\" has expired and been deleted.",
 					),

@@ -219,15 +219,21 @@ class UsersHelper
 			$username = $basicAuth['username'] ?? null;
 			$password = $basicAuth['password'] ?? null;
 
-			if ($username && $password) {
-				/** @var \Drupal\user\UserAuthInterface $userAuth */
-				$userAuth = Drupal::service('user.auth');
-				$uid = $userAuth->authenticate($username, $password);
-				if ($uid) {
-					$user = User::load($uid);
-					if ($user && !$user->isBlocked()) {
-						return $user;
-					}
+			if (!$username) {
+				return GeneralHelper::unauthorized('Username is required for basic authentication');
+			}
+
+			if (!$password) {
+				return GeneralHelper::unauthorized('Password is required for basic authentication');
+			}
+
+			/** @var \Drupal\user\UserAuthInterface $userAuth */
+			$userAuth = Drupal::service('user.auth');
+			$uid = $userAuth->authenticate($username, $password);
+			if ($uid) {
+				$user = User::load($uid);
+				if ($user && !$user->isBlocked()) {
+					return $user;
 				}
 			}
 
@@ -486,8 +492,12 @@ class UsersHelper
 		return in_array($accountType, [AccountType::ORGANIZER, AccountType::ADMINISTRATOR], true);
 	}
 
-	public static function isAdmin(UserInterface $user): bool
+	public static function isAdmin(?UserInterface $user): bool
 	{
+		if (!$user) {
+			return false;
+		}
+
 		$accountType = self::getAccountType($user);
 
 		return $user->hasRole('administrator') ||
@@ -505,6 +515,22 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): array {
 		$privacy = self::getFieldPrivacy($user);
+
+		$visibility = self::getVisibility($user);
+
+		// PRIVATE requires admin or as an added friend
+		if (
+			$visibility === Visibility::PRIVATE &&
+			!UsersHelper::isAdmin($requester) &&
+			!self::isAddedFriend($requester, $user)
+		) {
+			return [];
+		}
+
+		// UNLISTED requires logged in user
+		if ($visibility === Visibility::UNLISTED && !$requester) {
+			return [];
+		}
 
 		return [
 			'id' => GeneralHelper::formatId($user->id()),
@@ -895,6 +921,18 @@ class UsersHelper
 		$friends0[] = $friend->id();
 		$user->set('field_friends', json_encode($friends0));
 		$user->save();
+
+		self::addNotification(
+			$friend,
+			Drupal::translation()->translate('New Friend Added'),
+			Drupal::translation()->translate(
+				"{$user->getDisplayName()} has added you as a friend.",
+			),
+			"/profile/{$user->id()}",
+			'info',
+			'system',
+		);
+
 		return true;
 	}
 
@@ -909,6 +947,18 @@ class UsersHelper
 		$friends0 = array_filter($friends0, fn($id) => $id !== $friend->id());
 		$user->set('field_friends', json_encode($friends0));
 		$user->save();
+
+		self::addNotification(
+			$friend,
+			Drupal::translation()->translate('Friend Removed'),
+			Drupal::translation()->translate(
+				"{$user->getDisplayName()} has removed you as a friend.",
+			),
+			"/profile/{$user->id()}",
+			'info',
+			'system',
+		);
+
 		return true;
 	}
 
@@ -1380,6 +1430,7 @@ class UsersHelper
 
 	public static function addNotification(
 		UserInterface $user,
+		string $title,
 		string $message,
 		?string $link = null,
 		string $type = 'info',
@@ -1394,6 +1445,7 @@ class UsersHelper
 		$notification = new Notification(
 			$id,
 			$user->id(),
+			$title,
 			$message,
 			time(),
 			$link,

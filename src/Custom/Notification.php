@@ -10,7 +10,8 @@ class Notification implements JsonSerializable
 {
 	public string $id;
 	public string $userId;
-	public string $message;
+	public string $title;
+	public string $message; // after first line break is full message; first line is summary
 	public ?string $link;
 	public string $type;
 	public string $source = 'system'; // 'system', 'email', '<username>', etc
@@ -20,6 +21,7 @@ class Notification implements JsonSerializable
 	public function __construct(
 		string $id,
 		string $userId,
+		string $title,
 		string $message,
 		int $timestamp,
 		?string $link = null,
@@ -29,6 +31,7 @@ class Notification implements JsonSerializable
 	) {
 		$this->id = $id;
 		$this->userId = $userId;
+		$this->title = $title;
 		$this->message = $message;
 		$this->timestamp = $timestamp;
 		$this->link = $link;
@@ -41,6 +44,7 @@ class Notification implements JsonSerializable
 	{
 		return [
 			'id' => $this->id,
+			'title' => $this->title,
 			'user_id' => $this->userId,
 			'message' => $this->message,
 			'link' => $this->link,
@@ -69,6 +73,16 @@ class Notification implements JsonSerializable
 	public function getTimestamp(): int
 	{
 		return $this->timestamp;
+	}
+
+	public function getTitle(): string
+	{
+		return $this->title;
+	}
+
+	public function setTitle(string $title): void
+	{
+		$this->title = $title;
 	}
 
 	public function getMessage(): string
