@@ -2363,7 +2363,7 @@ mantle2.articles.create:
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
-    body/schema: $articleBody
+    body/schema: articleCreate()
     body/description: Article data to create
   methods: [POST]
 

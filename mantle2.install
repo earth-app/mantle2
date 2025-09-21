@@ -484,6 +484,18 @@ function mantle2_install(): void
 		],
 	]);
 
+	/// Previous IPs
+	createField('user', 'field_previous_ips', 'json', 'Previous IPs', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'format' => 'ipv4',
+			],
+		],
+	]);
+
 	// Make sure the user form display shows all custom fields on fresh install.
 	mantle2_ensure_form_display('user', 'user');
 
@@ -625,7 +637,7 @@ function mantle2_install(): void
 		],
 	]);
 
-	// Add Event Attendees Field (from update 9003)
+	// Add Event Attendees Field
 	createField(
 		'node',
 		'field_event_attendees',
@@ -640,11 +652,6 @@ function mantle2_install(): void
 		-1,
 		'event',
 	);
-
-	// Add Visibility Field for Nodes (from update 9003)
-	createField('node', 'field_visibility', 'list_string', 'Visibility', true, null, [
-		'allowed_values' => array_map(fn($case) => $case->value, Visibility::cases()),
-	]);
 
 	// Prompts
 
