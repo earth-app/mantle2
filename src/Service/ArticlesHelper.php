@@ -52,6 +52,25 @@ class ArticlesHelper
 			return GeneralHelper::badRequest('Field ocean must be an array');
 		}
 
+		$validOceanFields = [
+			'title',
+			'url',
+			'author',
+			'source',
+			'abstract',
+			'content',
+			'keywords',
+			'links',
+			'favicon',
+			'theme_color',
+			'date',
+		];
+		foreach ($ocean as $field => $value) {
+			if (!in_array($field, $validOceanFields, true)) {
+				return GeneralHelper::badRequest("Invalid ocean field: $field");
+			}
+		}
+
 		$oceanRequiredFields = ['title', 'url', 'author', 'source'];
 		foreach ($oceanRequiredFields as $field) {
 			if (empty($ocean[$field])) {
