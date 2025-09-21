@@ -222,7 +222,7 @@ class ArticlesHelper
 			'type' => 'article',
 			'title' => $title,
 			'uid' => $author->id(),
-			'status' => 1, // Published
+			'status' => 1,
 		]);
 
 		$node->set('field_article_title', $title);
