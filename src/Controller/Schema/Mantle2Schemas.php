@@ -900,7 +900,7 @@ class Mantle2Schemas
 			'type' => 'object',
 			'properties' => [
 				'id' => self::$id,
-				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
+				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 100],
 				'description' => [
 					'type' => 'string',
 					'example' => 'Hello World',
@@ -981,7 +981,7 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
+				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 100],
 				'description' => [
 					'type' => 'string',
 					'example' => 'Hello World',
@@ -1013,7 +1013,7 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
+				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 100],
 				'description' => [
 					'type' => 'string',
 					'example' => 'Hello World',
