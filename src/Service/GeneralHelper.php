@@ -143,6 +143,11 @@ class GeneralHelper
 		return $index === false ? -1 : $index;
 	}
 
+	public static function intToHex(int $color): string
+	{
+		return sprintf('#%06X', $color & 0xffffff);
+	}
+
 	// Network Utilities
 
 	public static function getBearerToken(Request $request): ?string

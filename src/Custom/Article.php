@@ -2,6 +2,8 @@
 
 namespace Drupal\mantle2\Custom;
 
+use Drupal\mantle2\Service\GeneralHelper;
+use Drupal\mantle2\Service\UsersHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use JsonSerializable;
@@ -13,7 +15,6 @@ class Article implements JsonSerializable
 	private string $description;
 	private array $tags;
 	private string $content;
-	private string $author;
 	private int $authorId;
 	private int $color;
 	private int $createdAt;
@@ -26,7 +27,6 @@ class Article implements JsonSerializable
 		string $description,
 		array $tags,
 		string $content,
-		string $author,
 		int $authorId,
 		int $color,
 		int $createdAt,
@@ -38,7 +38,6 @@ class Article implements JsonSerializable
 		$this->description = $description;
 		$this->tags = $tags;
 		$this->content = $content;
-		$this->author = $author;
 		$this->authorId = $authorId;
 		$this->color = $color;
 		$this->createdAt = $createdAt;
@@ -49,14 +48,14 @@ class Article implements JsonSerializable
 	public function jsonSerialize(): array
 	{
 		return [
-			'id' => $this->id,
+			'id' => GeneralHelper::formatId($this->id),
 			'title' => $this->title,
 			'description' => $this->description,
 			'tags' => $this->tags,
 			'content' => $this->content,
-			'author' => $this->author,
-			'author_id' => $this->authorId,
 			'color' => $this->color,
+			'color_hex' => GeneralHelper::intToHex($this->color),
+			'author_id' => GeneralHelper::formatId($this->authorId),
 			'created_at' => $this->createdAt,
 			'updated_at' => $this->updatedAt,
 			'ocean' => $this->ocean,
@@ -88,17 +87,12 @@ class Article implements JsonSerializable
 		return $this->content;
 	}
 
-	public function getAuthor(): string
-	{
-		return $this->author;
-	}
-
 	public function getAuthorId(): int
 	{
 		return $this->authorId;
 	}
 
-	public function getAuthorInterface(): UserInterface
+	public function getAuthor(): UserInterface
 	{
 		return User::load($this->authorId);
 	}
