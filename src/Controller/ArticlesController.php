@@ -6,6 +6,7 @@ use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Controller\ControllerBase;
+use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
@@ -92,6 +93,10 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::paymentRequired('Upgrade to Organizer required');
 		}
 
+		if (UsersHelper::getVisibility($user) === Visibility::PRIVATE) {
+			return GeneralHelper::badRequest('Private accounts cannot create public content');
+		}
+
 		$body = json_decode($request->getContent(), true);
 		if (!is_array($body)) {
 			return GeneralHelper::badRequest('Invalid JSON');
@@ -101,41 +106,72 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
-		$requiredFields = ['title', 'description', 'tags', 'content', 'author', 'author_id'];
+		$requiredFields = ['title', 'description', 'content'];
 		foreach ($requiredFields as $field) {
 			if (empty($body[$field])) {
 				return GeneralHelper::badRequest("Missing required field: $field");
 			}
 		}
 
-		// Validate author_id
-		$authorId = (int) $body['author_id'];
-		$author = User::load($authorId);
-		if (!$author) {
-			return GeneralHelper::badRequest("Invalid author_id: $authorId");
+		// Validate title
+		$title = $body['title'];
+		if (!is_string($title) || strlen($title) > 48) {
+			return GeneralHelper::badRequest('Field title must be a string up to 48 characters');
+		}
+
+		// Validate description
+		$description = $body['description'];
+		if (!is_string($description) || strlen($description) > 512) {
+			return GeneralHelper::badRequest(
+				'Field description must be a string up to 512 characters',
+			);
+		}
+
+		// Validate tags
+		$tags = $body['tags'] ?? [];
+		if (!is_array($tags)) {
+			return GeneralHelper::badRequest('Field tags must be an array');
+		}
+
+		if (count($tags) > 10) {
+			return GeneralHelper::badRequest('Field tags can have a maximum of 10 items');
+		}
+
+		foreach ($tags as $tag) {
+			if (!is_string($tag) || strlen($tag) > 30) {
+				return GeneralHelper::badRequest(
+					'Field tags must be an array of strings up to 30 characters',
+				);
+			}
+		}
+
+		// Validate content
+		$content = $body['content'];
+		if (!is_string($content) || strlen($content) < 50 || strlen($content) > 10000) {
+			return GeneralHelper::badRequest(
+				'Field content must be a string between 50 and 10,000 characters',
+			);
+		}
+
+		// Validate ocean article
+		$ocean = $body['ocean'] ?? null;
+		if ($ocean !== null) {
+			$ocean = ArticlesHelper::validateOcean($ocean);
+			if ($ocean instanceof JsonResponse) {
+				return $ocean;
+			}
 		}
 
 		// Create the article node
-		$node = Node::create([
-			'type' => 'article',
-			'title' => $body['title'],
-			'uid' => $user->id(),
-			'field_article_title' => $body['title'],
-			'field_article_description' => $body['description'],
-			'field_article_tags' => json_encode($body['tags']),
-			'field_article_content' => $body['content'],
-			'field_article_author' => $body['author'],
-			'field_author_id' => ['target_id' => $authorId],
-			'field_article_color' => (int) $body['color'],
-			'field_article_ocean' => json_encode($body['ocean']),
-			'status' => 1,
-		]);
-
-		try {
-			$node->save();
-		} catch (Exception $e) {
-			return GeneralHelper::internalError('Failed to create article: ' . $e->getMessage());
-		}
+		$node = ArticlesHelper::createArticle(
+			$title,
+			$description,
+			$tags,
+			$content,
+			$user,
+			$body['color'] ?? 0,
+			$ocean ?? [],
+		);
 
 		// Load the created article
 		$article = ArticlesHelper::nodeToArticle($node);
@@ -144,7 +180,7 @@ class ArticlesController extends ControllerBase
 		}
 
 		$item = $article->jsonSerialize();
-		$item['id'] = GeneralHelper::formatId($node->id());
+		$item['author'] = UsersHelper::serializeUser($article->getAuthor(), $user);
 		$item['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$item['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -152,8 +188,10 @@ class ArticlesController extends ControllerBase
 	}
 
 	// GET /v2/articles/:articleId
-	public function getArticle(Node $articleId): JsonResponse
+	public function getArticle(Request $request, Node $articleId): JsonResponse
 	{
+		$requester = UsersHelper::getOwnerOfRequest($request);
+
 		if ($articleId->getType() !== 'article') {
 			return GeneralHelper::badRequest('ID does not point to an article');
 		}
@@ -164,7 +202,7 @@ class ArticlesController extends ControllerBase
 		}
 
 		$item = $article->jsonSerialize();
-		$item['id'] = GeneralHelper::formatId($articleId->id());
+		$item['author'] = UsersHelper::serializeUser($article->getAuthor(), $requester);
 		$item['created_at'] = GeneralHelper::dateToIso($articleId->getCreatedTime());
 		$item['updated_at'] = GeneralHelper::dateToIso($articleId->getChangedTime());
 
@@ -201,13 +239,81 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
+		// Validate title
+		if (array_key_exists('title', $body)) {
+			$title = $body['title'];
+			if (!is_string($title) || strlen($title) > 48) {
+				return GeneralHelper::badRequest(
+					'Field title must be a string up to 48 characters',
+				);
+			}
+		}
+
+		// Validate description
+		if (array_key_exists('description', $body)) {
+			$description = $body['description'];
+			if (!is_string($description) || strlen($description) > 512) {
+				return GeneralHelper::badRequest(
+					'Field description must be a string up to 512 characters',
+				);
+			}
+		}
+
+		// Validate tags
+		if (array_key_exists('tags', $body)) {
+			$tags = $body['tags'];
+			if (!is_array($tags)) {
+				return GeneralHelper::badRequest('Field tags must be an array');
+			}
+
+			if (count($tags) > 10) {
+				return GeneralHelper::badRequest('Field tags can have a maximum of 10 items');
+			}
+
+			foreach ($tags as $tag) {
+				if (!is_string($tag) || strlen($tag) > 30) {
+					return GeneralHelper::badRequest(
+						'Field tags must be an array of strings up to 30 characters',
+					);
+				}
+			}
+		}
+
+		// Validate color
+		$color = $body['color'] ?? null;
+		if ($color !== null) {
+			if (!is_string($color) || !preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) {
+				return GeneralHelper::badRequest('Field color must be a valid hex color code');
+			}
+		}
+
+		// Validate content
+		if (array_key_exists('content', $body)) {
+			$content = $body['content'];
+			if (!is_string($content) || strlen($content) < 50 || strlen($content) > 10000) {
+				return GeneralHelper::badRequest(
+					'Field content must be a string between 50 and 10,000 characters',
+				);
+			}
+		}
+
+		// Validate ocean article
+		$ocean = $body['ocean'] ?? null;
+		if ($ocean !== null) {
+			$ocean = ArticlesHelper::validateOcean($ocean);
+			if ($ocean instanceof JsonResponse) {
+				return $ocean;
+			}
+		}
+
 		$updatableFields = ['title', 'description', 'tags', 'content', 'color', 'ocean'];
 		foreach ($updatableFields as $field) {
 			if (array_key_exists($field, $body)) {
 				if ($field === 'tags' || $field === 'ocean') {
 					$articleId->set("field_article_$field", json_encode($body[$field]));
 				} elseif ($field === 'color') {
-					$articleId->set("field_article_$field", (int) $body[$field]);
+					$color0 = hexdec(substr($color, 1));
+					$articleId->set("field_article_$field", $color0);
 				} else {
 					$articleId->set("field_article_$field", $body[$field]);
 				}
@@ -227,7 +333,7 @@ class ArticlesController extends ControllerBase
 		}
 
 		$item = $article->jsonSerialize();
-		$item['id'] = GeneralHelper::formatId($articleId->id());
+		$item['author'] = UsersHelper::serializeUser($article->getAuthor(), $user);
 		$item['created_at'] = GeneralHelper::dateToIso($articleId->getCreatedTime());
 		$item['updated_at'] = GeneralHelper::dateToIso($articleId->getChangedTime());
 
@@ -251,7 +357,7 @@ class ArticlesController extends ControllerBase
 		}
 
 		$author = $articleId->get('field_author_id')->entity;
-		if ($author && $author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You do not have permission to delete this article.');
 		}
 

@@ -245,13 +245,13 @@ class Mantle2Schemas
 
 	// String Types
 	public static array $text = ['type' => 'string', 'example' => 'Hello World'];
-	public static function text($maxLength = 100, $minLength = 1): array
+	public static function text($maxLength = 100, $minLength = 1, $example = 'Hello World'): array
 	{
 		return [
 			'type' => 'string',
 			'minLength' => $minLength,
 			'maxLength' => $maxLength,
-			'example' => str_repeat('a', mt_rand($minLength, $maxLength)),
+			'example' => $example,
 		];
 	}
 
@@ -296,7 +296,7 @@ class Mantle2Schemas
 		'minLength' => 7,
 		'maxLength' => 7,
 		'pattern' => '^#[0-9A-Fa-f]{6}$',
-		'example' => '#ffd700',
+		'examples' => ['#ffd700', '#FF5733', '#33ff57', '#3357ff', '#F0F8FF'],
 		'description' => 'A valid hex color code',
 	];
 	public static array $bool = ['type' => 'boolean', 'example' => true];
@@ -553,88 +553,6 @@ class Mantle2Schemas
 		'properties' => ['content' => ['type' => 'string', 'maxLength' => 700]],
 		'required' => ['content'],
 	];
-
-	public static function oceanArticle(): array
-	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'title' => self::$text,
-				'url' => ['type' => 'string', 'format' => 'uri'],
-				'author' => self::$text,
-				'source' => self::$text,
-				'links' => [
-					'type' => 'object',
-					'additionalProperties' => ['type' => 'string', 'format' => 'uri'],
-				],
-				'abstract' => self::$text,
-				'content' => self::$text,
-				'theme_color' => ['type' => 'string'],
-				'keywords' => ['type' => 'array', 'items' => self::$text],
-				'date' => self::$date,
-				'favicon' => ['type' => 'string', 'format' => 'uri'],
-			],
-			'required' => ['title', 'url', 'author', 'source', 'content', 'date'],
-		];
-	}
-
-	public static function articleCreate(): array
-	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
-				'description' => [
-					'type' => 'string',
-					'example' => 'Hello World',
-					'maxLength' => 512,
-				],
-				'tags' => [
-					'type' => 'array',
-					'items' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 30],
-					'maxItems' => 10,
-					'default' => [],
-				],
-				'content' => [
-					'type' => 'string',
-					'example' => 'Hello World',
-					'minLength' => 50,
-					'maxLength' => 10000,
-				],
-				'color' => self::$hexCode,
-				'ocean' => self::oceanArticle(),
-			],
-			'required' => ['title', 'description', 'tags', 'content'],
-		];
-	}
-
-	public static function articleUpdate(): array
-	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
-				'description' => [
-					'type' => 'string',
-					'example' => 'Hello World',
-					'maxLength' => 512,
-				],
-				'tags' => [
-					'type' => 'array',
-					'items' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 30],
-					'maxItems' => 10,
-					'default' => [],
-				],
-				'content' => [
-					'type' => 'string',
-					'example' => 'Hello World',
-					'minLength' => 50,
-					'maxLength' => 10000,
-				],
-				'color' => self::$hexCode,
-			],
-		];
-	}
 
 	public static function activityCreate(): array
 	{
@@ -982,13 +900,17 @@ class Mantle2Schemas
 			'type' => 'object',
 			'properties' => [
 				'id' => self::$id,
-				'article_id' => ['type' => 'string', 'example' => 'article123'],
 				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
-				'summary' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 512],
+				'description' => [
+					'type' => 'string',
+					'example' => 'Hello World',
+					'maxLength' => 512,
+				],
 				'tags' => [
 					'type' => 'array',
 					'items' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 30],
 					'maxItems' => 10,
+					'example' => ['tag1', 'tag2', 'tag3'],
 					'default' => [],
 				],
 				'content' => [
@@ -997,11 +919,123 @@ class Mantle2Schemas
 					'minLength' => 50,
 					'maxLength' => 10000,
 				],
+				'color' => self::$number,
+				'color_hex' => self::$hexCode,
+				'author_id' => self::$id,
+				'author' => self::user(),
 				'created_at' => self::$date,
 				'updated_at' => self::$date,
 				'ocean' => self::oceanArticle(),
 			],
-			'required' => ['id', 'article_id', 'title', 'summary', 'tags', 'content', 'created_at'],
+			'required' => [
+				'id',
+				'title',
+				'description',
+				'tags',
+				'content',
+				'created_at',
+				'author_id',
+			],
+		];
+	}
+
+	public static function oceanArticle(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'title' => self::$text,
+				'url' => ['type' => 'string', 'format' => 'uri'],
+				'author' => self::$text,
+				'source' => self::$text,
+				'links' => [
+					'type' => 'object',
+					'additionalProperties' => ['type' => 'string', 'format' => 'uri'],
+				],
+				'abstract' => self::text(
+					10000,
+					50,
+					'The phrase "Hello World" is commonly used in programming as a simple test message to demonstrate the basic syntax of a programming language or to verify that a system is functioning correctly. It is often the first program written by beginners when learning a new programming language.',
+				),
+				'content' => self::text(
+					10000,
+					50,
+					'Hello World first appeared in 1972 when Brian Kernighan wrote it as an example in a tutorial for the B programming language. The tradition continued with the C programming language, where it was used in the book "The C Programming Language" by Brian Kernighan and Dennis Ritchie. Since then, "Hello World" has become a ubiquitous example in programming literature and tutorials across many languages. It symbolizes the starting point for learning a new programming language or environment.',
+				),
+				'theme_color' => self::$hexCode,
+				'keywords' => [
+					'type' => 'array',
+					'items' => self::text(35),
+					'example' => ['keyword1', 'keyword2'],
+					'maxItems' => 25,
+				],
+				'date' => self::$date,
+				'favicon' => ['type' => 'string', 'format' => 'uri'],
+			],
+			'required' => ['title', 'url', 'author', 'source', 'content', 'date'],
+		];
+	}
+
+	public static function articleCreate(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
+				'description' => [
+					'type' => 'string',
+					'example' => 'Hello World',
+					'maxLength' => 512,
+				],
+				'tags' => [
+					'type' => 'array',
+					'items' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 30],
+					'maxItems' => 10,
+					'example' => ['tag1', 'tag2', 'tag3'],
+					'default' => [],
+				],
+				'content' => [
+					'type' => 'string',
+					'example' =>
+						'The phrase "Hello World" is commonly used in programming as a simple test message to demonstrate the basic syntax of a programming language or to verify that a system is functioning correctly. It is often the first program written by beginners when learning a new programming language.',
+					'minLength' => 50,
+					'maxLength' => 10000,
+				],
+				'color' => self::$hexCode,
+				'ocean' => self::oceanArticle(),
+			],
+			'required' => ['title', 'description', 'content'],
+		];
+	}
+
+	public static function articleUpdate(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 48],
+				'description' => [
+					'type' => 'string',
+					'example' => 'Hello World',
+					'maxLength' => 512,
+				],
+				'tags' => [
+					'type' => 'array',
+					'items' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 30],
+					'maxItems' => 10,
+					'example' => ['tag1', 'tag2', 'tag3'],
+					'default' => [],
+				],
+				'content' => [
+					'type' => 'string',
+					'example' =>
+						'The phrase "Hello World" is commonly used in programming as a simple test message to demonstrate the basic syntax of a programming language or to verify that a system is functioning correctly. It is often the first program written by beginners when learning a new programming language.',
+					'minLength' => 50,
+					'maxLength' => 10000,
+				],
+				'ocean' => self::oceanArticle(),
+				'color' => self::$hexCode,
+			],
 		];
 	}
 }

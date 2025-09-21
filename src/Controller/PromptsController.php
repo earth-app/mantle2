@@ -115,6 +115,10 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::paymentRequired('Upgrade to Writer required');
 		}
 
+		if (UsersHelper::getVisibility($user) === Visibility::PRIVATE) {
+			return GeneralHelper::badRequest('Private accounts cannot create public content');
+		}
+
 		$body = json_decode($request->getContent(), true);
 		if (!is_array($body)) {
 			return GeneralHelper::badRequest('Invalid JSON body');

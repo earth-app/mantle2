@@ -109,7 +109,7 @@ class UsersController extends ControllerBase
 		}
 
 		// Log the user in for Drupal bookkeeping (last login, hooks) then issue API token.
-		$this->finalizeLogin($account);
+		$this->finalizeLogin($account, $request);
 		$token = UsersHelper::issueToken($account);
 
 		$data = [
@@ -198,7 +198,7 @@ class UsersController extends ControllerBase
 		}
 
 		// Immediately log user in (hooks/metadata) and return persistent API token
-		$this->finalizeLogin($user);
+		$this->finalizeLogin($user, $request);
 		$token = UsersHelper::issueToken($user);
 		$data = [
 			'user' => UsersHelper::serializeUser($user, $user),
@@ -1121,8 +1121,13 @@ class UsersController extends ControllerBase
 
 	// Utility Functions
 
-	private function finalizeLogin(UserInterface $account): void
+	private function finalizeLogin(UserInterface $account, ?Request $request = null): void
 	{
+		// Check for new IP address and send notification if needed
+		if ($request) {
+			$this->checkAndNotifyNewIP($account, $request);
+		}
+
 		Drupal::currentUser()->setAccount($account);
 		Drupal::logger('user')->info('Session opened for %name.', [
 			'%name' => $account->getAccountName(),
@@ -1153,6 +1158,53 @@ class UsersController extends ControllerBase
 			$session->save();
 		}
 		Drupal::moduleHandler()->invokeAll('user_login', [$account]);
+	}
+
+	private function checkAndNotifyNewIP(UserInterface $account, Request $request): void
+	{
+		$currentIP = $request->getClientIp();
+		if (!$currentIP) {
+			return; // Cannot determine IP
+		}
+
+		// Get previous IP addresses from user field (or create field if it doesn't exist)
+		$previousIPs = [];
+		if ($account->hasField('field_previous_ips')) {
+			$ipData = $account->get('field_previous_ips')->value;
+			if ($ipData) {
+				$previousIPs = json_decode($ipData, true) ?: [];
+			}
+		}
+
+		// Check if this is a new IP address
+		if (!in_array($currentIP, $previousIPs, true)) {
+			// Add notification for new IP login
+			UsersHelper::addNotification(
+				$account,
+				Drupal::translation()->translate('New Login Location'),
+				Drupal::translation()->translate(
+					"Your account was accessed from a new IP address: {$currentIP}. If this wasn't you, please secure your account immediately.",
+				),
+				null,
+				'warning',
+				'system',
+			);
+
+			// Update the list of known IPs (keep only last 10 for storage efficiency)
+			$previousIPs[] = $currentIP;
+			if (count($previousIPs) > 10) {
+				$previousIPs = array_slice($previousIPs, -10);
+			}
+
+			// Save updated IP list back to user
+			if ($account->hasField('field_previous_ips')) {
+				$account->set('field_previous_ips', json_encode($previousIPs));
+			} else {
+				// If field doesn't exist, we'll store it in a keyvalue store instead
+				$store = Drupal::service('keyvalue')->get('mantle2_user_ips');
+				$store->set((string) $account->id(), $previousIPs);
+			}
+		}
 	}
 
 	private function resolveUser(
