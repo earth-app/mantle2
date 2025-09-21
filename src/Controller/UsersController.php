@@ -165,9 +165,14 @@ class UsersController extends ControllerBase
 	public function createUser(Request $request): JsonResponse
 	{
 		$body = json_decode((string) $request->getContent(), true);
-		if (!is_array($body)) {
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
+
 		$username = $body['username'] ?? null;
 		$password = $body['password'] ?? null;
 		$email = $body['email'] ?? null;
@@ -186,6 +191,7 @@ class UsersController extends ControllerBase
 		$user->setUsername($username);
 		if ($email) {
 			$user->setEmail($email);
+			UsersHelper::sendEmailVerification($user);
 		}
 		$user->activate();
 		$user->setPassword($password);
@@ -255,7 +261,7 @@ class UsersController extends ControllerBase
 		}
 
 		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
 		return UsersHelper::patchUser($user, $body, $requester);
@@ -303,7 +309,7 @@ class UsersController extends ControllerBase
 		}
 
 		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
 		return UsersHelper::patchFieldPrivacy($user, $body, $requester);
@@ -432,7 +438,7 @@ class UsersController extends ControllerBase
 		}
 
 		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
 		if (empty($activityIds)) {
@@ -821,59 +827,7 @@ class UsersController extends ControllerBase
 			return GeneralHelper::conflict('Email is already verified');
 		}
 
-		// Generate 8-digit verification code
-		$code = str_pad((string) random_int(10000000, 99999999), 8, '0', STR_PAD_LEFT);
-
-		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
-		$tempstore = \Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
-		$codeKey = 'email_verification_' . $user->id();
-		$codeData = [
-			'code' => $code,
-			'timestamp' => time(),
-			'user_id' => $user->id(),
-		];
-
-		try {
-			$tempstore->set($codeKey, $codeData);
-		} catch (\Exception $e) {
-			\Drupal::logger('mantle2')->error('Failed to store email verification code: %message', [
-				'%message' => $e->getMessage(),
-			]);
-			return GeneralHelper::internalError('Failed to generate verification code');
-		}
-
-		$userEmail = $user->getEmail();
-		if (!$userEmail) {
-			return GeneralHelper::badRequest('User has no email address');
-		}
-
-		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
-		$mailManager = Drupal::service('plugin.manager.mail');
-		$module = 'mantle2';
-		$key = 'email_verification';
-		$to = $userEmail;
-		$langcode = $user->getPreferredLangcode();
-		$params = [
-			'verification_code' => $code,
-			'user' => $user,
-		];
-
-		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
-
-		if (!$result['result']) {
-			Drupal::logger('mantle2')->error('Failed to send email verification to %email', [
-				'%email' => $userEmail,
-			]);
-			return GeneralHelper::internalError('Failed to send verification email');
-		}
-
-		return new JsonResponse(
-			[
-				'message' => 'Verification email sent successfully',
-				'email' => $userEmail,
-			],
-			Response::HTTP_OK,
-		);
+		return UsersHelper::sendEmailVerification($user);
 	}
 
 	// POST /v2/users/current/verify_email

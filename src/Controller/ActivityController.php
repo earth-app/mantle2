@@ -141,12 +141,12 @@ class ActivityController extends ControllerBase
 		}
 
 		$body = json_decode($request->getContent(), true);
-		if (!is_array($body)) {
-			return GeneralHelper::badRequest('Invalid JSON');
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
+			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
 		$id = $body['id'] ?? null;
@@ -237,12 +237,12 @@ class ActivityController extends ControllerBase
 		}
 
 		$body = json_decode($request->getContent(), true);
-		if (!is_array($body)) {
-			return GeneralHelper::badRequest('Invalid JSON');
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
+			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
 		$name = $body['name'] ?? null;

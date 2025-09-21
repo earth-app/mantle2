@@ -1523,4 +1523,60 @@ class UsersHelper
 	{
 		self::setNotifications($user, []);
 	}
+
+	public static function sendEmailVerification(UserInterface $user): JsonResponse
+	{
+		$code = str_pad((string) random_int(10000000, 99999999), 8, '0', STR_PAD_LEFT);
+
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
+		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$codeKey = 'email_verification_' . $user->id();
+		$codeData = [
+			'code' => $code,
+			'timestamp' => time(),
+			'user_id' => $user->id(),
+		];
+
+		try {
+			$tempstore->set($codeKey, $codeData);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to store email verification code: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to generate verification code');
+		}
+
+		$userEmail = $user->getEmail();
+		if (!$userEmail) {
+			return GeneralHelper::badRequest('User has no email address');
+		}
+
+		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
+		$mailManager = Drupal::service('plugin.manager.mail');
+		$module = 'mantle2';
+		$key = 'email_verification';
+		$to = $userEmail;
+		$langcode = $user->getPreferredLangcode();
+		$params = [
+			'verification_code' => $code,
+			'user' => $user,
+		];
+
+		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
+
+		if (!$result['result']) {
+			Drupal::logger('mantle2')->error('Failed to send email verification to %email', [
+				'%email' => $userEmail,
+			]);
+			return GeneralHelper::internalError('Failed to send verification email');
+		}
+
+		return new JsonResponse(
+			[
+				'message' => 'Verification email sent',
+				'email' => $userEmail,
+			],
+			Response::HTTP_OK,
+		);
+	}
 }

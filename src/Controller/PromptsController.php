@@ -120,12 +120,12 @@ class PromptsController extends ControllerBase
 		}
 
 		$body = json_decode($request->getContent(), true);
-		if (!is_array($body)) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
 		$data = $body['prompt'] ?? null;
@@ -283,8 +283,12 @@ class PromptsController extends ControllerBase
 		}
 
 		$body = json_decode($request->getContent(), true);
-		if (!is_array($body)) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
+			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
 		$updated = false;
@@ -415,12 +419,12 @@ class PromptsController extends ControllerBase
 		}
 
 		$body = json_decode($request->getContent(), true);
-		if (!is_array($body)) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
 		$content = $body['content'] ?? null;
@@ -540,12 +544,12 @@ class PromptsController extends ControllerBase
 		}
 
 		$body = json_decode($request->getContent(), true);
-		if (!is_array($body)) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
 		$content = $body['content'] ?? null;

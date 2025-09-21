@@ -98,12 +98,12 @@ class ArticlesController extends ControllerBase
 		}
 
 		$body = json_decode($request->getContent(), true);
-		if (!is_array($body)) {
-			return GeneralHelper::badRequest('Invalid JSON');
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
+			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
 		$requiredFields = ['title', 'description', 'content'];
@@ -115,8 +115,8 @@ class ArticlesController extends ControllerBase
 
 		// Validate title
 		$title = $body['title'];
-		if (!is_string($title) || strlen($title) > 48) {
-			return GeneralHelper::badRequest('Field title must be a string up to 48 characters');
+		if (!is_string($title) || strlen($title) > 100) {
+			return GeneralHelper::badRequest('Field title must be a string up to 100 characters');
 		}
 
 		// Validate description
@@ -231,20 +231,20 @@ class ArticlesController extends ControllerBase
 		}
 
 		$body = json_decode($request->getContent(), true);
-		if (!is_array($body)) {
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
 		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body');
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
 		// Validate title
 		if (array_key_exists('title', $body)) {
 			$title = $body['title'];
-			if (!is_string($title) || strlen($title) > 48) {
+			if (!is_string($title) || strlen($title) > 100) {
 				return GeneralHelper::badRequest(
-					'Field title must be a string up to 48 characters',
+					'Field title must be a string up to 100 characters',
 				);
 			}
 		}
