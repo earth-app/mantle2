@@ -4,9 +4,11 @@ description: Core Mantle2 Implementation
 core_version_requirement: ^11
 
 dependencies:
+  - drupal:node
+  - drupal:user
+  - drupal:comment
   - drupal:json_field
   - drupal:key
-  - drupal:comment
   - drupal:field
   - drupal:options
   - drupal:datetime

@@ -30,6 +30,8 @@ if [ ! -d "$SITE_DIR" ]; then
   [ -d "$SRC_PATH/config" ] && cp -r "$SRC_PATH/config" web/modules/custom/$PROJECT_NAME/
   [ -d "$SRC_PATH/templates" ] && cp -r "$SRC_PATH/templates" web/modules/custom/$PROJECT_NAME/
 
+  echo ">>> Configuring ddev for Drupal 11"
+
   ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME" --host-webserver-port=8787
 
   ddev start
@@ -39,7 +41,8 @@ if [ ! -d "$SITE_DIR" ]; then
     --account-pass=admin \
     --site-name="$SITE_NAME"
 
-  ddev drush -y en field datetime options json_field key smtp
+  ddev drush -y en field datetime options json_field key smtp node user comment
+  ddev drush cr
   ddev drush -y en "$PROJECT_NAME" || true
 else
   echo ">>> Reusing existing site at $SITE_DIR"
@@ -62,6 +65,8 @@ else
   [ -d "$SRC_PATH/config" ] && cp -r "$SRC_PATH/config" web/modules/custom/$PROJECT_NAME/
   [ -d "$SRC_PATH/templates" ] && cp -r "$SRC_PATH/templates" web/modules/custom/$PROJECT_NAME/
 
+  ddev drush cr
+  ddev drush updb -y
   ddev drush en "$PROJECT_NAME" -y
 fi
 
