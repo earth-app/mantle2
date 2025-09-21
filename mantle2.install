@@ -635,6 +635,16 @@ function mantle2_install(): void
 			'label' => 'End Date',
 			'required' => false,
 		],
+		[
+			'name' => 'field_visibility',
+			'type' => 'list_string',
+			'label' => 'Visibility',
+			'required' => true,
+			'settings' => [
+				'allowed_values' => array_map(fn($case) => $case->value, Visibility::cases()),
+			],
+			'cardinality' => 1,
+		],
 	]);
 
 	// Add Event Attendees Field
