@@ -2345,8 +2345,29 @@ mantle2.articles:
   options:
     tags: Articles
     description: Lists all articles
+    schema/200: articles()
+    schema/404: Not Found
+  methods: [GET]
+
+mantle2.articles.random:
+  path: '/v2/articles/random'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::randomArticle'
+    _title: 'Random Articles'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Articles
+    description: Retrieves random articles
     schema/200: articlesList()
     schema/404: Not Found
+    query:
+      count:
+        type: integer
+        minimum: 1
+        maximum: 15
+        default: 3
+        description: The number of random articles to retrieve
   methods: [GET]
 
 mantle2.articles.create:

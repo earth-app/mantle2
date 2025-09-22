@@ -938,6 +938,14 @@ class Mantle2Schemas
 			],
 		];
 	}
+	public static function articles(): array
+	{
+		return self::paginated(self::article());
+	}
+	public static function articlesList(): array
+	{
+		return ['type' => 'array', 'items' => self::article()];
+	}
 
 	public static function oceanArticle(): array
 	{

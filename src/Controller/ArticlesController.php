@@ -14,6 +14,7 @@ use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
 use Exception;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,6 +29,7 @@ class ArticlesController extends ControllerBase
 	// GET /v2/articles
 	public function articles(Request $request): JsonResponse
 	{
+		$requester = UsersHelper::getOwnerOfRequest($request);
 		$pagination = GeneralHelper::paginatedParameters($request);
 		if ($pagination instanceof JsonResponse) {
 			return $pagination;
@@ -61,7 +63,8 @@ class ArticlesController extends ControllerBase
 				$article = ArticlesHelper::nodeToArticle($node);
 				if ($article) {
 					$item = $article->jsonSerialize();
-					$item['id'] = GeneralHelper::formatId($node->id());
+
+					$item['author'] = UsersHelper::serializeUser($article->getAuthor(), $requester);
 					$item['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 					$item['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 					$data[] = $item;
@@ -78,6 +81,63 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::internalError(
 				'Failed to load articles storage: ' . $e->getMessage(),
 			);
+		}
+	}
+
+	// GET /v2/articles/random
+	public function randomArticle(Request $request): JsonResponse
+	{
+		$requester = UsersHelper::getOwnerOfRequest($request);
+
+		try {
+			$count = $request->query->getInt('count', 3);
+			if ($count < 1 || $count > 15) {
+				return GeneralHelper::badRequest('Count must be between 1 and 15');
+			}
+
+			$connection = Drupal::database();
+			$query = $connection
+				->select('node_field_data', 'n')
+				->fields('n', ['nid'])
+				->condition('n.status', 1)
+				->condition('n.type', 'article');
+
+			$query->orderRandom()->range(0, $count);
+			$nids = $query->execute()->fetchCol();
+
+			if (empty($nids)) {
+				return GeneralHelper::notFound('No prompts found');
+			}
+
+			$results = [];
+
+			foreach ($nids as $randomNid) {
+				$node = Node::load($randomNid);
+
+				if (!$node) {
+					return GeneralHelper::internalError('Failed to load random prompt');
+				}
+
+				$article = ArticlesHelper::nodeToArticle($node);
+				if (!$article) {
+					return GeneralHelper::internalError('Failed to convert node to article');
+				}
+
+				$result = $article->jsonSerialize();
+				$result['author'] = UsersHelper::serializeUser($article->getAuthor(), $requester);
+				$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+				$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+
+				$results[] = $result;
+			}
+
+			return new JsonResponse($results, Response::HTTP_OK);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load articles storage: ' . $e->getMessage(),
+			);
+		} catch (UnexpectedValueException $e) {
+			return GeneralHelper::badRequest('Invalid count parameter: ' . $e->getMessage());
 		}
 	}
 

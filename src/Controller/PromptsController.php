@@ -226,7 +226,7 @@ class PromptsController extends ControllerBase
 				$results[] = $result;
 			}
 
-			return new JsonResponse($results);
+			return new JsonResponse($results, Response::HTTP_OK);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
 				'Failed to load prompts storage: ' . $e->getMessage(),
