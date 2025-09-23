@@ -89,25 +89,17 @@ class ArticlesHelper
 		}
 
 		if (isset($ocean['abstract'])) {
-			if (
-				!is_string($ocean['abstract']) ||
-				strlen($ocean['abstract']) < 50 ||
-				strlen($ocean['abstract']) > 10000
-			) {
+			if (!is_string($ocean['abstract']) || strlen($ocean['abstract']) > 100000) {
 				return GeneralHelper::badRequest(
-					'Field ocean.abstract must be a string between 50 and 10,000 characters',
+					'Field ocean.abstract must be a string at most 100,000 characters',
 				);
 			}
 		}
 
 		if (isset($ocean['content'])) {
-			if (
-				!is_string($ocean['content']) ||
-				strlen($ocean['content']) < 50 ||
-				strlen($ocean['content']) > 10000
-			) {
+			if (!is_string($ocean['content']) || strlen($ocean['content']) > 100000) {
 				return GeneralHelper::badRequest(
-					'Field ocean.content must be a string between 50 and 10,000 characters',
+					'Field ocean.content must be a string at most 100,000 characters',
 				);
 			}
 		}
@@ -130,9 +122,9 @@ class ArticlesHelper
 					);
 				}
 
-				if (strlen($keyword) > 35) {
+				if (strlen($keyword) > 100) {
 					return GeneralHelper::badRequest(
-						'Field ocean.keywords must be an array of strings up to 35 characters',
+						'Field ocean.keywords must be an array of strings up to 100 characters',
 					);
 				}
 			}

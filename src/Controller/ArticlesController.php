@@ -207,9 +207,9 @@ class ArticlesController extends ControllerBase
 
 		// Validate content
 		$content = $body['content'];
-		if (!is_string($content) || strlen($content) < 50 || strlen($content) > 10000) {
+		if (!is_string($content) || strlen($content) < 50 || strlen($content) > 25000) {
 			return GeneralHelper::badRequest(
-				'Field content must be a string between 50 and 10,000 characters',
+				'Field content must be a string between 50 and 25,000 characters',
 			);
 		}
 
@@ -350,9 +350,9 @@ class ArticlesController extends ControllerBase
 		// Validate content
 		if (array_key_exists('content', $body)) {
 			$content = $body['content'];
-			if (!is_string($content) || strlen($content) < 50 || strlen($content) > 10000) {
+			if (!is_string($content) || strlen($content) < 50 || strlen($content) > 25000) {
 				return GeneralHelper::badRequest(
-					'Field content must be a string between 50 and 10,000 characters',
+					'Field content must be a string between 50 and 25,000 characters',
 				);
 			}
 		}
