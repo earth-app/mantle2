@@ -1382,8 +1382,9 @@ class UsersHelper
 			fn(array $data) => new Notification(
 				$data['id'],
 				$data['user_id'],
+				$data['title'],
 				$data['message'],
-				$data['timestamp'],
+				$data['created_at'] ?? time(),
 				$data['link'] ?? null,
 				$data['type'] ?? 'info',
 				$data['source'] ?? 'system',
