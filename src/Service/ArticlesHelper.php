@@ -175,9 +175,9 @@ class ArticlesHelper
 
 			$date = strtotime($ocean['date']);
 			if ($date === false) {
-				return GeneralHelper::badRequest(
-					'Field ocean.date must be a valid ISO date string',
-				);
+				unset($ocean['date']);
+			} else {
+				$ocean['date'] = date(DATE_ATOM, $date);
 			}
 		}
 
