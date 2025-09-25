@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Controller;
 
+use DateTimeImmutable;
 use Drupal;
 use Exception;
 use Drupal\Core\Controller\ControllerBase;
@@ -1138,12 +1139,33 @@ class UsersController extends ControllerBase
 
 		// Check if this is a new IP address
 		if (!in_array($currentIP, $previousIPs, true)) {
+			$date = new DateTimeImmutable();
+			$timestamp = $date->format(DATE_ATOM);
+			$ips = implode(
+				'\n',
+				array_map(
+					fn($ip) => "- $ip",
+					array_filter($request->getClientIps(), fn($ip) => $ip !== $currentIP),
+				),
+			);
+
 			// Add notification for new IP login
 			UsersHelper::addNotification(
 				$account,
 				Drupal::translation()->translate('New Login Location'),
 				Drupal::translation()->translate(
-					"Your account was accessed from a new IP address: {$currentIP}. If this wasn't you, please secure your account immediately.",
+					"Your account was accessed from a new IP address: {$currentIP}.
+
+					Additional Addresses used in this request:
+					{$ips}
+
+					Other Info:
+					{$timestamp}
+					{$request->headers->get('User-Agent', 'Unknown Device')}
+					{$request->headers->get('Accept-Language', 'Unknown Language')}.
+					{$request->headers->get('Referer', 'No Referrer')}.
+
+					If this wasn't you, please secure your account immediately.",
 				),
 				null,
 				'warning',
