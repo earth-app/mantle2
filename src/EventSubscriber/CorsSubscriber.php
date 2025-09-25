@@ -17,14 +17,9 @@ class CorsSubscriber implements EventSubscriberInterface
 
 	public function onRespond(ResponseEvent $event)
 	{
-		$request = $event->getRequest();
 		$response = $event->getResponse();
-		$host = $request->headers->get('Origin') ?? $request->headers->get('Host');
-		if ($host === null) {
-			$host = '*'; // Fallback to wildcard if no host is provided
-		}
 
-		$response->headers->set('Access-Control-Allow-Origin', $host);
+		$response->headers->set('Access-Control-Allow-Origin', 'https://api.earth-app.com');
 		$response->headers->set(
 			'Access-Control-Allow-Methods',
 			'GET, POST, PUT, PATCH, DELETE, OPTIONS',
