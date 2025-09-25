@@ -698,15 +698,17 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
+				'id' => self::$id,
 				'user_id' => self::$id,
 				'type' => ['type' => 'string', 'example' => 'info'],
-				'message' => self::text(500),
+				'title' => self::text(100, 1, 'Notification Title'),
+				'message' => self::text(500, 1, 'You have a new message.'),
 				'source' => ['type' => 'string', 'example' => 'system'],
 				'created_at' => ['type' => 'integer', 'example' => 1736400000000],
 				'link' => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
 				'read' => self::$bool,
 			],
-			'required' => ['id', 'type', 'source', 'message', 'created_at', 'read'],
+			'required' => ['id', 'type', 'source', 'title', 'message', 'created_at', 'read'],
 		];
 	}
 
