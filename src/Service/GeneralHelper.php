@@ -61,6 +61,7 @@ class GeneralHelper
 	{
 		$s = (string) $id;
 		if (strlen($s) < 24) {
+			// avoid double padding
 			$s = str_pad($s, 24, '0', STR_PAD_LEFT);
 		}
 		return substr($s, 0, 24);

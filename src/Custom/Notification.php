@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Custom;
 
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use JsonSerializable;
@@ -45,7 +46,7 @@ class Notification implements JsonSerializable
 		return [
 			'id' => $this->id,
 			'title' => $this->title,
-			'user_id' => $this->userId,
+			'user_id' => GeneralHelper::formatId($this->userId),
 			'message' => $this->message,
 			'link' => $this->link,
 			'type' => $this->type,
