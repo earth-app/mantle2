@@ -1154,18 +1154,19 @@ class UsersController extends ControllerBase
 				$account,
 				Drupal::translation()->translate('New Login Location'),
 				Drupal::translation()->translate(
-					"Your account was accessed from a new IP address: {$currentIP}.
-
-					Additional Addresses used in this request:
-					{$ips}
-
-					Other Info:
-					{$timestamp}
-					{$request->headers->get('User-Agent', 'Unknown Device')}
-					{$request->headers->get('Accept-Language', 'Unknown Language')}.
-					{$request->headers->get('Referer', 'No Referrer')}.
-
-					If this wasn't you, please secure your account immediately.",
+					"Your account was accessed from a new IP address: {$currentIP}.\n\n" .
+						'Additional Addresses used in this request:' .
+						"{$ips}\n" .
+						"Other Info:\n" .
+						$timestamp .
+						"\n" .
+						$request->headers->get('User-Agent', 'Unknown Device') .
+						"\n" .
+						$request->headers->get('Accept-Language', 'Unknown Language') .
+						"\n" .
+						$request->headers->get('Referer', 'No Referrer') .
+						"\n\n" .
+						"If this wasn't you, please secure your account immediately.",
 				),
 				null,
 				'warning',
