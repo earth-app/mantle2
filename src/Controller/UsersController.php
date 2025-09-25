@@ -9,6 +9,7 @@ use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\mantle2\Custom\AccountType;
+use Drupal\mantle2\Custom\Notification;
 use Drupal\user\Entity\User;
 use Drupal\user\UserAuthInterface;
 use Drupal\user\UserInterface;
@@ -954,9 +955,14 @@ class UsersController extends ControllerBase
 		}
 
 		$notifications = UsersHelper::getNotifications($resolved);
-		$unreadCount = count(array_filter($notifications, fn($n) => !$n['read']));
-		$hasWarnings = count(array_filter($notifications, fn($n) => $n['type'] === 'warning')) > 0;
-		$hasErrors = count(array_filter($notifications, fn($n) => $n['type'] === 'error')) > 0;
+		$unreadCount = count(array_filter($notifications, fn(Notification $n) => !$n->isRead()));
+		$hasWarnings =
+			count(
+				array_filter($notifications, fn(Notification $n) => $n->getType() === 'warning'),
+			) > 0;
+		$hasErrors =
+			count(array_filter($notifications, fn(Notification $n) => $n->getType() === 'error')) >
+			0;
 
 		return new JsonResponse(
 			[
