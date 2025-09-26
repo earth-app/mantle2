@@ -1378,24 +1378,24 @@ class UsersHelper
 	public static function getNotifications(UserInterface $user): array
 	{
 		$notifications = json_decode($user->get('field_notifications')->value ?? '[]', true);
-		return usort(
-			array_map(
-				fn(array $data) => new Notification(
-					$data['id'],
-					$data['user_id'],
-					$data['title'],
-					$data['message'],
-					$data['created_at'] ?? time(),
-					$data['link'] ?? null,
-					$data['type'] ?? 'info',
-					$data['source'] ?? 'system',
-					$data['read'] ?? false,
-				),
-				$notifications,
+
+		$notifications0 = array_map(
+			fn(array $data) => new Notification(
+				$data['id'],
+				$data['user_id'],
+				$data['title'],
+				$data['message'],
+				$data['created_at'] ?? time(),
+				$data['link'] ?? null,
+				$data['type'] ?? 'info',
+				$data['source'] ?? 'system',
+				$data['read'] ?? false,
 			),
-			fn($a, $b) => $b->getTimestamp() <=> $a->getTimestamp(),
-		) ?:
-			[]; // newest first
+			$notifications,
+		);
+		usort($notifications0, fn($a, $b) => $b->getTimestamp() <=> $a->getTimestamp());
+
+		return $notifications0;
 	}
 
 	public static function getNotification(UserInterface $user, string $id): ?Notification
