@@ -15,11 +15,28 @@ class CorsSubscriber implements EventSubscriberInterface
 		];
 	}
 
+	private array $allowedOrigins = [
+		'https://api.earth-app.com',
+		'https://earth-app.com',
+		'https://app.earth-app.com',
+		'https://cloud.earth-app.com',
+		'http://localhost:3000', // local development, TODO remove on launch
+		'http://127.0.0.1:3000',
+	];
+
 	public function onRespond(ResponseEvent $event)
 	{
+		$request = $event->getRequest();
+		$origin = $request->headers->get('Origin');
 		$response = $event->getResponse();
 
-		$response->headers->set('Access-Control-Allow-Origin', 'https://api.earth-app.com');
+		if (in_array($origin, $this->allowedOrigins)) {
+			$response->headers->set('Access-Control-Allow-Origin', $origin);
+		} else {
+			$response->headers->set('Access-Control-Allow-Origin', $this->allowedOrigins[0]); // Default to the first allowed origin
+		}
+
+		$response->headers->set('Vary', 'Origin');
 		$response->headers->set(
 			'Access-Control-Allow-Methods',
 			'GET, POST, PUT, PATCH, DELETE, OPTIONS',
