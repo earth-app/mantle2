@@ -84,7 +84,7 @@ class PromptsController extends ControllerBase
 				$node = Node::load($nid);
 				if ($node) {
 					$data[] = [
-						'id' => (int) $nid,
+						'id' => GeneralHelper::formatId($nid),
 						...PromptsHelper::nodeToPrompt($node)->jsonSerialize(),
 					];
 				}
