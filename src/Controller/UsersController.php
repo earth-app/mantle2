@@ -1149,6 +1149,9 @@ class UsersController extends ControllerBase
 				),
 			);
 
+			$userAgent = $request->headers->get('User-Agent', 'Unknown Device');
+			$referer = $request->headers->get('Referer', 'No Referrer');
+
 			// Add notification for new IP login
 			UsersHelper::addNotification(
 				$account,
@@ -1160,11 +1163,11 @@ class UsersController extends ControllerBase
 						"Other Info:\n" .
 						$timestamp .
 						"\n" .
-						$request->headers->get('User-Agent', 'Unknown Device') .
+						$userAgent .
+						"\n" .
+						$referer .
 						"\n" .
 						$request->headers->get('Accept-Language', 'Unknown Language') .
-						"\n" .
-						$request->headers->get('Referer', 'No Referrer') .
 						"\n\n" .
 						"If this wasn't you, please secure your account immediately.",
 				),
@@ -1172,6 +1175,15 @@ class UsersController extends ControllerBase
 				'warning',
 				'system',
 			);
+
+			// Send new login email notification
+			UsersHelper::sendEmail($account, 'new_login', [
+				'time' => $timestamp,
+				'ip' => $currentIP,
+				'additional_ips' => $ips ?: 'No other IPs detected',
+				'user_agent' => $userAgent,
+				'referer' => $referer,
+			]);
 
 			// Update the list of known IPs (keep only last 10 for storage efficiency)
 			$previousIPs[] = $currentIP;

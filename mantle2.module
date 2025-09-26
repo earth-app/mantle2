@@ -41,6 +41,31 @@ function mantle2_mail($key, &$message, $params)
 				'If you did not request this verification, please ignore this email.',
 			);
 			break;
+		case 'new_login':
+			$message['from'] = Drupal::config('system.site')->get('mail');
+			$message['subject'] = Drupal::translation()->translate(
+				'The Earth App - New Login Notification',
+			);
+			$message['body'][] = Drupal::translation()->translate(
+				'Your account was just used to log in from a new device or location.',
+			);
+			$message['body'][] = Drupal::translation()->translate(
+				'Details:\n' . '@time\n' . '@ip (@additional_ips)\n' . '@user_agent\n' . '@referer',
+				[
+					'@time' => $params['time'],
+					'@ip' => $params['ip'],
+					'@additional_ips' => $params['additional_ips'],
+					'@user_agent' => $params['user_agent'],
+					'@referer' => $params['referer'],
+				],
+			);
+			$message['body'][] = Drupal::translation()->translate(
+				'If this was you, you can safely ignore this email.',
+			);
+			$message['body'][] = Drupal::translation()->translate(
+				'If you did not log in, please reset your password immediately to secure your account.',
+			);
+			break;
 	}
 }
 

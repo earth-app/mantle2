@@ -1584,4 +1584,32 @@ class UsersHelper
 			Response::HTTP_OK,
 		);
 	}
+
+	public static function sendEmail(UserInterface $user, string $key, array $params): void
+	{
+		$email = $user->getEmail();
+		if (!$email) {
+			Drupal::logger('mantle2')->warning(
+				'Cannot send email notification %key to user %uid: no email address.',
+				[
+					'%key' => $key,
+					'%uid' => $user->id(),
+				],
+			);
+			return;
+		}
+
+		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
+		$mailManager = Drupal::service('plugin.manager.mail');
+		$module = 'mantle2';
+		$to = $email;
+		$langcode = $user->getPreferredLangcode();
+		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
+		if (!$result['result']) {
+			Drupal::logger('mantle2')->error('Failed to send email %key to %email', [
+				'%key' => $key,
+				'%email' => $email,
+			]);
+		}
+	}
 }
