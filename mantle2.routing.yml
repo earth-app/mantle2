@@ -623,7 +623,7 @@ mantle2.users.id.notifications.get:
   requirements:
     _access: 'TRUE'
     id: '\d+'
-    notificationId: '\d+'
+    notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
     description: Retrieves a specific notification for a user by their ID
@@ -644,7 +644,7 @@ mantle2.users.id.notifications.mark_read:
   requirements:
     _access: 'TRUE'
     id: '\d+'
-    notificationId: '\d+'
+    notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
     description: Marks a specific notification for a user as read
@@ -1188,7 +1188,7 @@ mantle2.users.username.notifications.get:
   requirements:
     _access: 'TRUE'
     username: '@\w+'
-    notificationId: '\d+'
+    notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
     description: Retrieves a specific notification for a user by their ID
@@ -1209,7 +1209,7 @@ mantle2.users.username.notifications.mark_read:
   requirements:
     _access: 'TRUE'
     username: '@\w+'
-    notificationId: '\d+'
+    notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
     description: Marks a specific notification for a user as read
@@ -1670,7 +1670,7 @@ mantle2.users.current.notifications.get:
     _title: 'Get Current User Notification by ID'
   requirements:
     _access: 'TRUE'
-    notificationId: '\d+'
+    notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
     description: Retrieves a specific notification for the current user by their ID
@@ -1688,7 +1688,7 @@ mantle2.users.current.notifications.mark_read:
     _title: 'Mark Current User Notifications as Read by ID'
   requirements:
     _access: 'TRUE'
-    notificationId: '\d+'
+    notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
     description: Marks a specific notification for the current user as read

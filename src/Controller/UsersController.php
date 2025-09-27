@@ -998,9 +998,9 @@ class UsersController extends ControllerBase
 		return new JsonResponse($notification, Response::HTTP_OK);
 	}
 
-	// POST /v2/users/current/notifications/{notificationId}/read
-	// POST /v2/users/{id}/notifications/{notificationId}/read
-	// POST /v2/users/{username}/notifications/{notificationId}/read
+	// POST /v2/users/current/notifications/{notificationId}/mark_read
+	// POST /v2/users/{id}/notifications/{notificationId}/mark_read
+	// POST /v2/users/{username}/notifications/{notificationId}/mark_read
 	public function markUserNotificationRead(
 		Request $request,
 		string $notificationId,
