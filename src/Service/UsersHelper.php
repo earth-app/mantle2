@@ -1469,9 +1469,10 @@ class UsersHelper
 		self::setNotifications($user, $notifications);
 	}
 
-	public static function markNotificationAsRead(UserInterface $user, string $id): bool
-	{
-		$notification = self::getNotification($user, $id);
+	public static function markNotificationAsRead(
+		UserInterface $user,
+		Notification $notification,
+	): bool {
 		if ($notification === null || $notification->isRead()) {
 			return false;
 		}

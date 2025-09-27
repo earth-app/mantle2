@@ -1017,11 +1017,11 @@ class UsersController extends ControllerBase
 			return GeneralHelper::notFound('Notification not found');
 		}
 
-		if ($notification['read']) {
+		if ($notification->isRead()) {
 			return GeneralHelper::conflict('Notification is already marked as read');
 		}
 
-		$result = UsersHelper::markNotificationAsRead($user, $notificationId);
+		$result = UsersHelper::markNotificationAsRead($user, $notification);
 		if (!$result) {
 			return GeneralHelper::internalError('Failed to mark notification as read');
 		}
