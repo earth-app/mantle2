@@ -1477,30 +1477,65 @@ class UsersHelper
 			return false;
 		}
 
-		$notification->setRead(true);
-		self::setNotifications($user, self::getNotifications($user));
+		$notifications = self::getNotifications($user);
+		foreach ($notifications as $n) {
+			if ($n->getId() === $notification->getId()) {
+				$n->setRead();
+				break;
+			}
+		}
+
+		self::setNotifications($user, $notifications);
 		return true;
 	}
 
-	public static function removeNotification(UserInterface $user, string $id): bool
-	{
-		$notification = self::getNotification($user, $id);
-		if ($notification !== null) {
-			$notifications = self::getNotifications($user);
-			$notifications = array_filter($notifications, fn($n) => $n->getId() !== $id);
-			self::setNotifications($user, $notifications);
-			return true;
+	public static function markNotificationAsUnread(
+		UserInterface $user,
+		Notification $notification,
+	): bool {
+		if ($notification === null || !$notification->isRead()) {
+			return false;
 		}
 
-		Drupal::logger('mantle2')->warning(
-			'Internal Warning: User %uid attempted to remove a non-existent notification %id.',
-			[
-				'%uid' => $user->id(),
-				'%id' => $id,
-			],
-		);
+		$notifications = self::getNotifications($user);
+		foreach ($notifications as $n) {
+			if ($n->getId() === $notification->getId()) {
+				$n->setRead(false);
+				break;
+			}
+		}
 
-		return false;
+		self::setNotifications($user, $notifications);
+		return true;
+	}
+
+	public static function markAllNotificationsAsRead(UserInterface $user): void
+	{
+		$notifications = self::getNotifications($user);
+		foreach ($notifications as $notification) {
+			$notification->setRead();
+		}
+		self::setNotifications($user, $notifications);
+	}
+
+	public static function markAllNotificationsAsUnread(UserInterface $user): void
+	{
+		$notifications = self::getNotifications($user);
+		foreach ($notifications as $notification) {
+			$notification->setRead(false);
+		}
+		self::setNotifications($user, $notifications);
+	}
+
+	public static function removeNotification(UserInterface $user, Notification $notification): bool
+	{
+		$notifications = self::getNotifications($user);
+		$notifications = array_filter(
+			$notifications,
+			fn($n) => $n->getId() !== $notification->getId(),
+		);
+		self::setNotifications($user, $notifications);
+		return true;
 	}
 
 	public static function updateNotification(UserInterface $user, string $id, array $updates): bool

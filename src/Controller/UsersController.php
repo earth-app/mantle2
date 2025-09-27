@@ -976,6 +976,40 @@ class UsersController extends ControllerBase
 		);
 	}
 
+	// POST /v2/users/current/notifications/mark_all_read
+	// POST /v2/users/{id}/notifications/mark_all_read
+	// POST /v2/users/{username}/notifications/mark_all_read
+	public function markAllUserNotificationsRead(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		UsersHelper::markAllNotificationsAsRead($user);
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
+	// POST /v2/users/current/notifications/mark_all_unread
+	// POST /v2/users/{id}/notifications/mark_all_unread
+	// POST /v2/users/{username}/notifications/mark_all_unread
+	public function markAllUserNotificationsUnread(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		UsersHelper::markAllNotificationsAsUnread($user);
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
 	// GET /v2/users/current/notifications/{notificationId}
 	// GET /v2/users/{id}/notifications/{notificationId}
 	// GET /v2/users/{username}/notifications/{notificationId}
@@ -1024,6 +1058,64 @@ class UsersController extends ControllerBase
 		$result = UsersHelper::markNotificationAsRead($user, $notification);
 		if (!$result) {
 			return GeneralHelper::internalError('Failed to mark notification as read');
+		}
+
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
+	// POST /v2/users/current/notifications/{notificationId}/mark_unread
+	// POST /v2/users/{id}/notifications/{notificationId}/mark_unread
+	// POST /v2/users/{username}/notifications/{notificationId}/mark_unread
+	public function markUserNotificationUnread(
+		Request $request,
+		string $notificationId,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$notification = UsersHelper::getNotification($user, $notificationId);
+		if (!$notification) {
+			return GeneralHelper::notFound('Notification not found');
+		}
+
+		if (!$notification->isRead()) {
+			return GeneralHelper::conflict('Notification is already marked as unread');
+		}
+
+		$result = UsersHelper::markNotificationAsUnread($user, $notification);
+		if (!$result) {
+			return GeneralHelper::internalError('Failed to mark notification as unread');
+		}
+
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
+	// DELETE /v2/users/current/notifications/{notificationId}
+	// DELETE /v2/users/{id}/notifications/{notificationId}
+	// DELETE /v2/users/{username}/notifications/{notificationId}
+	public function deleteUserNotification(
+		Request $request,
+		string $notificationId,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$notification = UsersHelper::getNotification($user, $notificationId);
+		if (!$notification) {
+			return GeneralHelper::notFound('Notification not found');
+		}
+
+		$result = UsersHelper::removeNotification($user, $notification);
+		if (!$result) {
+			return GeneralHelper::internalError('Failed to delete notification');
 		}
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);

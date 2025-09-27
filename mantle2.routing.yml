@@ -636,6 +636,46 @@ mantle2.users.id.notifications.get:
         type: string
   methods: [GET]
 
+mantle2.users.id.notifications.mark_all_read:
+  path: '/v2/users/{id}/notifications/mark_all_read'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markAllUserNotificationsRead'
+    _title: 'Mark All User Notifications as Read by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,User Notifications
+    description: Marks all notifications for a user as read
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.notifications.mark_all_unread:
+  path: '/v2/users/{id}/notifications/mark_all_unread'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markAllUserNotificationsUnread'
+    _title: 'Mark All User Notifications as Unread by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,User Notifications
+    description: Marks all notifications for a user as unread
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
 mantle2.users.id.notifications.mark_read:
   path: '/v2/users/{id}/notifications/{notificationId}/mark_read'
   defaults:
@@ -658,6 +698,52 @@ mantle2.users.id.notifications.mark_read:
       notificationId:
         type: string
   methods: [POST]
+
+mantle2.users.id.notifications.mark_unread:
+  path: '/v2/users/{id}/notifications/{notificationId}/mark_unread'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markUserNotificationUnread'
+    _title: 'Mark User Notification as Unread by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    notificationId: '^[0-9a-f]{32}$'
+  options:
+    tags: Users,User Notifications
+    description: Marks a specific notification for a user as unread
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      id:
+        type: string
+      notificationId:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.notifications.delete:
+  path: '/v2/users/{id}/notifications/{notificationId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::deleteUserNotification'
+    _title: 'Delete User Notification by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    notificationId: '^[0-9a-f]{32}$'
+  options:
+    tags: Users,User Notifications
+    description: Deletes a specific notification for a user
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      id:
+        type: string
+      notificationId:
+        type: string
+  methods: [DELETE]
 
 mantle2.users.id.notifications.clear:
   path: '/v2/users/{id}/notifications/clear'
@@ -1201,6 +1287,46 @@ mantle2.users.username.notifications.get:
         type: string
   methods: [GET]
 
+mantle2.users.username.notifications.mark_all_read:
+  path: '/v2/users/{username}/notifications/mark_all_read'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markAllUserNotificationsRead'
+    _title: 'Mark All User Notifications as Read by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,User Notifications
+    description: Marks all notifications for a user as read
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.notifications.mark_all_unread:
+  path: '/v2/users/{username}/notifications/mark_all_unread'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markAllUserNotificationsUnread'
+    _title: 'Mark All User Notifications as Unread by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,User Notifications
+    description: Marks all notifications for a user as unread
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
 mantle2.users.username.notifications.mark_read:
   path: '/v2/users/{username}/notifications/{notificationId}/mark_read'
   defaults:
@@ -1223,6 +1349,52 @@ mantle2.users.username.notifications.mark_read:
       notificationId:
         type: string
   methods: [POST]
+
+mantle2.users.username.notifications.mark_unread:
+  path: '/v2/users/{username}/notifications/{notificationId}/mark_unread'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markUserNotificationUnread'
+    _title: 'Mark User Notification as Unread by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+    notificationId: '^[0-9a-f]{32}$'
+  options:
+    tags: Users,User Notifications
+    description: Marks a specific notification for a user as unread
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      username:
+        type: string
+      notificationId:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.notifications.delete:
+  path: '/v2/users/{username}/notifications/{notificationId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::deleteUserNotification'
+    _title: 'Delete User Notification by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+    notificationId: '^[0-9a-f]{32}$'
+  options:
+    tags: Users,User Notifications
+    description: Deletes a specific notification for a user
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      username:
+        type: string
+      notificationId:
+        type: string
+  methods: [DELETE]
 
 mantle2.users.username.notifications.clear:
   path: '/v2/users/{username}/notifications/clear'
@@ -1681,6 +1853,38 @@ mantle2.users.current.notifications.get:
         type: string
   methods: [GET]
 
+mantle2.users.current.notifications.mark_all_read:
+  path: '/v2/users/current/notifications/mark_all_read'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markAllUserNotificationsRead'
+    _title: 'Mark All Current User Notifications as Read'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,User Notifications
+    description: Marks all notifications for the current user as read
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+  methods: [POST]
+
+mantle2.users.current.notifications.mark_all_unread:
+  path: '/v2/users/current/notifications/mark_all_unread'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markAllUserNotificationsUnread'
+    _title: 'Mark All Current User Notifications as Unread'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,User Notifications
+    description: Marks all notifications for the current user as unread
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+  methods: [POST]
+
 mantle2.users.current.notifications.mark_read:
   path: '/v2/users/current/notifications/{notificationId}/mark_read'
   defaults:
@@ -1700,6 +1904,46 @@ mantle2.users.current.notifications.mark_read:
       notificationId:
         type: string
   methods: [POST]
+
+mantle2.users.current.notifications.mark_unread:
+  path: '/v2/users/current/notifications/{notificationId}/mark_unread'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::markUserNotificationUnread'
+    _title: 'Mark Current User Notification as Unread by ID'
+  requirements:
+    _access: 'TRUE'
+    notificationId: '^[0-9a-f]{32}$'
+  options:
+    tags: Users,User Notifications
+    description: Marks a specific notification for the current user as unread
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      notificationId:
+        type: string
+  methods: [POST]
+
+mantle2.users.current.notifications.delete:
+  path: '/v2/users/current/notifications/{notificationId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::deleteUserNotification'
+    _title: 'Delete Current User Notification by ID'
+  requirements:
+    _access: 'TRUE'
+    notificationId: '^[0-9a-f]{32}$'
+  options:
+    tags: Users,User Notifications
+    description: Deletes a specific notification for the current user
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or notification not found
+    parameters:
+      notificationId:
+        type: string
+  methods: [DELETE]
 
 mantle2.users.current.notifications.clear:
   path: '/v2/users/current/notifications/clear'
@@ -2057,6 +2301,37 @@ mantle2.events.leave:
         type: integer
         description: The ID of the event to cancel signup for
   methods: [POST]
+
+mantle2.events.current:
+  path: '/v2/events/current'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userEvents'
+    _title: 'Get Current User Events'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Events,Users
+    description: Retrieves events for the current user
+    schema/200: events()
+    schema/400: Invalid Pagination Parameters
+    schema/401: Unauthorized
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+  methods: [GET]
 
 ## Prompt Routes
 mantle2.prompts:
