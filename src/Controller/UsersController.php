@@ -915,7 +915,7 @@ class UsersController extends ControllerBase
 
 		// Check if this is an email change verification first
 		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
-		$tempstore = \Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
 		$emailChangeKey = 'email_change_' . $user->id();
 
 		try {
@@ -924,9 +924,9 @@ class UsersController extends ControllerBase
 				// This is an email change verification
 				return UsersHelper::verifyEmailChange($user, $code);
 			}
-		} catch (\Exception $e) {
+		} catch (Exception $e) {
 			// Log but continue to check regular email verification
-			\Drupal::logger('mantle2')->warning(
+			Drupal::logger('mantle2')->warning(
 				'Failed to check email change verification: %message',
 				[
 					'%message' => $e->getMessage(),
@@ -948,8 +948,8 @@ class UsersController extends ControllerBase
 
 		try {
 			$storedData = $tempstore->get($codeKey);
-		} catch (\Exception $e) {
-			\Drupal::logger('mantle2')->error(
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
 				'Failed to retrieve email verification code: %message',
 				[
 					'%message' => $e->getMessage(),
@@ -968,9 +968,9 @@ class UsersController extends ControllerBase
 			// Clean up expired code
 			try {
 				$tempstore->delete($codeKey);
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 				// Log but don't fail the request
-				\Drupal::logger('mantle2')->warning(
+				Drupal::logger('mantle2')->warning(
 					'Failed to delete expired verification code: %message',
 					[
 						'%message' => $e->getMessage(),
@@ -1002,9 +1002,9 @@ class UsersController extends ControllerBase
 		// Clean up used verification code
 		try {
 			$tempstore->delete($codeKey);
-		} catch (\Exception $e) {
+		} catch (Exception $e) {
 			// Log but don't fail the request since verification was successful
-			\Drupal::logger('mantle2')->warning(
+			Drupal::logger('mantle2')->warning(
 				'Failed to delete used verification code: %message',
 				[
 					'%message' => $e->getMessage(),
@@ -1016,9 +1016,9 @@ class UsersController extends ControllerBase
 		$rateLimitKey = 'email_verification_rate_limit_' . $user->id();
 		try {
 			$tempstore->delete($rateLimitKey);
-		} catch (\Exception $e) {
+		} catch (Exception $e) {
 			// Log but don't fail the request since verification was successful
-			\Drupal::logger('mantle2')->warning(
+			Drupal::logger('mantle2')->warning(
 				'Failed to delete email verification rate limit: %message',
 				[
 					'%message' => $e->getMessage(),
