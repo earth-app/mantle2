@@ -46,3 +46,7 @@ services:
     arguments: ['@keyvalue.expirable', '@lock', '@current_user', '@request_stack', 900]
     tags:
       - { name: backend_overridable }
+
+  # Email Markdown Rendering
+  mantle2.parser:
+    class: Drupal\mantle2\Service\MarkdownFactory
