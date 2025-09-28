@@ -2496,25 +2496,6 @@ mantle2.prompts.responses.create:
         description: The ID of the prompt to create a response for
   methods: [POST]
 
-mantle2.prompts.responses.count:
-  path: '/v2/prompts/{prompt}/responses/count'
-  defaults:
-    _controller: '\Drupal\mantle2\Controller\PromptsController::getPromptResponsesCount'
-    _title: 'Count Prompt Responses'
-  requirements:
-    _access: 'TRUE'
-    prompt: \d+
-  options:
-    tags: Prompts
-    description: Counts responses for a specific prompt
-    schema/200: promptResponsesCount()
-    schema/404: Not Found
-    parameters:
-      prompt:
-        type: entity:node
-        description: The ID of the prompt to count responses for
-  methods: [GET]
-
 mantle2.prompts.responses.get:
   path: '/v2/prompts/{prompt}/responses/{response}'
   defaults:

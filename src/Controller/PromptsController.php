@@ -145,6 +145,8 @@ class PromptsController extends ControllerBase
 
 		$result = $obj->jsonSerialize();
 		$result['id'] = GeneralHelper::formatId($node->id());
+		$result['owner'] = UsersHelper::serializeUser($obj->getOwner(), $user);
+		$result['responses_count'] = 0;
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -218,8 +220,11 @@ class PromptsController extends ControllerBase
 					return GeneralHelper::internalError('Failed to load random prompt');
 				}
 
-				$result = PromptsHelper::nodeToPrompt($node)->jsonSerialize();
+				$data = PromptsHelper::nodeToPrompt($node);
+				$result = $data->jsonSerialize();
 				$result['id'] = GeneralHelper::formatId($randomNid);
+				$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
+				$result['responses_count'] = PromptsHelper::getCommentsCount($node);
 				$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 				$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -255,6 +260,8 @@ class PromptsController extends ControllerBase
 
 		$result = $data->jsonSerialize();
 		$result['id'] = GeneralHelper::formatId($prompt->id());
+		$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
+		$result['responses_count'] = PromptsHelper::getCommentsCount($prompt);
 		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
 
@@ -317,6 +324,8 @@ class PromptsController extends ControllerBase
 
 		$result = $data->jsonSerialize();
 		$result['id'] = GeneralHelper::formatId($prompt->id());
+		$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
+		$result['responses_count'] = PromptsHelper::getCommentsCount($prompt);
 		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
 
@@ -451,30 +460,6 @@ class PromptsController extends ControllerBase
 		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
 		return new JsonResponse($res, Response::HTTP_CREATED);
-	}
-
-	// GET /v2/prompts/{prompt}/responses/count
-	public function getPromptResponsesCount(Request $request, Node $prompt)
-	{
-		if (!$prompt || $prompt->getType() !== 'prompt') {
-			return GeneralHelper::notFound('Prompt not found');
-		}
-
-		$user = UsersHelper::getOwnerOfRequest($request);
-		$data = PromptsHelper::nodeToPrompt($prompt);
-		if (!$data) {
-			return GeneralHelper::internalError('Failed to load prompt');
-		}
-		if (!PromptsHelper::isVisible($data, $user)) {
-			return GeneralHelper::notFound('Prompt not found');
-		}
-
-		$count = PromptsHelper::getCommentsCount($prompt);
-		$result = $data->jsonSerialize();
-		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
-
-		return new JsonResponse(['count' => $count, 'prompt' => $result], Response::HTTP_OK);
 	}
 
 	// GET /v2/prompts/{prompt}/responses/{response}

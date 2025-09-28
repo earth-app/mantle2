@@ -849,10 +849,13 @@ class Mantle2Schemas
 				'id' => self::$id,
 				'prompt' => self::$text,
 				'visibility' => self::userPrivacy(),
+				'responses_count' => self::$number,
+				'owner_id' => self::$id,
+				'owner' => self::user(),
 				'created_at' => self::$date,
 				'updated_at' => self::$date,
 			],
-			'required' => ['id', 'prompt', 'visibility', 'created_at'],
+			'required' => ['id', 'prompt', 'visibility', 'created_at', 'responses_count', 'owner'],
 		];
 	}
 	public static function prompts(): array
