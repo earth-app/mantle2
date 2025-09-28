@@ -11,7 +11,8 @@
 		"ext-curl": "*",
 		"drupal/key": "1.20",
 		"symfony/rate-limiter": "^7.3",
-		"symfony/cache": "^7.3"
+		"symfony/cache": "^7.3",
+		"league/commonmark": "^2.7"
 	},
 	"autoload": {
 		"psr-4": {

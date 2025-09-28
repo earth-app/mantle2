@@ -3,16 +3,17 @@
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\PromptsHelper;
+use League\CommonMark\CommonMarkConverter;
 
 function mantle2_help($route_name, RouteMatchInterface $route_match)
 {
 	switch ($route_name) {
 		case 'help.page.mantle2':
 			$output = '';
-			$output .= '<h3>' . \Drupal::translation()->translate('About') . '</h3>';
+			$output .= '<h3>' . Drupal::translation()->translate('About') . '</h3>';
 			$output .=
 				'<p>' .
-				\Drupal::translation()->translate('The Drupal backend for The Earth App') .
+				Drupal::translation()->translate('The Drupal backend for The Earth App') .
 				'</p>';
 			return $output;
 
@@ -22,50 +23,54 @@ function mantle2_help($route_name, RouteMatchInterface $route_match)
 
 function mantle2_mail($key, &$message, $params)
 {
+	$message['from'] = Drupal::config('system.site')->get('mail');
+
 	switch ($key) {
 		case 'email_verification':
-			$message['from'] = Drupal::config('system.site')->get('mail');
 			$message['subject'] = Drupal::translation()->translate(
 				'The Earth App - Email Verification Code',
 			);
-			$message['body'][] = Drupal::translation()->translate(
-				'Your email verification code is: @code',
-				[
-					'@code' => $params['verification_code'],
-				],
-			);
-			$message['body'][] = Drupal::translation()->translate(
-				'This code will expire in 15 minutes.',
-			);
-			$message['body'][] = Drupal::translation()->translate(
-				'If you did not request this verification, please ignore this email.',
-			);
+
+			$markdown = <<<EOT
+			Your email verification code is: **{$params['verification_code']}**
+
+			This code will expire in 15 minutes.
+
+			If you did not request this verification, please ignore this email.
+			EOT;
+
+			$message['body'][] = markdownToHtml($markdown);
 			break;
 		case 'new_login':
-			$message['from'] = Drupal::config('system.site')->get('mail');
 			$message['subject'] = Drupal::translation()->translate(
 				'The Earth App - New Login Notification',
 			);
-			$message['body'][] = Drupal::translation()->translate(
-				'Your account was just used to log in from a new device or location.',
-			);
-			$message['body'][] = Drupal::translation()->translate(
-				'Details:\n' . '@time\n' . '@ip (@additional_ips)\n' . '@user_agent\n' . '@referer',
-				[
-					'@time' => $params['time'],
-					'@ip' => $params['ip'],
-					'@additional_ips' => $params['additional_ips'],
-					'@user_agent' => $params['user_agent'],
-					'@referer' => $params['referer'],
-				],
-			);
-			$message['body'][] = Drupal::translation()->translate(
-				'If this was you, you can safely ignore this email.',
-			);
-			$message['body'][] = Drupal::translation()->translate(
-				'If you did not log in, please reset your password immediately to secure your account.',
-			);
+
+			$markdown = <<<EOT
+			Your account was just used to log in from a new device or location.
+
+			**Details:**
+			- Time: {$params['time']}
+			- IP: {$params['ip']} ({$params['additional_ips']})
+			- User Agent: {$params['user_agent']}
+			- Referrer: {$params['referer']}
+
+			If this was you, you can safely ignore this email.
+
+			If you did not log in, please reset your password immediately to secure your account.
+			EOT;
+
+			$message['body'][] = markdownToHtml($markdown);
 			break;
+	}
+}
+
+function mantle2_mail_alter(&$message)
+{
+	$messages = ['mantle2_email_verification', 'mantle2_new_login'];
+	if (in_array($message['id'], $messages, true)) {
+		$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
+		$message['body'] = implode("\n\n", $message['body']);
 	}
 }
 
@@ -75,4 +80,18 @@ function mantle2_cron()
 	PromptsHelper::checkExpiredPrompts();
 	ArticlesHelper::checkExpiredArticles();
 	Drupal::logger('mantle2')->notice('[cron] mantle2 cron executed.');
+}
+
+function markdownToHtml(string $markdown): string
+{
+	static $converter = null;
+
+	if ($converter === null) {
+		$converter = new CommonMarkConverter([
+			'html_input' => 'strip', // Prevent raw HTML injection
+			'allow_unsafe_links' => false,
+		]);
+	}
+
+	return Drupal::translation()->translate($converter->convert($markdown)->getContent());
 }
