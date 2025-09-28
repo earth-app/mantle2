@@ -42,6 +42,5 @@ jobs:
             composer update
             cd /var/www/drupal
             ./vendor/bin/drush en mantle2 -y
+            ./vendor/bin/drush updb -y
             ./vendor/bin/drush cr
-            ./vendor/bin/drush updb
-            systemctl restart apache2
