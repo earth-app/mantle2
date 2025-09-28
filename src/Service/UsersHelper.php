@@ -555,7 +555,12 @@ class UsersHelper
 					$requester,
 					$privacy['account_type'] ?? 'PUBLIC',
 				),
-				'email_verified' => self::isEmailVerified($user),
+				'email_verified' => self::tryVisible(
+					self::isEmailVerified($user),
+					$user,
+					$requester,
+					'PRIVATE',
+				),
 				'visibility' => self::getVisibility($user)->name,
 				'field_privacy' => $privacy,
 			],
@@ -593,22 +598,22 @@ class UsersHelper
 			$user->setUsername($username);
 		}
 
+		$emailChangeInitiated = false;
 		if (isset($data['email'])) {
 			$email = (string) $data['email'];
+			$currentEmail = $user->getEmail();
+			if ($currentEmail === $email) {
+				// No change needed, skip email processing
+			} else {
+				// Use the email change verification flow for different emails
+				$emailChangeResult = self::sendEmailChangeVerification($user, $email);
+				if ($emailChangeResult->getStatusCode() !== Response::HTTP_OK) {
+					return $emailChangeResult;
+				}
 
-			if (
-				!str_contains($email, '@') || // Missing @
-				!str_contains(explode('@', $email)[1], '.') // Period in domain
-			) {
-				return GeneralHelper::badRequest('Invalid email format: Must contain @ and .');
+				// Email change verification was sent successfully
+				$emailChangeInitiated = true;
 			}
-
-			$existing = self::findByEmail($email);
-			if ($existing && $existing->id() !== $user->id()) {
-				return GeneralHelper::badRequest('Email already exists');
-			}
-
-			$user->setEmail($email);
 		}
 
 		if (isset($data['first_name'])) {
@@ -688,7 +693,16 @@ class UsersHelper
 			return GeneralHelper::internalError('Failed to save user');
 		}
 
-		return new JsonResponse(self::serializeUser($user, $requester), Response::HTTP_OK);
+		$responseData = self::serializeUser($user, $requester);
+
+		// Add email change information to response if email change was initiated
+		if ($emailChangeInitiated) {
+			$responseData['email_change_pending'] = true;
+			$responseData['message'] =
+				'User updated successfully. Email change verification sent to new address.';
+		}
+
+		return new JsonResponse($responseData, Response::HTTP_OK);
 	}
 
 	private static function validKeys(): array
@@ -1647,5 +1661,304 @@ class UsersHelper
 				'%email' => $email,
 			]);
 		}
+	}
+
+	/**
+	 * Initiate email change process by sending verification to new email
+	 * and notification to old email.
+	 */
+	public static function sendEmailChangeVerification(
+		UserInterface $user,
+		string $newEmail,
+	): JsonResponse {
+		// Validate the new email format
+		if (!filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+			return GeneralHelper::badRequest('Invalid email format');
+		}
+
+		$currentEmail = $user->getEmail();
+		if (!$currentEmail) {
+			return GeneralHelper::badRequest('User has no current email address');
+		}
+
+		if ($currentEmail === $newEmail) {
+			return GeneralHelper::badRequest('New email must be different from current email');
+		}
+
+		// Check if new email is already in use by another user
+		$existingUser = self::findByEmail($newEmail);
+		if ($existingUser && $existingUser->id() !== $user->id()) {
+			return GeneralHelper::conflict('Email address is already in use');
+		}
+
+		// Check rate limit (5 minutes = 300 seconds)
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
+		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$rateLimitKey = 'email_change_rate_limit_' . $user->id();
+
+		try {
+			$lastSentData = $tempstore->get($rateLimitKey);
+			if ($lastSentData) {
+				$timeSinceLastSent = time() - $lastSentData['timestamp'];
+				if ($timeSinceLastSent < 300) {
+					$remainingTime = 300 - $timeSinceLastSent;
+					$response = new JsonResponse(
+						[
+							'error' => 'Rate limit exceeded',
+							'message' =>
+								'Please wait ' .
+								ceil($remainingTime / 60) .
+								' minutes before requesting another email change',
+							'retryAfter' => $remainingTime,
+						],
+						Response::HTTP_TOO_MANY_REQUESTS,
+					);
+					$response->headers->set('Retry-After', (string) $remainingTime);
+					return $response;
+				} else {
+					// Clean up expired rate limit entry
+					try {
+						$tempstore->delete($rateLimitKey);
+					} catch (Exception $e) {
+						// Log but continue
+						Drupal::logger('mantle2')->warning(
+							'Failed to clean up expired email change rate limit: %message',
+							[
+								'%message' => $e->getMessage(),
+							],
+						);
+					}
+				}
+			}
+		} catch (Exception $e) {
+			// Log error but continue - rate limiting failure shouldn't block the request
+			Drupal::logger('mantle2')->warning(
+				'Failed to check email change rate limit: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
+		// Store current timestamp for rate limiting
+		try {
+			$tempstore->set($rateLimitKey, [
+				'timestamp' => time(),
+				'user_id' => $user->id(),
+			]);
+		} catch (Exception $e) {
+			// Log error but continue - rate limiting storage failure shouldn't block the request
+			Drupal::logger('mantle2')->warning(
+				'Failed to store email change rate limit: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
+		$code = str_pad((string) random_int(10000000, 99999999), 8, '0', STR_PAD_LEFT);
+
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
+		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$codeKey = 'email_change_' . $user->id();
+		$codeData = [
+			'code' => $code,
+			'timestamp' => time(),
+			'user_id' => $user->id(),
+			'new_email' => $newEmail,
+			'old_email' => $currentEmail,
+		];
+
+		try {
+			$tempstore->set($codeKey, $codeData);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to store email change verification code: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+			return GeneralHelper::internalError('Failed to generate verification code');
+		}
+
+		// Send verification email to new email address
+		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
+		$mailManager = Drupal::service('plugin.manager.mail');
+		$module = 'mantle2';
+		$key = 'email_change_verification';
+		$to = $newEmail;
+		$langcode = $user->getPreferredLangcode();
+		$params = [
+			'verification_code' => $code,
+			'user' => $user,
+			'new_email' => $newEmail,
+			'old_email' => $currentEmail,
+		];
+
+		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
+
+		if (!$result['result']) {
+			Drupal::logger('mantle2')->error('Failed to send email change verification to %email', [
+				'%email' => $newEmail,
+			]);
+			return GeneralHelper::internalError('Failed to send verification email');
+		}
+
+		// Send notification to old email
+		self::sendEmailChangeNotification($user, $newEmail, $currentEmail);
+
+		return new JsonResponse(
+			[
+				'message' => 'Email change verification sent',
+				'new_email' => $newEmail,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	/**
+	 * Send notification to current email about email change request.
+	 */
+	public static function sendEmailChangeNotification(
+		UserInterface $user,
+		string $newEmail,
+		string $currentEmail,
+	): void {
+		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
+		$mailManager = Drupal::service('plugin.manager.mail');
+		$module = 'mantle2';
+		$key = 'email_change_notification';
+		$to = $currentEmail;
+		$langcode = $user->getPreferredLangcode();
+		$params = [
+			'user' => $user,
+			'new_email' => $newEmail,
+			'old_email' => $currentEmail,
+		];
+
+		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
+
+		if (!$result['result']) {
+			Drupal::logger('mantle2')->error('Failed to send email change notification to %email', [
+				'%email' => $currentEmail,
+			]);
+		}
+	}
+
+	/**
+	 * Verify email change and update user's email if valid.
+	 */
+	public static function verifyEmailChange(UserInterface $user, string $code): JsonResponse
+	{
+		// Validate code format (8 digits)
+		if (!preg_match('/^\d{8}$/', $code)) {
+			return GeneralHelper::badRequest('Invalid verification code format');
+		}
+
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
+		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$codeKey = 'email_change_' . $user->id();
+
+		try {
+			$storedData = $tempstore->get($codeKey);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to retrieve email change verification code: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+			return GeneralHelper::internalError('Failed to verify code');
+		}
+
+		if (!$storedData) {
+			return GeneralHelper::badRequest(
+				'No email change verification code found or code has expired',
+			);
+		}
+
+		// Check if code has expired (15 minutes = 900 seconds)
+		$currentTime = time();
+		if ($currentTime - $storedData['timestamp'] > 900) {
+			// Clean up expired code
+			try {
+				$tempstore->delete($codeKey);
+			} catch (Exception $e) {
+				// Log but don't fail the request
+				Drupal::logger('mantle2')->warning(
+					'Failed to delete expired email change verification code: %message',
+					[
+						'%message' => $e->getMessage(),
+					],
+				);
+			}
+			return GeneralHelper::badRequest('Verification code has expired');
+		}
+
+		// Verify the code matches
+		if ($storedData['code'] !== $code) {
+			return GeneralHelper::badRequest('Invalid verification code');
+		}
+
+		$newEmail = $storedData['new_email'];
+		$oldEmail = $storedData['old_email'];
+
+		// Double-check that the new email is still available
+		$existingUser = self::findByEmail($newEmail);
+		if ($existingUser && $existingUser->id() !== $user->id()) {
+			return GeneralHelper::conflict('Email address is no longer available');
+		}
+
+		// Update the user's email
+		try {
+			$user->setEmail($newEmail);
+			// Reset email verification status since it's a new email
+			$user->set('field_email_verified', false);
+			$user->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to update user email: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to update email');
+		}
+
+		// Clean up used verification code
+		try {
+			$tempstore->delete($codeKey);
+		} catch (Exception $e) {
+			// Log but don't fail the request since email change was successful
+			Drupal::logger('mantle2')->warning(
+				'Failed to delete used email change verification code: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
+		// Send confirmation email to new address
+		self::sendEmail($user, 'email_change_confirmed', [
+			'user' => $user,
+			'new_email' => $newEmail,
+			'old_email' => $oldEmail,
+		]);
+
+		// Add notification to user about successful email change
+		self::addNotification(
+			$user,
+			'Email Changed',
+			'Your email address has been successfully changed to ' . $newEmail,
+			null,
+			'success',
+			'system',
+		);
+
+		return new JsonResponse(
+			[
+				'message' => 'Email changed successfully',
+				'new_email' => $newEmail,
+				'email_verified' => false,
+			],
+			Response::HTTP_OK,
+		);
 	}
 }

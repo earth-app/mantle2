@@ -414,7 +414,10 @@ class Mantle2Schemas
 			'type' => 'object',
 			'properties' => [
 				'username' => self::$username,
-				'email' => self::$email,
+				'email' => array_merge(self::$email, [
+					'description' =>
+						'Email address. If changed, will trigger email verification process and not be updated immediately.',
+				]),
 				'first_name' => self::text(50),
 				'last_name' => self::text(50),
 				'address' => self::text(),
@@ -619,6 +622,17 @@ class Mantle2Schemas
 				],
 				'activities' => self::activitiesList(),
 				'friends' => self::idArray(),
+				'email_change_pending' => [
+					'type' => 'boolean',
+					'description' => 'Indicates if an email change verification is pending',
+					'example' => true,
+				],
+				'message' => [
+					'type' => 'string',
+					'description' => 'Optional message about the operation performed',
+					'example' =>
+						'User updated successfully. Email change verification sent to new address.',
+				],
 			],
 			'required' => ['id', 'username', 'created_at', 'updated_at', 'account', 'activities'],
 		];
@@ -690,6 +704,46 @@ class Mantle2Schemas
 				'email' => self::$email,
 			],
 			'required' => ['message'],
+		];
+	}
+
+	public static function emailChangeInitiated(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'message' => [
+					'type' => 'string',
+					'example' => 'Email change verification sent',
+				],
+				'new_email' => array_merge(self::$email, [
+					'description' => 'The new email address that verification was sent to',
+				]),
+			],
+			'required' => ['message', 'new_email'],
+		];
+	}
+
+	public static function emailChangeCompleted(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'message' => [
+					'type' => 'string',
+					'example' => 'Email changed successfully',
+				],
+				'new_email' => array_merge(self::$email, [
+					'description' => 'The new email address that was set',
+				]),
+				'email_verified' => [
+					'type' => 'boolean',
+					'example' => false,
+					'description' =>
+						'Whether the new email is verified (always false after email change)',
+				],
+			],
+			'required' => ['message', 'new_email', 'email_verified'],
 		];
 	}
 

@@ -829,6 +829,69 @@ class UsersController extends ControllerBase
 			return GeneralHelper::conflict('Email is already verified');
 		}
 
+		// Check rate limit (1 minute = 60 seconds)
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
+		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$rateLimitKey = 'email_verification_rate_limit_' . $user->id();
+
+		try {
+			$lastSentData = $tempstore->get($rateLimitKey);
+			if ($lastSentData) {
+				$timeSinceLastSent = time() - $lastSentData['timestamp'];
+				if ($timeSinceLastSent < 60) {
+					$remainingTime = 60 - $timeSinceLastSent;
+					$response = new JsonResponse(
+						[
+							'error' => 'Rate limit exceeded',
+							'message' =>
+								'Please wait ' .
+								$remainingTime .
+								' seconds before requesting another verification email',
+							'retryAfter' => $remainingTime,
+						],
+						Response::HTTP_TOO_MANY_REQUESTS,
+					);
+					$response->headers->set('Retry-After', (string) $remainingTime);
+					return $response;
+				} else {
+					// Clean up expired rate limit entry
+					try {
+						$tempstore->delete($rateLimitKey);
+					} catch (Exception $e) {
+						Drupal::logger('mantle2')->warning(
+							'Failed to clean up expired rate limit: %message',
+							[
+								'%message' => $e->getMessage(),
+							],
+						);
+					}
+				}
+			}
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to check email verification rate limit: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
+		// Store current timestamp for rate limiting
+		try {
+			$tempstore->set($rateLimitKey, [
+				'timestamp' => time(),
+				'user_id' => $user->id(),
+			]);
+		} catch (Exception $e) {
+			// Log error but continue - rate limiting storage failure shouldn't block the request
+			Drupal::logger('mantle2')->warning(
+				'Failed to store email verification rate limit: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
 		return UsersHelper::sendEmailVerification($user);
 	}
 
@@ -845,13 +908,35 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		if (UsersHelper::isEmailVerified($user)) {
-			return GeneralHelper::conflict('Email is already verified');
-		}
-
 		$code = $request->query->get('code');
 		if (!$code) {
 			return GeneralHelper::badRequest('Verification code is required');
+		}
+
+		// Check if this is an email change verification first
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
+		$tempstore = \Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$emailChangeKey = 'email_change_' . $user->id();
+
+		try {
+			$emailChangeData = $tempstore->get($emailChangeKey);
+			if ($emailChangeData && $emailChangeData['code'] === $code) {
+				// This is an email change verification
+				return UsersHelper::verifyEmailChange($user, $code);
+			}
+		} catch (\Exception $e) {
+			// Log but continue to check regular email verification
+			\Drupal::logger('mantle2')->warning(
+				'Failed to check email change verification: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
+		// Regular email verification
+		if (UsersHelper::isEmailVerified($user)) {
+			return GeneralHelper::conflict('Email is already verified');
 		}
 
 		// Validate code format (8 digits)
@@ -859,8 +944,6 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid verification code format');
 		}
 
-		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
-		$tempstore = \Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
 		$codeKey = 'email_verification_' . $user->id();
 
 		try {
@@ -923,6 +1006,20 @@ class UsersController extends ControllerBase
 			// Log but don't fail the request since verification was successful
 			\Drupal::logger('mantle2')->warning(
 				'Failed to delete used verification code: %message',
+				[
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
+		// Clean up rate limit since email is now verified
+		$rateLimitKey = 'email_verification_rate_limit_' . $user->id();
+		try {
+			$tempstore->delete($rateLimitKey);
+		} catch (\Exception $e) {
+			// Log but don't fail the request since verification was successful
+			\Drupal::logger('mantle2')->warning(
+				'Failed to delete email verification rate limit: %message',
 				[
 					'%message' => $e->getMessage(),
 				],
