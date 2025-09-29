@@ -39,7 +39,7 @@ jobs:
             cd /var/www/drupal
             ./vendor/bin/drush un mantle2 -y
             cd /var/www/drupal/web/modules/mantle2
-            composer update
+            composer install --no-progress --no-suggest --prefer-dist
             cd /var/www/drupal
             ./vendor/bin/drush en mantle2 -y
             ./vendor/bin/drush updb -y

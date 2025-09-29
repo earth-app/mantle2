@@ -14,7 +14,7 @@ if [ ! -d "$SITE_DIR" ]; then
 
   cd "$SITE_DIR"
 
-  composer require drush/drush drupal/json_field drupal/key drupal/smtp
+  composer require drush/drush drupal/json_field drupal/key drupal/smtp su-sws/markdown
 
   mkdir -p web/modules/custom/$PROJECT_NAME
   find "$SRC_PATH" -maxdepth 1 -name "*.php" \
@@ -41,7 +41,7 @@ if [ ! -d "$SITE_DIR" ]; then
     --account-pass=admin \
     --site-name="$SITE_NAME"
 
-  ddev drush -y en field datetime options json_field key smtp node user comment
+  ddev drush -y en field datetime options json_field key smtp node user comment markdown
   ddev drush cr
   ddev drush -y en "$PROJECT_NAME" || true
 else
