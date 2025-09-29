@@ -43,7 +43,7 @@ services:
   # Email Verification Tempstore
   mantle2.tempstore.email_verification:
     class: Drupal\Core\TempStore\PrivateTempStoreFactory
-    arguments: ['@keyvalue.expirable', '@lock', '@current_user', '@request_stack', 900]
+    arguments: ['@keyvalue.expirable', '@lock', '@current_user', '@request_stack']
     tags:
       - { name: backend_overridable }
 

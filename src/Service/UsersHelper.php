@@ -1692,46 +1692,44 @@ class UsersHelper
 		}
 
 		// Check rate limit (5 minutes = 300 seconds)
-		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
-		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		/** @var \Drupal\Core\TempStore\PrivateTempStore $rateLimitStore */
+		$rateLimitStore = Drupal::service('mantle2.tempstore.email_verification')->get(
+			'email_change_rate_limit',
+		);
 		$rateLimitKey = 'email_change_rate_limit_' . $user->id();
 
 		try {
-			$lastSentData = $tempstore->get($rateLimitKey);
+			$lastSentData = $rateLimitStore->get($rateLimitKey);
 			if ($lastSentData) {
 				$timeSinceLastSent = time() - $lastSentData['timestamp'];
-				if ($timeSinceLastSent < 300) {
-					$remainingTime = 300 - $timeSinceLastSent;
-					$response = new JsonResponse(
-						[
-							'error' => 'Rate limit exceeded',
-							'message' =>
-								'Please wait ' .
-								ceil($remainingTime / 60) .
-								' minutes before requesting another email change',
-							'retryAfter' => $remainingTime,
-						],
-						Response::HTTP_TOO_MANY_REQUESTS,
-					);
-					$response->headers->set('Retry-After', (string) $remainingTime);
-					return $response;
-				} else {
-					// Clean up expired rate limit entry
+				// Clean up expired entries (300 seconds TTL)
+				if ($timeSinceLastSent >= 300) {
 					try {
-						$tempstore->delete($rateLimitKey);
+						$rateLimitStore->delete($rateLimitKey);
 					} catch (Exception $e) {
 						// Log but continue
-						Drupal::logger('mantle2')->warning(
-							'Failed to clean up expired email change rate limit: %message',
-							[
-								'%message' => $e->getMessage(),
-							],
-						);
 					}
+					$lastSentData = null; // Treat as if no data exists
 				}
 			}
+
+			if ($lastSentData && $timeSinceLastSent < 300) {
+				$remainingTime = 300 - $timeSinceLastSent;
+				$response = new JsonResponse(
+					[
+						'error' => 'Rate limit exceeded',
+						'message' =>
+							'Please wait ' .
+							ceil($remainingTime / 60) .
+							' minutes before requesting another email change',
+						'retryAfter' => $remainingTime,
+					],
+					Response::HTTP_TOO_MANY_REQUESTS,
+				);
+				$response->headers->set('Retry-After', (string) $remainingTime);
+				return $response;
+			}
 		} catch (Exception $e) {
-			// Log error but continue - rate limiting failure shouldn't block the request
 			Drupal::logger('mantle2')->warning(
 				'Failed to check email change rate limit: %message',
 				[
@@ -1742,7 +1740,7 @@ class UsersHelper
 
 		// Store current timestamp for rate limiting
 		try {
-			$tempstore->set($rateLimitKey, [
+			$rateLimitStore->set($rateLimitKey, [
 				'timestamp' => time(),
 				'user_id' => $user->id(),
 			]);
@@ -1759,7 +1757,7 @@ class UsersHelper
 		$code = str_pad((string) random_int(10000000, 99999999), 8, '0', STR_PAD_LEFT);
 
 		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
-		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('email_change');
 		$codeKey = 'email_change_' . $user->id();
 		$codeData = [
 			'code' => $code,
@@ -1856,11 +1854,24 @@ class UsersHelper
 		}
 
 		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
-		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
+		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('email_change');
 		$codeKey = 'email_change_' . $user->id();
 
 		try {
 			$storedData = $tempstore->get($codeKey);
+			// Check if code has expired (15 minutes = 900 seconds)
+			if ($storedData) {
+				$currentTime = time();
+				if ($currentTime - $storedData['timestamp'] > 900) {
+					// Clean up expired code
+					try {
+						$tempstore->delete($codeKey);
+					} catch (Exception $e) {
+						// Log but don't fail the request
+					}
+					$storedData = null; // Treat as expired
+				}
+			}
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error(
 				'Failed to retrieve email change verification code: %message',
@@ -1875,24 +1886,6 @@ class UsersHelper
 			return GeneralHelper::badRequest(
 				'No email change verification code found or code has expired',
 			);
-		}
-
-		// Check if code has expired (15 minutes = 900 seconds)
-		$currentTime = time();
-		if ($currentTime - $storedData['timestamp'] > 900) {
-			// Clean up expired code
-			try {
-				$tempstore->delete($codeKey);
-			} catch (Exception $e) {
-				// Log but don't fail the request
-				Drupal::logger('mantle2')->warning(
-					'Failed to delete expired email change verification code: %message',
-					[
-						'%message' => $e->getMessage(),
-					],
-				);
-			}
-			return GeneralHelper::badRequest('Verification code has expired');
 		}
 
 		// Verify the code matches
