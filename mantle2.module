@@ -24,6 +24,9 @@ function mantle2_mail($key, &$message, $params)
 {
 	$message['from'] = Drupal::config('system.site')->get('mail');
 
+	/** @var \Drupal\mantle2\Service\MarkdownFactory $parser */
+	$parser = Drupal::service('mantle2.parser');
+
 	switch ($key) {
 		case 'email_verification':
 			$message['subject'] = 'The Earth App - Email Verification Code';
@@ -36,7 +39,7 @@ function mantle2_mail($key, &$message, $params)
 			If you did not request this verification, please ignore this email.
 			EOT;
 
-			$message['body'][] = Drupal::service('mantle2.parser')->toHtml($markdown);
+			$message['body'] = $parser->toHtml($markdown);
 			break;
 		case 'new_login':
 			$message['subject'] = 'The Earth App - New Login Notification';
@@ -55,7 +58,7 @@ function mantle2_mail($key, &$message, $params)
 			If you did not log in, please reset your password immediately to secure your account.
 			EOT;
 
-			$message['body'][] = Drupal::service('mantle2.parser')->toHtml($markdown);
+			$message['body'] = $parser->toHtml($markdown);
 			break;
 	}
 }
@@ -65,7 +68,6 @@ function mantle2_mail_alter(&$message)
 	$messages = ['mantle2_email_verification', 'mantle2_new_login'];
 	if (in_array($message['id'], $messages, true)) {
 		$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
-		$message['body'] = implode("\n\n", $message['body']);
 	}
 }
 
