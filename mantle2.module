@@ -39,7 +39,7 @@ function mantle2_mail($key, &$message, $params)
 			If you did not request this verification, please ignore this email.
 			EOT;
 
-			$message['body'] = $parser->toHtml($markdown);
+			$message['body'] = [$parser->toHtml($markdown)];
 			break;
 		case 'new_login':
 			$message['subject'] = 'The Earth App - New Login Notification';
@@ -58,7 +58,7 @@ function mantle2_mail($key, &$message, $params)
 			If you did not log in, please reset your password immediately to secure your account.
 			EOT;
 
-			$message['body'] = $parser->toHtml($markdown);
+			$message['body'] = [$parser->toHtml($markdown)];
 			break;
 	}
 }
