@@ -1247,6 +1247,9 @@ class UsersController extends ControllerBase
 					array_filter($request->getClientIps(), fn($ip) => $ip !== $currentIP),
 				),
 			);
+			if (empty($ips)) {
+				$ips = "(none)\n";
+			}
 
 			$userAgent = $request->headers->get('User-Agent', 'Unknown Device');
 			$referer = $request->headers->get('Referer', 'No Referrer');
@@ -1260,12 +1263,13 @@ class UsersController extends ControllerBase
 						'Additional Addresses used in this request:' .
 						"{$ips}\n" .
 						"Other Info:\n" .
-						$timestamp .
+						"Timestamp: {$timestamp}" .
 						"\n" .
-						$userAgent .
+						"User Agent: {$userAgent}" .
 						"\n" .
-						$referer .
+						"Referer: {$referer}" .
 						"\n" .
+						'Accept-Language: ' .
 						$request->headers->get('Accept-Language', 'Unknown Language') .
 						"\n\n" .
 						"If this wasn't you, please secure your account immediately.",
