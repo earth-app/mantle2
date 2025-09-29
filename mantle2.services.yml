@@ -40,7 +40,10 @@ services:
   mantle2.helper.articles:
     class: Drupal\mantle2\Service\ArticlesHelper
 
-  # Email Verification Tempstore
+  mantle2.helper.redis:
+    class: Drupal\mantle2\Service\RedisHelper
+
+  # Email Verification Tempstore (deprecated - use Redis instead)
   mantle2.tempstore.email_verification:
     class: Drupal\Core\TempStore\PrivateTempStoreFactory
     arguments: ['@keyvalue.expirable', '@lock', '@current_user', '@request_stack']

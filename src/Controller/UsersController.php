@@ -9,6 +9,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
+use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Notification;
 use Drupal\user\Entity\User;
@@ -830,28 +831,12 @@ class UsersController extends ControllerBase
 		}
 
 		// Check rate limit (1 minute = 60 seconds)
-		/** @var \Drupal\Core\TempStore\PrivateTempStore $rateLimitStore */
-		$rateLimitStore = Drupal::service('mantle2.tempstore.email_verification')->get(
-			'rate_limit',
-		);
 		$rateLimitKey = 'email_verification_rate_limit_' . $user->id();
 
-		try {
-			$lastSentData = $rateLimitStore->get($rateLimitKey);
-			if ($lastSentData) {
-				$timeSinceLastSent = time() - $lastSentData['timestamp'];
-				// Clean up expired entries (60 seconds TTL)
-				if ($timeSinceLastSent >= 60) {
-					try {
-						$rateLimitStore->delete($rateLimitKey);
-					} catch (Exception $e) {
-						// Log but continue
-					}
-					$lastSentData = null; // Treat as if no data exists
-				}
-			}
-
-			if ($lastSentData && $timeSinceLastSent < 60) {
+		$lastSentData = RedisHelper::get($rateLimitKey);
+		if ($lastSentData) {
+			$timeSinceLastSent = time() - $lastSentData['timestamp'];
+			if ($timeSinceLastSent < 60) {
 				$remainingTime = 60 - $timeSinceLastSent;
 				$response = new JsonResponse(
 					[
@@ -867,30 +852,17 @@ class UsersController extends ControllerBase
 				$response->headers->set('Retry-After', (string) $remainingTime);
 				return $response;
 			}
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->warning(
-				'Failed to check email verification rate limit: %message',
-				[
-					'%message' => $e->getMessage(),
-				],
-			);
 		}
 
-		// Store current timestamp for rate limiting
-		try {
-			$rateLimitStore->set($rateLimitKey, [
+		// Store current timestamp for rate limiting (60 seconds TTL)
+		RedisHelper::set(
+			$rateLimitKey,
+			[
 				'timestamp' => time(),
 				'user_id' => $user->id(),
-			]);
-		} catch (Exception $e) {
-			// Log error but continue - rate limiting storage failure shouldn't block the request
-			Drupal::logger('mantle2')->warning(
-				'Failed to store email verification rate limit: %message',
-				[
-					'%message' => $e->getMessage(),
-				],
-			);
-		}
+			],
+			60,
+		);
 
 		return UsersHelper::sendEmailVerification($user);
 	}
@@ -914,26 +886,11 @@ class UsersController extends ControllerBase
 		}
 
 		// Check if this is an email change verification first
-		/** @var \Drupal\Core\TempStore\PrivateTempStore $emailChangeStore */
-		$emailChangeStore = Drupal::service('mantle2.tempstore.email_verification')->get(
-			'email_change',
-		);
 		$emailChangeKey = 'email_change_' . $user->id();
-
-		try {
-			$emailChangeData = $emailChangeStore->get($emailChangeKey);
-			if ($emailChangeData && $emailChangeData['code'] === $code) {
-				// This is an email change verification
-				return UsersHelper::verifyEmailChange($user, $code);
-			}
-		} catch (Exception $e) {
-			// Log but continue to check regular email verification
-			Drupal::logger('mantle2')->warning(
-				'Failed to check email change verification: %message',
-				[
-					'%message' => $e->getMessage(),
-				],
-			);
+		$emailChangeData = RedisHelper::get($emailChangeKey);
+		if ($emailChangeData && $emailChangeData['code'] === $code) {
+			// This is an email change verification
+			return UsersHelper::verifyEmailChange($user, $code);
 		}
 
 		// Regular email verification
@@ -946,34 +903,8 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid verification code format');
 		}
 
-		/** @var \Drupal\Core\TempStore\PrivateTempStore $tempstore */
-		$tempstore = Drupal::service('mantle2.tempstore.email_verification')->get('mantle2');
 		$codeKey = 'email_verification_' . $user->id();
-
-		try {
-			$storedData = $tempstore->get($codeKey);
-			// Check if code has expired (15 minutes = 900 seconds)
-			if ($storedData) {
-				$currentTime = time();
-				if ($currentTime - $storedData['timestamp'] > 900) {
-					// Clean up expired code
-					try {
-						$tempstore->delete($codeKey);
-					} catch (Exception $e) {
-						// Log but don't fail the request
-					}
-					$storedData = null; // Treat as expired
-				}
-			}
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error(
-				'Failed to retrieve email verification code: %message',
-				[
-					'%message' => $e->getMessage(),
-				],
-			);
-			return GeneralHelper::internalError('Failed to verify code');
-		}
+		$storedData = RedisHelper::get($codeKey);
 
 		if (!$storedData) {
 			return GeneralHelper::badRequest('No verification code found or code has expired');
@@ -999,35 +930,11 @@ class UsersController extends ControllerBase
 		}
 
 		// Clean up used verification code
-		try {
-			$tempstore->delete($codeKey);
-		} catch (Exception $e) {
-			// Log but don't fail the request since verification was successful
-			Drupal::logger('mantle2')->warning(
-				'Failed to delete used verification code: %message',
-				[
-					'%message' => $e->getMessage(),
-				],
-			);
-		}
+		RedisHelper::delete($codeKey);
 
 		// Clean up rate limit since email is now verified
 		$rateLimitKey = 'email_verification_rate_limit_' . $user->id();
-		try {
-			/** @var \Drupal\Core\TempStore\PrivateTempStore $rateLimitStore */
-			$rateLimitStore = Drupal::service('mantle2.tempstore.email_verification')->get(
-				'rate_limit',
-			);
-			$rateLimitStore->delete($rateLimitKey);
-		} catch (Exception $e) {
-			// Log but don't fail the request since verification was successful
-			Drupal::logger('mantle2')->warning(
-				'Failed to delete email verification rate limit: %message',
-				[
-					'%message' => $e->getMessage(),
-				],
-			);
-		}
+		RedisHelper::delete($rateLimitKey);
 
 		return new JsonResponse(
 			[
