@@ -2,7 +2,10 @@
 
 namespace Drupal\mantle2\Service;
 
-use League\CommonMark\CommonMarkConverter;
+use League\CommonMark\Environment\Environment;
+use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
+use League\CommonMark\Extension\GithubFlavoredMarkdownExtension;
+use League\CommonMark\MarkdownConverter;
 
 class MarkdownFactory
 {
@@ -14,7 +17,12 @@ class MarkdownFactory
 			'html_input' => 'strip',
 			'allow_unsafe_links' => false,
 		];
-		$this->converter = new CommonMarkConverter($config);
+
+		$environment = new Environment($config);
+		$environment->addExtension(new CommonMarkCoreExtension());
+		$environment->addExtension(new GithubFlavoredMarkdownExtension());
+
+		$this->converter = new MarkdownConverter($environment);
 	}
 
 	public function toHtml(string $markdown): string
