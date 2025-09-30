@@ -214,32 +214,6 @@ class UsersHelper
 			return GeneralHelper::unauthorized('Invalid or expired session token');
 		}
 
-		$basicAuth = GeneralHelper::getBasicAuth($request);
-		if ($basicAuth) {
-			$username = $basicAuth['username'] ?? null;
-			$password = $basicAuth['password'] ?? null;
-
-			if (!$username) {
-				return GeneralHelper::unauthorized('Username is required for basic authentication');
-			}
-
-			if (!$password) {
-				return GeneralHelper::unauthorized('Password is required for basic authentication');
-			}
-
-			/** @var \Drupal\user\UserAuthInterface $userAuth */
-			$userAuth = Drupal::service('user.auth');
-			$uid = $userAuth->authenticate($username, $password);
-			if ($uid) {
-				$user = User::load($uid);
-				if ($user && !$user->isBlocked()) {
-					return $user;
-				}
-			}
-
-			return GeneralHelper::unauthorized('Invalid username or password');
-		}
-
 		return GeneralHelper::unauthorized('Authentication required');
 	}
 
