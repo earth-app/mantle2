@@ -321,6 +321,10 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
+		if ($user->id() === 0 || $user->id() === 1) {
+			return GeneralHelper::forbidden('Cannot delete the anonymous or root user');
+		}
+
 		if ($requester->id() === $user->id()) {
 			// Require password for self deletion
 			$body = json_decode((string) $request->getContent(), true) ?: [];
