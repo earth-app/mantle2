@@ -17,6 +17,7 @@ use Drupal\user\UserAuthInterface;
 use Drupal\user\UserInterface;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
+use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Service\ActivityHelper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
@@ -179,8 +180,39 @@ class UsersController extends ControllerBase
 		$username = $body['username'] ?? null;
 		$password = $body['password'] ?? null;
 		$email = $body['email'] ?? null;
+		$firstName = $body['first_name'] ?? null;
+		$lastName = $body['last_name'] ?? null;
+
 		if (!$username || !$password) {
-			return GeneralHelper::badRequest('username and password are required');
+			return GeneralHelper::badRequest('Username and Password are required');
+		}
+
+		if (
+			!is_string($username) ||
+			!is_string($password) ||
+			($email && !is_string($email)) ||
+			($firstName && !is_string($firstName)) ||
+			($lastName && !is_string($lastName))
+		) {
+			return GeneralHelper::badRequest(
+				'Invalid data types for username, password, email, first_name, or last_name',
+			);
+		}
+
+		if (!preg_match(Mantle2Schemas::$username['pattern'], $username)) {
+			return GeneralHelper::badRequest(
+				'Username must be 3-30 characters long and can only contain letters, numbers, underscores, dashes, and periods.',
+			);
+		}
+
+		if (!preg_match(Mantle2Schemas::$password['pattern'], $password)) {
+			return GeneralHelper::badRequest(
+				'Password must be 8-100 characters long and can only contain letters, numbers, and special characters.',
+			);
+		}
+
+		if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+			return GeneralHelper::badRequest('Invalid email address provided');
 		}
 
 		if (UsersHelper::findByUsername($username) !== null) {
@@ -194,7 +226,12 @@ class UsersController extends ControllerBase
 		$user->setUsername($username);
 		if ($email) {
 			$user->setEmail($email);
-			UsersHelper::sendEmailVerification($user);
+		}
+		if ($firstName) {
+			$user->set('field_first_name', $firstName);
+		}
+		if ($lastName) {
+			$user->set('field_last_name', $lastName);
 		}
 		$user->activate();
 		$user->setPassword($password);
@@ -807,6 +844,110 @@ class UsersController extends ControllerBase
 		}
 
 		return new JsonResponse(UsersHelper::serializeUser($user, $requester), Response::HTTP_OK);
+	}
+
+	// POST /v2/users/reset_password
+	public function resetPassword(Request $request): JsonResponse
+	{
+		$email = $request->query->get('email');
+		if (!$email) {
+			return GeneralHelper::badRequest('Missing email');
+		}
+
+		// Check rate limit (2 minutes = 120 seconds) per email
+		$rateLimitKey = 'password_reset_rate_limit_' . hash('sha256', strtolower($email));
+		$lastSentData = RedisHelper::get($rateLimitKey);
+		if ($lastSentData) {
+			$timeSinceLastSent = time() - $lastSentData['timestamp'];
+			$timeRemaining = 120 - $timeSinceLastSent;
+			if ($timeRemaining > 0) {
+				return new JsonResponse(
+					[
+						'error' => 'Rate limit exceeded',
+						'message' =>
+							'Please wait ' .
+							$timeRemaining .
+							' seconds before requesting another password reset.',
+						'retry_after' => $timeRemaining,
+					],
+					Response::HTTP_TOO_MANY_REQUESTS,
+				);
+			}
+		}
+
+		$user = UsersHelper::findByEmail($email);
+		if (!$user) {
+			// Store rate limit data even for non-existent users to prevent enumeration
+			RedisHelper::set($rateLimitKey, ['timestamp' => time(), 'email' => $email], 120);
+			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+		}
+
+		// Store rate limit data for valid requests
+		RedisHelper::set($rateLimitKey, ['timestamp' => time(), 'email' => $email], 120);
+
+		UsersHelper::sendPasswordResetEmail($user);
+
+		// Always return 204 to avoid leaking user existence
+		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
+	// POST /v2/users/current/change_password
+	// POST /v2/users/{id}/change_password
+	// POST /v2/users/{username}/change_password
+	public function changePassword(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$token = $request->query->get('token');
+		$oldPassword = $request->query->get('old_password');
+		if (!$token && !$oldPassword) {
+			return GeneralHelper::badRequest('Missing token');
+		}
+
+		if ($token) {
+			$result = UsersHelper::validateResetPasswordToken($user, $token);
+			if (!$result) {
+				return GeneralHelper::badRequest('Invalid or expired token');
+			}
+		}
+
+		if ($oldPassword) {
+			if (!UsersHelper::validatePassword($user, $oldPassword)) {
+				return GeneralHelper::badRequest('Old password is incorrect');
+			}
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		if (!$body) {
+			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		$newPassword = $body['new_password'] ?? null;
+		if (!$newPassword) {
+			return GeneralHelper::badRequest('Missing new_password');
+		}
+
+		if (
+			!is_string($newPassword) ||
+			!preg_match(Mantle2Schemas::$password['pattern'], $newPassword)
+		) {
+			return GeneralHelper::badRequest(
+				'Password must be 8-100 characters long and can only contain letters, numbers, and special characters.',
+			);
+		}
+
+		UsersHelper::changePassword($user, $newPassword);
+		return new JsonResponse(['message' => 'Password changed successfully'], Response::HTTP_OK);
 	}
 
 	#endregion

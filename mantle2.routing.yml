@@ -115,6 +115,30 @@ mantle2.users.create:
     schema/400: Bad User Data
   methods: [POST]
 
+mantle2.users.reset_password:
+  path: '/v2/users/reset_password'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::resetPassword'
+    _title: 'Reset Password'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Initiate password reset for a user by email
+    schema/204: No Content
+    schema/400: Bad request
+    schema/429: Rate limit exceeded
+    parameters:
+      email:
+        name: email
+        in: query
+        required: true
+        description: Email address of user to reset password for
+        schema:
+          type: string
+          format: email
+  methods: [POST]
+
 #region User - By ID
 mantle2.users.id.get:
   path: '/v2/users/{id}'
@@ -595,6 +619,37 @@ mantle2.users.id.verify_email:
         pattern: '^\d{8}$'
         description: 8-digit verification code received via email
         example: '12345678'
+  methods: [POST]
+
+mantle2.users.id.change_password:
+  path: '/v2/users/{id}/change_password'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::changePassword'
+    _title: 'Change Password for User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Password
+    description: Changes password for a user using either a reset token or current password verification
+    schema/200: passwordChangeResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      token:
+        type: string
+        description: Password reset token received via email (alternative to old_password)
+        required: false
+      old_password:
+        type: string
+        description: Current password for verification (alternative to token)
+        required: false
+    body/schema: $passwordChangeFlexibleBody
   methods: [POST]
 
 mantle2.users.id.notifications:
@@ -1248,6 +1303,37 @@ mantle2.users.username.verify_email:
         example: '12345678'
   methods: [POST]
 
+mantle2.users.username.change_password:
+  path: '/v2/users/{username}/change_password'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::changePassword'
+    _title: 'Change Password for User by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Password
+    description: Changes password for a user using either a reset token or current password verification
+    schema/200: passwordChangeResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      token:
+        type: string
+        description: Password reset token received via email (alternative to old_password)
+        required: false
+      old_password:
+        type: string
+        description: Current password for verification (alternative to token)
+        required: false
+    body/schema: $passwordChangeFlexibleBody
+  methods: [POST]
+
 mantle2.users.username.notifications:
   path: '/v2/users/{username}/notifications'
   defaults:
@@ -1819,6 +1905,32 @@ mantle2.users.current.verify_email:
         pattern: '^\d{8}$'
         description: 8-digit verification code received via email
         example: '12345678'
+  methods: [POST]
+
+mantle2.users.current.change_password:
+  path: '/v2/users/current/change_password'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::changePassword'
+    _title: 'Change Password for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Password
+    description: Changes password for the current user using either a reset token or current password verification
+    schema/200: passwordChangeResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/409: Email already verified
+    query:
+      token:
+        type: string
+        description: Password reset token received via email (alternative to old_password)
+        required: false
+      old_password:
+        type: string
+        description: Current password for verification (alternative to token)
+        required: false
+    body/schema: $passwordChangeFlexibleBody
   methods: [POST]
 
 mantle2.users.current.notifications:

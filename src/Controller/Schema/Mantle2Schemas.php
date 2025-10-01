@@ -595,7 +595,8 @@ class Mantle2Schemas
 		'properties' => [
 			'current_password' => [
 				'type' => 'string',
-				'description' => 'Current password for verification',
+				'description' =>
+					'Current password for verification (optional if using reset token)',
 			],
 			'new_password' => [
 				'type' => 'string',
@@ -605,7 +606,23 @@ class Mantle2Schemas
 				'description' => 'New password for the user account',
 			],
 		],
-		'required' => ['current_password', 'new_password'],
+		'required' => ['new_password'],
+	];
+
+	public static array $passwordChangeFlexibleBody = [
+		'type' => 'object',
+		'properties' => [
+			'new_password' => [
+				'type' => 'string',
+				'minLength' => 8,
+				'maxLength' => 100,
+				'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]+$",
+				'description' => 'New password for the user account',
+			],
+		],
+		'required' => ['new_password'],
+		'description' =>
+			'Request body for password change. Authentication can be done via either reset token (query parameter) or current password (old_password query parameter).',
 	];
 
 	public static array $articleBody = [

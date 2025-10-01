@@ -3,6 +3,8 @@
 namespace Drupal\mantle2\Service;
 
 use Drupal;
+use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
+use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\AccountType;
@@ -1333,7 +1335,7 @@ class UsersHelper
 				),
 				'total' => $count,
 			];
-		} catch (Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException | Drupal\Component\Plugin\Exception\PluginNotFoundException $e) {
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			Drupal::logger('mantle2')->error('Failed to retrieve user events: %message', [
 				'%message' => $e->getMessage(),
 			]);
@@ -1575,25 +1577,10 @@ class UsersHelper
 			return GeneralHelper::badRequest('User has no email address');
 		}
 
-		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
-		$mailManager = Drupal::service('plugin.manager.mail');
-		$module = 'mantle2';
-		$key = 'email_verification';
-		$to = $userEmail;
-		$langcode = $user->getPreferredLangcode();
-		$params = [
+		self::sendEmail($user, 'email_verification', [
 			'verification_code' => $code,
 			'user' => $user,
-		];
-
-		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
-
-		if (!$result['result']) {
-			Drupal::logger('mantle2')->error('Failed to send email verification to %email', [
-				'%email' => $userEmail,
-			]);
-			return GeneralHelper::internalError('Failed to send verification email');
-		}
+		]);
 
 		return new JsonResponse(
 			[
@@ -1714,27 +1701,12 @@ class UsersHelper
 		}
 
 		// Send verification email to new email address
-		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
-		$mailManager = Drupal::service('plugin.manager.mail');
-		$module = 'mantle2';
-		$key = 'email_change_verification';
-		$to = $newEmail;
-		$langcode = $user->getPreferredLangcode();
-		$params = [
+		self::sendEmail($user, 'email_change_verification', [
 			'verification_code' => $code,
 			'user' => $user,
 			'new_email' => $newEmail,
 			'old_email' => $currentEmail,
-		];
-
-		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
-
-		if (!$result['result']) {
-			Drupal::logger('mantle2')->error('Failed to send email change verification to %email', [
-				'%email' => $newEmail,
-			]);
-			return GeneralHelper::internalError('Failed to send verification email');
-		}
+		]);
 
 		// Send notification to old email
 		self::sendEmailChangeNotification($user, $newEmail, $currentEmail);
@@ -1756,25 +1728,11 @@ class UsersHelper
 		string $newEmail,
 		string $currentEmail,
 	): void {
-		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
-		$mailManager = Drupal::service('plugin.manager.mail');
-		$module = 'mantle2';
-		$key = 'email_change_notification';
-		$to = $currentEmail;
-		$langcode = $user->getPreferredLangcode();
-		$params = [
+		self::sendEmail($user, 'email_change_notification', [
 			'user' => $user,
 			'new_email' => $newEmail,
 			'old_email' => $currentEmail,
-		];
-
-		$result = $mailManager->mail($module, $key, $to, $langcode, $params);
-
-		if (!$result['result']) {
-			Drupal::logger('mantle2')->error('Failed to send email change notification to %email', [
-				'%email' => $currentEmail,
-			]);
-		}
+		]);
 	}
 
 	/**
@@ -1837,7 +1795,9 @@ class UsersHelper
 		self::addNotification(
 			$user,
 			'Email Changed',
-			'Your email address has been successfully changed to ' . $newEmail,
+			'Your email address has been successfully changed to ' .
+				$newEmail .
+				'. If you did not perform this action, please contact support immediately.',
 			null,
 			'success',
 			'system',
@@ -1851,5 +1811,92 @@ class UsersHelper
 			],
 			Response::HTTP_OK,
 		);
+	}
+
+	public static function changePassword(UserInterface $user, string $newPassword): bool
+	{
+		try {
+			$user->setPassword($newPassword);
+			$user->save();
+
+			// Send notifications about password change
+			self::addNotification(
+				$user,
+				'Password Changed',
+				'Your account password has been successfully changed. If you did not perform this action, please contact support immediately.',
+				null,
+				'success',
+				'system',
+			);
+
+			self::sendEmail($user, 'new_password', [
+				'user' => $user,
+			]);
+
+			return true;
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to change user password: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return false;
+		}
+	}
+
+	public const RESET_TOKEN_TTL = 3600; // 1 hour
+
+	public static function generateResetPasswordToken(UserInterface $user): string
+	{
+		$token = bin2hex(random_bytes(32));
+		$tokenKey = 'password_reset_' . $user->id();
+		$tokenData = [
+			'token' => $token,
+			'timestamp' => time(),
+			'user_id' => $user->id(),
+		];
+
+		// Store in Redis with 1 hour TTL
+		RedisHelper::set($tokenKey, $tokenData, self::RESET_TOKEN_TTL);
+
+		return $token;
+	}
+
+	public static function validateResetPasswordToken(UserInterface $user, string $token): bool
+	{
+		$tokenKey = 'password_reset_' . $user->id();
+		$storedData = RedisHelper::get($tokenKey);
+		if (!$storedData) {
+			return false;
+		}
+
+		return hash_equals($storedData['token'], $token);
+	}
+
+	public static function sendPasswordResetEmail(UserInterface $user): void
+	{
+		$userEmail = $user->getEmail();
+		if (!$userEmail) {
+			Drupal::logger('mantle2')->warning(
+				'Attempted to send password reset email to user without email address: %uid',
+				[
+					'%uid' => $user->id(),
+				],
+			);
+			return;
+		}
+
+		$token = self::generateResetPasswordToken($user);
+		$resetLink =
+			'https://app.earth-app.com/reset-password?uid=' . $user->id() . '&token=' . $token;
+
+		self::sendEmail($user, 'password_reset', [
+			'user' => $user,
+			'reset_link' => $resetLink,
+		]);
+	}
+
+	public static function validatePassword(UserInterface $user, string $password): bool
+	{
+		$auth = Drupal::service('user.auth');
+		return $auth->authenticate($user->getAccountName(), $password) === $user->id();
 	}
 }

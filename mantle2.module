@@ -56,12 +56,64 @@ If you did not log in, please reset your password immediately to secure your acc
 
 			$message['body'] = [$parser->toHtml($markdown)];
 			break;
+		case 'email_change_notification':
+			$message['subject'] = 'The Earth App - Email Change Notification';
+
+			$markdown = "Your email address was just requested to be changed.
+Old Email: **{$params['old_email']}**
+New Email: **{$params['new_email']}**
+
+If you did not perform this action, please contact support immediately to secure your account.";
+
+			$message['body'] = [$parser->toHtml($markdown)];
+			break;
+		case 'email_change_verification':
+			$message['subject'] = 'The Earth App - Email Change Verification Code';
+
+			$markdown = "Your email change verification code is: **{$params['verification_code']}**";
+			$message['body'] = [$parser->toHtml($markdown)];
+			break;
+		case 'email_change_confirmed':
+			$message['subject'] = 'The Earth App - Email Change Confirmation';
+
+			$markdown = "Your email address has been successfully changed. If you did not perform this action, please contact support immediately to secure your account.
+Old Email: **{$params['old_email']}**
+New Email: **{$params['new_email']}**";
+
+			$message['body'] = [$parser->toHtml($markdown)];
+			break;
+		case 'password_reset':
+			$message['subject'] = 'The Earth App - Password Reset';
+
+			$markdown = "We received a request to reset your password for The Earth App.
+
+Click the link below to reset your password:
+{$params['reset_link']}
+
+This link will expire in 1 hour.
+
+If you did not request this password reset, please ignore this email and your password will remain unchanged.";
+
+			$message['body'] = [$parser->toHtml($markdown)];
+			break;
+		case 'new_password':
+			$message['subject'] = 'The Earth App - Password Reset';
+
+			$markdown =
+				'Your password has been successfully changed. If you did not perform this action, please reset your password immediately to secure your account.';
+			$message['body'] = [$parser->toHtml($markdown)];
+			break;
 	}
 }
 
 function mantle2_mail_alter(&$message)
 {
-	$messages = ['mantle2_email_verification', 'mantle2_new_login'];
+	$messages = [
+		'mantle2_email_verification',
+		'mantle2_new_login',
+		'mantle2_new_password',
+		'mantle2_password_reset',
+	];
 	if (in_array($message['id'], $messages, true)) {
 		$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
 	}
