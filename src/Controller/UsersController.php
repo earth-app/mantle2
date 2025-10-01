@@ -315,9 +315,35 @@ class UsersController extends ControllerBase
 		?string $id = null,
 		?string $username = null,
 	): JsonResponse {
+		$requester = UsersHelper::getOwnerOfRequest($request);
 		$user = $this->resolveAuthorizedUser($request, $id, $username);
 		if ($user instanceof JsonResponse) {
 			return $user;
+		}
+
+		if ($requester->id() === $user->id()) {
+			// Require password for self deletion
+			$body = json_decode((string) $request->getContent(), true) ?: [];
+			if (!$body) {
+				return GeneralHelper::badRequest('Invalid JSON');
+			}
+
+			if (json_last_error() !== JSON_ERROR_NONE) {
+				return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+			}
+
+			$password = $body['password'] ?? null;
+			if (!$password || !is_string($password)) {
+				return GeneralHelper::badRequest('Missing or invalid password');
+			}
+
+			if (!UsersHelper::validatePassword($user, $password)) {
+				return GeneralHelper::badRequest('Password is incorrect');
+			}
+		}
+
+		if (UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('Cannot delete admin users via the API');
 		}
 
 		try {
