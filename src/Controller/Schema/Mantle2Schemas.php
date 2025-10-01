@@ -145,23 +145,42 @@ class Mantle2Schemas
 					'schema' => [
 						'type' => 'object',
 						'properties' => [
-							'error' => [
-								'type' => 'string',
-								'example' => $description,
-							],
-							'code' => [
-								'type' => 'number',
-								'example' => 409,
-							],
+							'error' => ['type' => 'string', 'example' => 'Conflict'],
+							'message' => ['type' => 'string', 'example' => 'Duplicate entry found'],
 						],
-						'required' => ['error', 'code'],
+						'required' => ['error', 'message'],
 					],
 				],
 			],
 		];
 	}
 
-	// Root Types (schemas)
+	public static function E429($description = 'Rate limit exceeded'): array
+	{
+		return [
+			'description' => $description,
+			'content' => [
+				'application/json' => [
+					'schema' => [
+						'type' => 'object',
+						'properties' => [
+							'error' => ['type' => 'string', 'example' => 'Rate limit exceeded'],
+							'message' => [
+								'type' => 'string',
+								'example' => 'Please wait 120 seconds before trying again',
+							],
+							'retry_after' => [
+								'type' => 'integer',
+								'example' => 120,
+								'description' => 'Seconds to wait before retrying',
+							],
+						],
+						'required' => ['error', 'message', 'retry_after'],
+					],
+				],
+			],
+		];
+	} // Root Types (schemas)
 
 	public static array $info = [
 		'type' => 'object',
@@ -278,7 +297,7 @@ class Mantle2Schemas
 		'type' => 'string',
 		'minLength' => 8,
 		'maxLength' => 100,
-		'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]+$",
+		'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]+$", // At least 8 characters, letters, numbers, special chars
 		'example' => 'password123',
 	];
 	public static array $email = [
@@ -557,6 +576,96 @@ class Mantle2Schemas
 		'required' => ['content'],
 	];
 
+	public static array $passwordResetBody = [
+		'type' => 'object',
+		'properties' => [
+			'new_password' => [
+				'type' => 'string',
+				'minLength' => 8,
+				'maxLength' => 100,
+				'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]+$",
+				'description' => 'New password for the user account',
+			],
+		],
+		'required' => ['new_password'],
+	];
+
+	public static array $passwordChangeBody = [
+		'type' => 'object',
+		'properties' => [
+			'current_password' => [
+				'type' => 'string',
+				'description' => 'Current password for verification',
+			],
+			'new_password' => [
+				'type' => 'string',
+				'minLength' => 8,
+				'maxLength' => 100,
+				'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]+$",
+				'description' => 'New password for the user account',
+			],
+		],
+		'required' => ['current_password', 'new_password'],
+	];
+
+	public static array $articleBody = [
+		'type' => 'object',
+		'properties' => [
+			'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 100],
+			'description' => [
+				'type' => 'string',
+				'example' => 'Hello World',
+				'maxLength' => 512,
+			],
+			'tags' => [
+				'type' => 'array',
+				'items' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 30],
+				'maxItems' => 10,
+				'example' => ['tag1', 'tag2', 'tag3'],
+				'default' => [],
+			],
+			'content' => [
+				'type' => 'string',
+				'example' =>
+					'The phrase "Hello World" is commonly used in programming as a simple test message to demonstrate the basic syntax of a programming language or to verify that a system is functioning correctly. It is often the first program written by beginners when learning a new programming language.',
+				'minLength' => 50,
+				'maxLength' => 10000,
+			],
+			'ocean' => [
+				'type' => 'object',
+				'properties' => [
+					'title' => ['type' => 'string'],
+					'url' => ['type' => 'string', 'format' => 'uri'],
+					'author' => ['type' => 'string'],
+					'source' => ['type' => 'string'],
+					'links' => [
+						'type' => 'object',
+						'additionalProperties' => ['type' => 'string', 'format' => 'uri'],
+					],
+					'abstract' => ['type' => 'string', 'maxLength' => 10000, 'minLength' => 50],
+					'content' => ['type' => 'string', 'maxLength' => 10000, 'minLength' => 50],
+					'theme_color' => [
+						'type' => 'string',
+						'pattern' => '^#[0-9A-Fa-f]{6}$',
+					],
+					'keywords' => [
+						'type' => 'array',
+						'items' => ['type' => 'string', 'maxLength' => 35],
+						'maxItems' => 25,
+					],
+					'date' => ['type' => 'string', 'format' => 'date-time'],
+					'favicon' => ['type' => 'string', 'format' => 'uri'],
+				],
+				'required' => ['title', 'url', 'author', 'source', 'content', 'date'],
+			],
+			'color' => [
+				'type' => 'string',
+				'pattern' => '^#[0-9A-Fa-f]{6}$',
+			],
+		],
+		'required' => ['title', 'description', 'content'],
+	];
+
 	public static function activityCreate(): array
 	{
 		return [
@@ -744,6 +853,20 @@ class Mantle2Schemas
 				],
 			],
 			'required' => ['message', 'new_email', 'email_verified'],
+		];
+	}
+
+	public static function passwordChangeResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'message' => [
+					'type' => 'string',
+					'example' => 'Password changed successfully',
+				],
+			],
+			'required' => ['message'],
 		];
 	}
 

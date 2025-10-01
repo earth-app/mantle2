@@ -44,24 +44,17 @@ class OpenAPIController extends ControllerBase
 				$methods = ['GET'];
 			}
 
-			if (array_key_exists('body/description', $options)) {
+			$requestBody = [];
+			if (array_key_exists('body/schema', $options)) {
 				$requestBody = [
-					'description' => array_key_exists('body/description', $options)
-						? $options['body/description']
-						: 'Request object',
-					'required' => array_key_exists('body/required', $options)
-						? $options['body/required']
-						: true,
+					'description' => $options['body/description'] ?? 'Request object',
+					'required' => $options['body/required'] ?? true,
 					'content' => [
 						'application/json' => [
-							'schema' => $this->resolveSchemaSpecifier(
-								$options['body/schema'] ?? null,
-							),
+							'schema' => $this->resolveSchemaSpecifier($options['body/schema']),
 						],
 					],
 				];
-			} else {
-				$requestBody = [];
 			}
 
 			$responses = array_filter(
@@ -84,9 +77,7 @@ class OpenAPIController extends ControllerBase
 							? [
 								'description' => 'Resource created',
 								'content' => [
-									array_key_exists('schema/201/type', $options)
-										? $options['schema/201/type']
-										: 'application/json' => [
+									$options['schema/201/type'] ?? 'application/json' => [
 										'schema' => $this->resolveSchemaSpecifier(
 											$options['schema/201'],
 										),
@@ -116,6 +107,14 @@ class OpenAPIController extends ControllerBase
 						$options['schema/404'] ?? null
 							? Mantle2Schemas::E404($options['schema/404'])
 							: null,
+					'409' =>
+						$options['schema/409'] ?? null
+							? Mantle2Schemas::E409($options['schema/409'])
+							: null,
+					'429' =>
+						$options['schema/429'] ?? null
+							? Mantle2Schemas::E429($options['schema/429'])
+							: null,
 				],
 				fn($v) => $v !== null,
 			);
@@ -125,7 +124,7 @@ class OpenAPIController extends ControllerBase
 				$parameters = [];
 				preg_match_all('/\{(\w+)}/', $path, $matches);
 				foreach ($matches[1] as $param) {
-					$paramSettings = $options['parameters'][$param];
+					$paramSettings = $options['parameters'][$param] ?? [];
 					$type = $paramSettings['type'] ?? 'string';
 					if (str_starts_with($type, 'entity:')) {
 						$type = 'integer';
@@ -180,7 +179,7 @@ class OpenAPIController extends ControllerBase
 					'description' => $options['description'] ?? '',
 					'parameters' => $parameters,
 					'responses' => $responses,
-					'tags' => explode(',', $options['tags'] ?? '') ?? [],
+					'tags' => !empty($options['tags']) ? explode(',', $options['tags']) : [],
 				];
 
 				if ($method !== 'GET' && !empty($requestBody)) {
