@@ -62,9 +62,23 @@ class MarkdownFactory
 			$html,
 		);
 
-		// Wrap in email-safe container
+		// Wrap in email-safe container and include branding details
 		return '<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">' .
 			$html .
-			'</div>';
+			'</div>' .
+			$this->getBrandingHtml();
+	}
+
+	private function getBrandingHtml(): string
+	{
+		return '<div style="margin-top: 32px; font-size: 10px; color: #999;">
+			<p>Thank you for using The Earth App!</p>
+			<p>If you have any questions, feel free to <a href="mailto:support@earth-app.com">contact our support team</a>.</p>
+			<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="height: 24px; margin-top: 8px;">
+			<p style="margin-top: 8px;">&copy; ' .
+			date('Y') .
+			' The Earth App. All rights reserved.</p>
+			<p>This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.</p>
+		</div>';
 	}
 }
