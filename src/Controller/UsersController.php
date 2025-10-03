@@ -199,13 +199,13 @@ class UsersController extends ControllerBase
 			);
 		}
 
-		if (!preg_match(Mantle2Schemas::$username['pattern'], $username)) {
+		if (!preg_match('/' . Mantle2Schemas::$username['pattern'] . '/', $username)) {
 			return GeneralHelper::badRequest(
 				'Username must be 3-30 characters long and can only contain letters, numbers, underscores, dashes, and periods.',
 			);
 		}
 
-		if (!preg_match(Mantle2Schemas::$password['pattern'], $password)) {
+		if (!preg_match('/' . Mantle2Schemas::$password['pattern'] . '/', $password)) {
 			return GeneralHelper::badRequest(
 				'Password must be 8-100 characters long and can only contain letters, numbers, and special characters.',
 			);
@@ -969,7 +969,7 @@ class UsersController extends ControllerBase
 
 		if (
 			!is_string($newPassword) ||
-			!preg_match(Mantle2Schemas::$password['pattern'], $newPassword)
+			!preg_match('/' . Mantle2Schemas::$password['pattern'] . '/', $newPassword)
 		) {
 			return GeneralHelper::badRequest(
 				'Password must be 8-100 characters long and can only contain letters, numbers, and special characters.',
