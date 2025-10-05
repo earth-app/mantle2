@@ -137,6 +137,14 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid fields');
 		}
 
+		if (GeneralHelper::isFlagged($data)) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid attempted to create flagged prompt: %prompt',
+				['%uid' => $user->id(), '%prompt' => $data],
+			);
+			return GeneralHelper::badRequest('Prompt contains inappropriate content');
+		}
+
 		$obj = new Prompt($data, $user->id(), Visibility::from($visibility));
 		$node = PromptsHelper::createPrompt($obj, $user);
 		if (!$node) {
@@ -306,6 +314,14 @@ class PromptsController extends ControllerBase
 			$updated = true;
 		}
 
+		if (GeneralHelper::isFlagged($newPrompt)) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid attempted to update flagged prompt: %prompt',
+				['%uid' => $user->id(), '%prompt' => $newPrompt],
+			);
+			return GeneralHelper::badRequest('Prompt contains inappropriate content');
+		}
+
 		$newVisibility = $body['visibility'] ?? null;
 		if (
 			is_string($newVisibility) &&
@@ -441,6 +457,14 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid content');
 		}
 
+		if (GeneralHelper::isFlagged($content)) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid attempted to create flagged prompt response: %prompt',
+				['%uid' => $user->id(), '%prompt' => $content],
+			);
+			return GeneralHelper::badRequest('Prompt response contains inappropriate content');
+		}
+
 		if (!$user->hasPermission('post comments')) {
 			return GeneralHelper::forbidden('You do not have permission to post responses');
 		}
@@ -540,6 +564,14 @@ class PromptsController extends ControllerBase
 		$content = $body['content'] ?? null;
 		if (!is_string($content) || trim($content) === '') {
 			return GeneralHelper::badRequest('Missing or invalid content');
+		}
+
+		if (GeneralHelper::isFlagged($content)) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid attempted to create flagged prompt response: %prompt',
+				['%uid' => $user->id(), '%prompt' => $content],
+			);
+			return GeneralHelper::badRequest('Prompt response contains inappropriate content');
 		}
 
 		$response->set('comment_body', $content);

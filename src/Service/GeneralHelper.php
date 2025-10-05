@@ -178,4 +178,206 @@ class GeneralHelper
 		}
 		return null;
 	}
+
+	// Content Validation
+
+	private static array $badWords = [
+		'nigger',
+		'fuck',
+		'shit',
+		'bitch',
+		'slut',
+		'ass',
+		'nigga',
+		'whore',
+		'cannabis',
+		'clanker',
+		'faggot',
+		'pussy',
+		'arse',
+		'shite',
+		'cunt',
+		'wanker',
+		'crap',
+		'thot',
+		'bozo',
+		'cuck',
+	];
+
+	// Cache for normalized bad words to avoid repeated normalization
+	private static ?array $normalizedBadWords = null;
+
+	// Global leetspeak / symbol substitution map
+	private static array $leetspeakMap = [
+		// numbers -> letters
+		'0' => 'o',
+		'1' => 'i',
+		'2' => 'z',
+		'3' => 'e',
+		'4' => 'a',
+		'5' => 's',
+		'6' => 'g',
+		'7' => 't',
+		'8' => 'b',
+		'9' => 'g',
+
+		// common symbols -> letters or removal
+		'@' => 'a',
+		'$' => 's',
+		'+' => 't',
+		'!' => 'i',
+		'|' => 'i',
+		'¥' => 'y',
+		'%' => '',
+		'^' => '',
+		'&' => 'and',
+		'*' => '',
+		'_' => '',
+		'-' => '',
+		'=' => '',
+		'~' => '',
+		'`' => '',
+		"'" => '',
+		'"' => '',
+		':' => '',
+		';' => '',
+		',' => '',
+		'.' => '',
+		'/' => '',
+		'\\' => '',
+		'?' => '',
+		'<' => '',
+		'>' => '',
+		'(' => '',
+		')' => '',
+		'[' => '',
+		']' => '',
+		'{' => '',
+		'}' => '',
+		'#' => '',
+		'¿' => '',
+		'¡' => 'i',
+
+		// visual / currency / punctuation homoglyphs
+		'¢' => 'c',
+		'£' => 'l',
+		'€' => 'e',
+		'©' => 'c',
+		'®' => 'r',
+		'°' => 'o',
+		'º' => 'o',
+		'‚' => '',
+		'•' => '',
+		'…' => '',
+
+		// some ascii-art substitutions
+		// (removed duplicates that were already defined above)
+
+		// common bracket-like separators that people insert between letters
+		'·' => '',
+		'•' => '',
+		'—' => '',
+		'–' => '',
+		'´' => '',
+		'˝' => '',
+
+		// letters that look similar in other alphabets (some examples)
+		'а' => 'a', // Cyrillic a -> Latin a
+		'е' => 'e', // Cyrillic e
+		'о' => 'o', // Cyrillic o
+		'р' => 'p', // Cyrillic r -> looks like p but often used for r/p confusion
+		'с' => 'c', // Cyrillic s -> c
+		'і' => 'i', // Cyrillic/ Ukrainian i
+		'ј' => 'j', // Cyrillic small je
+		'ѵ' => 'v', // old Cyrillic v
+		'ʀ' => 'r', // small Latin/R variants
+
+		// more visually similar punctuation mapped to nothing to avoid bypasses
+		'﹫' => 'a',
+		'﹤' => '',
+		'﹥' => '',
+
+		// common unicode non-letter confusables that should be removed
+		'„' => '',
+		'‹' => '',
+		'›' => '',
+
+		// whitespace variants we will normalize to plain space first
+		"\t" => ' ',
+		"\n" => ' ',
+		"\r" => ' ',
+	];
+
+	private static function normalize_text(string $text): string
+	{
+		// 1) Normalize Unicode (NFKD) and remove combining diacritics (turn ó -> o, etc.)
+		if (class_exists('Normalizer')) {
+			$text = \Normalizer::normalize($text, \Normalizer::FORM_KD) ?: $text;
+		}
+		// strip combining marks (accents)
+		$text = preg_replace('/\p{M}/u', '', $text);
+
+		// 2) Remove zero-width and other format-control characters (U+200B, U+200C, U+200D, U+FEFF, etc.)
+		$text = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}\p{Cf}]+/u', '', $text);
+
+		// 3) Lowercase (multibyte-safe)
+		$text = mb_strtolower($text, 'UTF-8');
+
+		// 4) Apply the leetspeak map (strtr is fast and handles single-char and multichar keys)
+		$text = strtr($text, self::$leetspeakMap);
+
+		// 5) Collapse "spaced-out" or punctuated letters:
+		//    Example: "b a d", "b.a.d", "b-a-d" => "bad"
+		//    We do two passes:
+		//      a) collapse single-character separators between letters (keep letters)
+		//      b) remove any remaining non-alphanumerics
+		// a) remove separators between letters: letter [non-alnum]+ letter -> letterletter
+		$text = preg_replace('/(\p{L})(?:[\s\W_]+)(?=\p{L})/u', '$1', $text);
+
+		// b) remove anything left that's not a-z or 0-9
+		$text = preg_replace('/[^a-z0-9]+/u', '', $text);
+
+		// 6) Collapse repeated characters that are commonly used to evade detection (optional)
+		//    Example: "baaaad" -> "baad" (keeps one duplication but removes extreme repeats)
+		$text = preg_replace('/([a-z0-9])\1{2,}/u', '$1$1', $text); // if 3+ repeat, reduce to 2
+
+		return $text;
+	}
+
+	public static function isFlagged(string $text): bool
+	{
+		// Early exit for very short strings (less than 3 characters)
+		if (strlen($text) < 3) {
+			return false;
+		}
+
+		// Step 1: Normalize text, convert to lower
+		$normalized = self::normalize_text($text);
+
+		// Early exit if normalization resulted in too short text
+		if (strlen($normalized) < 2) {
+			return false;
+		}
+
+		// Initialize normalized bad words cache if not already done
+		if (self::$normalizedBadWords === null) {
+			self::$normalizedBadWords = [];
+			foreach (self::$badWords as $word) {
+				$wordNorm = self::normalize_text((string) $word);
+				if ($wordNorm !== '' && strlen($wordNorm) >= 2) {
+					self::$normalizedBadWords[] = $wordNorm;
+				}
+			}
+		}
+
+		foreach (self::$normalizedBadWords as $wordNorm) {
+			// Simple substring matching with common suffix variants
+			$pattern = '/' . preg_quote($wordNorm, '/') . '(?:s|es|ed|ing)?/u';
+			if (preg_match($pattern, $normalized)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
 }

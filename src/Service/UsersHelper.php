@@ -599,6 +599,14 @@ class UsersHelper
 				return GeneralHelper::badRequest('Invalid first name length');
 			}
 
+			if (GeneralHelper::isFlagged($firstName)) {
+				Drupal::logger('mantle2')->warning(
+					'User %uid attempted to create flagged first name: %first_name',
+					['%uid' => $user->id(), '%first_name' => $firstName],
+				);
+				return GeneralHelper::badRequest('First name contains inappropriate content');
+			}
+
 			$user->set('field_first_name', $firstName);
 		}
 
@@ -607,6 +615,14 @@ class UsersHelper
 			$len = strlen($lastName);
 			if ($len < 2 || $len > 50) {
 				return GeneralHelper::badRequest('Invalid last name length');
+			}
+
+			if (GeneralHelper::isFlagged($lastName)) {
+				Drupal::logger('mantle2')->warning(
+					'User %uid attempted to create flagged last name: %last_name',
+					['%uid' => $user->id(), '%last_name' => $lastName],
+				);
+				return GeneralHelper::badRequest('Last name contains inappropriate content');
 			}
 
 			$user->set('field_last_name', $lastName);
@@ -619,6 +635,14 @@ class UsersHelper
 				return GeneralHelper::badRequest(
 					'Invalid biography length: Maximum 500 characters',
 				);
+			}
+
+			if (GeneralHelper::isFlagged($bio)) {
+				Drupal::logger('mantle2')->warning(
+					'User %uid attempted to create flagged biography: %bio',
+					['%uid' => $user->id(), '%bio' => $bio],
+				);
+				return GeneralHelper::badRequest('Biography contains inappropriate content');
 			}
 
 			$user->set('field_bio', $bio);
