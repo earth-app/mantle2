@@ -202,6 +202,8 @@ class GeneralHelper
 		'thot',
 		'bozo',
 		'cuck',
+		'sex',
+		'masturbation',
 	];
 
 	// Cache for normalized bad words to avoid repeated normalization
