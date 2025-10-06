@@ -599,12 +599,19 @@ class UsersHelper
 				return GeneralHelper::badRequest('Invalid first name length');
 			}
 
-			if (GeneralHelper::isFlagged($firstName)) {
+			$flagResult = GeneralHelper::isFlagged($firstName);
+			if ($flagResult['flagged']) {
 				Drupal::logger('mantle2')->warning(
-					'User %uid attempted to create flagged first name: %first_name',
-					['%uid' => $user->id(), '%first_name' => $firstName],
+					'User %uid attempted to create flagged first name: %first_name (matched: %matched)',
+					[
+						'%uid' => $user->id(),
+						'%first_name' => $firstName,
+						'%matched' => $flagResult['matched_word'],
+					],
 				);
-				return GeneralHelper::badRequest('First name contains inappropriate content');
+				return GeneralHelper::badRequest(
+					'First name contains inappropriate content: ' . $flagResult['matched_word'],
+				);
 			}
 
 			$user->set('field_first_name', $firstName);
@@ -617,12 +624,19 @@ class UsersHelper
 				return GeneralHelper::badRequest('Invalid last name length');
 			}
 
-			if (GeneralHelper::isFlagged($lastName)) {
+			$flagResult = GeneralHelper::isFlagged($lastName);
+			if ($flagResult['flagged']) {
 				Drupal::logger('mantle2')->warning(
-					'User %uid attempted to create flagged last name: %last_name',
-					['%uid' => $user->id(), '%last_name' => $lastName],
+					'User %uid attempted to create flagged last name: %last_name (matched: %matched)',
+					[
+						'%uid' => $user->id(),
+						'%last_name' => $lastName,
+						'%matched' => $flagResult['matched_word'],
+					],
 				);
-				return GeneralHelper::badRequest('Last name contains inappropriate content');
+				return GeneralHelper::badRequest(
+					'Last name contains inappropriate content: ' . $flagResult['matched_word'],
+				);
 			}
 
 			$user->set('field_last_name', $lastName);
@@ -637,12 +651,19 @@ class UsersHelper
 				);
 			}
 
-			if (GeneralHelper::isFlagged($bio)) {
+			$flagResult = GeneralHelper::isFlagged($bio);
+			if ($flagResult['flagged']) {
 				Drupal::logger('mantle2')->warning(
-					'User %uid attempted to create flagged biography: %bio',
-					['%uid' => $user->id(), '%bio' => $bio],
+					'User %uid attempted to create flagged biography: %bio (matched: %matched)',
+					[
+						'%uid' => $user->id(),
+						'%bio' => $bio,
+						'%matched' => $flagResult['matched_word'],
+					],
 				);
-				return GeneralHelper::badRequest('Biography contains inappropriate content');
+				return GeneralHelper::badRequest(
+					'Biography contains inappropriate content: ' . $flagResult['matched_word'],
+				);
 			}
 
 			$user->set('field_bio', $bio);

@@ -346,11 +346,11 @@ class GeneralHelper
 		return $text;
 	}
 
-	public static function isFlagged(string $text): bool
+	public static function isFlagged(string $text): array
 	{
 		// Early exit for very short strings (less than 3 characters)
 		if (strlen($text) < 3) {
-			return false;
+			return ['flagged' => '', 'matched_word' => ''];
 		}
 
 		// Step 1: Normalize text, convert to lower
@@ -358,7 +358,7 @@ class GeneralHelper
 
 		// Early exit if normalization resulted in too short text
 		if (strlen($normalized) < 2) {
-			return false;
+			return ['flagged' => '', 'matched_word' => ''];
 		}
 
 		// Initialize normalized bad words cache if not already done
@@ -372,14 +372,17 @@ class GeneralHelper
 			}
 		}
 
-		foreach (self::$normalizedBadWords as $wordNorm) {
-			// Simple substring matching with common suffix variants
-			$pattern = '/' . preg_quote($wordNorm, '/') . '(?:s|es|ed|ing)?/u';
+		foreach (self::$normalizedBadWords as $index => $wordNorm) {
+			// Word boundary matching with optional suffix variants to avoid false positives
+			$pattern = '/\b' . preg_quote($wordNorm, '/') . '(?:s|es|ed|ing)?\b/u';
 			if (preg_match($pattern, $normalized)) {
-				return true;
+				return [
+					'flagged' => $text,
+					'matched_word' => self::$badWords[$index],
+				];
 			}
 		}
 
-		return false;
+		return ['flagged' => '', 'matched_word' => ''];
 	}
 }

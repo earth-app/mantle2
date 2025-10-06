@@ -137,12 +137,19 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid fields');
 		}
 
-		if (GeneralHelper::isFlagged($data)) {
+		$flagResult = GeneralHelper::isFlagged($data);
+		if ($flagResult['flagged']) {
 			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to create flagged prompt: %prompt',
-				['%uid' => $user->id(), '%prompt' => $data],
+				'User %uid attempted to create flagged prompt: %prompt (matched: %matched)',
+				[
+					'%uid' => $user->id(),
+					'%prompt' => $data,
+					'%matched' => $flagResult['matched_word'],
+				],
 			);
-			return GeneralHelper::badRequest('Prompt contains inappropriate content');
+			return GeneralHelper::badRequest(
+				'Prompt contains inappropriate content: ' . $flagResult['matched_word'],
+			);
 		}
 
 		$obj = new Prompt($data, $user->id(), Visibility::from($visibility));
@@ -314,12 +321,19 @@ class PromptsController extends ControllerBase
 			$updated = true;
 		}
 
-		if (GeneralHelper::isFlagged($newPrompt)) {
+		$flagResult = GeneralHelper::isFlagged($newPrompt);
+		if ($flagResult['flagged']) {
 			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to update flagged prompt: %prompt',
-				['%uid' => $user->id(), '%prompt' => $newPrompt],
+				'User %uid attempted to update flagged prompt: %prompt (matched: %matched)',
+				[
+					'%uid' => $user->id(),
+					'%prompt' => $newPrompt,
+					'%matched' => $flagResult['matched_word'],
+				],
 			);
-			return GeneralHelper::badRequest('Prompt contains inappropriate content');
+			return GeneralHelper::badRequest(
+				'Prompt contains inappropriate content: ' . $flagResult['matched_word'],
+			);
 		}
 
 		$newVisibility = $body['visibility'] ?? null;
@@ -457,12 +471,19 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid content');
 		}
 
-		if (GeneralHelper::isFlagged($content)) {
+		$flagResult = GeneralHelper::isFlagged($content);
+		if ($flagResult['flagged']) {
 			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to create flagged prompt response: %prompt',
-				['%uid' => $user->id(), '%prompt' => $content],
+				'User %uid attempted to create flagged prompt response: %prompt (matched: %matched)',
+				[
+					'%uid' => $user->id(),
+					'%prompt' => $content,
+					'%matched' => $flagResult['matched_word'],
+				],
 			);
-			return GeneralHelper::badRequest('Prompt response contains inappropriate content');
+			return GeneralHelper::badRequest(
+				'Prompt response contains inappropriate content: ' . $flagResult['matched_word'],
+			);
 		}
 
 		if (!$user->hasPermission('post comments')) {
@@ -566,12 +587,19 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid content');
 		}
 
-		if (GeneralHelper::isFlagged($content)) {
+		$flagResult = GeneralHelper::isFlagged($content);
+		if ($flagResult['flagged']) {
 			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to create flagged prompt response: %prompt',
-				['%uid' => $user->id(), '%prompt' => $content],
+				'User %uid attempted to create flagged prompt response: %prompt (matched: %matched)',
+				[
+					'%uid' => $user->id(),
+					'%prompt' => $content,
+					'%matched' => $flagResult['matched_word'],
+				],
 			);
-			return GeneralHelper::badRequest('Prompt response contains inappropriate content');
+			return GeneralHelper::badRequest(
+				'Prompt response contains inappropriate content: ' . $flagResult['matched_word'],
+			);
 		}
 
 		$response->set('comment_body', $content);

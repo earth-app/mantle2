@@ -213,12 +213,19 @@ class ArticlesController extends ControllerBase
 			);
 		}
 
-		if (GeneralHelper::isFlagged($content)) {
+		$flagResult = GeneralHelper::isFlagged($content);
+		if ($flagResult['flagged']) {
 			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to create flagged article: %article',
-				['%uid' => $user->id(), '%article' => $content],
+				'User %uid attempted to create flagged article: %article (matched: %matched)',
+				[
+					'%uid' => $user->id(),
+					'%article' => $content,
+					'%matched' => $flagResult['matched_word'],
+				],
 			);
-			return GeneralHelper::badRequest('Article contains inappropriate content');
+			return GeneralHelper::badRequest(
+				'Article contains inappropriate content: ' . $flagResult['matched_word'],
+			);
 		}
 
 		// Validate ocean article
