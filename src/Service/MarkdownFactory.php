@@ -18,8 +18,8 @@ class MarkdownFactory
 			'allow_unsafe_links' => false,
 			'max_nesting_level' => 10,
 			'renderer' => [
-				'block_separator' => "\n",
-				'inner_separator' => "\n",
+				'block_separator' => "<br>\n",
+				'inner_separator' => "<br>\n",
 				'soft_break' => "<br>\n",
 			],
 		];
