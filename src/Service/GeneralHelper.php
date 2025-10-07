@@ -82,10 +82,6 @@ class GeneralHelper
 				return self::badRequest("Invalid limit '$limit': must be between 1 and $maxLimit");
 			}
 
-			if ($limit < 1 || $limit > $maxLimit) {
-				return self::badRequest("Invalid limit '$limit': must be between 1 and $maxLimit");
-			}
-
 			$page = $request->query->getInt('page', 1);
 			if ($page < 1) {
 				return self::badRequest("Invalid page '$page'");
@@ -114,21 +110,29 @@ class GeneralHelper
 	public static function fromDataURL(string $dataUrl): Response
 	{
 		if (!$dataUrl) {
-			return GeneralHelper::notFound('Profile photo not found');
+			return GeneralHelper::notFound('Data not found');
+		}
+
+		if (stripos($dataUrl, 'data:') !== 0) {
+			return GeneralHelper::badRequest('Invalid data URL');
+		}
+
+		if (stripos($dataUrl, ',') === false) {
+			return GeneralHelper::badRequest('Invalid data URL');
 		}
 
 		[$meta, $data] = explode(',', $dataUrl, 2);
 		if (stripos($meta, 'base64') === false) {
-			return GeneralHelper::internalError('Invalid profile photo data');
+			return GeneralHelper::badRequest('Invalid data');
 		}
 		$matches = [];
 		if (!preg_match('/data:(.*?);base64/', $meta, $matches) || count($matches) < 2) {
-			return GeneralHelper::internalError('Invalid profile photo data');
+			return GeneralHelper::badRequest('Invalid data URL');
 		}
 		$mime = $matches[1];
 		$decoded = base64_decode($data, true);
 		if ($decoded === false) {
-			return GeneralHelper::internalError('Failed to decode profile photo data');
+			return GeneralHelper::internalError('Failed to decode data');
 		}
 
 		return new Response($decoded, Response::HTTP_OK, [
@@ -183,6 +187,9 @@ class GeneralHelper
 
 	private static array $badWords = [
 		'nigger',
+		'nigga',
+		'jigaboo',
+		'coon',
 		'fuck',
 		'shit',
 		'bitch',
@@ -212,102 +219,102 @@ class GeneralHelper
 	// Global leetspeak / symbol substitution map
 	private static array $leetspeakMap = [
 		// numbers -> letters
-		'0' => 'o',
-		'1' => 'i',
-		'2' => 'z',
-		'3' => 'e',
-		'4' => 'a',
-		'5' => 's',
-		'6' => 'g',
-		'7' => 't',
-		'8' => 'b',
-		'9' => 'g',
+		'0' => ['o'],
+		'1' => ['i', 'l'],
+		'2' => ['z'],
+		'3' => ['a', 'e', 'u'],
+		'4' => ['a', 'u', 'i'],
+		'5' => ['s'],
+		'6' => ['g', 'u'],
+		'7' => ['t', 'y', 'r'],
+		'8' => ['b', 'u'],
+		'9' => ['g'],
 
 		// common symbols -> letters or removal
-		'@' => 'a',
-		'$' => 's',
-		'+' => 't',
-		'!' => 'i',
-		'|' => 'i',
-		'¥' => 'y',
-		'%' => '',
-		'^' => '',
-		'&' => 'and',
-		'*' => '',
-		'_' => '',
-		'-' => '',
-		'=' => '',
-		'~' => '',
-		'`' => '',
-		"'" => '',
-		'"' => '',
-		':' => '',
-		';' => '',
-		',' => '',
-		'.' => '',
-		'/' => '',
-		'\\' => '',
-		'?' => '',
-		'<' => '',
-		'>' => '',
-		'(' => '',
-		')' => '',
-		'[' => '',
-		']' => '',
-		'{' => '',
-		'}' => '',
-		'#' => '',
-		'¿' => '',
-		'¡' => 'i',
+		'@' => ['a', 'o'],
+		'$' => ['s'],
+		'+' => ['t'],
+		'!' => ['i', 'l'],
+		'|' => ['i', 'l'],
+		'¥' => ['y'],
+		'%' => [''],
+		'^' => [''],
+		'&' => ['and', 'a'],
+		'*' => [''],
+		'_' => [''],
+		'-' => [''],
+		'=' => [''],
+		'~' => [''],
+		'`' => [''],
+		"'" => [''],
+		'"' => [''],
+		':' => ['i', 'l'],
+		';' => [''],
+		',' => [''],
+		'.' => [''],
+		'/' => [''],
+		'\\' => [''],
+		'?' => [''],
+		'<' => [''],
+		'>' => [''],
+		'(' => [''],
+		')' => [''],
+		'[' => [''],
+		']' => [''],
+		'{' => [''],
+		'}' => [''],
+		'#' => [''],
+		'¿' => [''],
+		'¡' => ['i'],
 
 		// visual / currency / punctuation homoglyphs
-		'¢' => 'c',
-		'£' => 'l',
-		'€' => 'e',
-		'©' => 'c',
-		'®' => 'r',
-		'°' => 'o',
-		'º' => 'o',
-		'‚' => '',
-		'•' => '',
-		'…' => '',
+		'¢' => ['c'],
+		'£' => ['l'],
+		'€' => ['e'],
+		'©' => ['c'],
+		'®' => ['r'],
+		'°' => ['o'],
+		'º' => ['o'],
+		'‚' => [''],
+		'•' => [''],
+		'…' => [''],
 
 		// some ascii-art substitutions
 		// (removed duplicates that were already defined above)
 
 		// common bracket-like separators that people insert between letters
-		'·' => '',
-		'•' => '',
-		'—' => '',
-		'–' => '',
-		'´' => '',
-		'˝' => '',
+		'·' => [''],
+		'•' => [''],
+		'—' => [''],
+		'–' => [''],
+		'´' => [''],
+		'˝' => [''],
 
 		// letters that look similar in other alphabets (some examples)
-		'а' => 'a', // Cyrillic a -> Latin a
-		'е' => 'e', // Cyrillic e
-		'о' => 'o', // Cyrillic o
-		'р' => 'p', // Cyrillic r -> looks like p but often used for r/p confusion
-		'с' => 'c', // Cyrillic s -> c
-		'і' => 'i', // Cyrillic/ Ukrainian i
-		'ј' => 'j', // Cyrillic small je
-		'ѵ' => 'v', // old Cyrillic v
-		'ʀ' => 'r', // small Latin/R variants
+		'а' => ['a'], // Cyrillic a -> Latin a
+		'е' => ['e'], // Cyrillic e
+		'о' => ['o'], // Cyrillic o
+		'р' => ['p'], // Cyrillic r -> looks like p but often used for r/p confusion
+		'с' => ['c'], // Cyrillic s -> c
+		'і' => ['i'], // Cyrillic/ Ukrainian i
+		'ј' => ['j'], // Cyrillic small je
+		'ѵ' => ['v'], // old Cyrillic v
+		'ʀ' => ['r'], // small Latin/R variants
 
 		// more visually similar punctuation mapped to nothing to avoid bypasses
-		'﹫' => 'a',
-		'﹤' => '',
-		'﹥' => '',
+		'﹫' => ['a'],
+		'﹤' => [''],
+		'﹥' => [''],
 
 		// common unicode non-letter confusables that should be removed
-		'„' => '',
-		'‹' => '',
-		'›' => '',
+		'„' => [''],
+		'‹' => [''],
+		'›' => [''],
 
 		// whitespace variants we will normalize to plain space first
-		"\t" => ' ',
-		"\n" => ' ',
-		"\r" => ' ',
+		"\t" => [' '],
+		"\n" => [' '],
+		"\r" => [' '],
 	];
 
 	private static function normalize_text(string $text): string
@@ -325,8 +332,8 @@ class GeneralHelper
 		// 3) Lowercase (multibyte-safe)
 		$text = mb_strtolower($text, 'UTF-8');
 
-		// 4) Apply the leetspeak map (strtr is fast and handles single-char and multichar keys)
-		$text = strtr($text, self::$leetspeakMap);
+		// 4) Apply the leetspeak map - now handles multiple character possibilities
+		$text = self::expandLeetspeakVariations($text);
 
 		// 5) Collapse "spaced-out" or punctuated letters:
 		//    Example: "b a d", "b.a.d", "b-a-d" => "bad"
@@ -344,6 +351,158 @@ class GeneralHelper
 		$text = preg_replace('/([a-z0-9])\1{2,}/u', '$1$1', $text); // if 3+ repeat, reduce to 2
 
 		return $text;
+	}
+
+	/**
+	 * Expand leetspeak characters to generate multiple possible variations
+	 */
+	private static function expandLeetspeakVariations(string $text): string
+	{
+		// First apply simple replacements (characters with only one possible replacement)
+		$simpleMap = [];
+		$multiMap = [];
+
+		foreach (self::$leetspeakMap as $char => $replacements) {
+			if (count($replacements) === 1) {
+				$simpleMap[$char] = $replacements[0];
+			} elseif (count($replacements) > 1) {
+				$multiMap[$char] = $replacements;
+			}
+		}
+
+		// Apply simple replacements first
+		$text = strtr($text, $simpleMap);
+
+		// For characters with multiple possible replacements, generate variations
+		// and return the one that makes the most sense in context
+		if (!empty($multiMap)) {
+			$text = self::resolveAmbiguousCharacters($text, $multiMap);
+		}
+
+		return $text;
+	}
+
+	/**
+	 * Resolve characters that have multiple possible substitutions
+	 */
+	private static function resolveAmbiguousCharacters(string $text, array $multiMap): string
+	{
+		// Generate all possible variations of the text
+		$variations = self::generateVariations($text, $multiMap);
+
+		// Return the variation that seems most likely to contain actual words
+		return self::selectBestVariation($variations);
+	}
+
+	/**
+	 * Generate all possible variations of text given multiple character substitutions
+	 */
+	private static function generateVariations(string $text, array $multiMap): array
+	{
+		$variations = [$text];
+
+		foreach ($multiMap as $char => $replacements) {
+			if (strpos($text, $char) === false) {
+				continue; // Skip if character not in text
+			}
+
+			$newVariations = [];
+			foreach ($variations as $variation) {
+				foreach ($replacements as $replacement) {
+					$newVariations[] = str_replace($char, $replacement, $variation);
+				}
+			}
+			$variations = $newVariations;
+
+			// Limit variations to prevent exponential explosion
+			if (count($variations) > 100) {
+				$variations = array_slice($variations, 0, 100);
+			}
+		}
+
+		return array_unique($variations);
+	}
+
+	/**
+	 * Select the best variation based on which one is most likely to contain real words
+	 */
+	private static function selectBestVariation(array $variations): string
+	{
+		if (count($variations) <= 1) {
+			return $variations[0] ?? '';
+		}
+
+		// Initialize bad words cache to check against variations
+		if (self::$normalizedBadWords === null) {
+			self::$normalizedBadWords = [];
+			foreach (self::$badWords as $word) {
+				$wordNorm = self::normalize_text((string) $word);
+				if ($wordNorm !== '' && strlen($wordNorm) >= 2) {
+					self::$normalizedBadWords[] = $wordNorm;
+				}
+			}
+		}
+
+		// First, check if any variation contains a known bad word - prioritize these
+		foreach ($variations as $variation) {
+			$cleanVariation = preg_replace('/[^a-z0-9]+/u', '', $variation);
+			foreach (self::$normalizedBadWords as $badWord) {
+				if (strpos($cleanVariation, $badWord) !== false) {
+					return $variation; // Return first variation that contains a bad word
+				}
+			}
+		}
+
+		// If no variation contains bad words, score them normally
+		$scored = [];
+		foreach ($variations as $variation) {
+			$score = self::scoreVariation($variation);
+			$scored[] = ['text' => $variation, 'score' => $score];
+		}
+
+		// Sort by score (highest first)
+		usort($scored, function ($a, $b) {
+			return $b['score'] <=> $a['score'];
+		});
+
+		return $scored[0]['text'];
+	}
+
+	/**
+	 * Score a text variation based on common letter patterns and word-like structures
+	 */
+	private static function scoreVariation(string $text): int
+	{
+		$score = 0;
+
+		// Common English letter patterns that increase likelihood
+		$patterns = [
+			'/ck/' => 10, // 'ck' is very common
+			'/th/' => 8, // 'th' is common
+			'/ing$/' => 15, // 'ing' at end
+			'/ed$/' => 10, // 'ed' at end
+			'/er$/' => 8, // 'er' at end
+			'/ly$/' => 8, // 'ly' at end
+			'/tion/' => 12, // 'tion' is common
+			'/qu/' => 12, // 'qu' almost always together
+			'/[aeiou]/' => 2, // vowels are important
+		];
+
+		foreach ($patterns as $pattern => $points) {
+			$score += preg_match_all($pattern, $text) * $points;
+		}
+
+		// Penalize for common leetspeak artifacts that weren't resolved
+		$penalties = [
+			'/[0-9]/' => -5, // Numbers that weren't converted
+			'/[^a-z]/' => -2, // Non-alphabetic characters
+		];
+
+		foreach ($penalties as $pattern => $penalty) {
+			$score += preg_match_all($pattern, $text) * $penalty;
+		}
+
+		return $score;
 	}
 
 	public static function isFlagged(string $text): array
@@ -373,9 +532,9 @@ class GeneralHelper
 		}
 
 		foreach (self::$normalizedBadWords as $index => $wordNorm) {
-			// Word boundary matching with optional suffix variants to avoid false positives
-			$pattern = '/\b' . preg_quote($wordNorm, '/') . '(?:s|es|ed|ing)?\b/u';
-			if (preg_match($pattern, $normalized)) {
+			// Use simple substring matching instead of word boundaries to catch concatenated words
+			// But add some context checking to avoid false positives
+			if (self::containsBadWord($normalized, $wordNorm)) {
 				return [
 					'flagged' => $text,
 					'matched_word' => self::$badWords[$index],
@@ -384,5 +543,28 @@ class GeneralHelper
 		}
 
 		return ['flagged' => '', 'matched_word' => ''];
+	}
+
+	/**
+	 * Check if a bad word is contained in the normalized text with some context awareness
+	 */
+	private static function containsBadWord(string $normalized, string $badWord): bool
+	{
+		// Simple substring search for the bad word
+		if (strpos($normalized, $badWord) === false) {
+			return false;
+		}
+
+		// For very short bad words (2-3 chars), be more strict to avoid false positives
+		if (strlen($badWord) <= 3) {
+			// Use word boundaries for short words to avoid matching parts of longer words
+			$pattern = '/\b' . preg_quote($badWord, '/') . '(?:s|es|ed|ing|y)?\b/u';
+			return preg_match($pattern, $normalized);
+		}
+
+		// For longer bad words (4+ chars), simple substring matching is usually safe
+		// But also check for common suffixes
+		$pattern = '/' . preg_quote($badWord, '/') . '(?:s|es|ed|ing|y)?/u';
+		return preg_match($pattern, $normalized);
 	}
 }

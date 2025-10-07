@@ -6,8 +6,43 @@ on:
       - master
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring libxml gd dom curl date hash bcmath pcov random xml zlib standard
+      - name: Install Composer Dependencies
+        run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Run Tests
+        run: ./vendor/bin/phpunit --colors=never
+      - name: Archive Test Coverage
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage
+          path: coverage/
+          retention-days: 30
+      - name: Output Test Coverage to Build Summary
+        if: success() || failure()
+        run: |
+          echo "##[group]Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage/mantle2.coverage.txt ]; then
+            cat coverage/mantle2.coverage.txt >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No coverage report found." >> $GITHUB_STEP_SUMMARY
+          fi
+
   deploy:
     runs-on: ubuntu-latest
+    needs: build
+    if: ${{ github.ref == 'refs/heads/master' }}
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v5
@@ -39,7 +74,7 @@ jobs:
             cd /var/www/drupal
             ./vendor/bin/drush un mantle2 -y
             cd /var/www/drupal/web/modules/mantle2
-            composer install --no-progress --no-suggest --prefer-dist
+            composer install --no-progress --no-suggest --no-dev --prefer-dist
             cd /var/www/drupal
             ./vendor/bin/drush en mantle2 -y
             ./vendor/bin/drush updb -y

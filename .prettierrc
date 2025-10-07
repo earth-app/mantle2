@@ -1,5 +1,5 @@
 {
-	"plugins": ["@prettier/plugin-php"],
+	"plugins": ["@prettier/plugin-php", "@prettier/plugin-xml"],
 	"printWidth": 100,
 	"singleQuote": true,
 	"semi": true,
@@ -12,6 +12,12 @@
 			"files": "*.{install,module,php}",
 			"options": {
 				"parser": "php"
+			}
+		},
+		{
+			"files": "phpunit.xml.dist",
+			"options": {
+				"parser": "xml"
 			}
 		}
 	]
