@@ -16,7 +16,7 @@
 		"su-sws/markdown": "^3.0",
 		"drupal/smtp": "^1.4",
 		"drupal/redis": "^1.10",
-		"sebastian/diff": "^6"
+		"sebastian/diff": "^7"
 	},
 	"autoload": {
 		"psr-4": {
