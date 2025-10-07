@@ -15,7 +15,8 @@
 		"league/commonmark": "^2.7",
 		"su-sws/markdown": "^3.0",
 		"drupal/smtp": "^1.4",
-		"drupal/redis": "^1.10"
+		"drupal/redis": "^1.10",
+		"sebastian/diff": "^6"
 	},
 	"autoload": {
 		"psr-4": {
@@ -23,12 +24,27 @@
 		}
 	},
 	"require-dev": {
-		"drush/drush": "^13.6"
+		"drush/drush": "^13.6",
+		"phpunit/phpunit": "^11.5",
+		"drupal/core-dev": "^11.2"
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"Drupal\\Tests\\mantle2\\": "tests/src/"
+		}
 	},
 	"repositories": [
 		{
 			"type": "composer",
 			"url": "https://packages.drupal.org/8"
 		}
-	]
+	],
+	"config": {
+		"allow-plugins": {
+			"php-http/discovery": true,
+			"phpstan/extension-installer": true,
+			"tbachert/spi": true,
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	}
 }
