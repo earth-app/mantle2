@@ -10,7 +10,6 @@ use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\HeaderBag;
 use Symfony\Component\HttpFoundation\InputBag;
-use Symfony\Component\HttpFoundation\ParameterBag;
 use Symfony\Component\HttpFoundation\Request;
 
 class GeneralUnitTest extends TestCase
@@ -163,6 +162,7 @@ class GeneralUnitTest extends TestCase
 			'case 13' => [16711680, '#FF0000'],
 			'case 14' => [32768, '#008000'],
 			'case 15' => [4294950912, '#FFC000'],
+			'case 16' => [16711935, '#FF00FF'],
 		];
 	}
 

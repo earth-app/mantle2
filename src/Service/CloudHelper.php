@@ -37,6 +37,10 @@ class CloudHelper
 		array $data = [],
 	): array {
 		$cloud = self::getCloudEndpoint();
+		if (empty($path)) {
+			throw new Exception('Path is required for the request.');
+		}
+
 		$ch = curl_init();
 		$method = strtoupper($method);
 
@@ -75,7 +79,7 @@ class CloudHelper
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
 		if (curl_errno($ch)) {
-			throw new Exception('Request Error: ' . curl_error($ch));
+			throw new Exception('Request Error: ' . curl_error($ch) . ' URL: ' . $url);
 		}
 
 		curl_close($ch);
