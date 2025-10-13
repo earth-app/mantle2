@@ -347,7 +347,10 @@ class GeneralUnitTest extends TestCase
 		$request1->query = new InputBag(['limit' => '10', 'page' => '2', 'search' => 'abc']);
 
 		$params = GeneralHelper::paginatedParameters($request1);
-		$this->assertEquals(['limit' => 10, 'page' => 2, 'search' => 'abc'], $params);
+		$this->assertEquals(
+			['limit' => 10, 'page' => 2, 'search' => 'abc', 'sort' => 'desc'],
+			$params,
+		);
 
 		$request2 = $this->createMock(Request::class);
 		$request2->query = new InputBag(['limit' => '0', 'page' => '-1']);
@@ -372,7 +375,10 @@ class GeneralUnitTest extends TestCase
 		$request4 = $this->createMock(Request::class);
 		$request4->query = new InputBag([]);
 		$params = GeneralHelper::paginatedParameters($request4);
-		$this->assertEquals(['limit' => 25, 'page' => 1, 'search' => ''], $params);
+		$this->assertEquals(
+			['limit' => 25, 'page' => 1, 'search' => '', 'sort' => 'desc'],
+			$params,
+		);
 
 		$request5 = $this->createMock(Request::class);
 		$request5->query = new InputBag(['limit' => '25', 'page' => '1', 'search' => 1234]);
@@ -388,6 +394,35 @@ class GeneralUnitTest extends TestCase
 		$this->assertEquals(400, $params->getStatusCode());
 		$this->assertEquals(
 			'{"code":400,"message":"Invalid page \u0027-1\u0027"}',
+			$params->getContent(),
+		);
+
+		$request7 = $this->createMock(Request::class);
+		$request7->query = new InputBag([
+			'limit' => '25',
+			'page' => '1',
+			'search' => 'valid',
+			'sort' => 'rand',
+		]);
+		$params = GeneralHelper::paginatedParameters($request7);
+		$this->assertIsArray($params);
+		$this->assertEquals(
+			['limit' => 25, 'page' => 1, 'search' => 'valid', 'sort' => 'rand'],
+			$params,
+		);
+
+		$request8 = $this->createMock(Request::class);
+		$request8->query = new InputBag([
+			'limit' => '25',
+			'page' => '1',
+			'search' => 'valid',
+			'sort' => 'invalid',
+		]);
+		$params = GeneralHelper::paginatedParameters($request8);
+		$this->assertIsNotArray($params);
+		$this->assertEquals(400, $params->getStatusCode());
+		$this->assertEquals(
+			'{"code":400,"message":"Invalid sort order \u0027invalid\u0027; Must be \u0027asc\u0027, \u0027desc\u0027, or \u0027rand\u0027"}',
 			$params->getContent(),
 		);
 	}
