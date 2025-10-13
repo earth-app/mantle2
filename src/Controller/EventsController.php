@@ -52,7 +52,10 @@ class EventsController extends ControllerBase
 					$group = $query->orConditionGroup();
 					$group->condition(
 						'field_visibility',
-						[Visibility::PUBLIC->value, Visibility::UNLISTED->value],
+						[
+							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::UNLISTED),
+						],
 						'IN',
 					);
 
@@ -66,7 +69,7 @@ class EventsController extends ControllerBase
 				$query->condition(
 					'field_visibility',
 					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
-					'IN',
+					'=',
 				);
 			}
 

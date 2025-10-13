@@ -18,6 +18,7 @@ use Drupal\user\UserInterface;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
+use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ActivityHelper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
@@ -47,7 +48,15 @@ class UsersController extends ControllerBase
 
 		try {
 			$storage = Drupal::entityTypeManager()->getStorage('user');
-			$query = $storage->getQuery()->accessCheck(false)->condition('uid', 0, '!='); // Exclude anonymous user
+			$query = $storage
+				->getQuery()
+				->accessCheck(false)
+				->condition('uid', 0, '!=') // Exclude anonymous user
+				->condition(
+					'field_visibility',
+					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+					'=',
+				);
 
 			if ($search) {
 				$group = $query
