@@ -173,6 +173,7 @@ class PromptsHelper
 		int $page = 1,
 		int $limit = 25,
 		string $search = '',
+		string $sort = 'desc',
 	): array {
 		$fieldName = self::getCommentFieldName($node);
 		if (!$fieldName) {
@@ -180,27 +181,52 @@ class PromptsHelper
 			return [];
 		}
 
-		$storage = Drupal::entityTypeManager()->getStorage('comment');
-		$query = $storage
-			->getQuery()
-			->accessCheck(false)
-			->condition('entity_id', $node->id())
-			->condition('entity_type', 'node')
-			->condition('field_name', $fieldName)
-			->condition('status', 1)
-			->range(($page - 1) * $limit, $limit)
-			->sort('created', 'DESC');
+		// Handle random sorting separately using database query
+		if ($sort === 'rand') {
+			$connection = Drupal::database();
+			$query = $connection
+				->select('comment_field_data', 'c')
+				->fields('c', ['cid'])
+				->condition('c.status', 1)
+				->condition('c.entity_id', $node->id())
+				->condition('c.entity_type', 'node')
+				->condition('c.field_name', $fieldName);
 
-		if ($search) {
-			$query->condition(
-				'comment_body.value',
-				Drupal::database()->escapeLike($search),
-				'CONTAINS',
-			);
+			if ($search) {
+				$cb = $query->leftJoin('comment__comment_body', 'cb', 'cb.entity_id = c.cid');
+				$query->condition("$cb.comment_body_value", "%$search%", 'LIKE');
+			}
+
+			$query->orderRandom()->range(($page - 1) * $limit, $limit);
+			$ids = $query->execute()->fetchCol();
+			$storage = Drupal::entityTypeManager()->getStorage('comment');
+			$comments = $storage->loadMultiple($ids);
+		} else {
+			$storage = Drupal::entityTypeManager()->getStorage('comment');
+			$query = $storage
+				->getQuery()
+				->accessCheck(false)
+				->condition('entity_id', $node->id())
+				->condition('entity_type', 'node')
+				->condition('field_name', $fieldName)
+				->condition('status', 1)
+				->range(($page - 1) * $limit, $limit);
+
+			// Add sorting
+			$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+			$query->sort('created', $sortDirection);
+
+			if ($search) {
+				$query->condition(
+					'comment_body.value',
+					Drupal::database()->escapeLike($search),
+					'CONTAINS',
+				);
+			}
+
+			$ids = $query->execute();
+			$comments = $storage->loadMultiple($ids);
 		}
-
-		$ids = $query->execute();
-		$comments = $storage->loadMultiple($ids);
 
 		return array_values($comments);
 	}
@@ -269,8 +295,9 @@ class PromptsHelper
 		int $page = 1,
 		int $limit = 25,
 		string $search = '',
+		string $sort = 'desc',
 	): array {
-		$comments = self::getComments($node, $page, $limit, $search);
+		$comments = self::getComments($node, $page, $limit, $search, $sort);
 		$responses = [];
 
 		foreach ($comments as $comment) {

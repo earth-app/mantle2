@@ -70,6 +70,11 @@ mantle2.users:
         type: string
         default: ''
         description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: asc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
 mantle2.users.login:
@@ -2091,6 +2096,27 @@ mantle2.activities:
     description: Retrieves a list of activities
     schema/200: activities()
     schema/401: Unauthorized
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: asc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
 mantle2.activities.random:
@@ -2248,6 +2274,11 @@ mantle2.events:
         type: string
         default: ''
         description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: asc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
 mantle2.events.create:
@@ -2715,6 +2746,27 @@ mantle2.articles:
     description: Lists all articles
     schema/200: articles()
     schema/404: Not Found
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: asc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
 mantle2.articles.random:

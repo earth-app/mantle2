@@ -228,6 +228,17 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function sortOrder(): array
+	{
+		return [
+			'type' => 'string',
+			'enum' => ['asc', 'desc', 'rand'],
+			'default' => 'desc',
+			'description' =>
+				'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)',
+		];
+	}
+
 	public static array $paginatedParameters = [
 		[
 			'name' => 'page',
@@ -250,6 +261,18 @@ class Mantle2Schemas
 			'required' => false,
 			'schema' => ['type' => 'string', 'maxLength' => 40, 'default' => ''],
 		],
+		[
+			'name' => 'sort',
+			'in' => 'query',
+			'description' =>
+				'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)',
+			'required' => false,
+			'schema' => [
+				'type' => 'string',
+				'enum' => ['asc', 'desc', 'rand'],
+				'default' => 'desc',
+			],
+		],
 	];
 
 	public static array $paginatedParams = [
@@ -258,8 +281,9 @@ class Mantle2Schemas
 			'page' => ['type' => 'integer', 'minimum' => 1, 'default' => 1],
 			'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 250, 'default' => 25],
 			'search' => ['type' => 'string', 'maxLength' => 40, 'default' => ''],
+			'sort' => ['type' => 'string', 'enum' => ['asc', 'desc', 'rand'], 'default' => 'desc'],
 		],
-		'required' => ['page', 'limit', 'search'],
+		'required' => ['page', 'limit', 'search', 'sort'],
 	];
 
 	// String Types

@@ -816,21 +816,36 @@ class UsersHelper
 		int $limit = 25,
 		int $page = 1,
 		string $search = '',
+		string $sort = 'desc',
 	): array {
 		$friendsValue = $user->get('field_friends')->value ?? '[]';
 
 		/** @var int[] $friends*/
 		$friends = $friendsValue ? json_decode($friendsValue, true) : [];
-		$friends = array_slice($friends, ($page - 1) * $limit, $limit);
-		return array_filter(array_map(fn($id) => self::findById($id), $friends), function ($u) use (
-			$search,
-		) {
-			if (empty($search)) {
-				return true;
-			}
 
-			return str_contains($u->getAccountName(), $search);
-		});
+		// Load all friends as users for filtering and sorting
+		$friendUsers = array_filter(array_map(fn($id) => self::findById($id), $friends));
+
+		// Apply search filter
+		if (!empty($search)) {
+			$friendUsers = array_filter($friendUsers, function ($u) use ($search) {
+				return str_contains($u->getAccountName(), $search);
+			});
+		}
+
+		// Apply sorting
+		if ($sort === 'rand') {
+			shuffle($friendUsers);
+		} else {
+			usort($friendUsers, function ($a, $b) use ($sort) {
+				$aTime = $a->getCreatedTime();
+				$bTime = $b->getCreatedTime();
+				return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
+			});
+		}
+
+		// Apply pagination
+		return array_slice($friendUsers, ($page - 1) * $limit, $limit);
 	}
 
 	public static function getAddedFriendsCount(UserInterface $user, string $search = ''): int
@@ -868,6 +883,7 @@ class UsersHelper
 		int $limit = 25,
 		int $page = 1,
 		string $search = '',
+		string $sort = 'desc',
 	): array {
 		$userFriends = self::getAddedFriends($user);
 		$friendCounts = [];
@@ -904,6 +920,17 @@ class UsersHelper
 			});
 		}
 
+		// Apply sorting
+		if ($sort === 'rand') {
+			shuffle($mutual);
+		} else {
+			usort($mutual, function ($a, $b) use ($sort) {
+				$aTime = $a->getCreatedTime();
+				$bTime = $b->getCreatedTime();
+				return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
+			});
+		}
+
 		// Apply pagination
 		$offset = ($page - 1) * $limit;
 		return array_slice($mutual, $offset, $limit);
@@ -914,6 +941,7 @@ class UsersHelper
 		int $limit = 25,
 		int $page = 1,
 		string $search = '',
+		string $sort = 'desc',
 	): array {
 		$userFriends = self::getAddedFriends($user);
 		$nonMutual = [];
@@ -931,18 +959,31 @@ class UsersHelper
 		}
 
 		$nonMutual = array_filter($nonMutual, fn($count) => $count === 1);
-		$nonMutual = array_map(fn($id) => self::findById($id), array_keys($nonMutual));
+		$nonMutualUsers = array_filter(
+			array_map(fn($id) => self::findById($id), array_keys($nonMutual)),
+		);
 
 		// Apply search filter
 		if (!empty($search)) {
-			$nonMutual = array_filter($nonMutual, function ($u) use ($search) {
+			$nonMutualUsers = array_filter($nonMutualUsers, function ($u) use ($search) {
 				return str_contains($u->getAccountName(), $search);
+			});
+		}
+
+		// Apply sorting
+		if ($sort === 'rand') {
+			shuffle($nonMutualUsers);
+		} else {
+			usort($nonMutualUsers, function ($a, $b) use ($sort) {
+				$aTime = $a->getCreatedTime();
+				$bTime = $b->getCreatedTime();
+				return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
 			});
 		}
 
 		// Apply pagination
 		$offset = ($page - 1) * $limit;
-		return array_slice($nonMutual, $offset, $limit);
+		return array_slice($nonMutualUsers, $offset, $limit);
 	}
 
 	public static function addFriend(UserInterface $user, UserInterface $friend): bool
@@ -1005,23 +1046,35 @@ class UsersHelper
 		int $limit = 25,
 		int $page = 1,
 		string $search = '',
+		string $sort = 'desc',
 	): array {
 		$circleValue = $user->get('field_circle')->value ?? '{}';
 
 		/** @var int[] $circle */
 		$circle = $circleValue ? json_decode($circleValue, true) : [];
-		if (empty($search)) {
-			$circle = array_slice($circle, ($page - 1) * $limit, $limit);
-			return array_map(fn($id) => self::findById($id), $circle);
-		} else {
-			$circleUsers = array_map(fn($id) => self::findById($id), $circle);
+		$circleUsers = array_filter(array_map(fn($id) => self::findById($id), $circle));
+
+		// Apply search filter
+		if (!empty($search)) {
 			$circleUsers = array_filter(
 				$circleUsers,
 				fn($u) => str_contains($u->getAccountName(), $search),
 			);
-			$circleUsers = array_slice($circleUsers, ($page - 1) * $limit, $limit);
-			return $circleUsers;
 		}
+
+		// Apply sorting
+		if ($sort === 'rand') {
+			shuffle($circleUsers);
+		} else {
+			usort($circleUsers, function ($a, $b) use ($sort) {
+				$aTime = $a->getCreatedTime();
+				$bTime = $b->getCreatedTime();
+				return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
+			});
+		}
+
+		// Apply pagination
+		return array_slice($circleUsers, ($page - 1) * $limit, $limit);
 	}
 
 	public static function isInCircle(UserInterface $user1, UserInterface $user2): bool
@@ -1350,6 +1403,7 @@ class UsersHelper
 		int $limit = 25,
 		int $page = 1,
 		string $search = '',
+		string $sort = 'desc',
 	) {
 		try {
 			$storage = Drupal::entityTypeManager()->getStorage('node');
@@ -1365,8 +1419,19 @@ class UsersHelper
 			$countQuery = clone $query;
 			$count = $countQuery->count()->execute();
 
+			// Add sorting
+			$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+			$query->sort('created', $sortDirection);
+
 			$query->range(($page - 1) * $limit, $limit);
 			$nids = $query->execute();
+
+			// Handle random sorting differently
+			if ($sort === 'rand') {
+				$nids = array_values($nids);
+				shuffle($nids);
+			}
+
 			$nodes = $storage->loadMultiple($nids);
 
 			return [

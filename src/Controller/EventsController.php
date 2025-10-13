@@ -39,52 +39,132 @@ class EventsController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
 		try {
-			$storage = Drupal::entityTypeManager()->getStorage('node');
-			$query = $storage->getQuery()->accessCheck(false)->condition('type', 'event');
+			// Handle random sorting separately using database query
+			if ($sort === 'rand') {
+				$connection = Drupal::database();
+				$query = $connection
+					->select('node_field_data', 'n')
+					->fields('n', ['nid'])
+					->condition('n.status', 1)
+					->condition('n.type', 'event');
 
-			// Check visibility
-			$user = UsersHelper::getOwnerOfRequest($request);
-			if ($user) {
-				if (!UsersHelper::isAdmin($user)) {
-					// non-private events for logged in users
-					$group = $query->orConditionGroup();
-					$group->condition(
-						'field_visibility',
-						[
-							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
-							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::UNLISTED),
-						],
-						'IN',
+				$fv = $query->leftJoin('node__field_visibility', 'fv', 'fv.entity_id = n.nid');
+				$query->condition("$fv.delta", 0);
+
+				// Check visibility
+				$user = UsersHelper::getOwnerOfRequest($request);
+				if ($user) {
+					if (!UsersHelper::isAdmin($user)) {
+						// Non-private events for logged-in users OR events where user is host/attendee
+						$fh = $query->leftJoin('node__field_host_id', 'fh', 'fh.entity_id = n.nid');
+						$query->condition("$fh.delta", 0);
+
+						$fa = $query->leftJoin(
+							'node__field_event_attendees',
+							'fa',
+							'fa.entity_id = n.nid',
+						);
+
+						$group = $query
+							->orConditionGroup()
+							->condition(
+								"$fv.field_visibility_value",
+								[
+									GeneralHelper::findOrdinal(
+										Visibility::cases(),
+										Visibility::PUBLIC,
+									),
+									GeneralHelper::findOrdinal(
+										Visibility::cases(),
+										Visibility::UNLISTED,
+									),
+								],
+								'IN',
+							)
+							->condition("$fa.field_event_attendees_target_id", $user->id())
+							->condition("$fh.field_host_id_value", $user->id());
+						$query->condition($group);
+					}
+				} else {
+					// Only public events for anonymous users
+					$query->condition(
+						"$fv.field_visibility_value",
+						GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
 					);
+				}
 
-					// is in attendee array or is host
-					$group->condition('field_event_attendees.target_id', $user->id(), 'CONTAINS');
-					$group->condition('field_host_id', $user->id());
+				if ($search) {
+					$fn = $query->leftJoin('node__field_event_name', 'fn', 'fn.entity_id = n.nid');
+					$query->condition("$fn.field_event_name_value", "%$search%", 'LIKE');
+				}
+
+				// Get total count for random
+				$countQuery = clone $query;
+				$total = $countQuery->countQuery()->execute()->fetchField();
+
+				$query->orderRandom()->range($page * $limit, $limit);
+				$nids = $query->execute()->fetchCol();
+			} else {
+				// Use entity query for normal sorting
+				$storage = Drupal::entityTypeManager()->getStorage('node');
+				$query = $storage->getQuery()->accessCheck(false)->condition('type', 'event');
+
+				// Check visibility
+				$user = UsersHelper::getOwnerOfRequest($request);
+				if ($user) {
+					if (!UsersHelper::isAdmin($user)) {
+						// non-private events for logged in users
+						$group = $query->orConditionGroup();
+						$group->condition(
+							'field_visibility',
+							[
+								GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+								GeneralHelper::findOrdinal(
+									Visibility::cases(),
+									Visibility::UNLISTED,
+								),
+							],
+							'IN',
+						);
+
+						// is in attendee array or is host
+						$group->condition(
+							'field_event_attendees.target_id',
+							$user->id(),
+							'CONTAINS',
+						);
+						$group->condition('field_host_id', $user->id());
+						$query->condition($group);
+					}
+				} else {
+					// only public events for anonymous users
+					$query->condition(
+						'field_visibility',
+						GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+						'=',
+					);
+				}
+
+				if ($search) {
+					$group = $query
+						->orConditionGroup()
+						->condition('field_event_name', $search, 'CONTAINS');
 					$query->condition($group);
 				}
-			} else {
-				// only public events for anonymous users
-				$query->condition(
-					'field_visibility',
-					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
-					'=',
-				);
+
+				$countQuery = clone $query;
+				$total = $countQuery->count()->execute();
+
+				// Add sorting
+				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+				$query->sort('created', $sortDirection);
+
+				$query->range($page * $limit, $limit);
+				$nids = $query->execute();
 			}
-
-			if ($search) {
-				$group = $query
-					->orConditionGroup()
-					->condition('field_event_name', $search, 'CONTAINS');
-				$query->condition($group);
-			}
-
-			$countQuery = clone $query;
-			$total = $countQuery->count()->execute();
-
-			$query->range($page * $limit, $limit);
-			$nids = $query->execute();
 
 			/** @var Node[] $nodes */
 			$nodes = $storage->loadMultiple($nids);
@@ -509,6 +589,7 @@ class EventsController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
 		$attendees = array_filter($event->getAttendees(), function (UserInterface $attendee) use (
 			$search,
@@ -518,6 +599,18 @@ class EventsController extends ControllerBase
 			}
 			return true;
 		});
+
+		// Apply sorting
+		if ($sort === 'rand') {
+			shuffle($attendees);
+		} else {
+			usort($attendees, function ($a, $b) use ($sort) {
+				$aTime = $a->getCreatedTime();
+				$bTime = $b->getCreatedTime();
+				return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
+			});
+		}
+
 		$total = count($attendees);
 		$attendees = array_slice($attendees, $page * $limit, $limit);
 		$attendees = array_map(

@@ -45,34 +45,73 @@ class UsersController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
 		try {
-			$storage = Drupal::entityTypeManager()->getStorage('user');
-			$query = $storage
-				->getQuery()
-				->accessCheck(false)
-				->condition('uid', 0, '!=') // Exclude anonymous user
-				->condition(
-					'field_visibility',
+			// Handle random sorting separately using database query
+			if ($sort === 'rand') {
+				$connection = Drupal::database();
+				$query = $connection
+					->select('users_field_data', 'u')
+					->fields('u', ['uid'])
+					->condition('u.status', 1)
+					->condition('u.uid', 0, '!=');
+
+				$fv = $query->leftJoin('user__field_visibility', 'fv', 'fv.entity_id = u.uid');
+				$query->condition(
+					"$fv.field_visibility_value",
 					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
-					'=',
 				);
 
-			if ($search) {
-				$group = $query
-					->orConditionGroup()
-					->condition('name', $search, 'CONTAINS')
-					->condition('field_first_name', $search, 'CONTAINS')
-					->condition('field_last_name', $search, 'CONTAINS');
-				$query->condition($group);
-			}
+				if ($search) {
+					$fn = $query->leftJoin('user__field_first_name', 'fn', 'fn.entity_id = u.uid');
+					$fl = $query->leftJoin('user__field_last_name', 'fl', 'fl.entity_id = u.uid');
 
-			$countQuery = clone $query;
-			$total = $countQuery->count()->execute();
-			$uids = $query
-				->range($page * $limit, $limit)
-				->sort('created', 'DESC')
-				->execute();
+					$group = $query
+						->orConditionGroup()
+						->condition('u.name', "%$search%", 'LIKE')
+						->condition("$fn.field_first_name_value", "%$search%", 'LIKE')
+						->condition("$fl.field_last_name_value", "%$search%", 'LIKE');
+					$query->condition($group);
+				}
+
+				// Get total count for random
+				$countQuery = clone $query;
+				$total = $countQuery->countQuery()->execute()->fetchField();
+
+				$query->orderRandom()->range($page * $limit, $limit);
+				$uids = $query->execute()->fetchCol();
+			} else {
+				// Use entity query for normal sorting
+				$storage = Drupal::entityTypeManager()->getStorage('user');
+				$query = $storage
+					->getQuery()
+					->accessCheck(false)
+					->condition('uid', 0, '!=') // Exclude anonymous user
+					->condition(
+						'field_visibility',
+						GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+						'=',
+					);
+
+				if ($search) {
+					$group = $query
+						->orConditionGroup()
+						->condition('name', $search, 'CONTAINS')
+						->condition('field_first_name', $search, 'CONTAINS')
+						->condition('field_last_name', $search, 'CONTAINS');
+					$query->condition($group);
+				}
+
+				$countQuery = clone $query;
+				$total = $countQuery->count()->execute();
+
+				// Add sorting
+				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+				$query->sort('created', $sortDirection);
+
+				$uids = $query->range($page * $limit, $limit)->execute();
+			}
 			$users = array_filter($storage->loadMultiple($uids), function ($user) use ($request) {
 				$res = UsersHelper::checkVisibility($user, $request);
 				if ($res instanceof JsonResponse) {
@@ -669,17 +708,24 @@ class UsersController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
 		$filter = $request->query->get('filter') ?? 'added';
 		switch ($filter) {
 			case 'mutual':
-				$friends = UsersHelper::getMutualFriends($visible, $limit, $page, $search);
+				$friends = UsersHelper::getMutualFriends($visible, $limit, $page, $search, $sort);
 				break;
 			case 'added':
-				$friends = UsersHelper::getAddedFriends($visible, $limit, $page, $search);
+				$friends = UsersHelper::getAddedFriends($visible, $limit, $page, $search, $sort);
 				break;
 			case 'non_mutual':
-				$friends = UsersHelper::getNonMutualFriends($visible, $limit, $page, $search);
+				$friends = UsersHelper::getNonMutualFriends(
+					$visible,
+					$limit,
+					$page,
+					$search,
+					$sort,
+				);
 				break;
 			default:
 				return GeneralHelper::badRequest(
@@ -798,8 +844,9 @@ class UsersController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
-		$circle = UsersHelper::getCircle($visible, $limit, $page, $search);
+		$circle = UsersHelper::getCircle($visible, $limit, $page, $search, $sort);
 		$data = array_map(fn($u) => UsersHelper::serializeUser($u, $requester), $circle);
 
 		return new JsonResponse(
@@ -1345,8 +1392,9 @@ class UsersController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
-		$events = UsersHelper::getUserEvents($requester, $limit, $page, $search);
+		$events = UsersHelper::getUserEvents($requester, $limit, $page, $search, $sort);
 		return new JsonResponse([
 			'limit' => $limit,
 			'page' => $page + 1,

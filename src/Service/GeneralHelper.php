@@ -97,10 +97,20 @@ class GeneralHelper
 				return self::badRequest("Search term '$search' too long");
 			}
 
+			$sort = $request->query->get('sort') ?? 'desc';
+			if (!is_string($sort) || !in_array(strtolower($sort), ['asc', 'desc', 'rand'], true)) {
+				return self::badRequest(
+					"Invalid sort order '$sort'; Must be 'asc', 'desc', or 'rand'",
+				);
+			}
+
+			$sort = strtolower($sort);
+
 			return [
 				'limit' => $limit,
 				'page' => $page,
 				'search' => $search,
+				'sort' => $sort,
 			];
 		} catch (UnexpectedValueException $e) {
 			return self::badRequest('Invalid pagination parameters: ' . $e->getMessage());

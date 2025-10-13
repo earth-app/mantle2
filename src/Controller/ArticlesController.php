@@ -38,23 +38,65 @@ class ArticlesController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
 		try {
-			$storage = Drupal::entityTypeManager()->getStorage('node');
-			$query = $storage->getQuery()->accessCheck(false)->condition('type', 'article');
+			// Handle random sorting separately using database query
+			if ($sort === 'rand') {
+				$connection = Drupal::database();
+				$query = $connection
+					->select('node_field_data', 'n')
+					->fields('n', ['nid'])
+					->condition('n.status', 1)
+					->condition('n.type', 'article');
 
-			if ($search) {
-				$group = $query->orConditionGroup();
-				$group->condition('field_article_title', $search, 'CONTAINS');
-				$group->condition('field_article_description', $search, 'CONTAINS');
-				$query->condition($group);
+				if ($search) {
+					$ft = $query->leftJoin(
+						'node__field_article_title',
+						'ft',
+						'ft.entity_id = n.nid',
+					);
+					$fd = $query->leftJoin(
+						'node__field_article_description',
+						'fd',
+						'fd.entity_id = n.nid',
+					);
+
+					$group = $query
+						->orConditionGroup()
+						->condition("$ft.field_article_title_value", "%$search%", 'LIKE')
+						->condition("$fd.field_article_description_value", "%$search%", 'LIKE');
+					$query->condition($group);
+				}
+
+				// Get total count for random
+				$countQuery = clone $query;
+				$total = $countQuery->countQuery()->execute()->fetchField();
+
+				$query->orderRandom()->range($page * $limit, $limit);
+				$nids = $query->execute()->fetchCol();
+			} else {
+				// Use entity query for normal sorting
+				$storage = Drupal::entityTypeManager()->getStorage('node');
+				$query = $storage->getQuery()->accessCheck(false)->condition('type', 'article');
+
+				if ($search) {
+					$group = $query->orConditionGroup();
+					$group->condition('field_article_title', $search, 'CONTAINS');
+					$group->condition('field_article_description', $search, 'CONTAINS');
+					$query->condition($group);
+				}
+
+				$countQuery = clone $query;
+				$total = $countQuery->count()->execute();
+
+				// Add sorting
+				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+				$query->sort('created', $sortDirection);
+
+				$query->range($page * $limit, $limit);
+				$nids = $query->execute();
 			}
-
-			$countQuery = clone $query;
-			$total = $countQuery->count()->execute();
-
-			$query->range($page * $limit, $limit);
-			$nids = $query->execute();
 
 			/** @var Node[] $nodes */
 			$nodes = $storage->loadMultiple($nids);

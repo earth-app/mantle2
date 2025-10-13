@@ -37,47 +37,120 @@ class PromptsController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
 		try {
-			$storage = Drupal::entityTypeManager()->getStorage('node');
-			$query = $storage->getQuery()->accessCheck(false)->condition('type', 'prompt');
+			// Handle random sorting separately using database query
+			if ($sort === 'rand') {
+				$connection = Drupal::database();
+				$query = $connection
+					->select('node_field_data', 'n')
+					->fields('n', ['nid'])
+					->condition('n.status', 1)
+					->condition('n.type', 'prompt');
 
-			// Check visibility
-			$user = UsersHelper::getOwnerOfRequest($request);
-			if ($user) {
-				if (!UsersHelper::isAdmin($user)) {
-					// non-private events for logged in users
-					$group = $query->orConditionGroup();
-					$group->condition(
-						'field_visibility',
-						[
-							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
-							GeneralHelper::findOrdinal(Visibility::cases(), Visibility::UNLISTED),
-						],
-						'IN',
+				$fv = $query->leftJoin('node__field_visibility', 'fv', 'fv.entity_id = n.nid');
+				$query->condition("$fv.delta", 0);
+
+				// Check visibility
+				$user = UsersHelper::getOwnerOfRequest($request);
+				if ($user) {
+					if (!UsersHelper::isAdmin($user)) {
+						// Non-private prompts for logged-in users OR prompts owned by the user.
+						$fo = $query->leftJoin(
+							'node__field_owner_id',
+							'fo',
+							'fo.entity_id = n.nid',
+						);
+						$query->condition("$fo.delta", 0);
+
+						$group = $query
+							->orConditionGroup()
+							->condition(
+								"$fv.field_visibility_value",
+								[
+									GeneralHelper::findOrdinal(
+										Visibility::cases(),
+										Visibility::PUBLIC,
+									),
+									GeneralHelper::findOrdinal(
+										Visibility::cases(),
+										Visibility::UNLISTED,
+									),
+								],
+								'IN',
+							)
+							->condition("$fo.field_owner_id_value", $user->id());
+						$query->condition($group);
+					}
+				} else {
+					// Only public prompts for anonymous users
+					$query->condition(
+						"$fv.field_visibility_value",
+						GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
 					);
-
-					// is owner
-					$group->condition('field_owner_id', $user->id());
-					$query->condition($group);
 				}
+
+				if ($search) {
+					$fp = $query->leftJoin('node__field_prompt', 'fp', 'fp.entity_id = n.nid');
+					$query->condition("$fp.field_prompt_value", "%$search%", 'LIKE');
+				}
+
+				// Get total count for random
+				$countQuery = clone $query;
+				$total = $countQuery->countQuery()->execute()->fetchField();
+
+				$query->orderRandom()->range($page * $limit, $limit);
+				$nids = $query->execute()->fetchCol();
 			} else {
-				// only public events for anonymous users
-				$query->condition(
-					'field_visibility',
-					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
-				);
+				// Use entity query for normal sorting
+				$storage = Drupal::entityTypeManager()->getStorage('node');
+				$query = $storage->getQuery()->accessCheck(false)->condition('type', 'prompt');
+
+				// Check visibility
+				$user = UsersHelper::getOwnerOfRequest($request);
+				if ($user) {
+					if (!UsersHelper::isAdmin($user)) {
+						// non-private events for logged in users
+						$group = $query->orConditionGroup();
+						$group->condition(
+							'field_visibility',
+							[
+								GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+								GeneralHelper::findOrdinal(
+									Visibility::cases(),
+									Visibility::UNLISTED,
+								),
+							],
+							'IN',
+						);
+
+						// is owner
+						$group->condition('field_owner_id', $user->id());
+						$query->condition($group);
+					}
+				} else {
+					// only public events for anonymous users
+					$query->condition(
+						'field_visibility',
+						GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+					);
+				}
+
+				if ($search) {
+					$query->condition('field_prompt', $search, 'CONTAINS');
+				}
+
+				$countQuery = clone $query;
+				$total = $countQuery->count()->execute();
+
+				// Add sorting
+				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+				$query->sort('created', $sortDirection);
+
+				$query->range($page * $limit, $limit);
+				$nids = $query->execute();
 			}
-
-			if ($search) {
-				$query->condition('field_prompt', $search, 'CONTAINS');
-			}
-
-			$countQuery = clone $query;
-			$total = $countQuery->count()->execute();
-
-			$query->range($page * $limit, $limit);
-			$nids = $query->execute();
 
 			$data = [];
 			foreach ($nids as $nid) {
@@ -413,8 +486,9 @@ class PromptsController extends ControllerBase
 		$limit = $paginated['limit'];
 		$page = $paginated['page'];
 		$search = $paginated['search'];
+		$sort = $paginated['sort'];
 
-		$responses = PromptsHelper::getResponses($prompt, $page, $limit, $search);
+		$responses = PromptsHelper::getResponses($prompt, $page, $limit, $search, $sort);
 		$total = PromptsHelper::getCommentsCount($prompt);
 
 		return new JsonResponse([

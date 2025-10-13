@@ -36,27 +36,77 @@ class ActivityController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
 		try {
-			$storage = Drupal::entityTypeManager()->getStorage('node');
-			$query = $storage->getQuery()->accessCheck(false)->condition('type', 'activity');
+			// Handle random sorting separately using database query
+			if ($sort === 'rand') {
+				$connection = Drupal::database();
+				$query = $connection
+					->select('node_field_data', 'n')
+					->fields('n', ['nid'])
+					->condition('n.status', 1)
+					->condition('n.type', 'activity');
 
-			if ($search) {
-				// For JSON fields, we search the raw JSON string which may contain the search term
-				$group = $query
-					->orConditionGroup()
-					->condition('field_activity_id', $search, 'CONTAINS')
-					->condition('field_activity_name', $search, 'CONTAINS')
-					->condition('field_activity_description', $search, 'CONTAINS')
-					->condition('field_activity_aliases', $search, 'CONTAINS');
-				$query->condition($group);
+				if ($search) {
+					$fi = $query->leftJoin('node__field_activity_id', 'fi', 'fi.entity_id = n.nid');
+					$fn = $query->leftJoin(
+						'node__field_activity_name',
+						'fn',
+						'fn.entity_id = n.nid',
+					);
+					$fd = $query->leftJoin(
+						'node__field_activity_description',
+						'fd',
+						'fd.entity_id = n.nid',
+					);
+					$fa = $query->leftJoin(
+						'node__field_activity_aliases',
+						'fa',
+						'fa.entity_id = n.nid',
+					);
+
+					$group = $query
+						->orConditionGroup()
+						->condition("$fi.field_activity_id_value", "%$search%", 'LIKE')
+						->condition("$fn.field_activity_name_value", "%$search%", 'LIKE')
+						->condition("$fd.field_activity_description_value", "%$search%", 'LIKE')
+						->condition("$fa.field_activity_aliases_value", "%$search%", 'LIKE');
+					$query->condition($group);
+				}
+
+				// Get total count for random
+				$countQuery = clone $query;
+				$total = $countQuery->countQuery()->execute()->fetchField();
+
+				$query->orderRandom()->range($page * $limit, $limit);
+				$nids = $query->execute()->fetchCol();
+			} else {
+				// Use entity query for normal sorting
+				$storage = Drupal::entityTypeManager()->getStorage('node');
+				$query = $storage->getQuery()->accessCheck(false)->condition('type', 'activity');
+
+				if ($search) {
+					// For JSON fields, we search the raw JSON string which may contain the search term
+					$group = $query
+						->orConditionGroup()
+						->condition('field_activity_id', $search, 'CONTAINS')
+						->condition('field_activity_name', $search, 'CONTAINS')
+						->condition('field_activity_description', $search, 'CONTAINS')
+						->condition('field_activity_aliases', $search, 'CONTAINS');
+					$query->condition($group);
+				}
+
+				$countQuery = clone $query;
+				$total = $countQuery->count()->execute();
+
+				// Add sorting
+				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+				$query->sort('created', $sortDirection);
+
+				$query->range($page * $limit, $limit);
+				$nids = $query->execute();
 			}
-
-			$countQuery = clone $query;
-			$total = $countQuery->count()->execute();
-
-			$query->range($page * $limit, $limit);
-			$nids = $query->execute();
 
 			$data = [];
 			foreach ($nids as $nid) {
@@ -352,6 +402,7 @@ class ActivityController extends ControllerBase
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
+		$sort = $pagination['sort'];
 
 		try {
 			$connection = Drupal::database();
@@ -372,6 +423,15 @@ class ActivityController extends ControllerBase
 
 			$countQuery = clone $query;
 			$total = (int) $countQuery->countQuery()->execute()->fetchField();
+
+			// Add sorting
+			if ($sort === 'rand') {
+				$query->orderRandom();
+			} else {
+				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+				$query->orderBy('n.created', $sortDirection);
+			}
+
 			$ids = $query
 				->range($page * $limit, $limit)
 				->execute()
