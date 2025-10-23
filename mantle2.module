@@ -24,7 +24,7 @@ function mantle2_mail($key, &$message, $params)
 {
 	$message['from'] = Drupal::config('system.site')->get('mail');
 
-	/** @var \Drupal\mantle2\Service\MarkdownFactory $parser */
+	/** @var \Drupal\mantle2\Service\HTMLFactory $parser */
 	$parser = Drupal::service('mantle2.parser');
 
 	switch ($key) {

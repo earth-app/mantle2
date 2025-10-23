@@ -50,6 +50,6 @@ services:
     tags:
       - { name: backend_overridable }
 
-  # Email Markdown Rendering
+  # Email HTML Rendering
   mantle2.parser:
-    class: Drupal\mantle2\Service\MarkdownFactory
+    class: Drupal\mantle2\Service\HTMLFactory
