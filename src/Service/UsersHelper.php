@@ -1396,77 +1396,6 @@ class UsersHelper
 		$indexStore->set((string) $uid, array_values($toKeep));
 	}
 
-	// User field utilities
-
-	public static function getUserEvents(
-		UserInterface $user,
-		int $limit = 25,
-		int $page = 1,
-		string $search = '',
-		string $sort = 'desc',
-	) {
-		try {
-			$storage = Drupal::entityTypeManager()->getStorage('node');
-			$query = $storage
-				->getQuery()
-				->condition('type', 'event')
-				->condition('field_host_id', $user->id());
-
-			if (!empty($search)) {
-				$query->condition('field_event_name', $search, 'CONTAINS');
-			}
-
-			$countQuery = clone $query;
-			$count = $countQuery->count()->execute();
-
-			// Add sorting
-			$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
-			$query->sort('created', $sortDirection);
-
-			$query->range(($page - 1) * $limit, $limit);
-			$nids = $query->execute();
-
-			// Handle random sorting differently
-			if ($sort === 'rand') {
-				$nids = array_values($nids);
-				shuffle($nids);
-			}
-
-			$nodes = $storage->loadMultiple($nids);
-
-			return [
-				'events' => array_values(
-					array_filter(
-						array_map(
-							fn($node) => $node ? EventsHelper::nodeToEvent($node) : null,
-							$nodes,
-						),
-					),
-				),
-				'total' => $count,
-			];
-		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
-			Drupal::logger('mantle2')->error('Failed to retrieve user events: %message', [
-				'%message' => $e->getMessage(),
-			]);
-			return [
-				'events' => [],
-				'total' => 0,
-			];
-		}
-	}
-
-	public static function getMaxEventAttendees(UserInterface $user): int
-	{
-		$type = self::getAccountType($user)->name;
-		return match ($type) {
-			'ADMINISTRATOR' => PHP_INT_MAX,
-			'PRO', 'WRITER' => 5000,
-			'ORGANIZER' => 1_000_000,
-			default => 100,
-		};
-	}
-
 	// Notification System Utilities
 
 	private const MAX_NOTIFICATIONS = 50;
@@ -2008,5 +1937,198 @@ class UsersHelper
 	{
 		$auth = Drupal::service('user.auth');
 		return $auth->authenticate($user->getAccountName(), $password) === $user->id();
+	}
+
+	// Content Utilities
+
+	public static function getUserPrompts(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+		string $sort = 'desc',
+	): array {
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('node');
+			$query = $storage
+				->getQuery()
+				->accessCheck(false)
+				->condition('type', 'prompt')
+				->condition('field_owner_id', $user->id());
+
+			if (!empty($search)) {
+				$query->condition('field_prompt', $search, 'CONTAINS');
+			}
+
+			$countQuery = clone $query;
+			$count = $countQuery->count()->execute();
+
+			// Handle random sorting differently
+			if ($sort === 'rand') {
+				$query->range(0, $limit * $page);
+				$nids = $query->execute();
+				$nids = array_values($nids);
+				shuffle($nids);
+				$nids = array_slice($nids, ($page - 1) * $limit, $limit);
+			} else {
+				// Add sorting
+				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+				$query->sort('created', $sortDirection);
+				$query->range(($page - 1) * $limit, $limit);
+				$nids = $query->execute();
+			}
+
+			$nodes = $storage->loadMultiple($nids);
+
+			return [
+				'prompts' => array_values(
+					array_filter(
+						array_map(
+							fn($node) => $node ? PromptsHelper::nodeToPrompt($node) : null,
+							$nodes,
+						),
+					),
+				),
+				'total' => $count,
+			];
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error('Failed to retrieve user prompts: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return [
+				'prompts' => [],
+				'total' => 0,
+			];
+		}
+	}
+
+	public static function getUserArticles(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+		string $sort = 'desc',
+	): array {
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('node');
+			$query = $storage
+				->getQuery()
+				->accessCheck(false)
+				->condition('type', 'article')
+				->condition('field_author_id', $user->id());
+
+			if (!empty($search)) {
+				$query->condition('field_article_title', $search, 'CONTAINS');
+			}
+
+			$countQuery = clone $query;
+			$count = $countQuery->count()->execute();
+
+			// Add sorting
+			$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+			$query->sort('created', $sortDirection);
+
+			$query->range(($page - 1) * $limit, $limit);
+			$nids = $query->execute();
+
+			// Handle random sorting differently
+			if ($sort === 'rand') {
+				$nids = array_values($nids);
+				shuffle($nids);
+			}
+
+			$nodes = $storage->loadMultiple($nids);
+
+			return [
+				'articles' => array_values(
+					array_filter(
+						array_map(
+							fn($node) => $node ? ArticlesHelper::nodeToArticle($node) : null,
+							$nodes,
+						),
+					),
+				),
+				'total' => $count,
+			];
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error('Failed to retrieve user articles: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return [
+				'articles' => [],
+				'total' => 0,
+			];
+		}
+	}
+
+	public static function getUserEvents(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+		string $sort = 'desc',
+	) {
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('node');
+			$query = $storage
+				->getQuery()
+				->condition('type', 'event')
+				->condition('field_host_id', $user->id());
+
+			if (!empty($search)) {
+				$query->condition('field_event_name', $search, 'CONTAINS');
+			}
+
+			$countQuery = clone $query;
+			$count = $countQuery->count()->execute();
+
+			// Handle random sorting differently
+			if ($sort === 'rand') {
+				$query->range(0, $limit * $page);
+				$nids = $query->execute();
+				$nids = array_values($nids);
+				shuffle($nids);
+				$nids = array_slice($nids, ($page - 1) * $limit, $limit);
+			} else {
+				// Add sorting
+				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
+				$query->sort('created', $sortDirection);
+				$query->range(($page - 1) * $limit, $limit);
+				$nids = $query->execute();
+			}
+
+			$nodes = $storage->loadMultiple($nids);
+
+			return [
+				'events' => array_values(
+					array_filter(
+						array_map(
+							fn($node) => $node ? EventsHelper::nodeToEvent($node) : null,
+							$nodes,
+						),
+					),
+				),
+				'total' => $count,
+			];
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error('Failed to retrieve user events: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return [
+				'events' => [],
+				'total' => 0,
+			];
+		}
+	}
+
+	public static function getMaxEventAttendees(UserInterface $user): int
+	{
+		$type = self::getAccountType($user)->name;
+		return match ($type) {
+			'ADMINISTRATOR' => PHP_INT_MAX,
+			'PRO', 'WRITER' => 5000,
+			'ORGANIZER' => 1_000_000,
+			default => 100,
+		};
 	}
 }

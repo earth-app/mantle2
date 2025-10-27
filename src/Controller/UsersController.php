@@ -1374,6 +1374,102 @@ class UsersController extends ControllerBase
 
 	#endregion
 
+	#region Prompt Routes
+
+	// GET /v2/users/current/prompts
+	// GET /v2/users/{id}/prompts
+	// GET /v2/users/{username}/prompts
+	public function userPrompts(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$resolved = $this->resolveUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		if (!$resolved) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$visible = UsersHelper::checkVisibility($resolved, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		$pagination = GeneralHelper::paginatedParameters($request);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		$limit = $pagination['limit'];
+		$page = $pagination['page'] - 1;
+		$search = $pagination['search'];
+		$sort = $pagination['sort'];
+
+		$data = UsersHelper::getUserPrompts($visible, $limit, $page, $search, $sort);
+		$prompts = $data['prompts'];
+		$total = $data['total'];
+
+		return new JsonResponse([
+			'limit' => $limit,
+			'page' => $page + 1,
+			'items' => $prompts,
+			'total' => $total,
+		]);
+	}
+
+	#endregion
+
+	#region Article Routes
+
+	// GET /v2/users/current/articles
+	// GET /v2/users/{id}/articles
+	// GET /v2/users/{username}/articles
+	public function userArticles(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$resolved = $this->resolveUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		if (!$resolved) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$visible = UsersHelper::checkVisibility($resolved, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		$pagination = GeneralHelper::paginatedParameters($request);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		$limit = $pagination['limit'];
+		$page = $pagination['page'] - 1;
+		$search = $pagination['search'];
+		$sort = $pagination['sort'];
+
+		$data = UsersHelper::getUserArticles($visible, $limit, $page, $search, $sort);
+		$articles = $data['articles'];
+		$total = $data['total'];
+
+		return new JsonResponse([
+			'limit' => $limit,
+			'page' => $page + 1,
+			'items' => $articles,
+			'total' => $total,
+		]);
+	}
+
+	#endregion
+
 	#region Event Routes
 
 	// GET /v2/events/current

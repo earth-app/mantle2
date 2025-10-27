@@ -353,4 +353,45 @@ class PromptsHelper
 
 		return;
 	}
+
+	public static function getPrompts(UserInterface $user, int $limit = 10): array
+	{
+		$storage = Drupal::entityTypeManager()->getStorage('node');
+
+		$query = $storage
+			->getQuery()
+			->accessCheck(true)
+			->condition('type', 'prompt')
+			->condition('field_owner_id', $user->id())
+			->range(0, $limit)
+			->sort('created', 'DESC');
+
+		$nids = $query->execute();
+		if (empty($nids)) {
+			return [];
+		}
+
+		$nodes = $storage->loadMultiple($nids);
+		$prompts = [];
+
+		/** @var Node $node */
+		foreach ($nodes as $node) {
+			$prompts[] = self::nodeToPrompt($node);
+		}
+
+		return $prompts;
+	}
+
+	public static function getPromptsCount(UserInterface $user): int
+	{
+		$storage = Drupal::entityTypeManager()->getStorage('node');
+
+		$query = $storage
+			->getQuery()
+			->accessCheck(true)
+			->condition('type', 'prompt')
+			->condition('field_owner_id', $user->id());
+
+		return $query->count()->execute();
+	}
 }

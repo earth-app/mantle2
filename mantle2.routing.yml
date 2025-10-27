@@ -825,6 +825,86 @@ mantle2.users.id.notifications.clear:
         type: string
   methods: [DELETE]
 
+mantle2.users.id.prompts:
+  path: '/v2/users/{id}/prompts'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userPrompts'
+    _title: 'Get User Prompts by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Prompts
+    description: Retrieves a list of prompts created by the user
+    schema/200: prompts()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.users.id.articles:
+  path: '/v2/users/{id}/articles'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userArticles'
+    _title: 'Get User Articles by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Articles
+    description: Retrieves a list of articles created by the user
+    schema/200: articles()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
 #endregion
 #region User - By Username
 
@@ -1507,6 +1587,86 @@ mantle2.users.username.notifications.clear:
         type: string
   methods: [DELETE]
 
+mantle2.users.username.prompts:
+  path: '/v2/users/{username}/prompts'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userPrompts'
+    _title: 'Get User Prompts by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Prompts
+    description: Retrieves a list of prompts created by the user
+    schema/200: prompts()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.users.username.articles:
+  path: '/v2/users/{username}/articles'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userArticles'
+    _title: 'Get User Articles by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Articles
+    description: Retrieves a list of articles created by the user
+    schema/200: articles()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
 #endregion
 #region User - Current User
 
@@ -2080,6 +2240,78 @@ mantle2.users.current.notifications.clear:
       id:
         type: string
   methods: [DELETE]
+
+mantle2.users.current.prompts:
+  path: '/v2/users/current/prompts'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userPrompts'
+    _title: 'Get Current User Prompts'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Prompts
+    description: Retrieves a list of prompts created by the current user
+    schema/200: prompts()
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.users.current.articles:
+  path: '/v2/users/current/articles'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userArticles'
+    _title: 'Get Current User Articles'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Articles
+    description: Retrieves a list of articles created by the current user
+    schema/200: articles()
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
 
 #endregion
 
