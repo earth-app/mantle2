@@ -34,12 +34,14 @@ class HTMLFactory
 		$lines = explode("\n", $text);
 		$html = '';
 		$inList = false;
+		$emptyLineCount = 0;
 
 		foreach ($lines as $line) {
-			$line = trim($line);
+			$trimmedLine = trim($line);
 
-			// Skip empty lines
-			if (empty($line)) {
+			// Track empty lines but don't skip them yet
+			if (empty($trimmedLine)) {
+				$emptyLineCount++;
 				if ($inList) {
 					$html .= '</ul>';
 					$inList = false;
@@ -47,8 +49,11 @@ class HTMLFactory
 				continue;
 			}
 
+			// Reset empty line counter
+			$emptyLineCount = 0;
+
 			// Handle unordered lists (lines starting with -)
-			if (preg_match('/^-\s+(.+)$/', $line, $matches)) {
+			if (preg_match('/^-\s+(.+)$/', $trimmedLine, $matches)) {
 				if (!$inList) {
 					$html .= '<ul style="margin: 0 0 16px 0; padding-left: 20px;">';
 					$inList = true;
@@ -69,7 +74,7 @@ class HTMLFactory
 			// Handle regular paragraphs
 			$html .=
 				'<p style="margin: 0 0 16px 0; line-height: 1.5;">' .
-				$this->formatInlineElements($line) .
+				$this->formatInlineElements($trimmedLine) .
 				'</p>';
 		}
 
@@ -127,22 +132,31 @@ class HTMLFactory
 	private function wrapEmailContent(string $html): string
 	{
 		// Wrap in email-safe container and include branding details
-		return '<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">' .
-			$html .
-			'</div>' .
-			$this->getBrandingHtml();
+		$wrapper =
+			'<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">';
+		$wrapper .= $html;
+		$wrapper .= '</div>';
+		$wrapper .= $this->getBrandingHtml();
+
+		return $wrapper;
 	}
 
 	private function getBrandingHtml(): string
 	{
-		return '<div style="margin-top: 32px; font-size: 10px; color: #999;">
-			<p>Thank you for using The Earth App!</p>
-			<p>If you have any questions, feel free to <a href="mailto:support@earth-app.com" style="color: #007bff; text-decoration: none;">contact our support team</a>.</p>
-			<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="height: 24px; margin-top: 8px;">
-			<p style="margin-top: 8px;">&copy; ' .
+		$branding = '<div style="margin-top: 32px; font-size: 10px; color: #999;">';
+		$branding .= '<p style="margin: 0 0 8px 0;">Thank you for using The Earth App!</p>';
+		$branding .=
+			'<p style="margin: 0 0 8px 0;">If you have any questions, feel free to <a href="mailto:support@earth-app.com" style="color: #007bff; text-decoration: none;">contact our support team</a>.</p>';
+		$branding .=
+			'<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="height: 24px; margin-top: 8px; display: block;">';
+		$branding .=
+			'<p style="margin: 8px 0 0 0;">&copy; ' .
 			date('Y') .
-			' The Earth App. All rights reserved.</p>
-			<p>This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.</p>
-		</div>';
+			' The Earth App. All rights reserved.</p>';
+		$branding .=
+			'<p style="margin: 8px 0 0 0;">This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.</p>';
+		$branding .= '</div>';
+
+		return $branding;
 	}
 }

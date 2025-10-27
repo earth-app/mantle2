@@ -496,4 +496,362 @@ class HTMLFactoryUnitTest extends TestCase
 			substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
 		);
 	}
+
+	#[Test]
+	#[TestDox('Test branding HTML uses separate paragraphs')]
+	#[Group('mantle2/html')]
+	#[Group('mantle2/branding')]
+	public function testBrandingHasSeparateParagraphs()
+	{
+		$text = 'Test content.';
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Each branding element should be in its own paragraph tag
+		$this->assertStringContainsString(
+			'<p style="margin: 0 0 8px 0;">Thank you for using The Earth App!</p>',
+			$html,
+		);
+		$this->assertStringContainsString(
+			'<p style="margin: 0 0 8px 0;">If you have any questions',
+			$html,
+		);
+		$this->assertStringContainsString('<p style="margin: 8px 0 0 0;">&copy;', $html);
+		$this->assertStringContainsString(
+			'<p style="margin: 8px 0 0 0;">This email was sent from a notification-only address',
+			$html,
+		);
+	}
+
+	#[Test]
+	#[TestDox('Test branding section has correct wrapper div')]
+	#[Group('mantle2/html')]
+	#[Group('mantle2/branding')]
+	public function testBrandingWrapperDiv()
+	{
+		$text = 'Test content.';
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Branding should be in its own div with correct styling
+		$this->assertStringContainsString(
+			'<div style="margin-top: 32px; font-size: 10px; color: #999;">',
+			$html,
+		);
+
+		// Check that branding div closes properly
+		$brandingStartPos = strpos($html, 'margin-top: 32px; font-size: 10px; color: #999;');
+		$this->assertNotFalse($brandingStartPos);
+
+		// Verify logo has display:block style
+		$this->assertStringContainsString(
+			'<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="height: 24px; margin-top: 8px; display: block;">',
+			$html,
+		);
+	}
+
+	#[Test]
+	#[TestDox('Test content wrapper and branding are separate divs')]
+	#[Group('mantle2/html')]
+	#[Group('mantle2/branding')]
+	public function testContentAndBrandingAreSeparate()
+	{
+		$text = 'Main content here.';
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Content wrapper should close before branding starts
+		$contentWrapperPos = strpos($html, 'font-family: Arial, sans-serif');
+		$contentClosePos = strpos($html, '</div>', $contentWrapperPos);
+		$brandingPos = strpos($html, 'margin-top: 32px; font-size: 10px');
+
+		$this->assertNotFalse($contentWrapperPos);
+		$this->assertNotFalse($contentClosePos);
+		$this->assertNotFalse($brandingPos);
+		$this->assertLessThan($brandingPos, $contentClosePos);
+	}
+
+	#[Test]
+	#[TestDox('Test multiple paragraphs with mixed formatting')]
+	#[Group('mantle2/html')]
+	public function testMultipleParagraphsWithMixedFormatting()
+	{
+		$text =
+			"First paragraph with **bold** text.\n\nSecond paragraph with *italic* text.\n\nThird paragraph with [a link](https://example.com).";
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Should have exactly 3 paragraphs
+		$this->assertEquals(
+			3,
+			substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+
+		// Check all formatting is preserved
+		$this->assertStringContainsString(
+			'<strong style="font-weight: bold;">bold</strong>',
+			$html,
+		);
+		$this->assertStringContainsString('<em style="font-style: italic;">italic</em>', $html);
+		$this->assertStringContainsString('<a href="https://example.com"', $html);
+	}
+
+	#[Test]
+	#[TestDox('Test paragraph with list then paragraph')]
+	#[Group('mantle2/html')]
+	public function testParagraphListParagraphStructure()
+	{
+		$text = "Intro paragraph.\n\n- List item 1\n- List item 2\n\nClosing paragraph.";
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Should have 2 paragraphs and 1 list
+		$this->assertEquals(
+			2,
+			substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+		$this->assertEquals(1, substr_count($html, '<ul style='));
+		$this->assertEquals(2, substr_count($html, '<li style='));
+
+		// Verify order
+		$introPos = strpos($html, 'Intro paragraph');
+		$listPos = strpos($html, '<ul style=');
+		$closingPos = strpos($html, 'Closing paragraph');
+
+		$this->assertLessThan($listPos, $introPos);
+		$this->assertLessThan($closingPos, $listPos);
+	}
+
+	#[Test]
+	#[TestDox('Test complex multi-paragraph email with all features')]
+	#[Group('mantle2/html')]
+	#[Group('mantle2/integration')]
+	public function testComplexMultiParagraphEmail()
+	{
+		$text =
+			"Hello **User**,\n\nYour account has been updated with the following changes:\n\n- Password changed\n- Email verified\n- Profile updated\n\nIf you have questions, visit https://help.example.com or contact support.\n\nThank you!";
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Should have 4 paragraphs (greeting, intro, outro, thanks)
+		$this->assertEquals(
+			4,
+			substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+
+		// Should have 1 list with 3 items
+		$this->assertEquals(1, substr_count($html, '<ul style='));
+		$this->assertEquals(3, substr_count($html, '<li style='));
+
+		// Check formatting
+		$this->assertStringContainsString(
+			'<strong style="font-weight: bold;">User</strong>',
+			$html,
+		);
+		$this->assertStringContainsString('<a href="https://help.example.com"', $html);
+
+		// Check branding is included
+		$this->assertStringContainsString('Thank you for using The Earth App!', $html);
+	}
+
+	#[Test]
+	#[TestDox('Test newline handling creates separate paragraphs')]
+	#[Group('mantle2/html')]
+	public function testNewlineCreatesSeparateParagraphs()
+	{
+		$text = "Line 1\nLine 2\nLine 3";
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Each line should be its own paragraph
+		$this->assertEquals(
+			3,
+			substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+		$this->assertStringContainsString(
+			'<p style="margin: 0 0 16px 0; line-height: 1.5;">Line 1</p>',
+			$html,
+		);
+		$this->assertStringContainsString(
+			'<p style="margin: 0 0 16px 0; line-height: 1.5;">Line 2</p>',
+			$html,
+		);
+		$this->assertStringContainsString(
+			'<p style="margin: 0 0 16px 0; line-height: 1.5;">Line 3</p>',
+			$html,
+		);
+	}
+
+	#[Test]
+	#[TestDox('Test single newlines vs double newlines both create paragraphs')]
+	#[Group('mantle2/html')]
+	public function testSingleVsDoubleNewlines()
+	{
+		$textSingle = "Para 1\nPara 2\nPara 3";
+		$textDouble = "Para 1\n\nPara 2\n\nPara 3";
+
+		$htmlSingle = $this->htmlFactory->toHtml($textSingle);
+		$htmlDouble = $this->htmlFactory->toHtml($textDouble);
+
+		// Both should create 3 paragraphs
+		$this->assertEquals(
+			3,
+			substr_count($htmlSingle, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+		$this->assertEquals(
+			3,
+			substr_count($htmlDouble, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Test mixed bold and italic in multiple paragraphs')]
+	#[Group('mantle2/html')]
+	public function testMixedFormattingMultipleParagraphs()
+	{
+		$text =
+			"**Bold** in first paragraph.\n*italic* in second paragraph.\n**Bold** and *italic* together.";
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Should have 3 paragraphs
+		$this->assertEquals(
+			3,
+			substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+
+		// Count formatting elements
+		$this->assertEquals(
+			2,
+			substr_count($html, '<strong style="font-weight: bold;">Bold</strong>'),
+		);
+		$this->assertEquals(2, substr_count($html, '<em style="font-style: italic;">italic</em>'));
+	}
+
+	#[Test]
+	#[TestDox('Test list items with URLs and formatting')]
+	#[Group('mantle2/html')]
+	public function testListItemsWithUrlsAndFormatting()
+	{
+		$text =
+			"Features:\n- **Bold feature** at https://example.com/feature1\n- *Italic feature* at https://example.com/feature2\n- Normal feature";
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Should have 1 paragraph + 1 list
+		$this->assertEquals(
+			1,
+			substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+		$this->assertEquals(1, substr_count($html, '<ul style='));
+		$this->assertEquals(3, substr_count($html, '<li style='));
+
+		// Check formatting in list items
+		$this->assertStringContainsString(
+			'<li style="margin: 4px 0;"><strong style="font-weight: bold;">Bold feature</strong>',
+			$html,
+		);
+		$this->assertStringContainsString(
+			'<li style="margin: 4px 0;"><em style="font-style: italic;">Italic feature</em>',
+			$html,
+		);
+		$this->assertStringContainsString('<a href="https://example.com/feature1"', $html);
+		$this->assertStringContainsString('<a href="https://example.com/feature2"', $html);
+	}
+
+	#[Test]
+	#[TestDox('Test actual new login email format matches expected structure')]
+	#[Group('mantle2/html')]
+	#[Group('mantle2/integration')]
+	public function testActualNewLoginEmailStructure()
+	{
+		$time = '2025-10-26T01:12:39+00:00';
+		$ip = '172.69.17.12';
+		$additionalIps = '(none)';
+		$userAgent =
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0';
+		$referer = 'No Referrer';
+
+		$text = "Your account was just used to log in from a new device or location.\n\n**Details:**\n- Time: {$time}\n- IP: {$ip} ({$additionalIps})\n- User Agent: {$userAgent}\n- Referrer: {$referer}\n\nIf this was you, you can safely ignore this email.\nIf you did not log in, please reset your password immediately to secure your account.";
+
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Should have intro paragraph, Details paragraph, list, and 2 closing paragraphs
+		$this->assertGreaterThanOrEqual(
+			3,
+			substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">'),
+		);
+
+		// Should have list with 4 items
+		$this->assertEquals(1, substr_count($html, '<ul style='));
+		$this->assertEquals(4, substr_count($html, '<li style='));
+
+		// Verify all details are present and formatted
+		$this->assertStringContainsString(
+			'<strong style="font-weight: bold;">Details:</strong>',
+			$html,
+		);
+		$this->assertStringContainsString("Time: {$time}", $html);
+		$this->assertStringContainsString("IP: {$ip}", $html);
+		$this->assertStringContainsString("User Agent: {$userAgent}", $html);
+		$this->assertStringContainsString("Referrer: {$referer}", $html);
+
+		// Verify closing messages are in separate paragraphs
+		$this->assertStringContainsString(
+			'If this was you, you can safely ignore this email.',
+			$html,
+		);
+		$this->assertStringContainsString(
+			'If you did not log in, please reset your password immediately to secure your account.',
+			$html,
+		);
+
+		// Verify branding is present
+		$this->assertStringContainsString('Thank you for using The Earth App!', $html);
+	}
+
+	#[Test]
+	#[TestDox('Test branding does not contain literal newlines or extra whitespace')]
+	#[Group('mantle2/html')]
+	#[Group('mantle2/branding')]
+	public function testBrandingHasNoLiteralWhitespace()
+	{
+		$text = 'Test content.';
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Extract branding section
+		$brandingStart = strpos($html, 'margin-top: 32px; font-size: 10px; color: #999;');
+		$brandingSection = substr($html, $brandingStart);
+
+		// Should not contain excessive whitespace between tags (outside of content)
+		// Check that paragraph tags are properly closed without newlines in between
+		$this->assertStringNotContainsString("</p>\n\n\t\t\t<p", $brandingSection);
+		$this->assertStringNotContainsString("</p>\n\t\t\t<p", $brandingSection);
+
+		// All text content should be within proper HTML tags
+		$this->assertStringContainsString(
+			'<p style="margin: 0 0 8px 0;">Thank you for using The Earth App!</p>',
+			$html,
+		);
+	}
+
+	#[Test]
+	#[TestDox('Test email with all formatting types across multiple paragraphs')]
+	#[Group('mantle2/html')]
+	public function testAllFormattingTypesMultipleParagraphs()
+	{
+		$text =
+			"**Welcome** to our service!\n\nHere are your *important* details:\n- Account: **premium**\n- Status: *active*\n- URL: https://account.example.com\n\nVisit [our help center](https://help.example.com) for more info.\n\nThank you!";
+		$html = $this->htmlFactory->toHtml($text);
+
+		// Verify paragraph count (4 paragraphs + 1 list)
+		$paragraphCount = substr_count($html, '<p style="margin: 0 0 16px 0; line-height: 1.5;">');
+		$this->assertGreaterThanOrEqual(4, $paragraphCount);
+
+		// Verify all formatting types exist
+		$this->assertStringContainsString('<strong style="font-weight: bold;">', $html);
+		$this->assertStringContainsString('<em style="font-style: italic;">', $html);
+		$this->assertStringContainsString('<a href="https://account.example.com"', $html);
+		$this->assertStringContainsString('<a href="https://help.example.com"', $html);
+		$this->assertStringContainsString('<ul style=', $html);
+		$this->assertStringContainsString('<li style=', $html);
+
+		// Verify structure: wrapper div, content, branding
+		$this->assertStringStartsWith(
+			'<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">',
+			$html,
+		);
+		$this->assertStringContainsString('Thank you for using The Earth App!', $html);
+	}
 }
