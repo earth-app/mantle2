@@ -184,8 +184,13 @@ class PromptsController extends ControllerBase
 			return $user;
 		}
 
-		if (!UsersHelper::isWriter($user)) {
-			return GeneralHelper::paymentRequired('Upgrade to Writer required');
+		$count = PromptsHelper::getPromptsCount($user);
+		if ($count >= 1 && !UsersHelper::isWriter($user)) {
+			return GeneralHelper::paymentRequired('Upgrade to Writer required for more prompts');
+		}
+
+		if ($count >= 10 && !UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('Prompt limit reached');
 		}
 
 		if (UsersHelper::getVisibility($user) === Visibility::PRIVATE) {
