@@ -254,7 +254,10 @@ class HTMLFactoryUnitTest extends TestCase
 		$text = 'Test content.';
 		$html = $this->htmlFactory->toHtml($text);
 
-		$this->assertStringStartsWith(
+		// Should start with proper HTML document structure
+		$this->assertStringStartsWith('<!DOCTYPE html>', $html);
+		$this->assertStringContainsString('<html lang="en">', $html);
+		$this->assertStringContainsString(
 			'<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">',
 			$html,
 		);
@@ -515,9 +518,12 @@ class HTMLFactoryUnitTest extends TestCase
 			'<p style="margin: 0 0 8px 0;">If you have any questions',
 			$html,
 		);
-		$this->assertStringContainsString('<p style="margin: 8px 0 0 0;">&copy;', $html);
 		$this->assertStringContainsString(
-			'<p style="margin: 8px 0 0 0;">This email was sent from a notification-only address',
+			'<p style="margin: 8px 0 0 0; font-size: 11px; color: #999;">&copy;',
+			$html,
+		);
+		$this->assertStringContainsString(
+			'<p style="margin: 8px 0 0 0; font-size: 11px; color: #999;">This email was sent from a notification-only address',
 			$html,
 		);
 	}
@@ -531,19 +537,22 @@ class HTMLFactoryUnitTest extends TestCase
 		$text = 'Test content.';
 		$html = $this->htmlFactory->toHtml($text);
 
-		// Branding should be in its own div with correct styling
+		// Branding should be in its own div with updated styling (border-top, different colors)
 		$this->assertStringContainsString(
-			'<div style="margin-top: 32px; font-size: 10px; color: #999;">',
+			'<div style="margin-top: 32px; padding-top: 32px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #666;">',
 			$html,
 		);
 
-		// Check that branding div closes properly
-		$brandingStartPos = strpos($html, 'margin-top: 32px; font-size: 10px; color: #999;');
+		// Check that branding div exists
+		$brandingStartPos = strpos(
+			$html,
+			'margin-top: 32px; padding-top: 32px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #666;',
+		);
 		$this->assertNotFalse($brandingStartPos);
 
-		// Verify logo has display:block style
+		// Verify logo has updated display:block style with new dimensions
 		$this->assertStringContainsString(
-			'<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="height: 24px; margin-top: 8px; display: block;">',
+			'<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="width: auto; height: 32px; margin: 16px 0; display: block;">',
 			$html,
 		);
 	}
@@ -560,7 +569,10 @@ class HTMLFactoryUnitTest extends TestCase
 		// Content wrapper should close before branding starts
 		$contentWrapperPos = strpos($html, 'font-family: Arial, sans-serif');
 		$contentClosePos = strpos($html, '</div>', $contentWrapperPos);
-		$brandingPos = strpos($html, 'margin-top: 32px; font-size: 10px');
+		$brandingPos = strpos(
+			$html,
+			'margin-top: 32px; padding-top: 32px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #666;',
+		);
 
 		$this->assertNotFalse($contentWrapperPos);
 		$this->assertNotFalse($contentClosePos);
@@ -847,8 +859,9 @@ class HTMLFactoryUnitTest extends TestCase
 		$this->assertStringContainsString('<ul style=', $html);
 		$this->assertStringContainsString('<li style=', $html);
 
-		// Verify structure: wrapper div, content, branding
-		$this->assertStringStartsWith(
+		// Verify structure: HTML document with wrapper div, content, branding
+		$this->assertStringStartsWith('<!DOCTYPE html>', $html);
+		$this->assertStringContainsString(
 			'<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">',
 			$html,
 		);
