@@ -2,7 +2,10 @@
 
 > Backend for The Earth App, powered by Drupal 11
 
-This is the second version of the backend system for The Earth App, a comprehensive RESTful API built on top of PHP 8.4 and Drupal 11.2. The module provides a complete backend infrastructure for a social networking platform focused on environmental activities, events, and user engagement.
+This is the second version of the backend system for The Earth App,
+a comprehensive RESTful API built on top of PHP 8.4 and Drupal 11.2.
+The module provides a complete backend infrastructure for a social
+networking platform focused on novelty, activities, and user engagement.
 
 ## Table of Contents
 
@@ -10,7 +13,6 @@ This is the second version of the backend system for The Earth App, a comprehens
 - [Technical Stack](#technical-stack)
 - [Architecture](#architecture)
 - [Installation](#installation)
-- [API Structure](#api-structure)
 - [Core Components](#core-components)
 - [Security & Performance](#security--performance)
 - [Development](#development)
@@ -18,7 +20,10 @@ This is the second version of the backend system for The Earth App, a comprehens
 
 ## Overview
 
-Mantle2 is a custom Drupal 11 module that implements a RESTful API backend for The Earth App. It leverages Drupal's entity system, field API, and routing infrastructure while adding custom controllers, services, and event subscribers to create a modern, scalable API platform.
+Mantle2 is a custom Drupal 11 module that implements a RESTful API backend
+for The Earth App. It leverages Drupal's entity system, field API, and routing
+infrastructure while adding custom controllers, services, and event subscribers
+to create a modern, scalable API platform.
 
 ### Key Features
 

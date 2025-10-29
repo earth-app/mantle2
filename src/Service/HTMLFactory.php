@@ -22,7 +22,8 @@ class HTMLFactory
 		// Wrap for email rendering
 		$html = $this->wrapEmailContent($html);
 
-		return $html;
+		// Return full HTML document for email clients
+		return $this->createHtmlDocument($html);
 	}
 
 	/**
@@ -143,20 +144,51 @@ class HTMLFactory
 
 	private function getBrandingHtml(): string
 	{
-		$branding = '<div style="margin-top: 32px; font-size: 10px; color: #999;">';
+		$branding =
+			'<div style="margin-top: 32px; padding-top: 32px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #666;">';
 		$branding .= '<p style="margin: 0 0 8px 0;">Thank you for using The Earth App!</p>';
 		$branding .=
 			'<p style="margin: 0 0 8px 0;">If you have any questions, feel free to <a href="mailto:support@earth-app.com" style="color: #007bff; text-decoration: none;">contact our support team</a>.</p>';
 		$branding .=
-			'<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="height: 24px; margin-top: 8px; display: block;">';
+			'<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="width: auto; height: 32px; margin: 16px 0; display: block;">';
 		$branding .=
-			'<p style="margin: 8px 0 0 0;">&copy; ' .
+			'<p style="margin: 8px 0 0 0; font-size: 11px; color: #999;">&copy; ' .
 			date('Y') .
 			' The Earth App. All rights reserved.</p>';
 		$branding .=
-			'<p style="margin: 8px 0 0 0;">This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.</p>';
+			'<p style="margin: 8px 0 0 0; font-size: 11px; color: #999;">This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.</p>';
 		$branding .= '</div>';
 
 		return $branding;
+	}
+
+	private function createHtmlDocument(string $content): string
+	{
+		$html = '<!DOCTYPE html>';
+		$html .= '<html lang="en">';
+		$html .= '<head>';
+		$html .= '<meta charset="UTF-8">';
+		$html .= '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+		$html .= '<title>The Earth App</title>';
+		$html .= '</head>';
+		$html .= '<body style="margin: 0; padding: 0; background-color: #f5f5f5;">';
+		$html .= '<table role="presentation" style="width: 100%; border-collapse: collapse;">';
+		$html .= '<tr>';
+		$html .= '<td align="center" style="padding: 40px 0;">';
+		$html .=
+			'<table role="presentation" style="max-width: 600px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">';
+		$html .= '<tr>';
+		$html .= '<td style="padding: 40px;">';
+		$html .= $content;
+		$html .= '</td>';
+		$html .= '</tr>';
+		$html .= '</table>';
+		$html .= '</td>';
+		$html .= '</tr>';
+		$html .= '</table>';
+		$html .= '</body>';
+		$html .= '</html>';
+
+		return $html;
 	}
 }
