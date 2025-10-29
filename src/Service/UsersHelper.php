@@ -1992,7 +1992,7 @@ class UsersHelper
 							$nid = $node->id();
 							$obj = PromptsHelper::nodeToPrompt($node);
 
-							return array_merge($obj, [
+							return array_merge($obj->jsonSerialize(), [
 								'id' => GeneralHelper::formatId($nid),
 								'owner' => UsersHelper::serializeUser($obj->getOwner(), $user),
 								'responses_count' => PromptsHelper::getCommentsCount($node),
@@ -2061,7 +2061,7 @@ class UsersHelper
 							}
 
 							$obj = ArticlesHelper::nodeToArticle($node);
-							return array_merge($obj, [
+							return array_merge($obj->jsonSerialize(), [
 								'author' => UsersHelper::serializeUser($obj->getAuthor(), $user),
 								'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
 								'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
