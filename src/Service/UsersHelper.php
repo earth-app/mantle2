@@ -1965,16 +1965,16 @@ class UsersHelper
 
 			// Handle random sorting differently
 			if ($sort === 'rand') {
-				$query->range(0, $limit * $page);
+				$query->range(0, $limit * ($page + 1));
 				$nids = $query->execute();
 				$nids = array_values($nids);
 				shuffle($nids);
-				$nids = array_slice($nids, ($page - 1) * $limit, $limit);
+				$nids = array_slice($nids, $page * $limit, $limit);
 			} else {
 				// Add sorting
 				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
 				$query->sort('created', $sortDirection);
-				$query->range(($page - 1) * $limit, $limit);
+				$query->range($page * $limit, $limit);
 				$nids = $query->execute();
 			}
 
@@ -2028,7 +2028,7 @@ class UsersHelper
 			$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
 			$query->sort('created', $sortDirection);
 
-			$query->range(($page - 1) * $limit, $limit);
+			$query->range($page * $limit, $limit);
 			$nids = $query->execute();
 
 			// Handle random sorting differently
@@ -2084,16 +2084,16 @@ class UsersHelper
 
 			// Handle random sorting differently
 			if ($sort === 'rand') {
-				$query->range(0, $limit * $page);
+				$query->range(0, $limit * ($page + 1));
 				$nids = $query->execute();
 				$nids = array_values($nids);
 				shuffle($nids);
-				$nids = array_slice($nids, ($page - 1) * $limit, $limit);
+				$nids = array_slice($nids, $page * $limit, $limit);
 			} else {
 				// Add sorting
 				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
 				$query->sort('created', $sortDirection);
-				$query->range(($page - 1) * $limit, $limit);
+				$query->range($page * $limit, $limit);
 				$nids = $query->execute();
 			}
 
