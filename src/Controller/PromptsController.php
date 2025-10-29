@@ -215,6 +215,12 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid fields');
 		}
 
+		if (strlen($data) < 10 || strlen($data) > 100) {
+			return GeneralHelper::badRequest(
+				'Prompt must be between length of 10 and 100 characters',
+			);
+		}
+
 		$flagResult = GeneralHelper::isFlagged($data);
 		if ($flagResult['flagged']) {
 			Drupal::logger('mantle2')->warning(
