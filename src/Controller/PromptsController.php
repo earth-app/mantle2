@@ -156,10 +156,14 @@ class PromptsController extends ControllerBase
 			foreach ($nids as $nid) {
 				$node = Node::load($nid);
 				if ($node) {
-					$data[] = [
+					$obj = PromptsHelper::nodeToPrompt($node);
+					$data[] = array_merge($obj->jsonSerialize(), [
 						'id' => GeneralHelper::formatId($nid),
-						...PromptsHelper::nodeToPrompt($node)->jsonSerialize(),
-					];
+						'owner' => UsersHelper::serializeUser($obj->getOwner(), $user),
+						'responses_count' => PromptsHelper::getCommentsCount($node),
+						'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
+						'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
+					]);
 				}
 			}
 

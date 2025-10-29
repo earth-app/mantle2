@@ -12,6 +12,7 @@ use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Notification;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Exception;
@@ -1983,10 +1984,22 @@ class UsersHelper
 			return [
 				'prompts' => array_values(
 					array_filter(
-						array_map(
-							fn($node) => $node ? PromptsHelper::nodeToPrompt($node) : null,
-							$nodes,
-						),
+						array_map(function (Node $node) use ($user) {
+							if (!$node) {
+								return null;
+							}
+
+							$nid = $node->id();
+							$obj = PromptsHelper::nodeToPrompt($node);
+
+							return array_merge($obj, [
+								'id' => GeneralHelper::formatId($nid),
+								'owner' => UsersHelper::serializeUser($obj->getOwner(), $user),
+								'responses_count' => PromptsHelper::getCommentsCount($node),
+								'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
+								'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
+							]);
+						}, $nodes),
 					),
 				),
 				'total' => $count,
@@ -2042,10 +2055,18 @@ class UsersHelper
 			return [
 				'articles' => array_values(
 					array_filter(
-						array_map(
-							fn($node) => $node ? ArticlesHelper::nodeToArticle($node) : null,
-							$nodes,
-						),
+						array_map(function (Node $node) use ($user) {
+							if (!$node) {
+								return null;
+							}
+
+							$obj = ArticlesHelper::nodeToArticle($node);
+							return array_merge($obj, [
+								'author' => UsersHelper::serializeUser($obj->getAuthor(), $user),
+								'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
+								'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
+							]);
+						}, $nodes),
 					),
 				),
 				'total' => $count,

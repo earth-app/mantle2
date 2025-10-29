@@ -304,7 +304,7 @@ class ArticlesController extends ControllerBase
 		return new JsonResponse($item, Response::HTTP_CREATED);
 	}
 
-	// GET /v2/articles/:articleId
+	// GET /v2/articles/{articleId}
 	public function getArticle(Request $request, Node $articleId): JsonResponse
 	{
 		$requester = UsersHelper::getOwnerOfRequest($request);
@@ -326,7 +326,7 @@ class ArticlesController extends ControllerBase
 		return new JsonResponse($item, Response::HTTP_OK);
 	}
 
-	// PATCH /v2/articles/:articleId
+	// PATCH /v2/articles/{articleId}
 	public function updateArticle(Request $request, Node $articleId): JsonResponse
 	{
 		if ($articleId->getType() !== 'article') {
@@ -457,7 +457,7 @@ class ArticlesController extends ControllerBase
 		return new JsonResponse($item, Response::HTTP_OK);
 	}
 
-	// DELETE /v2/articles/:articleId
+	// DELETE /v2/articles/{articleId}
 	public function deleteArticle(Request $request, Node $articleId): JsonResponse
 	{
 		if ($articleId->getType() !== 'article') {
