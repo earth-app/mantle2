@@ -1569,7 +1569,7 @@ class UsersController extends ControllerBase
 				array_filter($request->getClientIps(), fn($ip) => $ip !== $currentIP),
 			);
 			if (empty($ips)) {
-				$ips = 'none';
+				$ips = 'no other IPs';
 			}
 
 			$userAgent = $request->headers->get('User-Agent', 'Unknown Device');
