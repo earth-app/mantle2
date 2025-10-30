@@ -2236,16 +2236,16 @@
         },
         {
             "name": "symfony/cache",
-            "version": "v7.3.4",
+            "version": "v7.3.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/cache.git",
-                "reference": "bf8afc8ffd4bfd3d9c373e417f041d9f1e5b863f"
+                "reference": "4a55feb59664f49042a0824c0f955e2f4c1412ad"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/cache/zipball/bf8afc8ffd4bfd3d9c373e417f041d9f1e5b863f",
-                "reference": "bf8afc8ffd4bfd3d9c373e417f041d9f1e5b863f",
+                "url": "https://api.github.com/repos/symfony/cache/zipball/4a55feb59664f49042a0824c0f955e2f4c1412ad",
+                "reference": "4a55feb59664f49042a0824c0f955e2f4c1412ad",
                 "shasum": ""
             },
             "require": {
@@ -2314,7 +2314,7 @@
                 "psr6"
             ],
             "support": {
-                "source": "https://github.com/symfony/cache/tree/v7.3.4"
+                "source": "https://github.com/symfony/cache/tree/v7.3.5"
             },
             "funding": [
                 {
@@ -2334,7 +2334,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2025-09-11T10:12:26+00:00"
+            "time": "2025-10-16T13:55:38+00:00"
         },
         {
             "name": "symfony/cache-contracts",
@@ -9841,16 +9841,16 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "11.5.42",
+            "version": "11.5.43",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "1c6cb5dfe412af3d0dfd414cfd110e3b9cfdbc3c"
+                "reference": "c6b89b6cf4324a8b4cb86e1f5dfdd6c9e0371924"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/1c6cb5dfe412af3d0dfd414cfd110e3b9cfdbc3c",
-                "reference": "1c6cb5dfe412af3d0dfd414cfd110e3b9cfdbc3c",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/c6b89b6cf4324a8b4cb86e1f5dfdd6c9e0371924",
+                "reference": "c6b89b6cf4324a8b4cb86e1f5dfdd6c9e0371924",
                 "shasum": ""
             },
             "require": {
@@ -9922,7 +9922,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
                 "security": "https://github.com/sebastianbergmann/phpunit/security/policy",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/11.5.42"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/11.5.43"
             },
             "funding": [
                 {
@@ -9946,7 +9946,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2025-09-28T12:09:13+00:00"
+            "time": "2025-10-30T08:39:39+00:00"
         },
         {
             "name": "psy/psysh",
