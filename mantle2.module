@@ -23,7 +23,6 @@ function mantle2_help($route_name, RouteMatchInterface $route_match)
 function mantle2_mail($key, &$message, $params)
 {
 	$message['from'] = Drupal::config('system.site')->get('mail');
-	$message['headers']['Content-Type'] = 'text/html; charset=UTF-8; format=flowed; delsp=yes';
 
 	/** @var \Drupal\mantle2\Service\HTMLFactory $parser */
 	$parser = Drupal::service('mantle2.parser');
@@ -33,7 +32,7 @@ function mantle2_mail($key, &$message, $params)
 			$message['subject'] = 'The Earth App - Email Verification Code';
 
 			$markdown = "Your email verification code is: **{$params['verification_code']}**\n\n
-			This code will expire in 15 minutes.\n\n
+			This code will expire in 15 minutes.\n
 			If you did not request this verification, please ignore this email.";
 
 			$message['body'][] = $parser->toHtml($markdown);
@@ -42,12 +41,12 @@ function mantle2_mail($key, &$message, $params)
 			$message['subject'] = 'The Earth App - New Login Notification';
 
 			$markdown = "Your account was just used to log in from a new device or location.\n\n
-			**Details:**\n\n
+			**Details:**\n
 			- Time: {$params['time']}\n
 			- IP: {$params['ip']} ({$params['additional_ips']})\n
 			- User Agent: {$params['user_agent']}\n
 			- Referrer: {$params['referer']}\n\n
-			If this was you, you can safely ignore this email.\n\n
+			If this was you, you can safely ignore this email.\n
 			If you did not log in, please reset your password immediately to secure your account.";
 
 			$message['body'][] = $parser->toHtml($markdown);
@@ -66,7 +65,7 @@ function mantle2_mail($key, &$message, $params)
 			$message['subject'] = 'The Earth App - Email Change Verification Code';
 
 			$markdown = "Your email change verification code is: **{$params['verification_code']}**\n\n
-			This code will expire in 15 minutes.\n\n
+			This code will expire in 15 minutes.\n
 			If you did not request this verification, please ignore this email.";
 
 			$message['body'][] = $parser->toHtml($markdown);
@@ -85,7 +84,7 @@ function mantle2_mail($key, &$message, $params)
 			$message['subject'] = 'The Earth App - Password Reset';
 
 			$markdown = "We received a request to reset your password for The Earth App.\n\n
-			Click the link below to reset your password:\n\n
+			Click the link below to reset your password:\n
 			{$params['reset_link']}\n\n
 			This link will expire in 1 hour.\n\n
 			If you did not request this password reset, please ignore this email and your password will remain unchanged.";
@@ -95,11 +94,29 @@ function mantle2_mail($key, &$message, $params)
 		case 'new_password':
 			$message['subject'] = 'The Earth App - Password Reset';
 
-			$markdown = "Your password has been successfully changed.\n\n
-				If you did not perform this action, please reset your password immediately to secure your account.";
+			$markdown = 'Your password has been successfully changed.\n\n
+				If you did not perform this action, please reset your password immediately to secure your account.';
 
 			$message['body'][] = $parser->toHtml($markdown);
 			break;
+	}
+}
+
+function mantle2_mail_alter(&$message)
+{
+	$messages = [
+		'mantle2_email_verification',
+		'mantle2_new_login',
+		'mantle2_new_password',
+		'mantle2_password_reset',
+		'mantle2_email_change_notification',
+		'mantle2_email_change_verification',
+		'mantle2_email_change_confirmed',
+	];
+
+	if (in_array($message['id'], $messages, true)) {
+		$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
+		$message['params']['convert'] = false;
 	}
 }
 
