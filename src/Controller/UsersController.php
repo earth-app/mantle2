@@ -1565,14 +1565,11 @@ class UsersController extends ControllerBase
 			$date = new DateTimeImmutable();
 			$timestamp = $date->format(DATE_ATOM);
 			$ips = implode(
-				'\n',
-				array_map(
-					fn($ip) => "- $ip",
-					array_filter($request->getClientIps(), fn($ip) => $ip !== $currentIP),
-				),
+				', ',
+				array_filter($request->getClientIps(), fn($ip) => $ip !== $currentIP),
 			);
 			if (empty($ips)) {
-				$ips = "(none)\n";
+				$ips = 'none';
 			}
 
 			$userAgent = $request->headers->get('User-Agent', 'Unknown Device');
@@ -1607,7 +1604,7 @@ class UsersController extends ControllerBase
 			UsersHelper::sendEmail($account, 'new_login', [
 				'time' => $timestamp,
 				'ip' => $currentIP,
-				'additional_ips' => $ips ?: 'No other IPs detected',
+				'additional_ips' => $ips,
 				'user_agent' => $userAgent,
 				'referer' => $referer,
 			]);
