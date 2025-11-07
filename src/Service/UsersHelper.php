@@ -1203,6 +1203,8 @@ class UsersHelper
 	public static function recommendActivities(UserInterface $user, int $poolLimit = 25): array
 	{
 		try {
+			$userActivities = self::getActivities($user);
+
 			$connection = Drupal::database();
 			$query = $connection
 				->select('node_field_data', 'n')
@@ -1213,18 +1215,23 @@ class UsersHelper
 				->range(0, $poolLimit);
 			$nids = $query->execute()->fetchCol();
 
-			$activitiesPool = array_map(
-				fn($nid) => self::serializeForCloud(ActivityHelper::getActivityByNid($nid)),
-				$nids,
-			);
-			$userActivities = array_map(
-				fn(Activity $activity) => self::serializeForCloud($activity),
-				self::getActivities($user),
-			);
+			$activitiesPool = array_map(fn($nid) => ActivityHelper::getActivityByNid($nid), $nids);
+
+			if (empty($userActivities)) {
+				// if no user activities, return random 3 from pool
+				$subPool = array_slice($activitiesPool, 0, 3);
+				return $subPool;
+			}
 
 			$res = CloudHelper::sendRequest('/v1/users/recommend_activities', 'POST', [
-				'all' => $activitiesPool,
-				'user' => $userActivities,
+				'all' => array_map(
+					fn(Activity $activity) => self::serializeForCloud($activity),
+					$activitiesPool,
+				),
+				'user' => array_map(
+					fn(Activity $activity) => self::serializeForCloud($activity),
+					$userActivities,
+				),
 			]);
 
 			return array_map(function ($a) {
