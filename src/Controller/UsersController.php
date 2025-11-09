@@ -47,6 +47,10 @@ class UsersController extends ControllerBase
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
+		// Determine visibility filter based on requester
+		$isAdmin = $requester && UsersHelper::isAdmin($requester);
+		$isLoggedIn = $requester !== null;
+
 		try {
 			// Handle random sorting separately using database query
 			if ($sort === 'rand') {
@@ -58,10 +62,13 @@ class UsersController extends ControllerBase
 					->condition('u.uid', 0, '!=');
 
 				$fv = $query->leftJoin('user__field_visibility', 'fv', 'fv.entity_id = u.uid');
-				$query->condition(
-					"$fv.field_visibility_value",
-					GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
-				);
+				if (!$isAdmin) {
+					// only admins can see non-public users
+					$query->condition(
+						"$fv.field_visibility_value",
+						GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+					);
+				}
 
 				if ($search) {
 					$fn = $query->leftJoin('user__field_first_name', 'fn', 'fn.entity_id = u.uid');
@@ -84,15 +91,16 @@ class UsersController extends ControllerBase
 			} else {
 				// Use entity query for normal sorting
 				$storage = Drupal::entityTypeManager()->getStorage('user');
-				$query = $storage
-					->getQuery()
-					->accessCheck(false)
-					->condition('uid', 0, '!=') // Exclude anonymous user
-					->condition(
+				$query = $storage->getQuery()->accessCheck(false)->condition('uid', 0, '!='); // Exclude anonymous user
+
+				if (!$isAdmin) {
+					// only admins can see non-public users
+					$query->condition(
 						'field_visibility',
 						GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
 						'=',
 					);
+				}
 
 				if ($search) {
 					$group = $query
