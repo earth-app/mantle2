@@ -225,7 +225,7 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
-		$username = $body['username'] ?? null;
+		$username = strtolower($body['username'] ?? null);
 		$password = $body['password'] ?? null;
 		$email = $body['email'] ?? null;
 		$firstName = $body['first_name'] ?? null;
