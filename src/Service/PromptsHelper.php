@@ -394,4 +394,26 @@ class PromptsHelper
 
 		return $query->count()->execute();
 	}
+
+	public static function hasResponded(UserInterface $user, Node $promptNode): bool
+	{
+		$fieldName = self::getCommentFieldName($promptNode);
+		if (!$fieldName) {
+			return false;
+		}
+
+		$storage = Drupal::entityTypeManager()->getStorage('comment');
+		$query = $storage
+			->getQuery()
+			->accessCheck(false)
+			->condition('entity_id', $promptNode->id())
+			->condition('entity_type', 'node')
+			->condition('field_name', $fieldName)
+			->condition('uid', $user->id())
+			->condition('status', 1);
+
+		$count = $query->count()->execute();
+
+		return $count > 0;
+	}
 }

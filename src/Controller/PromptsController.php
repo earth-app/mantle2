@@ -161,6 +161,7 @@ class PromptsController extends ControllerBase
 						'id' => GeneralHelper::formatId($nid),
 						'owner' => UsersHelper::serializeUser($obj->getOwner(), $user),
 						'responses_count' => PromptsHelper::getCommentsCount($node),
+						'has_responded' => $user ? PromptsHelper::hasResponded($user, $node) : null,
 						'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
 						'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
 					]);
@@ -250,6 +251,7 @@ class PromptsController extends ControllerBase
 		$result['id'] = GeneralHelper::formatId($node->id());
 		$result['owner'] = UsersHelper::serializeUser($obj->getOwner(), $user);
 		$result['responses_count'] = 0;
+		$result['has_responded'] = false;
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -328,6 +330,7 @@ class PromptsController extends ControllerBase
 				$result['id'] = GeneralHelper::formatId($randomNid);
 				$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
 				$result['responses_count'] = PromptsHelper::getCommentsCount($node);
+				$result['has_responded'] = $user ? PromptsHelper::hasResponded($user, $node) : null;
 				$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 				$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -365,6 +368,7 @@ class PromptsController extends ControllerBase
 		$result['id'] = GeneralHelper::formatId($prompt->id());
 		$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
 		$result['responses_count'] = PromptsHelper::getCommentsCount($prompt);
+		$result['has_responded'] = $user ? PromptsHelper::hasResponded($user, $prompt) : null;
 		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
 
@@ -444,6 +448,7 @@ class PromptsController extends ControllerBase
 		$result['id'] = GeneralHelper::formatId($prompt->id());
 		$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
 		$result['responses_count'] = PromptsHelper::getCommentsCount($prompt);
+		$result['has_responded'] = PromptsHelper::hasResponded($user, $prompt);
 		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
 
