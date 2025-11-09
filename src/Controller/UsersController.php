@@ -119,7 +119,10 @@ class UsersController extends ControllerBase
 				}
 				return true;
 			});
-			$data = array_map(fn($user) => UsersHelper::serializeUser($user, $requester), $users);
+
+			$data = array_values(
+				array_map(fn($user) => UsersHelper::serializeUser($user, $requester), $users),
+			);
 			return new JsonResponse([
 				'page' => $page + 1,
 				'total' => $total,
