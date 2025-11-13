@@ -344,16 +344,16 @@
         },
         {
             "name": "drupal/core",
-            "version": "11.2.5",
+            "version": "11.2.8",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drupal/core.git",
-                "reference": "cdfdb569ac089c877dba27534c7a89cf3fdd36c4"
+                "reference": "e9c111ea8f26f751797fbf6a918f845730fc95ee"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/drupal/core/zipball/cdfdb569ac089c877dba27534c7a89cf3fdd36c4",
-                "reference": "cdfdb569ac089c877dba27534c7a89cf3fdd36c4",
+                "url": "https://api.github.com/repos/drupal/core/zipball/e9c111ea8f26f751797fbf6a918f845730fc95ee",
+                "reference": "e9c111ea8f26f751797fbf6a918f845730fc95ee",
                 "shasum": ""
             },
             "require": {
@@ -510,9 +510,9 @@
             ],
             "description": "Drupal is an open source content management platform powering millions of websites and applications.",
             "support": {
-                "source": "https://github.com/drupal/core/tree/11.2.5"
+                "source": "https://github.com/drupal/core/tree/11.2.8"
             },
-            "time": "2025-10-02T07:24:02+00:00"
+            "time": "2025-11-12T21:53:29+00:00"
         },
         {
             "name": "drupal/json_field",
@@ -658,17 +658,17 @@
         },
         {
             "name": "drupal/redis",
-            "version": "1.10.0",
+            "version": "1.11.0",
             "source": {
                 "type": "git",
                 "url": "https://git.drupalcode.org/project/redis.git",
-                "reference": "8.x-1.10"
+                "reference": "8.x-1.11"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://ftp.drupal.org/files/projects/redis-8.x-1.10.zip",
-                "reference": "8.x-1.10",
-                "shasum": "c3a886bd2941f60ae17bd23fa255ee99f2581637"
+                "url": "https://ftp.drupal.org/files/projects/redis-8.x-1.11.zip",
+                "reference": "8.x-1.11",
+                "shasum": "4a32e50b85523fd09500b6c6398cf18504bdc652"
             },
             "require": {
                 "drupal/core": "^9.3 || ^10 || ^11"
@@ -681,8 +681,8 @@
             "type": "drupal-module",
             "extra": {
                 "drupal": {
-                    "version": "8.x-1.10",
-                    "datestamp": "1754045876",
+                    "version": "8.x-1.11",
+                    "datestamp": "1762688846",
                     "security-coverage": {
                         "status": "covered",
                         "message": "Covered by Drupal's security advisory policy"
@@ -2236,16 +2236,16 @@
         },
         {
             "name": "symfony/cache",
-            "version": "v7.3.4",
+            "version": "v7.3.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/cache.git",
-                "reference": "bf8afc8ffd4bfd3d9c373e417f041d9f1e5b863f"
+                "reference": "1277a1ec61c8d93ea61b2a59738f1deb9bfb6701"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/cache/zipball/bf8afc8ffd4bfd3d9c373e417f041d9f1e5b863f",
-                "reference": "bf8afc8ffd4bfd3d9c373e417f041d9f1e5b863f",
+                "url": "https://api.github.com/repos/symfony/cache/zipball/1277a1ec61c8d93ea61b2a59738f1deb9bfb6701",
+                "reference": "1277a1ec61c8d93ea61b2a59738f1deb9bfb6701",
                 "shasum": ""
             },
             "require": {
@@ -2314,7 +2314,7 @@
                 "psr6"
             ],
             "support": {
-                "source": "https://github.com/symfony/cache/tree/v7.3.4"
+                "source": "https://github.com/symfony/cache/tree/v7.3.6"
             },
             "funding": [
                 {
@@ -2334,7 +2334,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2025-09-11T10:12:26+00:00"
+            "time": "2025-10-30T13:22:58+00:00"
         },
         {
             "name": "symfony/cache-contracts",
@@ -6872,7 +6872,7 @@
         },
         {
             "name": "drupal/core-dev",
-            "version": "11.2.5",
+            "version": "11.2.8",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drupal/core-dev.git",
@@ -6921,7 +6921,7 @@
             ],
             "description": "require-dev dependencies from drupal/drupal; use in addition to drupal/core-recommended to run tests from drupal/core.",
             "support": {
-                "source": "https://github.com/drupal/core-dev/tree/11.2.5"
+                "source": "https://github.com/drupal/core-dev/tree/11.2.8"
             },
             "time": "2025-06-29T21:12:09+00:00"
         },
@@ -9841,16 +9841,16 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "11.5.42",
+            "version": "11.5.44",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "1c6cb5dfe412af3d0dfd414cfd110e3b9cfdbc3c"
+                "reference": "c346885c95423eda3f65d85a194aaa24873cda82"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/1c6cb5dfe412af3d0dfd414cfd110e3b9cfdbc3c",
-                "reference": "1c6cb5dfe412af3d0dfd414cfd110e3b9cfdbc3c",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/c346885c95423eda3f65d85a194aaa24873cda82",
+                "reference": "c346885c95423eda3f65d85a194aaa24873cda82",
                 "shasum": ""
             },
             "require": {
@@ -9922,7 +9922,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
                 "security": "https://github.com/sebastianbergmann/phpunit/security/policy",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/11.5.42"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/11.5.44"
             },
             "funding": [
                 {
@@ -9946,7 +9946,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2025-09-28T12:09:13+00:00"
+            "time": "2025-11-13T07:17:35+00:00"
         },
         {
             "name": "psy/psysh",
