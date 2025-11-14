@@ -236,11 +236,11 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
-		$username = strtolower($body['username'] ?? null);
-		$password = $body['password'] ?? null;
-		$email = $body['email'] ?? null;
-		$firstName = $body['first_name'] ?? null;
-		$lastName = $body['last_name'] ?? null;
+		$username = trim(strtolower($body['username'] ?? null));
+		$password = trim($body['password'] ?? null);
+		$email = trim($body['email'] ?? null);
+		$firstName = trim($body['first_name'] ?? null);
+		$lastName = trim($body['last_name'] ?? null);
 
 		if (!$username || !$password) {
 			return GeneralHelper::badRequest('Username and Password are required');
@@ -256,6 +256,14 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest(
 				'Invalid data types for username, password, email, first_name, or last_name',
 			);
+		}
+
+		if (strlen($firstName) < 2 || strlen($firstName) > 50) {
+			return GeneralHelper::badRequest('First name must be between 2 and 50 characters');
+		}
+
+		if (strlen($lastName) < 2 || strlen($lastName) > 50) {
+			return GeneralHelper::badRequest('Last name must be between 2 and 50 characters');
 		}
 
 		if (!preg_match('/' . Mantle2Schemas::$username['pattern'] . '/', $username)) {

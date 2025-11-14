@@ -561,7 +561,7 @@ class UsersHelper
 		}
 
 		if (isset($data['username'])) {
-			$username = (string) $data['username'];
+			$username = trim(strtolower((string) $data['username']));
 			$len = strlen($username);
 			if ($len < 3 || $len > 30) {
 				return GeneralHelper::badRequest('Invalid username length');
@@ -577,7 +577,7 @@ class UsersHelper
 
 		$emailChangeInitiated = false;
 		if (isset($data['email'])) {
-			$email = (string) $data['email'];
+			$email = trim((string) $data['email']);
 			$currentEmail = $user->getEmail();
 			if ($currentEmail === $email) {
 				// No change needed, skip email processing
@@ -594,7 +594,7 @@ class UsersHelper
 		}
 
 		if (isset($data['first_name'])) {
-			$firstName = (string) $data['first_name'];
+			$firstName = trim((string) $data['first_name']);
 			$len = strlen($firstName);
 			if ($len < 2 || $len > 50) {
 				return GeneralHelper::badRequest('Invalid first name length');
@@ -619,7 +619,7 @@ class UsersHelper
 		}
 
 		if (isset($data['last_name'])) {
-			$lastName = (string) $data['last_name'];
+			$lastName = trim((string) $data['last_name']);
 			$len = strlen($lastName);
 			if ($len < 2 || $len > 50) {
 				return GeneralHelper::badRequest('Invalid last name length');
@@ -644,7 +644,7 @@ class UsersHelper
 		}
 
 		if (isset($data['bio'])) {
-			$bio = (string) $data['bio'];
+			$bio = trim((string) $data['bio']);
 			$len = strlen($bio);
 			if ($len > 500) {
 				return GeneralHelper::badRequest(
@@ -671,9 +671,9 @@ class UsersHelper
 		}
 
 		if (isset($data['country'])) {
-			$country = (string) $data['country'];
+			$country = trim((string) $data['country']);
 			$len = strlen($country);
-			if ($len < 2 || $len > 2) {
+			if ($len != 2) {
 				return GeneralHelper::badRequest(
 					'Invalid country code length: Must be 2 characters',
 				);
@@ -694,7 +694,7 @@ class UsersHelper
 		}
 
 		if (isset($data['visibility'])) {
-			$visibility = (string) $data['visibility'];
+			$visibility = trim((string) $data['visibility']);
 			$visibility0 = Visibility::tryFrom($visibility);
 			if ($visibility0 === null) {
 				return GeneralHelper::badRequest('Invalid visibility value');
