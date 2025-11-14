@@ -385,7 +385,9 @@ class UsersHelper
 	{
 		$firstName = self::getFirstName($user, $requester);
 		$lastName = self::getLastName($user, $requester);
-		return trim("$firstName $lastName");
+
+		$parts = array_filter([$firstName, $lastName], fn($v) => !empty($v));
+		return !empty($parts) ? implode(' ', $parts) : null;
 	}
 
 	public static function getEmail(UserInterface $user, ?UserInterface $requester = null): ?string
