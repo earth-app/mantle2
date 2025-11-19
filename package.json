@@ -11,7 +11,7 @@
 		"@prettier/plugin-xml": "^3.4.2",
 		"@types/bun": "latest",
 		"husky": "^9.1.7",
-		"lint-staged": "^16.2.6",
+		"lint-staged": "^16.2.7",
 		"prettier": "^3.6.2"
 	},
 	"peerDependencies": {
