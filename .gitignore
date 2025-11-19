@@ -13,3 +13,8 @@ coverage/
 .phpunit.result.cache
 
 .idea/
+
+# other
+.DS_Store
+.env
+.env.local
