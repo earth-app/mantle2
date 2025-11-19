@@ -657,6 +657,48 @@ mantle2.users.id.change_password:
     body/schema: $passwordChangeFlexibleBody
   methods: [POST]
 
+mantle2.users.id.subscribe:
+  path: '/v2/users/{id}/subscribe'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::subscribe'
+    _title: 'Subscribe User to Marketing Emails by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Subscription
+    description: Subscribes a user to marketing emails. Returns 200 if already subscribed, 201 if newly subscribed.
+    schema/200: subscriptionResponse()
+    schema/201: subscriptionResponse()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.unsubscribe:
+  path: '/v2/users/{id}/unsubscribe'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unsubscribe'
+    _title: 'Unsubscribe User from Marketing Emails by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Subscription
+    description: Unsubscribes a user from marketing emails. Returns 200 if already unsubscribed, 201 if newly unsubscribed.
+    schema/200: subscriptionResponse()
+    schema/201: subscriptionResponse()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
 mantle2.users.id.notifications:
   path: '/v2/users/{id}/notifications'
   defaults:
@@ -1419,6 +1461,48 @@ mantle2.users.username.change_password:
     body/schema: $passwordChangeFlexibleBody
   methods: [POST]
 
+mantle2.users.username.subscribe:
+  path: '/v2/users/{username}/subscribe'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::subscribe'
+    _title: 'Subscribe User to Marketing Emails by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Subscription
+    description: Subscribes a user to marketing emails. Returns 200 if already subscribed, 201 if newly subscribed.
+    schema/200: subscriptionResponse()
+    schema/201: subscriptionResponse()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.unsubscribe:
+  path: '/v2/users/{username}/unsubscribe'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unsubscribe'
+    _title: 'Unsubscribe User from Marketing Emails by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Subscription
+    description: Unsubscribes a user from marketing emails. Returns 200 if already unsubscribed, 201 if newly unsubscribed.
+    schema/200: subscriptionResponse()
+    schema/201: subscriptionResponse()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
 mantle2.users.username.notifications:
   path: '/v2/users/{username}/notifications'
   defaults:
@@ -2096,6 +2180,36 @@ mantle2.users.current.change_password:
         description: Current password for verification (alternative to token)
         required: false
     body/schema: $passwordChangeFlexibleBody
+  methods: [POST]
+
+mantle2.users.current.subscribe:
+  path: '/v2/users/current/subscribe'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::subscribe'
+    _title: 'Subscribe Current User to Marketing Emails'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Subscription
+    description: Subscribes the current user to marketing emails. Returns 200 if already subscribed, 201 if newly subscribed.
+    schema/200: subscriptionResponse()
+    schema/201: subscriptionResponse()
+    schema/401: Unauthorized
+  methods: [POST]
+
+mantle2.users.current.unsubscribe:
+  path: '/v2/users/current/unsubscribe'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unsubscribe'
+    _title: 'Unsubscribe Current User from Marketing Emails'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Subscription
+    description: Unsubscribes the current user from marketing emails. Returns 200 if already unsubscribed, 201 if newly unsubscribed.
+    schema/200: subscriptionResponse()
+    schema/201: subscriptionResponse()
+    schema/401: Unauthorized
   methods: [POST]
 
 mantle2.users.current.notifications:

@@ -468,6 +468,7 @@ class Mantle2Schemas
 				'country' => self::text(2),
 				'phone_number' => self::$number,
 				'visibility' => self::visibility(),
+				'subscribed' => self::$bool,
 			],
 		];
 	}
@@ -767,6 +768,8 @@ class Mantle2Schemas
 						'country' => ['type' => 'string'],
 						'phone_number' => ['type' => 'integer'],
 						'visibility' => self::visibility(),
+						'email_verified' => self::$bool,
+						'subscribed' => self::$bool,
 						'field_privacy' => self::userFieldPrivacy(),
 					],
 				],
@@ -908,6 +911,24 @@ class Mantle2Schemas
 				],
 			],
 			'required' => ['message'],
+		];
+	}
+
+	public static function subscriptionResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'message' => [
+					'type' => 'string',
+					'example' => 'Successfully subscribed to marketing emails',
+				],
+				'subscribed' => [
+					'type' => 'boolean',
+					'example' => true,
+				],
+			],
+			'required' => ['message', 'subscribed'],
 		];
 	}
 

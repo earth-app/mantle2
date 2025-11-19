@@ -1193,6 +1193,96 @@ class UsersController extends ControllerBase
 
 	#endregion
 
+	#region Subscription Management
+
+	// POST /v2/users/current/subscribe
+	// POST /v2/users/{id}/subscribe
+	// POST /v2/users/{username}/subscribe
+	public function subscribe(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$wasSubscribed = UsersHelper::isSubscribed($user);
+		if ($wasSubscribed) {
+			return new JsonResponse(
+				[
+					'message' => 'User is already subscribed to marketing emails',
+					'subscribed' => true,
+				],
+				Response::HTTP_OK,
+			);
+		}
+
+		try {
+			UsersHelper::setSubscribed($user, true);
+			$user->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to update subscription status: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to update subscription status');
+		}
+
+		return new JsonResponse(
+			[
+				'message' => 'Successfully subscribed to marketing emails',
+				'subscribed' => true,
+			],
+			Response::HTTP_CREATED,
+		);
+	}
+
+	// POST /v2/users/current/unsubscribe
+	// POST /v2/users/{id}/unsubscribe
+	// POST /v2/users/{username}/unsubscribe
+	public function unsubscribe(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$wasSubscribed = UsersHelper::isSubscribed($user);
+		if (!$wasSubscribed) {
+			return new JsonResponse(
+				[
+					'message' => 'User is already unsubscribed from marketing emails',
+					'subscribed' => false,
+				],
+				Response::HTTP_OK,
+			);
+		}
+
+		try {
+			UsersHelper::setSubscribed($user, false);
+			$user->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to update subscription status: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to update subscription status');
+		}
+
+		return new JsonResponse(
+			[
+				'message' => 'Successfully unsubscribed from marketing emails',
+				'subscribed' => false,
+			],
+			Response::HTTP_CREATED,
+		);
+	}
+
+	#endregion
+
 	#region User Notifications
 
 	// GET /v2/users/current/notifications

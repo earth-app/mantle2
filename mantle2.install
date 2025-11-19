@@ -463,6 +463,9 @@ function mantle2_install(): void
 	/// Email Verified
 	createField('user', 'field_email_verified', 'boolean', 'Email Verified', false, false);
 
+	/// Subscribed
+	createField('user', 'field_subscribed', 'boolean', 'Subscribed', false, true);
+
 	/// Notifications
 	createField('user', 'field_notifications', 'json', 'Notifications', false, json_encode([]), [
 		'schema' => [

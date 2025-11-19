@@ -489,6 +489,16 @@ class UsersHelper
 		return (bool) $user->get('field_email_verified')->value;
 	}
 
+	public static function isSubscribed(UserInterface $user): bool
+	{
+		return (bool) ($user->get('field_subscribed')->value ?? true);
+	}
+
+	public static function setSubscribed(UserInterface $user, bool $subscribed): void
+	{
+		$user->set('field_subscribed', $subscribed);
+	}
+
 	public static function serializeUser(
 		UserInterface $user,
 		?UserInterface $requester = null,
@@ -536,6 +546,12 @@ class UsersHelper
 				),
 				'email_verified' => self::tryVisible(
 					self::isEmailVerified($user),
+					$user,
+					$requester,
+					'PRIVATE',
+				),
+				'subscribed' => self::tryVisible(
+					self::isSubscribed($user),
 					$user,
 					$requester,
 					'PRIVATE',
@@ -706,6 +722,11 @@ class UsersHelper
 				'field_visibility',
 				GeneralHelper::findOrdinal(Visibility::cases(), $visibility0),
 			);
+		}
+
+		if (isset($data['subscribed'])) {
+			$subscribed = (bool) $data['subscribed'];
+			$user->set('field_subscribed', $subscribed);
 		}
 
 		try {
