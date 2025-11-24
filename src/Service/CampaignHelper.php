@@ -35,9 +35,18 @@ class CampaignHelper
 	{
 		$campaigns = self::getCampaigns();
 
-		// try id, then index
-		return array_filter($campaigns, fn($k) => $k['id'] === $key)[0] ??
-			($campaigns[$key] ?? null);
+		// Try to find by ID or by index
+		foreach ($campaigns as $i => $campaign) {
+			if (isset($campaign['id']) && $campaign['id'] === $key) {
+				return $campaign;
+			}
+
+			if ($i === $key) {
+				return $campaign;
+			}
+		}
+
+		return null;
 	}
 
 	// Filters
