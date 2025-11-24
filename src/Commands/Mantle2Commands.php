@@ -32,25 +32,25 @@ class Mantle2Commands extends DrushCommands
 		$user = UsersHelper::findBy($identifier);
 		if (!$user) {
 			$this->stderr()->writeln(
-				"User '$user' not found. Hint: for usernames, try prefixing with '@'.",
+				"User '$identifier' not found. Hint: for usernames, try prefixing with '@'.",
 			);
 			return;
 		}
 
 		if (UsersHelper::isEmailVerified($user)) {
-			$this->stderr()->writeln("User '$user' email is already verified.");
+			$this->stderr()->writeln("User '$identifier' email is already verified.");
 			return;
 		}
 
-		$this->output()->writeln("Sending email verification to user '$user'...");
+		$this->output()->writeln("Sending email verification to user '$identifier'...");
 		$success = UsersHelper::sendEmailVerification($user);
 
 		if (!$success) {
-			$this->stderr()->writeln("Failed to send email verification to user '$user'.");
+			$this->stderr()->writeln("Failed to send email verification to user '$identifier'.");
 			return;
 		}
 
-		$this->output()->writeln("Email verification sent to user '$user'.");
+		$this->output()->writeln("Email verification sent to user '$identifier'.");
 	}
 
 	/**
@@ -67,20 +67,20 @@ class Mantle2Commands extends DrushCommands
 		$user = UsersHelper::findBy($identifier);
 		if (!$user) {
 			$this->stderr()->writeln(
-				"User '$user' not found. Hint: for usernames, try prefixing with '@'.",
+				"User '$identifier' not found. Hint: for usernames, try prefixing with '@'.",
 			);
 			return;
 		}
 
-		$this->output()->writeln("Sending email campaign '$id' to user '$user'...");
+		$this->output()->writeln("Sending email campaign '$id' to user '$identifier'...");
 		$success = UsersHelper::sendEmailCampaign($id, $user);
 
 		if (!$success) {
-			$this->stderr()->writeln("Failed to send email campaign '$id' to user '$user'.");
+			$this->stderr()->writeln("Failed to send email campaign '$id' to user '$identifier'.");
 			return;
 		}
 
-		$this->output()->writeln("Email campaign '$id' sent to user '$user'.");
+		$this->output()->writeln("Email campaign '$id' sent to user '$identifier'.");
 	}
 
 	/**
@@ -109,12 +109,12 @@ class Mantle2Commands extends DrushCommands
 		$user = UsersHelper::findBy($identifier);
 		if (!$user) {
 			$this->stderr()->writeln(
-				"User '$user' not found. Hint: for usernames, try prefixing with '@'.",
+				"User '$identifier' not found. Hint: for usernames, try prefixing with '@'.",
 			);
 			return;
 		}
 
-		$this->output()->writeln("Adding notification to user '$user'...");
+		$this->output()->writeln("Adding notification to user '$identifier'...");
 		UsersHelper::addNotification(
 			$user,
 			$options['title'],
@@ -123,6 +123,6 @@ class Mantle2Commands extends DrushCommands
 			$options['type'],
 			$options['source'],
 		);
-		$this->output()->writeln("Notification added to user '$user'.");
+		$this->output()->writeln("Notification added to user '$identifier'.");
 	}
 }
