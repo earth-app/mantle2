@@ -2,7 +2,6 @@
 
 namespace Drupal\mantle2\Service;
 
-use CampaignHelper;
 use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
@@ -13,6 +12,7 @@ use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Notification;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;

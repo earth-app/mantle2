@@ -1,5 +1,7 @@
 <?php
 
+namespace Drupal\mantle2\Commands;
+
 use Drupal\mantle2\Service\UsersHelper;
 use Drush\Commands\DrushCommands;
 
