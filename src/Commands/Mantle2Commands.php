@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Commands;
 
+use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drush\Commands\DrushCommands;
 
@@ -51,6 +52,22 @@ class Mantle2Commands extends DrushCommands
 		}
 
 		$this->output()->writeln("Email verification sent to user '$identifier'.");
+	}
+
+	/**
+	 * List all available email campaigns.
+	 *
+	 * @command mantle2:list-email-campaigns
+	 * @aliases m2:list-email-campaigns m2:email-campaigns
+	 * @usage drush m2:list-email-campaigns
+	 */
+	public function listEmailCampaigns()
+	{
+		$campaigns = CampaignHelper::getCampaigns();
+		$this->output()->writeln('Available Email Campaigns:');
+		foreach ($campaigns as $key => $campaign) {
+			$this->output()->writeln("- $key: " . ($campaign['title'] ?? 'No title'));
+		}
 	}
 
 	/**

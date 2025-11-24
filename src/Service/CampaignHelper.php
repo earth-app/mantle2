@@ -21,6 +21,13 @@ class CampaignHelper
 			Drupal::service('extension.list.module')->getPath('mantle2') .
 			'/data/email_campaigns.yml';
 
+		if (!file_exists($path)) {
+			Drupal::logger('mantle2')->error('Email campaigns file not found at %path', [
+				'%path' => $path,
+			]);
+			return [];
+		}
+
 		return Yaml::decode(file_get_contents($path));
 	}
 
