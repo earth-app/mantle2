@@ -152,7 +152,10 @@ function mantle2_mail_alter(&$message)
 		'mantle2_email_change_confirmed',
 	];
 
-	if (in_array($message['id'], $messages, true) || str_starts_with($message['id'], 'campaign:')) {
+	if (
+		in_array($message['id'], $messages, true) ||
+		str_starts_with($message['id'], 'mantle2_campaign:')
+	) {
 		$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
 		$message['params']['convert'] = false;
 	}

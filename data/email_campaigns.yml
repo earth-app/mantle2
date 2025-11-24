@@ -12,7 +12,7 @@
 
     Verify your email to ensure you receive important updates and notifications from us, or to stop these reminders.
 - id: welcome_back
-  title: We Miss You at Earth App!
+  title: We Miss You at The Earth App!
   filter: inactiveFilter
   interval: 604800 # 7 days
   body: |-
