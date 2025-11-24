@@ -59,9 +59,3 @@ services:
   # Email HTML Rendering
   mantle2.parser:
     class: Drupal\mantle2\Service\HTMLFactory
-
-  # Commands
-  mantle2.commands:
-    class: Drupal\mantle2\Commands\Mantle2Commands
-    tags:
-      - { name: drush.command }
