@@ -1683,7 +1683,7 @@ class UsersHelper
 	public static function sendEmail(
 		UserInterface $user,
 		string $key,
-		array $param,
+		array $params,
 		bool $unsubscribable = true,
 	): void {
 		$email = $user->getEmail();
@@ -1697,8 +1697,6 @@ class UsersHelper
 			);
 			return;
 		}
-
-		$params = $param;
 
 		if ($unsubscribable) {
 			if (!self::isSubscribed($user, $key)) {
