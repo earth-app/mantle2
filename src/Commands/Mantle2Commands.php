@@ -22,13 +22,14 @@ class Mantle2Commands extends DrushCommands
 	/**
 	 * Send an email verification to a user.
 	 *
+	 * @param string $identifier The user identifier (ID or username with '@')
 	 * @command mantle2:send-email-verification
 	 * @aliases m2:send-email-verification m2:verify-email
 	 * @usage drush m2:send-email-verification @username
 	 */
-	public function sendEmailVerification(string $user)
+	public function sendEmailVerification(string $identifier)
 	{
-		$user = UsersHelper::findBy($user);
+		$user = UsersHelper::findBy($identifier);
 		if (!$user) {
 			$this->stderr()->writeln(
 				"User '$user' not found. Hint: for usernames, try prefixing with '@'.",
@@ -55,13 +56,15 @@ class Mantle2Commands extends DrushCommands
 	/**
 	 * Send an email campaign to a user.
 	 *
+	 * @param string $id The email campaign ID.
+	 * @param string $identifier The user identifier (ID or username with '@')
 	 * @command mantle2:send-email-campaign
 	 * @aliases m2:send-email-campaign m2:campaign
 	 * @usage drush m2:send-email-campaign welcome_back @username
 	 */
-	public function sendEmailCampaign(string $id, string $user)
+	public function sendEmailCampaign(string $id, string $identifier)
 	{
-		$user = UsersHelper::findBy($user);
+		$user = UsersHelper::findBy($identifier);
 		if (!$user) {
 			$this->stderr()->writeln(
 				"User '$user' not found. Hint: for usernames, try prefixing with '@'.",
@@ -84,11 +87,17 @@ class Mantle2Commands extends DrushCommands
 	 * Add a notification to a user.
 	 *
 	 * @command mantle2:add-notification
+	 * @param string $identifier The user identifier (ID, username with '@', or email).
+	 * @option title The title of the notification. Default: 'Test notification'.
+	 * @option type The type of the notification (info, warning, error). Default: 'info'.
+	 * @option message The message of the notification. Default: 'Test notification'.
+	 * @option link An optional link for the notification. Default: null.
+	 * @option source The source of the notification. Default: 'drush'.
 	 * @aliases m2:add-notification m2:notify
 	 * @usage drush m2:add-notification @username --title="Test" --message="This is a test notification."
 	 */
 	public function addNotification(
-		string $user,
+		string $identifier,
 		array $options = [
 			'title' => 'Test notification',
 			'type' => 'info',
@@ -97,7 +106,7 @@ class Mantle2Commands extends DrushCommands
 			'source' => 'drush',
 		],
 	) {
-		$user = UsersHelper::findBy($user);
+		$user = UsersHelper::findBy($identifier);
 		if (!$user) {
 			$this->stderr()->writeln(
 				"User '$user' not found. Hint: for usernames, try prefixing with '@'.",
