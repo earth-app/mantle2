@@ -34,7 +34,10 @@ class CampaignHelper
 	public static function getCampaign(string $key): ?array
 	{
 		$campaigns = self::getCampaigns();
-		return $campaigns[$key] ?? null;
+
+		// try id, then index
+		return array_filter($campaigns, fn($k) => $k['id'] === $key)[0] ??
+			($campaigns[$key] ?? null);
 	}
 
 	// Filters

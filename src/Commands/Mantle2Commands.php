@@ -65,8 +65,10 @@ class Mantle2Commands extends DrushCommands
 	{
 		$campaigns = CampaignHelper::getCampaigns();
 		$this->output()->writeln('Available Email Campaigns:');
-		foreach ($campaigns as $key => $campaign) {
-			$this->output()->writeln("- $key: " . ($campaign['title'] ?? 'No title'));
+		foreach ($campaigns as $i => $campaign) {
+			$this->output()->writeln(
+				"- ($i) " . $campaign['id'] ?? '' . ': ' . ($campaign['title'] ?? 'No title'),
+			);
 		}
 	}
 
