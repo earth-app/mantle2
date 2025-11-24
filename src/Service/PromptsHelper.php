@@ -64,7 +64,7 @@ class PromptsHelper
 		$ownerId = (int) $node->get('field_owner_id')->value;
 		$visibility = Visibility::cases()[$node->get('field_visibility')->value ?? 0];
 
-		return new Prompt($prompt, $ownerId, $visibility);
+		return new Prompt($node->id(), $prompt, $ownerId, $visibility);
 	}
 
 	public static function isVisible(Prompt $prompt, ?UserInterface $user): bool
@@ -415,5 +415,32 @@ class PromptsHelper
 		$count = $query->count()->execute();
 
 		return $count > 0;
+	}
+
+	public static function getRandomPrompt(): ?Prompt
+	{
+		$storage = Drupal::entityTypeManager()->getStorage('node');
+
+		$query = $storage
+			->getQuery()
+			->accessCheck(true)
+			->condition('type', 'prompt')
+			->condition(
+				'field_visibility',
+				GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+			);
+
+		$nids = $query->execute();
+		if (empty($nids)) {
+			return null;
+		}
+
+		$randomNid = $nids[array_rand($nids)];
+		$node = Node::load($randomNid);
+		if (!$node) {
+			return null;
+		}
+
+		return self::nodeToPrompt($node);
 	}
 }

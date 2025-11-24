@@ -265,4 +265,25 @@ class ArticlesHelper
 
 		return $node;
 	}
+
+	public static function getRandomArticle(): ?Article
+	{
+		$query = Drupal::entityQuery('node')
+			->accessCheck(true)
+			->condition('type', 'article')
+			->condition('status', 1);
+
+		$nids = $query->execute();
+		if (empty($nids)) {
+			return null;
+		}
+
+		$randomNid = $nids[array_rand($nids)];
+		$node = Node::load($randomNid);
+		if (!$node) {
+			return null;
+		}
+
+		return self::nodeToArticle($node);
+	}
 }

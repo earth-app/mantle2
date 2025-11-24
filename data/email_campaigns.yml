@@ -1,0 +1,59 @@
+- id: verify_email
+  title: Verify Your Email Address
+  filter: unverifiedFilter
+  unsubscribable: false
+  interval: 86400 # 1 day
+  body: |-
+    Hello @{user.username},
+
+    We've noticed you haven't verified your email yet. Please navigate to the link below to verify your email address and unlock all features of your account:
+
+    https://app.earth-app.com/verify-email
+
+    Verify your email to ensure you receive important updates and notifications from us, or to stop these reminders.
+- id: welcome_back
+  title: We Miss You at Earth App!
+  filter: inactiveFilter
+  interval: 604800 # 7 days
+  body: |-
+    Hey @{user.username},
+
+    We've noticed you haven't logged into your Earth App account for a while. We miss you!
+
+    The Earth App is designed to help you learn new things, discover new activities, and learn about the world around you.
+    Come back and explore the latest features and updates we've added to enhance your experience.
+
+    Log in now: https://app.earth-app.com/login
+
+    We look forward to seeing you again soon!
+- id: insights
+  title: Insights from The Earth App
+  filter: verifiedFilter
+  interval: 259200 # 3 days
+  body: |-
+    {user.first_name},
+
+    Here's some interesting insights from The Earth App to brighten your day and expand your knowledge:
+
+    ## Your Activities
+
+    {activity.recommended}
+    {activity.random}
+
+    ## A Fun Prompt
+
+    {prompts.random}
+
+    ## An Interesting Read
+
+    {article.random}
+- id: daily_article
+  title: Your Daily Earth App Article
+  filter: verifiedFilter
+  interval: 86400 # 1 day
+  body: |-
+    {user.first_name},
+
+    Here's your daily article from The Earth App:
+
+    {article.random}

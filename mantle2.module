@@ -1,6 +1,7 @@
 <?php
 
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Serialization\Yaml;
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 
@@ -27,6 +28,37 @@ function mantle2_mail($key, &$message, $params)
 	/** @var \Drupal\mantle2\Service\HTMLFactory $parser */
 	$parser = Drupal::service('mantle2.parser');
 
+	// email campaigns that may include unsubscribe links
+	if (str_starts_with($key, 'campaign:')) {
+		$key = substr($key, 9);
+		$campaign = CampaignHelper::getCampaign($key);
+
+		if ($campaign) {
+			$message['subject'] = $campaign['title'];
+			$markdown = $campaign['body'];
+			$unsubscribable = $campaign['unsubscribable'] ?? false;
+
+			$message['body'][] = $parser->toHtml(
+				$markdown,
+				true,
+				$params['unsubscribe_url'] ?? null,
+			);
+
+			if ($unsubscribable && isset($params['unsubscribe_api_url'])) {
+				$message['headers']['List-Unsubscribe'] =
+					'<' . $params['unsubscribe_api_url'] . '>';
+				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+			}
+
+			return;
+		}
+	}
+
+	// determine if this email should include unsubscribe
+	$includeUnsubscribe = in_array($key, ['new_login', 'new_password'], true);
+	$unsubscribeUrl = $params['unsubscribe_url'] ?? null; // Frontend URL for body link
+	$unsubscribeApiUrl = $params['unsubscribe_api_url'] ?? null; // API URL for headers
+
 	switch ($key) {
 		case 'email_verification':
 			$message['subject'] = 'The Earth App - Email Verification Code';
@@ -35,7 +67,7 @@ function mantle2_mail($key, &$message, $params)
 			This code will expire in 15 minutes.\n
 			If you did not request this verification, please ignore this email.";
 
-			$message['body'][] = $parser->toHtml($markdown);
+			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'new_login':
 			$message['subject'] = 'The Earth App - New Login Notification';
@@ -49,7 +81,7 @@ function mantle2_mail($key, &$message, $params)
 			If this was you, you can safely ignore this email.\n
 			If you did not log in, please reset your password immediately to secure your account.";
 
-			$message['body'][] = $parser->toHtml($markdown);
+			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
 			break;
 		case 'email_change_notification':
 			$message['subject'] = 'The Earth App - Email Change Notification';
@@ -59,7 +91,7 @@ function mantle2_mail($key, &$message, $params)
 			New Email: **{$params['new_email']}**\n\n
 			If you did not perform this action, please contact support immediately to secure your account.";
 
-			$message['body'][] = $parser->toHtml($markdown);
+			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'email_change_verification':
 			$message['subject'] = 'The Earth App - Email Change Verification Code';
@@ -68,7 +100,7 @@ function mantle2_mail($key, &$message, $params)
 			This code will expire in 15 minutes.\n
 			If you did not request this verification, please ignore this email.";
 
-			$message['body'][] = $parser->toHtml($markdown);
+			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'email_change_confirmed':
 			$message['subject'] = 'The Earth App - Email Change Confirmation';
@@ -78,7 +110,7 @@ function mantle2_mail($key, &$message, $params)
 			New Email: **{$params['new_email']}**\n\n
 			If you did not perform this action, please contact support immediately to secure your account.";
 
-			$message['body'][] = $parser->toHtml($markdown);
+			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'password_reset':
 			$message['subject'] = 'The Earth App - Password Reset';
@@ -89,7 +121,7 @@ function mantle2_mail($key, &$message, $params)
 			This link will expire in 1 hour.\n\n
 			If you did not request this password reset, please ignore this email and your password will remain unchanged.";
 
-			$message['body'][] = $parser->toHtml($markdown);
+			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'new_password':
 			$message['subject'] = 'The Earth App - Password Reset';
@@ -97,8 +129,14 @@ function mantle2_mail($key, &$message, $params)
 			$markdown = 'Your password has been successfully changed.\n\n
 				If you did not perform this action, please reset your password immediately to secure your account.';
 
-			$message['body'][] = $parser->toHtml($markdown);
+			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
 			break;
+	}
+
+	// Add List-Unsubscribe headers for compatible emails (using API URL)
+	if ($includeUnsubscribe && $unsubscribeApiUrl) {
+		$message['headers']['List-Unsubscribe'] = '<' . $unsubscribeApiUrl . '>';
+		$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
 	}
 }
 

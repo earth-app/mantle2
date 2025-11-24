@@ -153,4 +153,20 @@ class ActivityHelper
 
 		$node->delete();
 	}
+
+	public static function getRandomActivity(): ?Activity
+	{
+		$query = \Drupal::entityQuery('node')->condition('type', 'activity')->accessCheck(false);
+
+		$nids = $query->execute();
+
+		if (empty($nids)) {
+			return null;
+		}
+
+		$randomNid = $nids[array_rand($nids)];
+		$node = Node::load($randomNid);
+
+		return $node ? self::nodeToActivity($node) : null;
+	}
 }

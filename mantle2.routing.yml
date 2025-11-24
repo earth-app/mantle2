@@ -144,6 +144,28 @@ mantle2.users.reset_password:
           format: email
   methods: [POST]
 
+mantle2.users.unsubscribe:
+  path: '/v2/users/unsubscribe'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::publicUnsubscribe'
+    _title: 'Unsubscribe from Emails'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Unsubscribe from email notifications using a secure token (no authentication required)
+    schema/200: subscriptionResponse()
+    schema/400: Invalid or expired token
+    parameters:
+      token:
+        name: token
+        in: query
+        required: true
+        description: Secure unsubscribe token from email
+        schema:
+          type: string
+  methods: [GET, POST]
+
 #region User - By ID
 mantle2.users.id.get:
   path: '/v2/users/{id}'

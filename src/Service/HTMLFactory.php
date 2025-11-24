@@ -8,10 +8,15 @@ class HTMLFactory
 	 * Convert text with basic formatting to HTML
 	 *
 	 * @param string $text The text to convert
+	 * @param bool $includeUnsubscribe Whether to include an unsubscribe link
+	 * @param string|null $unsubscribeUrl The unsubscribe URL to use
 	 * @return string The HTML output
 	 */
-	public function toHtml(string $text): string
-	{
+	public function toHtml(
+		string $text,
+		bool $includeUnsubscribe = false,
+		?string $unsubscribeUrl = null,
+	): string {
 		// Normalize line endings and trim whitespace
 		$text = trim($text);
 		$text = str_replace(["\r\n", "\r"], "\n", $text);
@@ -20,7 +25,7 @@ class HTMLFactory
 		$html = $this->convertToHtml($text);
 
 		// Wrap for email rendering
-		$html = $this->wrapEmailContent($html);
+		$html = $this->wrapEmailContent($html, $includeUnsubscribe, $unsubscribeUrl);
 
 		// Return full HTML document for email clients
 		return $this->createHtmlDocument($html);
@@ -130,25 +135,38 @@ class HTMLFactory
 	/**
 	 * Wrap email content for better rendering in email clients
 	 */
-	private function wrapEmailContent(string $html): string
-	{
+	private function wrapEmailContent(
+		string $html,
+		bool $includeUnsubscribe = false,
+		?string $unsubscribeUrl = null,
+	): string {
 		// Wrap in email-safe container and include branding details
 		$wrapper =
 			'<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">';
 		$wrapper .= $html;
 		$wrapper .= '</div>';
-		$wrapper .= $this->getBrandingHtml();
+		$wrapper .= $this->getBrandingHtml($includeUnsubscribe, $unsubscribeUrl);
 
 		return $wrapper;
 	}
 
-	private function getBrandingHtml(): string
-	{
+	private function getBrandingHtml(
+		bool $includeUnsubscribe = false,
+		?string $unsubscribeUrl = null,
+	): string {
 		$branding =
 			'<div style="margin-top: 32px; padding-top: 32px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #666;">';
 		$branding .= '<p style="margin: 0 0 8px 0;">Thank you for using The Earth App!</p>';
 		$branding .=
 			'<p style="margin: 0 0 8px 0;">If you have any questions, feel free to <a href="mailto:support@earth-app.com" style="color: #007bff; text-decoration: none;">contact our support team</a>.</p>';
+
+		if ($includeUnsubscribe && $unsubscribeUrl) {
+			$branding .=
+				'<p style="margin: 0 0 8px 0;"><a href="' .
+				htmlspecialchars($unsubscribeUrl, ENT_QUOTES, 'UTF-8') .
+				'" style="color: #007bff; text-decoration: none;">Unsubscribe from these emails</a></p>';
+		}
+
 		$branding .=
 			'<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App Logo" style="width: auto; height: 32px; margin: 16px 0; display: block;">';
 		$branding .=

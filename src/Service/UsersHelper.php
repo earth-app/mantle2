@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Service;
 
+use CampaignHelper;
 use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
@@ -1022,12 +1023,11 @@ class UsersHelper
 		$user->set('field_friends', json_encode($friends0));
 		$user->save();
 
+		$name = $user->getAccountName();
 		self::addNotification(
 			$friend,
 			Drupal::translation()->translate('New Friend Added'),
-			Drupal::translation()->translate(
-				"{$user->getDisplayName()} has added you as a friend.",
-			),
+			Drupal::translation()->translate("$name has added you as a friend."),
 			"/profile/{$user->id()}",
 			'info',
 			'system',
@@ -1048,12 +1048,11 @@ class UsersHelper
 		$user->set('field_friends', json_encode($friends0));
 		$user->save();
 
+		$name = $user->getAccountName();
 		self::addNotification(
 			$friend,
 			Drupal::translation()->translate('Friend Removed'),
-			Drupal::translation()->translate(
-				"{$user->getDisplayName()} has removed you as a friend.",
-			),
+			Drupal::translation()->translate("$name has removed you as a friend."),
 			"/profile/{$user->id()}",
 			'info',
 			'system',
@@ -1661,8 +1660,32 @@ class UsersHelper
 		);
 	}
 
-	public static function sendEmail(UserInterface $user, string $key, array $params): void
+	public static function sendEmailCampaign(string $id, UserInterface $user): bool
 	{
+		$campaign = CampaignHelper::getCampaign($id);
+		if (!$campaign) {
+			Drupal::logger('mantle2')->error('Email campaign %id not found', ['%id' => $id]);
+			return false;
+		}
+
+		self::sendEmail(
+			$user,
+			'campaign:' . $id,
+			[
+				'user' => $user,
+			],
+			$campaign['unsubscribable'] ?? true,
+		);
+
+		return true;
+	}
+
+	public static function sendEmail(
+		UserInterface $user,
+		string $key,
+		array $param,
+		bool $unsubscribable = true,
+	): void {
 		$email = $user->getEmail();
 		if (!$email) {
 			Drupal::logger('mantle2')->warning(
@@ -1674,6 +1697,30 @@ class UsersHelper
 			);
 			return;
 		}
+
+		$params = $param;
+
+		if ($unsubscribable) {
+			if (!self::isSubscribed($user, $key)) {
+				Drupal::logger('mantle2')->info(
+					'Not sending email %key to %email: user has unsubscribed.',
+					[
+						'%key' => $key,
+						'%email' => $email,
+					],
+				);
+				return;
+			}
+
+			// Add unsubscribe URLs to params
+			// Frontend URL for visible link in email body
+			$params['unsubscribe_url'] = self::getUnsubscribeUrl();
+
+			// API URL for List-Unsubscribe header (one-click)
+			$params['unsubscribe_api_url'] = self::getUnsubscribeApiUrl($user);
+		}
+
+		$params['user_obj'] = $user; // Pass user object for mail headers
 
 		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
 		$mailManager = Drupal::service('plugin.manager.mail');
@@ -2181,5 +2228,67 @@ class UsersHelper
 			'ORGANIZER' => 1_000_000,
 			default => 100,
 		};
+	}
+
+	public static function generateUnsubscribeToken(UserInterface $user): string
+	{
+		// Generate a cryptographically secure random token
+		$token = bin2hex(random_bytes(32));
+
+		$tokenKey = 'unsubscribe_token_' . $token;
+		$tokenData = [
+			'user_id' => $user->id(),
+			'email' => $user->getEmail(),
+			'timestamp' => time(),
+		];
+
+		// Store in Redis with 30 days TTL (2592000 seconds)
+		// This allows unsubscribe links to work for a reasonable period
+		RedisHelper::set($tokenKey, $tokenData, 2592000);
+
+		return $token;
+	}
+
+	public static function validateUnsubscribeToken(string $token): ?UserInterface
+	{
+		if (!$token || !ctype_xdigit($token) || strlen($token) !== 64) {
+			return null;
+		}
+
+		$tokenKey = 'unsubscribe_token_' . $token;
+		$tokenData = RedisHelper::get($tokenKey);
+
+		if (!$tokenData || !isset($tokenData['user_id'])) {
+			return null;
+		}
+
+		$user = User::load($tokenData['user_id']);
+		if (!$user) {
+			return null;
+		}
+
+		// Verify email hasn't changed (security check)
+		if ($user->getEmail() !== $tokenData['email']) {
+			return null;
+		}
+
+		return $user;
+	}
+
+	public static function revokeUnsubscribeToken(string $token): void
+	{
+		$tokenKey = 'unsubscribe_token_' . $token;
+		RedisHelper::delete($tokenKey);
+	}
+
+	public static function getUnsubscribeApiUrl(UserInterface $user): string
+	{
+		$token = self::generateUnsubscribeToken($user);
+		return 'https://api.earth-app.com/v2/users/unsubscribe?token=' . $token;
+	}
+
+	public static function getUnsubscribeUrl(): string
+	{
+		return 'https://app.earth-app.com/api/unsubscribe';
 	}
 }
