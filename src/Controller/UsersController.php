@@ -1281,6 +1281,53 @@ class UsersController extends ControllerBase
 		);
 	}
 
+	// Public Unsubscribe
+	// GET /v2/users/unsubscribe
+	// POST /v2/users/unsubscribe
+	public function publicUnsubscribe(Request $request): JsonResponse
+	{
+		$token = $request->query->get('token');
+		if (!$token) {
+			return GeneralHelper::badRequest('Missing unsubscribe token');
+		}
+
+		$user = UsersHelper::validateUnsubscribeToken($token);
+		if (!$user) {
+			return GeneralHelper::badRequest('Invalid or expired unsubscribe token');
+		}
+
+		$wasSubscribed = UsersHelper::isSubscribed($user);
+		if (!$wasSubscribed) {
+			UsersHelper::revokeUnsubscribeToken($token);
+			return new JsonResponse(
+				[
+					'message' => 'You are already unsubscribed from email notifications',
+					'subscribed' => false,
+				],
+				Response::HTTP_OK,
+			);
+		}
+
+		try {
+			UsersHelper::setSubscribed($user, false);
+			$user->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to unsubscribe user: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to unsubscribe');
+		}
+
+		UsersHelper::revokeUnsubscribeToken($token);
+		return new JsonResponse(
+			[
+				'message' => 'You have been successfully unsubscribed from email notifications',
+				'subscribed' => false,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
 	#endregion
 
 	#region User Notifications
@@ -1684,7 +1731,7 @@ class UsersController extends ControllerBase
 			$userAgent = $request->headers->get('User-Agent', 'Unknown Device');
 			$referer = $request->headers->get('Referer', 'No Referrer');
 
-			// Add notification for new IP login
+			// add notification for new IP login
 			UsersHelper::addNotification(
 				$account,
 				Drupal::translation()->translate('New Login Location'),
@@ -1709,16 +1756,17 @@ class UsersController extends ControllerBase
 				'system',
 			);
 
-			// Send new login email notification
-			UsersHelper::sendEmail($account, 'new_login', [
-				'time' => $timestamp,
-				'ip' => $currentIP,
-				'additional_ips' => $ips,
-				'user_agent' => $userAgent,
-				'referer' => $referer,
-			]);
+			if (UsersHelper::isSubscribed($account)) {
+				// send new login email notification
+				UsersHelper::sendEmail($account, 'new_login', [
+					'time' => $timestamp,
+					'ip' => $currentIP,
+					'additional_ips' => $ips,
+					'user_agent' => $userAgent,
+					'referer' => $referer,
+				]);
+			}
 
-			// Update the list of known IPs (keep only last 10 for storage efficiency)
 			$previousIPs[] = $currentIP;
 			if (count($previousIPs) > 10) {
 				$previousIPs = array_slice($previousIPs, -10);
@@ -1750,10 +1798,6 @@ class UsersController extends ControllerBase
 		return UsersHelper::findByRequest($request);
 	}
 
-	/**
-	 * Resolve a user ensuring the requester is authorized to modify it. If no id/username,
-	 * uses the current user from the request.
-	 */
 	private function resolveAuthorizedUser(
 		Request $request,
 		?string $id,

@@ -241,14 +241,15 @@ class PromptsController extends ControllerBase
 			);
 		}
 
-		$obj = new Prompt($data, $user->id(), Visibility::from($visibility));
+		// temporary id (0) for new prompt
+		$obj = new Prompt(0, $data, $user->id(), Visibility::from($visibility));
 		$node = PromptsHelper::createPrompt($obj, $user);
 		if (!$node) {
 			return GeneralHelper::internalError('Failed to create prompt');
 		}
 
 		$result = $obj->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($node->id());
+		$result['id'] = GeneralHelper::formatId($node->id()); // set real id
 		$result['owner'] = UsersHelper::serializeUser($obj->getOwner(), $user);
 		$result['responses_count'] = 0;
 		$result['has_responded'] = false;
@@ -327,7 +328,6 @@ class PromptsController extends ControllerBase
 
 				$data = PromptsHelper::nodeToPrompt($node);
 				$result = $data->jsonSerialize();
-				$result['id'] = GeneralHelper::formatId($randomNid);
 				$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
 				$result['responses_count'] = PromptsHelper::getCommentsCount($node);
 				$result['has_responded'] = $user ? PromptsHelper::hasResponded($user, $node) : null;
@@ -365,7 +365,6 @@ class PromptsController extends ControllerBase
 		}
 
 		$result = $data->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($prompt->id());
 		$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
 		$result['responses_count'] = PromptsHelper::getCommentsCount($prompt);
 		$result['has_responded'] = $user ? PromptsHelper::hasResponded($user, $prompt) : null;
@@ -445,7 +444,6 @@ class PromptsController extends ControllerBase
 		PromptsHelper::updatePrompt($prompt, $data);
 
 		$result = $data->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($prompt->id());
 		$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
 		$result['responses_count'] = PromptsHelper::getCommentsCount($prompt);
 		$result['has_responded'] = PromptsHelper::hasResponded($user, $prompt);

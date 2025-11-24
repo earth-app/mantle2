@@ -595,7 +595,7 @@ class EventsController extends ControllerBase
 			$search,
 		) {
 			if ($search) {
-				return stripos($attendee->getDisplayName(), $search) !== false;
+				return stripos($attendee->getAccountName(), $search) !== false;
 			}
 			return true;
 		});

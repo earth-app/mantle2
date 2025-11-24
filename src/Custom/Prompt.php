@@ -10,12 +10,14 @@ use JsonSerializable;
 
 class Prompt implements JsonSerializable
 {
+	private int $id;
 	private string $prompt;
 	private int $ownerId;
 	private Visibility $visibility;
 
-	public function __construct(string $prompt, int $ownerId, Visibility $visibility)
+	public function __construct(int $id, string $prompt, int $ownerId, Visibility $visibility)
 	{
+		$this->id = $id;
 		$this->prompt = $prompt;
 		$this->ownerId = $ownerId;
 		$this->visibility = $visibility;
@@ -24,12 +26,17 @@ class Prompt implements JsonSerializable
 	public function jsonSerialize(): array
 	{
 		return [
+			'id' => GeneralHelper::formatId($this->id),
 			'prompt' => $this->prompt,
 			'owner_id' => GeneralHelper::formatId($this->ownerId),
 			'visibility' => $this->visibility->value,
 		];
 	}
 
+	public function getId(): int
+	{
+		return $this->id;
+	}
 	public function getPrompt(): string
 	{
 		return $this->prompt;
