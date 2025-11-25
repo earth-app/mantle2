@@ -28,6 +28,10 @@ function mantle2_mail($key, &$message, $params)
 	/** @var \Drupal\mantle2\Service\HTMLFactory $parser */
 	$parser = Drupal::service('mantle2.parser');
 
+	/** @var \Drupal\user\UserInterface $user */
+	$user = $params['user'];
+	$username = $user->getAccountName();
+
 	// email campaigns that may include unsubscribe links
 	if (str_starts_with($key, 'campaign:')) {
 		$key = substr($key, 9);
@@ -35,7 +39,7 @@ function mantle2_mail($key, &$message, $params)
 
 		if ($campaign) {
 			$message['subject'] = $campaign['title'];
-			$markdown = $campaign['body'];
+			$markdown = CampaignHelper::runPlaceholders($campaign['body'], $user);
 			$unsubscribable = $campaign['unsubscribable'] ?? false;
 
 			$message['body'][] = $parser->toHtml(
@@ -71,8 +75,7 @@ function mantle2_mail($key, &$message, $params)
 			break;
 		case 'new_login':
 			$message['subject'] = 'The Earth App - New Login Notification';
-
-			$markdown = "Your account was just used to log in from a new device or location.\n\n
+			$markdown = "@$username, Your account was just used to log in from a new device or location.\n\n
 			**Details:**\n
 			- Time: {$params['time']}\n
 			- IP: {$params['ip']} ({$params['additional_ips']})\n
@@ -86,7 +89,7 @@ function mantle2_mail($key, &$message, $params)
 		case 'email_change_notification':
 			$message['subject'] = 'The Earth App - Email Change Notification';
 
-			$markdown = "Your email address was just requested to be changed.\n\n
+			$markdown = "@$username, Your email address was just requested to be changed.\n\n
 			Old Email: **{$params['old_email']}**\n\n
 			New Email: **{$params['new_email']}**\n\n
 			If you did not perform this action, please contact support immediately to secure your account.";
@@ -105,7 +108,7 @@ function mantle2_mail($key, &$message, $params)
 		case 'email_change_confirmed':
 			$message['subject'] = 'The Earth App - Email Change Confirmation';
 
-			$markdown = "Your email address has been successfully changed.\n\n
+			$markdown = "@$username, Your email address has been successfully changed.\n\n
 			Old Email: **{$params['old_email']}**\n\n
 			New Email: **{$params['new_email']}**\n\n
 			If you did not perform this action, please contact support immediately to secure your account.";
@@ -115,7 +118,7 @@ function mantle2_mail($key, &$message, $params)
 		case 'password_reset':
 			$message['subject'] = 'The Earth App - Password Reset';
 
-			$markdown = "We received a request to reset your password for The Earth App.\n\n
+			$markdown = "@$username, We received a request to reset your password for The Earth App.\n\n
 			Click the link below to reset your password:\n
 			{$params['reset_link']}\n\n
 			This link will expire in 1 hour.\n\n
@@ -126,8 +129,8 @@ function mantle2_mail($key, &$message, $params)
 		case 'new_password':
 			$message['subject'] = 'The Earth App - Password Reset';
 
-			$markdown = 'Your password has been successfully changed.\n\n
-				If you did not perform this action, please reset your password immediately to secure your account.';
+			$markdown = "@$username, Your password has been successfully changed.\n\n
+				If you did not perform this action, please reset your password immediately to secure your account.";
 
 			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
 			break;
