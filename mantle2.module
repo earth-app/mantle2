@@ -48,12 +48,6 @@ function mantle2_mail($key, &$message, $params)
 				$params['unsubscribe_url'] ?? null,
 			);
 
-			if ($unsubscribable && isset($params['unsubscribe_api_url'])) {
-				$message['headers']['List-Unsubscribe'] =
-					'<' . $params['unsubscribe_api_url'] . '>';
-				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-			}
-
 			return;
 		}
 	}
@@ -135,12 +129,6 @@ function mantle2_mail($key, &$message, $params)
 			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
 			break;
 	}
-
-	// Add List-Unsubscribe headers for compatible emails (using API URL)
-	if ($includeUnsubscribe && $unsubscribeApiUrl) {
-		$message['headers']['List-Unsubscribe'] = '<' . $unsubscribeApiUrl . '>';
-		$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-	}
 }
 
 function mantle2_mail_alter(&$message)
@@ -162,6 +150,25 @@ function mantle2_mail_alter(&$message)
 		$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
 		$message['params']['convert'] = false;
 	}
+
+	// Add List-Unsubscribe headers for campaign emails
+	if (str_starts_with($message['id'], 'mantle2_campaign:')) {
+		if (isset($message['params']['unsubscribe_api_url'])) {
+			$message['headers']['List-Unsubscribe'] =
+				'<' . $message['params']['unsubscribe_api_url'] . '>';
+			$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+		}
+	}
+
+	// Add List-Unsubscribe headers for specific email types
+	$unsubscribableMessages = ['mantle2_new_login', 'mantle2_new_password'];
+	if (in_array($message['id'], $unsubscribableMessages, true)) {
+		if (isset($message['params']['unsubscribe_api_url'])) {
+			$message['headers']['List-Unsubscribe'] =
+				'<' . $message['params']['unsubscribe_api_url'] . '>';
+			$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+		}
+	}
 }
 
 function mantle2_cron()
@@ -170,4 +177,7 @@ function mantle2_cron()
 	PromptsHelper::checkExpiredPrompts();
 	ArticlesHelper::checkExpiredArticles();
 	Drupal::logger('mantle2')->notice('[cron] mantle2 cron executed.');
+
+	// Run Email Campaigns
+	CampaignHelper::runEmailCampaigns();
 }

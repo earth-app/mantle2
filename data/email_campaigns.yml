@@ -2,7 +2,7 @@
   title: Verify Your Email Address
   filter: unverifiedFilter
   unsubscribable: false
-  interval: 86400 # 1 day
+  interval: 259200 # 3 days
   body: |-
     Hello @{user.username},
 
@@ -14,7 +14,7 @@
 - id: welcome_back
   title: We Miss You at The Earth App!
   filter: inactiveFilter
-  interval: 604800 # 7 days
+  interval: 777600 # 9 days
   body: |-
     Hey @{user.username},
 
@@ -29,7 +29,7 @@
 - id: insights
   title: Insights from The Earth App
   filter: verifiedFilter
-  interval: 259200 # 3 days
+  interval: 432000 # 5 days
   body: |-
     {user.first_name},
 
@@ -42,7 +42,7 @@
 
     ## A Fun Prompt
 
-    {prompts.random}
+    {prompt.random}
 
     ## An Interesting Read
 

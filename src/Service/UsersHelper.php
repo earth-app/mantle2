@@ -1718,6 +1718,11 @@ class UsersHelper
 			$params['unsubscribe_api_url'] = self::getUnsubscribeApiUrl($user);
 		}
 
+		if ($user->id() === self::cloud()->id()) {
+			// Do not send emails to root user
+			return;
+		}
+
 		$params['user_obj'] = $user; // Pass user object for mail headers
 
 		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */

@@ -58,6 +58,18 @@ class HTMLFactory
 			// Reset empty line counter
 			$emptyLineCount = 0;
 
+			// Handle headers (lines starting with #)
+			if (preg_match('/^(#{1,6})\s+(.+)$/', $trimmedLine, $matches)) {
+				if ($inList) {
+					$html .= '</ul>';
+					$inList = false;
+				}
+				$level = strlen($matches[1]); // Number of # symbols
+				$headerText = $this->formatInlineElements($matches[2]);
+				$html .= $this->formatHeader($level, $headerText);
+				continue;
+			}
+
 			// Handle unordered lists (lines starting with -)
 			if (preg_match('/^-\s+(.+)$/', $trimmedLine, $matches)) {
 				if (!$inList) {
@@ -93,6 +105,35 @@ class HTMLFactory
 	}
 
 	/**
+	 * Format header elements with appropriate styling
+	 */
+	private function formatHeader(int $level, string $text): string
+	{
+		$sizes = [
+			1 => '28px',
+			2 => '24px',
+			3 => '20px',
+			4 => '18px',
+			5 => '16px',
+			6 => '14px',
+		];
+
+		$margins = [
+			1 => '0 0 24px 0',
+			2 => '0 0 20px 0',
+			3 => '0 0 16px 0',
+			4 => '0 0 14px 0',
+			5 => '0 0 12px 0',
+			6 => '0 0 10px 0',
+		];
+
+		$fontSize = $sizes[$level] ?? $sizes[6];
+		$margin = $margins[$level] ?? $margins[6];
+
+		return "<h{$level} style=\"margin: {$margin}; font-size: {$fontSize}; font-weight: bold; color: #222;\">{$text}</h{$level}>";
+	}
+
+	/**
 	 * Format inline elements like bold, links, etc.
 	 */
 	private function formatInlineElements(string $text): string
@@ -100,11 +141,34 @@ class HTMLFactory
 		// First, escape HTML to prevent XSS
 		$text = htmlspecialchars($text, ENT_QUOTES | ENT_HTML5, 'UTF-8', false);
 
-		// Convert links [text](url) to <a href="url">text</a>
-		// Must happen before plain URL conversion to avoid double-conversion
-		$text = preg_replace(
+		// Process markdown links [text](url) which may contain nested formatting
+		// This must happen before bold/italic conversion to properly handle [**text**](url)
+		$text = preg_replace_callback(
 			'/\[([^\]]+)\]\(([^\)]+)\)/',
-			'<a href="$2" style="color: #007bff; text-decoration: none;">$1</a>',
+			function ($matches) {
+				$linkText = $matches[1];
+				$url = $matches[2];
+
+				// Process bold within link text: **text** -> <strong>text</strong>
+				$linkText = preg_replace(
+					'/\*\*(.+?)\*\*/',
+					'<strong style="font-weight: bold;">$1</strong>',
+					$linkText,
+				);
+
+				// Process italic within link text: *text* -> <em>text</em>
+				$linkText = preg_replace(
+					'/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/',
+					'<em style="font-style: italic;">$1</em>',
+					$linkText,
+				);
+
+				return '<a href="' .
+					$url .
+					'" style="color: #007bff; text-decoration: none;">' .
+					$linkText .
+					'</a>';
+			},
 			$text,
 		);
 
@@ -115,7 +179,7 @@ class HTMLFactory
 			$text,
 		);
 
-		// Convert **text** to <strong>text</strong>
+		// Convert **text** to <strong>text</strong> (for non-link text)
 		$text = preg_replace(
 			'/\*\*(.+?)\*\*/',
 			'<strong style="font-weight: bold;">$1</strong>',

@@ -136,7 +136,7 @@ class CampaignHelper
 		$desc = trim($activity->getDescription());
 		$desc = strlen($desc) > 150 ? substr($desc, 0, 147) . '...' : $desc;
 
-		return "[$name](https://app.earth-app.com/activities/$id)\n$desc\n";
+		return "[**$name**](https://app.earth-app.com/activities/$id)\n*$desc*\n";
 	}
 
 	private static function formatPrompt(Prompt $prompt): string
@@ -145,7 +145,7 @@ class CampaignHelper
 		$id = $prompt->getId();
 		$ownerUsername = $prompt->getOwner()->getAccountName();
 
-		return "[$promptText](https://app.earth-app.com/prompts/$id)\nby $ownerUsername\n";
+		return "[**$promptText**](https://app.earth-app.com/prompts/$id)\nby $ownerUsername\n";
 	}
 
 	private static function formatArticle(Article $article): string
@@ -157,6 +157,97 @@ class CampaignHelper
 		$summary = trim($article->getContent());
 		$summary = strlen($summary) > 250 ? substr($summary, 0, 247) . '...' : $summary;
 
-		return "[$title by @$author](https://app.earth-app.com/articles/$id)\n$date\n\n$summary\n";
+		return "[**$title** by @$author](https://app.earth-app.com/articles/$id)\n$date\n\n$summary\n";
+	}
+
+	// Cron Job
+
+	public static $variation = 14400; // 4 hour variation
+
+	// cron runs every hour according to drupal configuration
+	public static function runEmailCampaigns(): void
+	{
+		$campaigns = self::getCampaigns();
+		$time = Drupal::time()->getCurrentTime();
+
+		foreach ($campaigns as $campaign) {
+			if (!isset($campaign['id']) || !isset($campaign['interval'])) {
+				continue;
+			}
+
+			$campaignId = $campaign['id'];
+			$interval = (int) $campaign['interval'];
+			$filterName = $campaign['filter'] ?? null;
+
+			// Get all users
+			$userStorage = Drupal::entityTypeManager()->getStorage('user');
+			$query = $userStorage->getQuery()->condition('uid', 0, '>')->accessCheck(false);
+			$uids = $query->execute();
+
+			if (empty($uids)) {
+				continue;
+			}
+
+			$users = $userStorage->loadMultiple($uids);
+
+			foreach ($users as $user) {
+				// Check if user is subscribed
+				if (!UsersHelper::isSubscribed($user)) {
+					continue;
+				}
+
+				// Apply filter if specified
+				if ($filterName && method_exists(self::class, $filterName)) {
+					if (!self::$filterName($user)) {
+						continue;
+					}
+				}
+
+				// Check Redis for last send time
+				$redisKey = "campaign:{$campaignId}:user:{$user->id()}";
+				$lastSentData = RedisHelper::get($redisKey);
+
+				if ($lastSentData && isset($lastSentData['sent_at'])) {
+					$lastSent = (int) $lastSentData['sent_at'];
+					$nextSend = $lastSent + $interval;
+
+					// Add random variation (± $variation seconds)
+					$variation = rand(-self::$variation, self::$variation);
+					$nextSendWithVariation = $nextSend + $variation;
+
+					// Check if it's time to send
+					if ($time < $nextSendWithVariation) {
+						continue;
+					}
+				} else {
+					// First time sending - add initial random variation to stagger sends
+					$initialVariation = rand(0, self::$variation);
+					if ($time < $initialVariation) {
+						continue;
+					}
+				}
+
+				// Send the email
+				$success = UsersHelper::sendEmailCampaign($campaignId, $user);
+
+				if ($success) {
+					// Store send time in Redis with TTL slightly longer than interval
+					$ttl = $interval + self::$variation * 2 + 86400; // Add extra day buffer
+					RedisHelper::set(
+						$redisKey,
+						[
+							'sent_at' => $time,
+							'campaign_id' => $campaignId,
+						],
+						$ttl,
+					);
+
+					Drupal::logger('mantle2')->info('Sent campaign %campaign to user %user', [
+						'%campaign' => $campaignId,
+						'%user' => $user->id(),
+					]);
+				}
+			}
+		}
 	}
 }
