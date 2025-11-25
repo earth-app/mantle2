@@ -145,7 +145,7 @@ class CampaignHelper
 		$id = $prompt->getId();
 		$ownerUsername = $prompt->getOwner()->getAccountName();
 
-		return "[**$promptText**](https://app.earth-app.com/prompts/$id)\nby $ownerUsername\n";
+		return "[**$promptText**](https://app.earth-app.com/prompts/$id) by @$ownerUsername\n";
 	}
 
 	private static function formatArticle(Article $article): string
@@ -157,7 +157,7 @@ class CampaignHelper
 		$summary = trim($article->getContent());
 		$summary = strlen($summary) > 250 ? substr($summary, 0, 247) . '...' : $summary;
 
-		return "[**$title** by @$author](https://app.earth-app.com/articles/$id)\n$date\n\n$summary\n";
+		return "[**$title** by @$author](https://app.earth-app.com/articles/$id)\n*$date*\n\n$summary\n";
 	}
 
 	// Cron Job
@@ -170,82 +170,116 @@ class CampaignHelper
 		$campaigns = self::getCampaigns();
 		$time = Drupal::time()->getCurrentTime();
 
-		foreach ($campaigns as $campaign) {
-			if (!isset($campaign['id']) || !isset($campaign['interval'])) {
+		// Track which users have been sent a campaign this cron run
+		$sentThisRun = [];
+
+		// get all users, excluding anonymous and root user
+		$userStorage = Drupal::entityTypeManager()->getStorage('user');
+		$query = $userStorage->getQuery()->condition('uid', 1, '>')->accessCheck(false);
+		$uids = $query->execute();
+
+		if (empty($uids)) {
+			return;
+		}
+
+		$users = $userStorage->loadMultiple($uids);
+
+		/** @var \Drupal\user\UserInterface $user */
+		foreach ($users as $user) {
+			$userId = $user->id();
+
+			if (isset($sentThisRun[$userId])) {
 				continue;
 			}
 
-			$campaignId = $campaign['id'];
-			$interval = (int) $campaign['interval'];
-			$filterName = $campaign['filter'] ?? null;
-
-			// Get all users
-			$userStorage = Drupal::entityTypeManager()->getStorage('user');
-			$query = $userStorage->getQuery()->condition('uid', 0, '>')->accessCheck(false);
-			$uids = $query->execute();
-
-			if (empty($uids)) {
+			if (!UsersHelper::isSubscribed($user)) {
 				continue;
 			}
 
-			$users = $userStorage->loadMultiple($uids);
+			// find the most overdue campaign for this user and prioritize that
+			$mostOverdueCampaign = null;
+			$maxOverdueAmount = 0;
 
-			foreach ($users as $user) {
-				// Check if user is subscribed
-				if (!UsersHelper::isSubscribed($user)) {
+			foreach ($campaigns as $campaign) {
+				if (!isset($campaign['id']) || !isset($campaign['interval'])) {
 					continue;
 				}
 
-				// Apply filter if specified
+				$campaignId = $campaign['id'];
+				$interval = (int) $campaign['interval'];
+				$filterName = $campaign['filter'] ?? null;
+
+				// check filter
 				if ($filterName && method_exists(self::class, $filterName)) {
 					if (!self::$filterName($user)) {
 						continue;
 					}
 				}
 
-				// Check Redis for last send time
-				$redisKey = "campaign:{$campaignId}:user:{$user->id()}";
+				$redisKey = "campaign:{$campaignId}:user:{$userId}";
 				$lastSentData = RedisHelper::get($redisKey);
+
+				$shouldSend = false;
+				$overdueAmount = 0;
 
 				if ($lastSentData && isset($lastSentData['sent_at'])) {
 					$lastSent = (int) $lastSentData['sent_at'];
 					$nextSend = $lastSent + $interval;
 
-					// Add random variation (± $variation seconds)
+					// add random variation (+ or - $variation seconds)
 					$variation = rand(-self::$variation, self::$variation);
 					$nextSendWithVariation = $nextSend + $variation;
 
-					// Check if it's time to send
-					if ($time < $nextSendWithVariation) {
-						continue;
+					if ($time >= $nextSendWithVariation) {
+						$shouldSend = true;
+						$overdueAmount = $time - $nextSendWithVariation;
 					}
 				} else {
-					// First time sending - add initial random variation to stagger sends
+					// first time sending - add initial random variation to stagger sends
 					$initialVariation = rand(0, self::$variation);
-					if ($time < $initialVariation) {
-						continue;
+					if ($time >= $initialVariation) {
+						$shouldSend = true;
+						// for new campaigns, prioritize by how long they've been available
+						$overdueAmount = $time;
 					}
 				}
 
-				// Send the email
-				$success = UsersHelper::sendEmailCampaign($campaignId, $user);
+				// track the most overdue campaign
+				if ($shouldSend && $overdueAmount > $maxOverdueAmount) {
+					$maxOverdueAmount = $overdueAmount;
+					$mostOverdueCampaign = [
+						'id' => $campaignId,
+						'interval' => $interval,
+						'redis_key' => $redisKey,
+					];
+				}
+			}
 
+			// send the most overdue campaign if found
+			if ($mostOverdueCampaign) {
+				$success = UsersHelper::sendEmailCampaign($mostOverdueCampaign['id'], $user);
 				if ($success) {
-					// Store send time in Redis with TTL slightly longer than interval
-					$ttl = $interval + self::$variation * 2 + 86400; // Add extra day buffer
+					$ttl = $mostOverdueCampaign['interval'] + self::$variation * 2 + 86400; // Add extra day buffer
 					RedisHelper::set(
-						$redisKey,
+						$mostOverdueCampaign['redis_key'],
 						[
 							'sent_at' => $time,
-							'campaign_id' => $campaignId,
+							'campaign_id' => $mostOverdueCampaign['id'],
 						],
 						$ttl,
 					);
 
-					Drupal::logger('mantle2')->info('Sent campaign %campaign to user %user', [
-						'%campaign' => $campaignId,
-						'%user' => $user->id(),
-					]);
+					// mark that this user has received a campaign this cron run
+					$sentThisRun[$userId] = true;
+
+					Drupal::logger('mantle2')->info(
+						"Sent campaign '%campaign' to user %user (@%name)",
+						[
+							'%campaign' => $mostOverdueCampaign['id'],
+							'%user' => $userId,
+							'%name' => $user->getAccountName(),
+						],
+					);
 				}
 			}
 		}
