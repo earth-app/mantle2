@@ -531,6 +531,10 @@ class UsersHelper
 			'last_login' => date('c', $user->getLastLoginTime()),
 			'account' => [
 				'id' => GeneralHelper::formatId($user->id()),
+				'avatar_url' =>
+					'https://api.earth-app.com/v2/users/' .
+					GeneralHelper::formatId($user->id()) .
+					'/profile_photo',
 				'username' => $user->getAccountName(),
 				'first_name' => self::getFirstName($user, $requester),
 				'last_name' => self::getLastName($user, $requester),
