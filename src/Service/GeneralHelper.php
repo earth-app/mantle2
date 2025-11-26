@@ -97,10 +97,6 @@ class GeneralHelper
 				return self::badRequest("Search term '$search' too long");
 			}
 
-			if (empty($search)) {
-				$search = null; // set to null if empty
-			}
-
 			$sort = $request->query->get('sort') ?? 'desc';
 			if (!is_string($sort) || !in_array(strtolower($sort), ['asc', 'desc', 'rand'], true)) {
 				return self::badRequest(
