@@ -465,6 +465,12 @@ class UsersController extends ControllerBase
 		?string $username = null,
 	): Response {
 		$resolved = $this->resolveUser($request, $id, $username);
+		$size = $request->query->getInt('size', 1024);
+
+		if ($size < 32 || $size > 1024) {
+			return GeneralHelper::badRequest('Size must be between 32 and 1024');
+		}
+
 		if ($resolved instanceof JsonResponse) {
 			return $resolved;
 		}
@@ -476,7 +482,7 @@ class UsersController extends ControllerBase
 			return $visible;
 		}
 
-		$dataUrl = UsersHelper::getProfilePhoto($visible);
+		$dataUrl = UsersHelper::getProfilePhoto($visible, $size);
 		return GeneralHelper::fromDataURL($dataUrl);
 	}
 

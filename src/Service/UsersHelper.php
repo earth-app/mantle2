@@ -796,10 +796,14 @@ class UsersHelper
 		return new JsonResponse(self::serializeUser($user, $requester), Response::HTTP_OK);
 	}
 
-	public static function getProfilePhoto(UserInterface $user): string
+	public static function getProfilePhoto(UserInterface $user, int $size = 1024): string
 	{
 		try {
-			$res = CloudHelper::sendRequest('/v1/users/profile_photo/' . $user->id());
+			$res = CloudHelper::sendRequest(
+				'/v1/users/profile_photo/' . $user->id() . '?size=' . $size,
+				'GET',
+			);
+
 			$data = $res['data'] ?? null;
 			return $data ?: '';
 		} catch (Exception $e) {

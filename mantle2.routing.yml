@@ -264,6 +264,13 @@ mantle2.users.id.get_profile_photo:
     parameters:
       id:
         type: string
+    query:
+      size:
+        type: integer
+        minimum: 32
+        maximum: 1024
+        default: 1024
+        description: The size of the profile photo to retrieve (between 32 and 1024). Sizes that are not 32, 128, or 1024 will default to the 1024 size.
   methods: [GET]
 
 mantle2.users.id.set_profile_photo:
@@ -1069,6 +1076,13 @@ mantle2.users.username.get_profile_photo:
     parameters:
       username:
         type: string
+    query:
+      size:
+        type: integer
+        minimum: 32
+        maximum: 1024
+        default: 1024
+        description: The size of the profile photo to retrieve (between 32 and 1024). Sizes that are not 32, 128, or 1024 will default to the 1024 size.
   methods: [GET]
 
 mantle2.users.username.set_profile_photo:
@@ -1851,6 +1865,13 @@ mantle2.users.current.get_profile_photo:
     description: Retrieves the profile photo of a user according to the session ID
     schema/200/type: image/png
     schema/404: User not found
+    query:
+      size:
+        type: integer
+        minimum: 32
+        maximum: 1024
+        default: 1024
+        description: The size of the profile photo to retrieve (between 32 and 1024). Sizes that are not 32, 128, or 1024 will default to the 1024 size.
   methods: [GET]
 
 mantle2.users.current.set_profile_photo:
