@@ -120,6 +120,19 @@ class UsersController extends ControllerBase
 
 				$uids = $query->range($page * $limit, $limit)->execute();
 			}
+
+			if (empty($uids)) {
+				return new JsonResponse(
+					[
+						'page' => $page + 1,
+						'total' => $total,
+						'limit' => $limit,
+						'items' => [],
+					],
+					Response::HTTP_OK,
+				);
+			}
+
 			$users = array_filter($storage->loadMultiple($uids), function ($user) use ($request) {
 				$res = UsersHelper::checkVisibility($user, $request);
 				if ($res instanceof JsonResponse) {

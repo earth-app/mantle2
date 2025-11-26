@@ -886,7 +886,8 @@ class UsersHelper
 		if (!empty($search)) {
 			$friends = array_filter(
 				$friends,
-				fn($id) => str_contains(self::findById($id)->getAccountName(), $search),
+				fn($id) => ($u = self::findById($id)) &&
+					str_contains($u->getAccountName(), $search),
 			);
 		}
 
@@ -2063,6 +2064,13 @@ class UsersHelper
 				$nids = $query->execute();
 			}
 
+			if (empty($nids)) {
+				return [
+					'prompts' => [],
+					'total' => $count,
+				];
+			}
+
 			$nodes = $storage->loadMultiple($nids);
 
 			return [
@@ -2121,17 +2129,24 @@ class UsersHelper
 			$countQuery = clone $query;
 			$count = $countQuery->count()->execute();
 
-			// Add sorting
+			// add sorting
 			$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
 			$query->sort('created', $sortDirection);
 
 			$query->range($page * $limit, $limit);
 			$nids = $query->execute();
 
-			// Handle random sorting differently
+			// handle random sorting differently
 			if ($sort === 'rand') {
 				$nids = array_values($nids);
 				shuffle($nids);
+			}
+
+			if (empty($nids)) {
+				return [
+					'articles' => [],
+					'total' => $count,
+				];
 			}
 
 			$nodes = $storage->loadMultiple($nids);
@@ -2200,6 +2215,13 @@ class UsersHelper
 				$query->sort('created', $sortDirection);
 				$query->range($page * $limit, $limit);
 				$nids = $query->execute();
+			}
+
+			if (empty($nids)) {
+				return [
+					'events' => [],
+					'total' => $count,
+				];
 			}
 
 			$nodes = $storage->loadMultiple($nids);

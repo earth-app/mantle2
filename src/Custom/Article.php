@@ -92,7 +92,7 @@ class Article implements JsonSerializable
 		return $this->authorId;
 	}
 
-	public function getAuthor(): UserInterface
+	public function getAuthor(): ?UserInterface
 	{
 		return User::load($this->authorId);
 	}

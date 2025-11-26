@@ -51,7 +51,7 @@ class Prompt implements JsonSerializable
 		return $this->ownerId;
 	}
 
-	public function getOwner(): UserInterface
+	public function getOwner(): ?UserInterface
 	{
 		return User::load($this->ownerId);
 	}

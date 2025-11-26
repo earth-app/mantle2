@@ -143,7 +143,8 @@ class CampaignHelper
 	{
 		$promptText = $prompt->getPrompt();
 		$id = $prompt->getId();
-		$ownerUsername = $prompt->getOwner()->getAccountName();
+		$owner = $prompt->getOwner();
+		$ownerUsername = $owner ? $owner->getAccountName() : 'Unknown';
 
 		return "[**$promptText**](https://app.earth-app.com/prompts/$id) by @$ownerUsername\n";
 	}
@@ -151,7 +152,8 @@ class CampaignHelper
 	private static function formatArticle(Article $article): string
 	{
 		$title = $article->getTitle();
-		$author = $article->getAuthor()->getAccountName();
+		$authorObj = $article->getAuthor();
+		$author = $authorObj ? $authorObj->getAccountName() : 'Unknown';
 		$date = date('F j, Y', $article->getCreatedAt());
 		$id = $article->getId();
 		$summary = trim($article->getContent());
