@@ -51,6 +51,8 @@ class UsersController extends ControllerBase
 		$isAdmin = $requester && UsersHelper::isAdmin($requester);
 
 		try {
+			$storage = Drupal::entityTypeManager()->getStorage('user');
+
 			// Handle random sorting separately using database query
 			if ($sort === 'rand') {
 				$connection = Drupal::database();
@@ -89,7 +91,6 @@ class UsersController extends ControllerBase
 				$uids = $query->execute()->fetchCol();
 			} else {
 				// Use entity query for normal sorting
-				$storage = Drupal::entityTypeManager()->getStorage('user');
 				$query = $storage->getQuery()->accessCheck(false)->condition('uid', 0, '!='); // Exclude anonymous user
 
 				if (!$isAdmin) {
@@ -120,31 +121,8 @@ class UsersController extends ControllerBase
 				$uids = $query->range($page * $limit, $limit)->execute();
 			}
 
-			if (!$uids || empty($uids)) {
-				return new JsonResponse(
-					[
-						'page' => $page + 1,
-						'total' => $total,
-						'limit' => $limit,
-						'items' => [],
-					],
-					Response::HTTP_OK,
-				);
-			}
-
 			/** @var UserInterface[] $loaded */
 			$loaded = $storage->loadMultiple($uids);
-			if (!$loaded || empty($loaded)) {
-				return new JsonResponse(
-					[
-						'page' => $page + 1,
-						'total' => $total,
-						'limit' => $limit,
-						'items' => [],
-					],
-					Response::HTTP_OK,
-				);
-			}
 
 			$users = array_filter($loaded, function ($user) use ($request) {
 				$res = UsersHelper::checkVisibility($user, $request);

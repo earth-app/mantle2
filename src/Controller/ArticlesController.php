@@ -41,6 +41,8 @@ class ArticlesController extends ControllerBase
 		$sort = $pagination['sort'];
 
 		try {
+			$storage = Drupal::entityTypeManager()->getStorage('node');
+
 			// Handle random sorting separately using database query
 			if ($sort === 'rand') {
 				$connection = Drupal::database();
@@ -77,7 +79,6 @@ class ArticlesController extends ControllerBase
 				$nids = $query->execute()->fetchCol();
 			} else {
 				// Use entity query for normal sorting
-				$storage = Drupal::entityTypeManager()->getStorage('node');
 				$query = $storage->getQuery()->accessCheck(false)->condition('type', 'article');
 
 				if ($search) {
