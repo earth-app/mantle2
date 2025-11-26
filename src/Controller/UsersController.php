@@ -49,7 +49,6 @@ class UsersController extends ControllerBase
 
 		// Determine visibility filter based on requester
 		$isAdmin = $requester && UsersHelper::isAdmin($requester);
-		$isLoggedIn = $requester !== null;
 
 		try {
 			// Handle random sorting separately using database query
@@ -121,7 +120,7 @@ class UsersController extends ControllerBase
 				$uids = $query->range($page * $limit, $limit)->execute();
 			}
 
-			if (empty($uids)) {
+			if (!$uids || empty($uids)) {
 				return new JsonResponse(
 					[
 						'page' => $page + 1,
@@ -133,7 +132,21 @@ class UsersController extends ControllerBase
 				);
 			}
 
-			$users = array_filter($storage->loadMultiple($uids), function ($user) use ($request) {
+			/** @var UserInterface[] $loaded */
+			$loaded = $storage->loadMultiple($uids);
+			if (!$loaded || empty($loaded)) {
+				return new JsonResponse(
+					[
+						'page' => $page + 1,
+						'total' => $total,
+						'limit' => $limit,
+						'items' => [],
+					],
+					Response::HTTP_OK,
+				);
+			}
+
+			$users = array_filter($loaded, function ($user) use ($request) {
 				$res = UsersHelper::checkVisibility($user, $request);
 				if ($res instanceof JsonResponse) {
 					return false;
