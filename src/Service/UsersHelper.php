@@ -1723,7 +1723,7 @@ class UsersHelper
 			return;
 		}
 
-		$params['user_obj'] = $user; // Pass user object for mail headers
+		$params['user'] = $user; // Pass user object for mail headers
 
 		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
 		$mailManager = Drupal::service('plugin.manager.mail');

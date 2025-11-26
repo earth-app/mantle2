@@ -29,7 +29,13 @@ function mantle2_mail($key, &$message, $params)
 	$parser = Drupal::service('mantle2.parser');
 
 	/** @var \Drupal\user\UserInterface $user */
-	$user = $params['user'];
+	$user = $params['user'] ?? null;
+	if (!$user) {
+		Drupal::logger('mantle2')->error('No user object provided for email key: %key', [
+			'%key' => $key,
+		]);
+		return;
+	}
 	$username = $user->getAccountName();
 
 	// email campaigns that may include unsubscribe links
@@ -40,7 +46,6 @@ function mantle2_mail($key, &$message, $params)
 		if ($campaign) {
 			$message['subject'] = $campaign['title'];
 			$markdown = CampaignHelper::runPlaceholders($campaign['body'], $user);
-			$unsubscribable = $campaign['unsubscribable'] ?? false;
 
 			$message['body'][] = $parser->toHtml(
 				$markdown,
@@ -55,7 +60,6 @@ function mantle2_mail($key, &$message, $params)
 	// determine if this email should include unsubscribe
 	$includeUnsubscribe = in_array($key, ['new_login', 'new_password'], true);
 	$unsubscribeUrl = $params['unsubscribe_url'] ?? null; // Frontend URL for body link
-	$unsubscribeApiUrl = $params['unsubscribe_api_url'] ?? null; // API URL for headers
 
 	switch ($key) {
 		case 'email_verification':
