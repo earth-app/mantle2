@@ -157,7 +157,7 @@ class CampaignHelper
 		$date = date('F j, Y', $article->getCreatedAt());
 		$id = $article->getId();
 		$summary = trim($article->getContent());
-		$summary = strlen($summary) > 250 ? substr($summary, 0, 247) . '...' : $summary;
+		$summary = strlen($summary) > 500 ? substr($summary, 0, 497) . '...' : $summary;
 
 		return "[**$title** by @$author](https://app.earth-app.com/articles/$id)\n*$date*\n\n$summary\n";
 	}
