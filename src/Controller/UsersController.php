@@ -262,14 +262,6 @@ class UsersController extends ControllerBase
 			);
 		}
 
-		if (strlen($firstName) < 2 || strlen($firstName) > 50) {
-			return GeneralHelper::badRequest('First name must be between 2 and 50 characters');
-		}
-
-		if (strlen($lastName) < 2 || strlen($lastName) > 50) {
-			return GeneralHelper::badRequest('Last name must be between 2 and 50 characters');
-		}
-
 		if (!preg_match('/' . Mantle2Schemas::$username['pattern'] . '/', $username)) {
 			return GeneralHelper::badRequest(
 				'Username must be 3-30 characters long and can only contain letters, numbers, underscores, dashes, and periods.',
@@ -280,6 +272,18 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest(
 				'Password must be 8-100 characters long and can only contain letters, numbers, and special characters.',
 			);
+		}
+
+		if ($firstName) {
+			if (strlen($firstName) < 2 || strlen($firstName) > 50) {
+				return GeneralHelper::badRequest('First name must be between 2 and 50 characters');
+			}
+		}
+
+		if ($lastName) {
+			if (strlen($lastName) < 2 || strlen($lastName) > 50) {
+				return GeneralHelper::badRequest('Last name must be between 2 and 50 characters');
+			}
 		}
 
 		if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
