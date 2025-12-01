@@ -369,7 +369,7 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		$firstName = $user->get('field_first_name')->value ?? 'John';
+		$firstName = $user->get('field_first_name')->value ?? null;
 		return self::tryVisible($firstName, $user, $requester, $privacy['name'] ?? 'PUBLIC');
 	}
 
@@ -378,7 +378,7 @@ class UsersHelper
 		?UserInterface $requester = null,
 	): ?string {
 		$privacy = self::getFieldPrivacy($user);
-		$lastName = $user->get('field_last_name')->value ?? 'Doe';
+		$lastName = $user->get('field_last_name')->value ?? null;
 		return self::tryVisible($lastName, $user, $requester, $privacy['name'] ?? 'PUBLIC');
 	}
 
