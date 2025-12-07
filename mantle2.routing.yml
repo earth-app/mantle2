@@ -986,7 +986,7 @@ mantle2.users.username.get:
     _title: 'Retrieve User by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users
     description: Retrieves user information by their username
@@ -1004,7 +1004,7 @@ mantle2.users.username.patch:
     _title: 'Update User by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users
     description: Updates user information by their username
@@ -1026,7 +1026,7 @@ mantle2.users.username.delete:
     _title: 'Delete User by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users
     schema/204: User deleted successfully
@@ -1045,7 +1045,7 @@ mantle2.users.username.patch_field_privacy:
     _title: 'Edit User Field Privacy by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users
     description: Updates user field privacy settings by their username
@@ -1067,7 +1067,7 @@ mantle2.users.username.get_profile_photo:
     _title: 'Get User Profile Photo by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users
     description: Retrieves the profile photo of a user by their username
@@ -1092,7 +1092,7 @@ mantle2.users.username.set_profile_photo:
     _title: 'Set User Profile Photo by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users
     description: Updates the profile photo of a user by their username
@@ -1112,7 +1112,7 @@ mantle2.users.username.set_account_type:
     _title: 'Set User Account Type by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users
     description: Updates user account type by their username
@@ -1138,7 +1138,7 @@ mantle2.users.username.activities:
     _title: 'Get User Activities by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Activities
     description: Retrieves user activities by their username
@@ -1156,7 +1156,7 @@ mantle2.users.username.activities.set:
     _title: 'Set User Activities by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Activities
     description: Updates user activities by their username
@@ -1178,7 +1178,7 @@ mantle2.users.username.activities.add:
     _title: 'Add User Activity by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Activities
     description: Updates user activities by their username
@@ -1203,7 +1203,7 @@ mantle2.users.username.activities.remove:
     _title: 'Remove User Activity by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
     activityId: '\d+'
   options:
     tags: Users,Activities
@@ -1229,7 +1229,7 @@ mantle2.users.username.activities.recommend:
     _title: 'Recommend Activities for User by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Activities
     description: Recommends activities for the user by their username
@@ -1247,7 +1247,7 @@ mantle2.users.username.friends:
     _title: 'Get User Friends by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Friends
     description: Retrieves user friends by their username
@@ -1286,7 +1286,7 @@ mantle2.users.username.friends.add:
     _title: 'Add User Friend by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Friends
     description: Adds a friend for the user by their username
@@ -1312,7 +1312,7 @@ mantle2.users.username.friends.remove:
     _title: 'Remove User Friend by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Friends
     description: Removes a friend for the user by their username
@@ -1337,7 +1337,7 @@ mantle2.users.username.circle:
     _title: "Get User's Circle by Username"
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Friends
     description: Retrieves a user's circle (their close friends) by their username
@@ -1372,7 +1372,7 @@ mantle2.users.username.circle.add:
     _title: "Add User to Circle by User's Username"
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Friends
     description: Adds a user to their circle by their username
@@ -1398,7 +1398,7 @@ mantle2.users.username.circle.remove:
     _title: "Remove User from Circle by User's Username"
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Friends
     description: Removes a user from their circle by their username
@@ -1423,7 +1423,7 @@ mantle2.users.username.send_email_verification:
     _title: 'Send Email Verification for User by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Email Verification
     description: Sends an email verification code to the specified user's email address
@@ -1445,7 +1445,7 @@ mantle2.users.username.verify_email:
     _title: 'Verify Email for User by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Email Verification
     description: Verifies the specified user's email using an 8-digit verification code
@@ -1473,7 +1473,7 @@ mantle2.users.username.change_password:
     _title: 'Change Password for User by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Password
     description: Changes password for a user using either a reset token or current password verification
