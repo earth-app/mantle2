@@ -53,6 +53,12 @@ function mantle2_mail($key, &$message, $params)
 				$params['unsubscribe_url'] ?? null,
 			);
 
+			if (isset($params['unsubscribe_api_url'])) {
+				$message['headers']['List-Unsubscribe'] =
+					'<' . $params['unsubscribe_api_url'] . '>';
+				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+			}
+
 			return;
 		}
 	}
@@ -83,6 +89,12 @@ function mantle2_mail($key, &$message, $params)
 			If you did not log in, please reset your password immediately to secure your account.";
 
 			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
+
+			if (isset($params['unsubscribe_api_url'])) {
+				$message['headers']['List-Unsubscribe'] =
+					'<' . $params['unsubscribe_api_url'] . '>';
+				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+			}
 			break;
 		case 'email_change_notification':
 			$message['subject'] = 'The Earth App - Email Change Notification';
@@ -131,6 +143,12 @@ function mantle2_mail($key, &$message, $params)
 				If you did not perform this action, please reset your password immediately to secure your account.";
 
 			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
+
+			if (isset($params['unsubscribe_api_url'])) {
+				$message['headers']['List-Unsubscribe'] =
+					'<' . $params['unsubscribe_api_url'] . '>';
+				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+			}
 			break;
 	}
 }

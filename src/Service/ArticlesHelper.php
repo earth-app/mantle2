@@ -286,4 +286,21 @@ class ArticlesHelper
 
 		return self::nodeToArticle($node);
 	}
+
+	public static function getRandomArticles(int $count = 1): array
+	{
+		$query = Drupal::entityQuery('node')
+			->accessCheck(true)
+			->condition('type', 'article')
+			->condition('status', 1)
+			->range(0, $count);
+
+		$nids = $query->execute();
+		if (empty($nids)) {
+			return [];
+		}
+
+		$nodes = Node::loadMultiple($nids);
+		return array_map([self::class, 'nodeToArticle'], $nodes);
+	}
 }

@@ -79,7 +79,7 @@ class CampaignHelper
 		$placeholders = [
 			// User
 			'{user.id}' => fn() => $user->id(),
-			'{user.identifier' => fn() => UsersHelper::getName($user, UsersHelper::cloud()) ??
+			'{user.identifier}' => fn() => UsersHelper::getName($user, UsersHelper::cloud()) ??
 				"@{$user->getAccountName()}",
 			'{user.first_name}' => fn() => UsersHelper::getFirstName($user, UsersHelper::cloud()) ??
 				$user->getAccountName(),
@@ -99,15 +99,39 @@ class CampaignHelper
 				$activity = ActivityHelper::getRandomActivity();
 				return $activity ? self::formatActivity($activity) : 'No random activity found';
 			},
+			'{activity.weekly}' => function () {
+				$activities = ActivityHelper::getRandomActivities(6);
+				if (empty($activities)) {
+					return 'No weekly activities found';
+				}
+
+				return implode("\n", array_map([self::class, 'formatActivity'], $activities));
+			},
 			// Prompts
 			'{prompt.random}' => function () {
 				$prompt = PromptsHelper::getRandomPrompt();
 				return $prompt ? self::formatPrompt($prompt) : 'No random prompt found';
 			},
+			'{prompt.weekly}' => function () {
+				$prompts = PromptsHelper::getRandomPrompts();
+				if (empty($prompts)) {
+					return 'No weekly prompts found';
+				}
+
+				return implode("\n", array_map([self::class, 'formatPrompt'], $prompts));
+			},
 			// Articles
 			'{article.random}' => function () {
 				$article = ArticlesHelper::getRandomArticle();
 				return $article ? self::formatArticle($article) : 'No random article found';
+			},
+			'{article.weekly}' => function () {
+				$articles = ArticlesHelper::getRandomArticles(3);
+				if (empty($articles)) {
+					return 'No weekly articles found';
+				}
+
+				return implode("\n", array_map([self::class, 'formatArticle'], $articles));
 			},
 		];
 
@@ -123,10 +147,11 @@ class CampaignHelper
 	private static function getRecommendedActivity(UserInterface $user): ?Activity
 	{
 		$activities = UsersHelper::recommendActivities($user, 100);
-		return array_filter(
+		$filtered = array_filter(
 			$activities,
 			fn($activity) => $activity != null && $activity instanceof Activity,
-		)[0] ?? null;
+		);
+		return $filtered ? reset($filtered) : null;
 	}
 
 	private static function formatActivity(Activity $activity): string
@@ -134,7 +159,7 @@ class CampaignHelper
 		$name = $activity->getName();
 		$id = $activity->getId();
 		$desc = trim($activity->getDescription());
-		$desc = strlen($desc) > 150 ? substr($desc, 0, 147) . '...' : $desc;
+		$desc = strlen($desc) > 250 ? substr($desc, 0, 247) . '...' : $desc;
 
 		return "[**$name**](https://app.earth-app.com/activities/$id)\n*$desc*\n";
 	}
@@ -157,7 +182,7 @@ class CampaignHelper
 		$date = date('F j, Y', $article->getCreatedAt());
 		$id = $article->getId();
 		$summary = trim($article->getContent());
-		$summary = strlen($summary) > 500 ? substr($summary, 0, 497) . '...' : $summary;
+		$summary = strlen($summary) > 700 ? substr($summary, 0, 697) . '...' : $summary;
 
 		return "[**$title** by @$author](https://app.earth-app.com/articles/$id)\n*$date*\n\n$summary\n";
 	}

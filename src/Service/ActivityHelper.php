@@ -169,4 +169,20 @@ class ActivityHelper
 
 		return $node ? self::nodeToActivity($node) : null;
 	}
+
+	public static function getRandomActivities(int $count = 5): array
+	{
+		$query = \Drupal::entityQuery('node')
+			->condition('type', 'activity')
+			->accessCheck(false)
+			->range(0, $count);
+
+		$nids = $query->execute();
+
+		if (empty($nids)) {
+			return [];
+		}
+
+		return array_map(fn($nid) => self::getActivityByNid($nid), $nids);
+	}
 }

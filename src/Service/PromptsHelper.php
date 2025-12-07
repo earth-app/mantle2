@@ -443,4 +443,27 @@ class PromptsHelper
 
 		return self::nodeToPrompt($node);
 	}
+
+	public static function getRandomPrompts(int $count = 5): array
+	{
+		$storage = Drupal::entityTypeManager()->getStorage('node');
+
+		$query = $storage
+			->getQuery()
+			->accessCheck(true)
+			->condition('type', 'prompt')
+			->condition(
+				'field_visibility',
+				GeneralHelper::findOrdinal(Visibility::cases(), Visibility::PUBLIC),
+			)
+			->range(0, $count);
+
+		$nids = $query->execute();
+		if (empty($nids)) {
+			return [];
+		}
+
+		$nodes = $storage->loadMultiple($nids);
+		return array_map([self::class, 'nodeToPrompt'], $nodes);
+	}
 }

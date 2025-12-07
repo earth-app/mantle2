@@ -1708,7 +1708,7 @@ class UsersHelper
 		}
 
 		if ($unsubscribable) {
-			if (!self::isSubscribed($user, $key)) {
+			if (!self::isSubscribed($user)) {
 				Drupal::logger('mantle2')->info(
 					'Not sending email %key to %email: user has unsubscribed.',
 					[
