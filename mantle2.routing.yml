@@ -227,6 +227,66 @@ mantle2.users.oauth.facebook:
     schema/401: Invalid OAuth token
   methods: [POST]
 
+mantle2.users.oauth.discord.unlink:
+  path: '/v2/users/oauth/discord'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unlinkOAuthDiscord'
+    _title: 'Unlink Discord OAuth'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Unlink Discord OAuth provider from your account'
+    schema/200: user()
+    schema/400: Invalid or missing id_token, or cannot unlink only login method
+    schema/401: Invalid OAuth token or not authenticated
+  methods: [DELETE]
+
+mantle2.users.oauth.github.unlink:
+  path: '/v2/users/oauth/github'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unlinkOAuthGitHub'
+    _title: 'Unlink GitHub OAuth'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Unlink GitHub OAuth provider from your account'
+    schema/200: user()
+    schema/400: Invalid or missing id_token, or cannot unlink only login method
+    schema/401: Invalid OAuth token or not authenticated
+  methods: [DELETE]
+
+mantle2.users.oauth.microsoft.unlink:
+  path: '/v2/users/oauth/microsoft'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unlinkOAuthMicrosoft'
+    _title: 'Unlink Microsoft OAuth'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Unlink Microsoft OAuth provider from your account'
+    schema/200: user()
+    schema/400: Invalid or missing id_token, or cannot unlink only login method
+    schema/401: Invalid OAuth token or not authenticated
+  methods: [DELETE]
+
+mantle2.users.oauth.facebook.unlink:
+  path: '/v2/users/oauth/facebook'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unlinkOAuthFacebook'
+    _title: 'Unlink Facebook OAuth'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Unlink Facebook OAuth provider from your account'
+    schema/200: user()
+    schema/400: Invalid or missing id_token, or cannot unlink only login method
+    schema/401: Invalid OAuth token or not authenticated
+  methods: [DELETE]
+
 #endregion
 
 #region User - By ID

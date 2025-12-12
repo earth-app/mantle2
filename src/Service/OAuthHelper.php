@@ -181,6 +181,41 @@ class OAuthHelper
 		return $linked;
 	}
 
+	// unlink OAuth provider from user
+	public static function unlinkProvider(UserInterface $user, string $provider): bool
+	{
+		// validate provider is supported
+		if (!in_array($provider, self::$providers)) {
+			return false;
+		}
+
+		// check if provider is actually linked
+		if (!self::hasProviderLinked($user, $provider)) {
+			return false;
+		}
+
+		// safety check: ensure user has another way to log in
+		$linkedProviders = self::getLinkedProviders($user);
+		$hasPassword = UsersHelper::hasPassword($user);
+
+		// prevent unlinking if this is the only login method
+		if (count($linkedProviders) === 1 && !$hasPassword) {
+			return false;
+		}
+
+		$user->set("field_oauth_{$provider}_sub", null);
+
+		try {
+			$user->save();
+			return true;
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to unlink OAuth provider: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return false;
+		}
+	}
+
 	// find unique username based on base string
 	private static function generateUniqueUsername(string $base): string
 	{
@@ -191,7 +226,6 @@ class OAuthHelper
 			return $username;
 		}
 
-		// add number suffix if username exists
 		$counter = 1;
 		while (true) {
 			$testUsername = substr($username, 0, 27) . $counter;

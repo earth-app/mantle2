@@ -1594,6 +1594,30 @@ class UsersController extends ControllerBase
 		return $this->handleOAuthLogin($request, 'github');
 	}
 
+	// DELETE /v2/users/oauth/microsoft
+	public function unlinkOAuthMicrosoft(Request $request): JsonResponse
+	{
+		return $this->handleOAuthUnlink($request, 'microsoft');
+	}
+
+	// DELETE /v2/users/oauth/facebook
+	public function unlinkOAuthFacebook(Request $request): JsonResponse
+	{
+		return $this->handleOAuthUnlink($request, 'facebook');
+	}
+
+	// DELETE /v2/users/oauth/discord
+	public function unlinkOAuthDiscord(Request $request): JsonResponse
+	{
+		return $this->handleOAuthUnlink($request, 'discord');
+	}
+
+	// DELETE /v2/users/oauth/github
+	public function unlinkOAuthGitHub(Request $request): JsonResponse
+	{
+		return $this->handleOAuthUnlink($request, 'github');
+	}
+
 	private function handleOAuthLogin(Request $request, string $provider)
 	{
 		if (!in_array($provider, OAuthHelper::$providers, true)) {
@@ -1632,24 +1656,69 @@ class UsersController extends ControllerBase
 		return new JsonResponse($data, Response::HTTP_OK);
 	}
 
+	private function handleOAuthUnlink(Request $request, string $provider): JsonResponse
+	{
+		if (!in_array($provider, OAuthHelper::$providers, true)) {
+			return GeneralHelper::badRequest('Unsupported OAuth provider: ' . $provider);
+		}
+
+		$user = UsersHelper::getOwnerOfRequest($request);
+		if (!$user) {
+			return GeneralHelper::unauthorized();
+		}
+
+		$body = json_decode((string) $request->getContent(), true);
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		$token = $body['id_token'] ?? null;
+		if (!$token || !is_string($token)) {
+			return GeneralHelper::badRequest('Missing or invalid id_token');
+		}
+
+		$userData = OAuthHelper::validateToken($provider, $token);
+		if (!$userData) {
+			return GeneralHelper::unauthorized('Invalid OAuth token');
+		}
+
+		if (!OAuthHelper::hasProviderLinked($user, $provider)) {
+			return GeneralHelper::badRequest(
+				"OAuth provider {$provider} is not linked to your account",
+			);
+		}
+
+		$success = OAuthHelper::unlinkProvider($user, $provider);
+		if (!$success) {
+			return GeneralHelper::badRequest(
+				'Cannot unlink: this is your only login method. Set a password first.',
+			);
+		}
+
+		return new JsonResponse(
+			[
+				'message' => 'OAuth provider unlinked successfully',
+				'user' => UsersHelper::serializeUser($user, $user),
+			],
+			Response::HTTP_OK,
+		);
+	}
+
 	private function createUserWithOAuth(
 		Request $request,
 		string $provider,
 		string $idToken,
 		array $body,
 	): JsonResponse {
-		// Validate provider
 		if (!in_array($provider, OAuthHelper::$providers)) {
 			return GeneralHelper::badRequest("Invalid OAuth provider: {$provider}");
 		}
 
-		// Validate token with OAuth provider
 		$userData = OAuthHelper::validateToken($provider, $idToken);
 		if (!$userData) {
 			return GeneralHelper::unauthorized('Invalid OAuth token');
 		}
 
-		// Optional: allow username override from body
 		$customUsername = isset($body['username']) ? trim(strtolower($body['username'])) : null;
 		if ($customUsername) {
 			if (!preg_match('/' . Mantle2Schemas::$username['pattern'] . '/', $customUsername)) {
@@ -1662,26 +1731,22 @@ class UsersController extends ControllerBase
 			}
 		}
 
-		// Check if user already exists with this OAuth provider
 		$existingUser = OAuthHelper::findByProviderSub($provider, $userData['sub']);
 		if ($existingUser) {
 			return GeneralHelper::conflict('Account already exists with this OAuth provider');
 		}
 
-		// Check if email is already in use
 		if ($userData['email'] && UsersHelper::findByEmail($userData['email']) !== null) {
 			return GeneralHelper::conflict(
 				'An account with this email already exists. Please log in and link your OAuth provider.',
 			);
 		}
 
-		// Create user with OAuth data
 		$user = OAuthHelper::createUserFromOAuth($provider, $userData, $customUsername);
 		if (!$user) {
 			return GeneralHelper::internalError('Failed to create user');
 		}
 
-		// Log user in and issue token
 		$this->finalizeLogin($user, $request);
 		$token = UsersHelper::issueToken($user);
 
