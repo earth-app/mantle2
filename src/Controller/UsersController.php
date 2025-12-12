@@ -1642,6 +1642,13 @@ class UsersController extends ControllerBase
 		// Find or create user
 		$user = OAuthHelper::findOrCreateUser($provider, $userData);
 		if (!$user) {
+			Drupal::logger('mantle2')->error(
+				'Failed to find or create user for OAuth provider %provider with sub %sub',
+				[
+					'%provider' => $provider,
+					'%sub' => $userData['sub'] ?? 'unknown',
+				],
+			);
 			return GeneralHelper::internalError('Failed to create or find user');
 		}
 

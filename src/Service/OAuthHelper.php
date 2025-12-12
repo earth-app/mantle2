@@ -23,6 +23,12 @@ class OAuthHelper
 			$userInfo = $client->decodeIdToken($token);
 
 			if (!$userInfo) {
+				Drupal::logger('mantle2')->error(
+					'OAuth token validation failed: no user info returned for provider %provider',
+					[
+						'%provider' => $provider,
+					],
+				);
 				return null;
 			}
 
@@ -83,51 +89,49 @@ class OAuthHelper
 		array $userData,
 		?string $customUsername = null,
 	): ?UserInterface {
-		$email = $userData['email'] ?? null;
-		$givenName = $userData['given_name'] ?? null;
-		$familyName = $userData['family_name'] ?? null;
-
-		// Determine username
-		if ($customUsername) {
-			$username = $customUsername;
-		} else {
-			// Generate from email, name, or fallback
-			if ($email) {
-				$baseUsername = explode('@', $email)[0];
-			} elseif ($givenName) {
-				$baseUsername = strtolower($givenName);
-			} else {
-				// Fallback: use provider + random suffix
-				$baseUsername = $provider . '_user_' . bin2hex(random_bytes(4));
-			}
-			$username = self::generateUniqueUsername($baseUsername);
-		}
-
-		$user = User::create([
-			'name' => $username,
-			'status' => 1,
-		]);
-
-		if ($email) {
-			$user->setEmail($email);
-			$user->set('field_email_verified', true); // OAuth emails are pre-verified
-		}
-
-		if ($givenName) {
-			$user->set('field_first_name', $givenName);
-		}
-		if ($familyName) {
-			$user->set('field_last_name', $familyName);
-		}
-
-		// store OAuth provider sub
-		$user->set("field_oauth_{$provider}_sub", $userData['sub']);
-		$user->activate();
-
 		try {
+			$email = $userData['email'] ?? null;
+			$givenName = $userData['given_name'] ?? null;
+			$familyName = $userData['family_name'] ?? null;
+
+			if ($customUsername) {
+				$username = $customUsername;
+			} else {
+				if ($email) {
+					$baseUsername = explode('@', $email)[0];
+				} elseif ($givenName) {
+					$baseUsername = strtolower($givenName);
+				} else {
+					// Fallback: use provider + random suffix
+					$baseUsername = $provider . '_user_' . bin2hex(random_bytes(4));
+				}
+				$username = self::generateUniqueUsername($baseUsername);
+			}
+
+			$user = User::create([
+				'name' => $username,
+				'status' => 1,
+			]);
+
+			if ($email) {
+				$user->setEmail($email);
+				$user->set('field_email_verified', true); // OAuth emails are pre-verified
+			}
+
+			if ($givenName) {
+				$user->set('field_first_name', $givenName);
+			}
+			if ($familyName) {
+				$user->set('field_last_name', $familyName);
+			}
+
+			// store OAuth provider sub
+			$user->set("field_oauth_{$provider}_sub", $userData['sub']);
+			$user->activate();
+
 			$user->save();
 			return $user;
-		} catch (EntityStorageException $e) {
+		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Failed to create OAuth user: %message', [
 				'%message' => $e->getMessage(),
 			]);
