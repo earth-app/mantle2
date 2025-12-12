@@ -51,19 +51,10 @@ class OAuthHelper
 	public static function findOrCreateUser(string $provider, array $userData): ?UserInterface
 	{
 		$sub = $userData['sub'];
-		$email = $userData['email'];
-
 		$existing = self::findByProviderSub($provider, $sub);
+
 		if ($existing) {
 			return $existing;
-		}
-
-		if ($email) {
-			$existingByEmail = UsersHelper::findByEmail($email);
-			if ($existingByEmail) {
-				self::linkProvider($existingByEmail, $provider, $sub);
-				return $existingByEmail;
-			}
 		}
 
 		return self::createUserFromOAuth($provider, $userData);
@@ -140,8 +131,12 @@ class OAuthHelper
 	}
 
 	// link OAuth provider to existing user
-	public static function linkProvider(UserInterface $user, string $provider, string $sub): bool
-	{
+	public static function linkProvider(
+		UserInterface $user,
+		string $provider,
+		string $sub,
+		array $userData = [],
+	): bool {
 		// check if provider is already linked to another account
 		$existingUser = self::findByProviderSub($provider, $sub);
 		if ($existingUser && $existingUser->id() !== $user->id()) {
@@ -149,6 +144,11 @@ class OAuthHelper
 		}
 
 		$user->set("field_oauth_{$provider}_sub", $sub);
+
+		if (!$user->getEmail() && !empty($userData['email'])) {
+			$user->setEmail($userData['email']);
+			$user->set('field_email_verified', true);
+		}
 
 		try {
 			$user->save();

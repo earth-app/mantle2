@@ -1639,17 +1639,53 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized('Invalid OAuth token');
 		}
 
-		// Find or create user
-		$user = OAuthHelper::findOrCreateUser($provider, $userData);
-		if (!$user) {
-			Drupal::logger('mantle2')->error(
-				'Failed to find or create user for OAuth provider %provider with sub %sub',
-				[
-					'%provider' => $provider,
-					'%sub' => $userData['sub'] ?? 'unknown',
-				],
-			);
-			return GeneralHelper::internalError('Failed to create or find user');
+		// check if this is a linking request (authenticated user)
+		$currentUser = UsersHelper::getOwnerOfRequest($request);
+		$userId = $body['user_id'] ?? null;
+
+		if ($currentUser || $userId) {
+			if (!$currentUser) {
+				return GeneralHelper::unauthorized(
+					'Authentication required to link OAuth provider',
+				);
+			}
+
+			// Check if provider already linked to another account
+			$existingProviderUser = OAuthHelper::findByProviderSub($provider, $userData['sub']);
+			if ($existingProviderUser) {
+				if ($existingProviderUser->id() === $currentUser->id()) {
+					// Already linked to this account, just log them in
+					$user = $currentUser;
+				} else {
+					return GeneralHelper::conflict(
+						'This OAuth account is already linked to a different user',
+					);
+				}
+			} else {
+				// Link provider to current user
+				$success = OAuthHelper::linkProvider(
+					$currentUser,
+					$provider,
+					$userData['sub'],
+					$userData,
+				);
+				if (!$success) {
+					return GeneralHelper::internalError('Failed to link OAuth provider');
+				}
+				$user = $currentUser;
+			}
+		} else {
+			$user = OAuthHelper::findOrCreateUser($provider, $userData);
+			if (!$user) {
+				Drupal::logger('mantle2')->error(
+					'Failed to find or create user for OAuth provider %provider with sub %sub',
+					[
+						'%provider' => $provider,
+						'%sub' => $userData['sub'] ?? 'unknown',
+					],
+				);
+				return GeneralHelper::internalError('Failed to create or find user');
+			}
 		}
 
 		$this->finalizeLogin($user, $request);
