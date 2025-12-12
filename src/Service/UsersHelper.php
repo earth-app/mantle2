@@ -555,6 +555,18 @@ class UsersHelper
 					$requester,
 					'PRIVATE',
 				),
+				'has_password' => self::tryVisible(
+					self::hasPassword($user),
+					$user,
+					$requester,
+					'PRIVATE',
+				),
+				'linked_providers' => self::tryVisible(
+					OAuthHelper::getLinkedProviders($user),
+					$user,
+					$requester,
+					'PRIVATE',
+				),
 				'subscribed' => self::tryVisible(
 					self::isSubscribed($user),
 					$user,

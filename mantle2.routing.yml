@@ -749,28 +749,6 @@ mantle2.users.id.change_password:
     body/schema: $passwordChangeFlexibleBody
   methods: [POST]
 
-mantle2.users.id.set_password:
-  path: '/v2/users/{id}/set_password'
-  defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::setPassword'
-    _title: 'Set Password for User by ID'
-  requirements:
-    _access: 'TRUE'
-    id: '\d+'
-  options:
-    tags: Users,Password
-    description: 'Sets or updates password for a user. For OAuth-only users, no old_password is required. For users with existing passwords, old_password is required.'
-    schema/200: passwordSetResponse()
-    schema/400: Bad Request
-    schema/401: Unauthorized
-    schema/403: Forbidden
-    schema/404: User not found
-    parameters:
-      id:
-        type: string
-    body/schema: $passwordSetBody
-  methods: [POST]
-
 mantle2.users.id.subscribe:
   path: '/v2/users/{id}/subscribe'
   defaults:

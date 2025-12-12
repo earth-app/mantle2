@@ -1596,6 +1596,10 @@ class UsersController extends ControllerBase
 
 	private function handleOAuthLogin(Request $request, string $provider)
 	{
+		if (!in_array($provider, OAuthHelper::$providers, true)) {
+			return GeneralHelper::badRequest('Unsupported OAuth provider: ' . $provider);
+		}
+
 		$body = json_decode((string) $request->getContent(), true);
 		if (json_last_error() !== JSON_ERROR_NONE) {
 			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
