@@ -1570,6 +1570,12 @@ class UsersController extends ControllerBase
 
 	#region OAuth Routes
 
+	// POST /v2/users/oauth/google
+	public function oauthGoogle(Request $request): JsonResponse
+	{
+		return $this->handleOAuthLogin($request, 'google');
+	}
+
 	// POST /v2/users/oauth/microsoft
 	public function oauthMicrosoft(Request $request): JsonResponse
 	{
@@ -1592,6 +1598,12 @@ class UsersController extends ControllerBase
 	public function oauthGitHub(Request $request): JsonResponse
 	{
 		return $this->handleOAuthLogin($request, 'github');
+	}
+
+	// DELETE /v2/users/oauth/google
+	public function unlinkOAuthGoogle(Request $request): JsonResponse
+	{
+		return $this->handleOAuthUnlink($request, 'google');
 	}
 
 	// DELETE /v2/users/oauth/microsoft
@@ -1629,9 +1641,10 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		$token = $body['id_token'] ?? null;
+		// Accept id_token (Microsoft) or access_token (Discord, GitHub, Facebook)
+		$token = $body['id_token'] ?? ($body['access_token'] ?? null);
 		if (!$token || !is_string($token)) {
-			return GeneralHelper::badRequest('Missing or invalid id_token');
+			return GeneralHelper::badRequest('Missing or invalid id_token or access_token');
 		}
 
 		$userData = OAuthHelper::validateToken($provider, $token);
@@ -1728,21 +1741,6 @@ class UsersController extends ControllerBase
 		$user = UsersHelper::getOwnerOfRequest($request);
 		if (!$user) {
 			return GeneralHelper::unauthorized();
-		}
-
-		$body = json_decode((string) $request->getContent(), true);
-		if (json_last_error() !== JSON_ERROR_NONE) {
-			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
-		}
-
-		$token = $body['id_token'] ?? null;
-		if (!$token || !is_string($token)) {
-			return GeneralHelper::badRequest('Missing or invalid id_token');
-		}
-
-		$userData = OAuthHelper::validateToken($provider, $token);
-		if (!$userData) {
-			return GeneralHelper::unauthorized('Invalid OAuth token');
 		}
 
 		if (!OAuthHelper::hasProviderLinked($user, $provider)) {
