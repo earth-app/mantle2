@@ -6,6 +6,7 @@ use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\node\Entity\Node;
 use Drupal\user\UserInterface;
+use Drupal;
 
 class ActivityHelper
 {
@@ -16,7 +17,7 @@ class ActivityHelper
 
 	public static function getNodeByActivityId(string $id): ?Node
 	{
-		$query = \Drupal::entityQuery('node')
+		$query = Drupal::entityQuery('node')
 			->condition('type', 'activity')
 			->condition('field_activity_id', $id)
 			->accessCheck(false)
@@ -34,7 +35,7 @@ class ActivityHelper
 
 	public static function getNodeByActivityAlias(string $alias): ?Node
 	{
-		$query = \Drupal::entityQuery('node')
+		$query = Drupal::entityQuery('node')
 			->condition('type', 'activity')
 			->condition('field_activity_aliases', $alias, 'CONTAINS')
 			->accessCheck(false)
@@ -156,7 +157,7 @@ class ActivityHelper
 
 	public static function getRandomActivity(): ?Activity
 	{
-		$query = \Drupal::entityQuery('node')->condition('type', 'activity')->accessCheck(false);
+		$query = Drupal::entityQuery('node')->condition('type', 'activity')->accessCheck(false);
 
 		$nids = $query->execute();
 
@@ -172,10 +173,28 @@ class ActivityHelper
 
 	public static function getRandomActivities(int $count = 5): array
 	{
-		$query = \Drupal::entityQuery('node')
+		$query = Drupal::entityQuery('node')
 			->condition('type', 'activity')
 			->accessCheck(false)
 			->range(0, $count);
+
+		$nids = $query->execute();
+
+		if (empty($nids)) {
+			return [];
+		}
+
+		return array_map(fn($nid) => self::getActivityByNid($nid), $nids);
+	}
+
+	public static function getActivitiesCreatedInLastDays(int $days): array
+	{
+		$timestamp = Drupal::time()->getRequestTime() - $days * 86400;
+
+		$query = Drupal::entityQuery('node')
+			->condition('type', 'activity')
+			->condition('created', $timestamp, '>=')
+			->accessCheck(false);
 
 		$nids = $query->execute();
 

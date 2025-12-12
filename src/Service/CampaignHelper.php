@@ -71,6 +71,20 @@ class CampaignHelper
 		return $lastLogin < $inactiveThreshold;
 	}
 
+	/// Global Filters
+
+	private static int $newActivityThreshold = 7;
+
+	public static function newActivitiesFilter(): bool
+	{
+		$activities = ActivityHelper::getActivitiesCreatedInLastDays(self::$newActivityThreshold);
+		if (empty($activities)) {
+			return false;
+		}
+
+		return true;
+	}
+
 	// Placeholders
 
 	public static function runPlaceholders(string $text, UserInterface $user): string
@@ -106,6 +120,14 @@ class CampaignHelper
 				}
 
 				return implode("\n", array_map([self::class, 'formatActivity'], $activities));
+			},
+			'{activity.last_added}' => function () {
+				$acitvities = ActivityHelper::getActivitiesCreatedInLastDays(5);
+				if (empty($acitvities)) {
+					return 'No recently added activities found';
+				}
+
+				return implode("\n", array_map([self::class, 'formatActivity'], $acitvities));
 			},
 			// Prompts
 			'{prompt.random}' => function () {
@@ -211,6 +233,9 @@ class CampaignHelper
 
 		$users = $userStorage->loadMultiple($uids);
 
+		// store global filter results to avoid redundant checks
+		$globalFilterResults = [];
+
 		/** @var \Drupal\user\UserInterface $user */
 		foreach ($users as $user) {
 			$userId = $user->id();
@@ -234,6 +259,20 @@ class CampaignHelper
 
 				$campaignId = $campaign['id'];
 				$interval = (int) $campaign['interval'];
+				$globalFilterName = $campaign['global_filter'] ?? null;
+
+				// check global filter
+				if ($globalFilterName && method_exists(self::class, $globalFilterName)) {
+					if ($globalFilterResults[$globalFilterName] ?? null === null) {
+						$result = self::$globalFilterName();
+						$globalFilterResults[$globalFilterName] = $result;
+					}
+
+					if (!$globalFilterResults[$globalFilterName]) {
+						continue;
+					}
+				}
+
 				$filterName = $campaign['filter'] ?? null;
 
 				// check filter

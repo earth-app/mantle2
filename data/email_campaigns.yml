@@ -82,3 +82,16 @@
     {prompt.weekly}
 
     Stay engaged and keep exploring!
+- id: new_activities
+  title: Added Activities to Explore!
+  global_filter: newActivitiesFilter
+  filter: verifiedFilter
+  interval: 172800 # 2 days
+  body: |-
+    {user.first_name},
+
+    We've added new activities to The Earth App for you to explore:
+
+    {activity.last_added}
+
+    Stay curious and keep discovering!
