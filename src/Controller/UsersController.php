@@ -1639,32 +1639,21 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized('Invalid OAuth token');
 		}
 
-		// check if this is a linking request (authenticated user)
-		$currentUser = UsersHelper::getOwnerOfRequest($request);
-		$userId = $body['user_id'] ?? null;
+		$isLinking = $request->query->getBoolean('is_linking', false);
 
-		if ($currentUser || $userId) {
-			if (!$currentUser) {
-				return GeneralHelper::unauthorized(
-					'Authentication required to link OAuth provider',
-				);
-			}
+		$sessionToken = $body['session_token'] ?? null;
+		$sessionUser = null;
+		if ($sessionToken && is_string($sessionToken)) {
+			$sessionUser = UsersHelper::getUserByToken($sessionToken);
+		}
 
-			// Check if provider already linked to another account
-			$existingProviderUser = OAuthHelper::findByProviderSub($provider, $userData['sub']);
-			if ($existingProviderUser) {
-				if ($existingProviderUser->id() === $currentUser->id()) {
-					// Already linked to this account, just log them in
-					$user = $currentUser;
-				} else {
-					return GeneralHelper::conflict(
-						'This OAuth account is already linked to a different user',
-					);
-				}
-			} else {
-				// Link provider to current user
+		$existingProviderUser = OAuthHelper::findByProviderSub($provider, $userData['sub']);
+		if ($existingProviderUser) {
+			$user = $existingProviderUser;
+		} else {
+			if ($sessionUser) {
 				$success = OAuthHelper::linkProvider(
-					$currentUser,
+					$sessionUser,
 					$provider,
 					$userData['sub'],
 					$userData,
@@ -1672,22 +1661,53 @@ class UsersController extends ControllerBase
 				if (!$success) {
 					return GeneralHelper::internalError('Failed to link OAuth provider');
 				}
-				$user = $currentUser;
-			}
-		} else {
-			$user = OAuthHelper::findOrCreateUser($provider, $userData);
-			if (!$user) {
-				Drupal::logger('mantle2')->error(
-					'Failed to find or create user for OAuth provider %provider with sub %sub',
-					[
-						'%provider' => $provider,
-						'%sub' => $userData['sub'] ?? 'unknown',
-					],
-				);
-				return GeneralHelper::internalError('Failed to create or find user');
+				$user = $sessionUser;
+			} else {
+				// Try email matching
+				$emails = $userData['emails'] ?? [];
+				$existingEmailUser = null;
+
+				foreach ($emails as $email) {
+					$existingEmailUser = UsersHelper::findByEmail($email);
+					if ($existingEmailUser) {
+						break;
+					}
+				}
+
+				if ($existingEmailUser) {
+					$success = OAuthHelper::linkProvider(
+						$existingEmailUser,
+						$provider,
+						$userData['sub'],
+						$userData,
+					);
+					if (!$success) {
+						return GeneralHelper::internalError('Failed to link OAuth provider');
+					}
+					$user = $existingEmailUser;
+				} else {
+					// no existing account found
+					if ($isLinking) {
+						return GeneralHelper::badRequest(
+							'Cannot link OAuth provider: no existing account found with matching email',
+						);
+					}
+
+					// create new user
+					$user = OAuthHelper::findOrCreateUser($provider, $userData);
+					if (!$user) {
+						Drupal::logger('mantle2')->error(
+							'Failed to find or create user for OAuth provider %provider with sub %sub',
+							[
+								'%provider' => $provider,
+								'%sub' => $userData['sub'] ?? 'unknown',
+							],
+						);
+						return GeneralHelper::internalError('Failed to create or find user');
+					}
+				}
 			}
 		}
-
 		$this->finalizeLogin($user, $request);
 		$token = UsersHelper::issueToken($user);
 

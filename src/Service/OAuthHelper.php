@@ -32,9 +32,26 @@ class OAuthHelper
 				return null;
 			}
 
+			$emails = [];
+			if (!empty($userInfo['email'])) {
+				$emails[] = $userInfo['email'];
+			}
+
+			if (!empty($userInfo['emails']) && is_array($userInfo['emails'])) {
+				foreach ($userInfo['emails'] as $emailData) {
+					if (is_array($emailData) && !empty($emailData['email'])) {
+						$emails[] = $emailData['email'];
+					} elseif (is_string($emailData)) {
+						$emails[] = $emailData;
+					}
+				}
+			}
+			$emails = array_unique($emails);
+
 			return [
 				'sub' => $userInfo['sub'] ?? ($userInfo['id'] ?? null),
 				'email' => $userInfo['email'] ?? null,
+				'emails' => $emails, // all available emails
 				'name' => $userInfo['name'] ?? null,
 				'given_name' => $userInfo['given_name'] ?? null,
 				'family_name' => $userInfo['family_name'] ?? null,
