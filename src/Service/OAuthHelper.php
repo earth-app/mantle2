@@ -20,7 +20,7 @@ class OAuthHelper
 
 		try {
 			$client = $clientManager->createInstance($provider);
-			$userInfo = $client->decodeIdToken($token);
+			$userInfo = $client->retrieveUserInfo($token);
 
 			if (!$userInfo) {
 				Drupal::logger('mantle2')->error(
@@ -33,7 +33,7 @@ class OAuthHelper
 			}
 
 			return [
-				'sub' => $userInfo['sub'] ?? null,
+				'sub' => $userInfo['sub'] ?? ($userInfo['id'] ?? null),
 				'email' => $userInfo['email'] ?? null,
 				'name' => $userInfo['name'] ?? null,
 				'given_name' => $userInfo['given_name'] ?? null,
