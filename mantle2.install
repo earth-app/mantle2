@@ -463,6 +463,23 @@ function mantle2_install(): void
 	/// Email Verified
 	createField('user', 'field_email_verified', 'boolean', 'Email Verified', false, false);
 
+	/// OAuth Provider IDs
+	createField('user', 'field_oauth_microsoft_sub', 'string', 'Microsoft OAuth Sub', false, '', [
+		'max_length' => 255,
+	]);
+
+	createField('user', 'field_oauth_discord_sub', 'string', 'Discord OAuth Sub', false, '', [
+		'max_length' => 255,
+	]);
+
+	createField('user', 'field_oauth_github_sub', 'string', 'GitHub OAuth Sub', false, '', [
+		'max_length' => 255,
+	]);
+
+	createField('user', 'field_oauth_facebook_sub', 'string', 'Facebook OAuth Sub', false, '', [
+		'max_length' => 255,
+	]);
+
 	/// Subscribed
 	createField('user', 'field_subscribed', 'boolean', 'Subscribed', false, true);
 

@@ -159,6 +159,11 @@ class OAuthHelper
 
 	public static function hasProviderLinked(UserInterface $user, string $provider): bool
 	{
+		// Check if field exists before trying to access it
+		if (!$user->hasField("field_oauth_{$provider}_sub")) {
+			return false;
+		}
+
 		$sub = $user->get("field_oauth_{$provider}_sub")->value ?? null;
 		return !empty($sub);
 	}
