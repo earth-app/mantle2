@@ -464,6 +464,10 @@ function mantle2_install(): void
 	createField('user', 'field_email_verified', 'boolean', 'Email Verified', false, false);
 
 	/// OAuth Provider IDs
+	createField('user', 'field_oauth_google_sub', 'string', 'Google OAuth Sub', false, '', [
+		'max_length' => 255,
+	]);
+
 	createField('user', 'field_oauth_microsoft_sub', 'string', 'Microsoft OAuth Sub', false, '', [
 		'max_length' => 255,
 	]);
