@@ -227,6 +227,21 @@ mantle2.users.oauth.facebook:
     schema/401: Invalid OAuth token
   methods: [POST]
 
+mantle2.users.oauth.google:
+  path: '/v2/users/oauth/google'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::oauthGoogle'
+    _title: 'Google OAuth Login'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Sign in or sign up with Google OAuth'
+    schema/200: loginResponse()
+    schema/400: Invalid or missing id_token
+    schema/401: Invalid OAuth token
+  methods: [POST]
+
 mantle2.users.oauth.discord.unlink:
   path: '/v2/users/oauth/discord'
   defaults:
@@ -282,6 +297,21 @@ mantle2.users.oauth.facebook.unlink:
   options:
     tags: Users
     description: 'Unlink Facebook OAuth provider from your account'
+    schema/200: user()
+    schema/400: Invalid or missing id_token, or cannot unlink only login method
+    schema/401: Invalid OAuth token or not authenticated
+  methods: [DELETE]
+
+mantle2.users.oauth.google.unlink:
+  path: '/v2/users/oauth/google'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unlinkOAuthGoogle'
+    _title: 'Unlink Google OAuth'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Unlink Google OAuth provider from your account'
     schema/200: user()
     schema/400: Invalid or missing id_token, or cannot unlink only login method
     schema/401: Invalid OAuth token or not authenticated
