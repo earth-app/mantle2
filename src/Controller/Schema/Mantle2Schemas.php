@@ -6,6 +6,7 @@ use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Privacy;
+use Drupal\mantle2\Service\OAuthHelper;
 
 class Mantle2Schemas
 {
@@ -440,14 +441,38 @@ class Mantle2Schemas
 	{
 		return [
 			'type' => 'object',
-			'properties' => [
-				'username' => self::$username,
-				'password' => self::$password,
-				'email' => self::$email,
-				'first_name' => self::text(50),
-				'last_name' => self::text(50),
+			'oneOf' => [
+				[
+					'description' => 'Traditional username/password signup',
+					'properties' => [
+						'username' => self::$username,
+						'password' => self::$password,
+						'email' => self::$email,
+						'first_name' => self::text(50),
+						'last_name' => self::text(50),
+					],
+					'required' => ['username', 'password'],
+				],
+				[
+					'description' => 'OAuth provider signup',
+					'properties' => [
+						'oauth_provider' => [
+							'type' => 'string',
+							'enum' => OAuthHelper::$providers,
+							'description' => 'OAuth provider to use for account creation',
+						],
+						'id_token' => [
+							'type' => 'string',
+							'description' => 'JWT id_token from OAuth provider',
+						],
+						'username' => array_merge(self::$username, [
+							'description' =>
+								'Optional custom username (auto-generated if not provided)',
+						]),
+					],
+					'required' => ['oauth_provider', 'id_token'],
+				],
 			],
-			'required' => ['username', 'password'],
 		];
 	}
 
@@ -650,6 +675,40 @@ class Mantle2Schemas
 			'Request body for password change. Authentication can be done via either reset token (query parameter) or current password (old_password query parameter).',
 	];
 
+	public static array $passwordSetBody = [
+		'type' => 'object',
+		'properties' => [
+			'password' => [
+				'type' => 'string',
+				'minLength' => 8,
+				'maxLength' => 100,
+				'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]+$",
+				'description' => 'Password to set for the user account',
+			],
+			'old_password' => [
+				'type' => 'string',
+				'description' =>
+					'Current password (required only if user already has a password set)',
+			],
+		],
+		'required' => ['password'],
+		'description' =>
+			'Request body for setting password. For OAuth-only users, only password is required. For users with existing passwords, old_password must be provided.',
+	];
+
+	public static array $oauthLoginBody = [
+		'type' => 'object',
+		'properties' => [
+			'id_token' => [
+				'type' => 'string',
+				'description' =>
+					'JWT id_token received from OAuth provider after successful authentication',
+				'example' => 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjFlOWdkazcifQ...',
+			],
+		],
+		'required' => ['id_token'],
+	];
+
 	public static array $articleBody = [
 		'type' => 'object',
 		'properties' => [
@@ -770,6 +829,21 @@ class Mantle2Schemas
 						'visibility' => self::visibility(),
 						'email_verified' => self::$bool,
 						'subscribed' => self::$bool,
+						'has_password' => [
+							'type' => 'boolean',
+							'description' =>
+								'Whether user has a password set (false for OAuth-only accounts)',
+							'example' => true,
+						],
+						'linked_providers' => [
+							'type' => 'array',
+							'items' => [
+								'type' => 'string',
+								'enum' => OAuthHelper::$providers,
+							],
+							'description' => 'List of OAuth providers linked to this account',
+							'example' => ['discord', 'github'],
+						],
 						'field_privacy' => self::userFieldPrivacy(),
 					],
 				],
@@ -911,6 +985,37 @@ class Mantle2Schemas
 				],
 			],
 			'required' => ['message'],
+		];
+	}
+
+	public static function passwordSetResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'message' => [
+					'type' => 'string',
+					'example' => 'Password set successfully',
+				],
+				'has_password' => [
+					'type' => 'boolean',
+					'example' => true,
+					'description' => 'Indicates whether the user now has a password set',
+				],
+			],
+			'required' => ['message', 'has_password'],
+		];
+	}
+
+	public static function oauthLoginResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'user' => self::user(),
+				'session_token' => self::$sessionToken,
+			],
+			'required' => ['user', 'session_token'],
 		];
 	}
 

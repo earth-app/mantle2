@@ -2324,4 +2324,14 @@ class UsersHelper
 	{
 		return 'https://app.earth-app.com/api/unsubscribe';
 	}
+
+	/**
+	 * Check if user has a password set (not OAuth-only account)
+	 */
+	public static function hasPassword(UserInterface $user): bool
+	{
+		// In Drupal, if a user has no password set, the password hash field is empty
+		$passField = $user->get('pass')->value;
+		return !empty($passField);
+	}
 }

@@ -14,7 +14,8 @@
 		"symfony/cache": "^7.3",
 		"drupal/smtp": "^1.4",
 		"drupal/redis": "^1.10",
-		"sebastian/diff": "^6"
+		"sebastian/diff": "^6",
+		"drupal/openid_connect": "^3.0@alpha"
 	},
 	"autoload": {
 		"psr-4": {

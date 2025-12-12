@@ -20,6 +20,7 @@ use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ActivityHelper;
+use Drupal\mantle2\Service\OAuthHelper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -162,16 +163,24 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid login credentials');
 		}
 
+		/** @var UserInterface $account */
+		$account = UsersHelper::findByUsername($name) ?? UsersHelper::findByEmail($name);
+
+		if (!$account || $account->isBlocked()) {
+			return GeneralHelper::unauthorized();
+		}
+
+		// Check if user has a password set (not OAuth-only user)
+		if (!UsersHelper::hasPassword($account)) {
+			return GeneralHelper::badRequest(
+				'This account was created using OAuth. Please log in using your OAuth provider and set a password first.',
+			);
+		}
+
 		/** @var UserAuthInterface $userAuth */
 		$userAuth = Drupal::service('user.auth');
 		$uid = $userAuth->authenticate($name, $pass);
 		if (!$uid) {
-			return GeneralHelper::unauthorized();
-		}
-
-		/** @var UserInterface $account */
-		$account = User::load($uid);
-		if (!$account || $account->isBlocked()) {
 			return GeneralHelper::unauthorized();
 		}
 
@@ -240,6 +249,16 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
+		// Check if this is an OAuth signup
+		$oauthProvider = $body['oauth_provider'] ?? null;
+		$idToken = $body['id_token'] ?? null;
+
+		if ($oauthProvider && $idToken) {
+			// OAuth signup flow
+			return $this->createUserWithOAuth($request, $oauthProvider, $idToken, $body);
+		}
+
+		// Traditional username/password signup
 		$username = trim(strtolower($body['username'] ?? null));
 		$password = trim($body['password'] ?? null);
 		$email = trim($body['email'] ?? null);
@@ -1023,10 +1042,15 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
+		// Check if user has a password set
+		$hasPassword = UsersHelper::hasPassword($user);
+
 		$token = $request->query->get('token');
 		$oldPassword = $request->query->get('old_password');
-		if (!$token && !$oldPassword) {
-			return GeneralHelper::badRequest('Missing token');
+
+		// For users with existing passwords, require either token or old_password
+		if ($hasPassword && !$token && !$oldPassword) {
+			return GeneralHelper::badRequest('Missing token or old_password');
 		}
 
 		if ($token) {
@@ -1540,6 +1564,129 @@ class UsersController extends ControllerBase
 
 		UsersHelper::clearNotifications($user);
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
+	#endregion
+
+	#region OAuth Routes
+
+	// POST /v2/users/oauth/microsoft
+	public function oauthMicrosoft(Request $request): JsonResponse
+	{
+		return $this->handleOAuthLogin($request, 'microsoft');
+	}
+
+	// POST /v2/users/oauth/facebook
+	public function oauthFacebook(Request $request): JsonResponse
+	{
+		return $this->handleOAuthLogin($request, 'facebook');
+	}
+
+	// POST /v2/users/oauth/discord
+	public function oauthDiscord(Request $request): JsonResponse
+	{
+		return $this->handleOAuthLogin($request, 'discord');
+	}
+
+	// POST /v2/users/oauth/github
+	public function oauthGitHub(Request $request): JsonResponse
+	{
+		return $this->handleOAuthLogin($request, 'github');
+	}
+
+	private function handleOAuthLogin(Request $request, string $provider)
+	{
+		$body = json_decode((string) $request->getContent(), true);
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		$token = $body['id_token'] ?? null;
+		if (!$token || !is_string($token)) {
+			return GeneralHelper::badRequest('Missing or invalid id_token');
+		}
+
+		$userData = OAuthHelper::validateToken($provider, $token);
+		if (!$userData) {
+			return GeneralHelper::unauthorized('Invalid OAuth token');
+		}
+
+		// Find or create user
+		$user = OAuthHelper::findOrCreateUser($provider, $userData);
+		if (!$user) {
+			return GeneralHelper::internalError('Failed to create or find user');
+		}
+
+		$this->finalizeLogin($user, $request);
+		$token = UsersHelper::issueToken($user);
+
+		$data = [
+			'user' => UsersHelper::serializeUser($user, $user),
+			'session_token' => $token,
+		];
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	private function createUserWithOAuth(
+		Request $request,
+		string $provider,
+		string $idToken,
+		array $body,
+	): JsonResponse {
+		// Validate provider
+		if (!in_array($provider, OAuthHelper::$providers)) {
+			return GeneralHelper::badRequest("Invalid OAuth provider: {$provider}");
+		}
+
+		// Validate token with OAuth provider
+		$userData = OAuthHelper::validateToken($provider, $idToken);
+		if (!$userData) {
+			return GeneralHelper::unauthorized('Invalid OAuth token');
+		}
+
+		// Optional: allow username override from body
+		$customUsername = isset($body['username']) ? trim(strtolower($body['username'])) : null;
+		if ($customUsername) {
+			if (!preg_match('/' . Mantle2Schemas::$username['pattern'] . '/', $customUsername)) {
+				return GeneralHelper::badRequest(
+					'Username must be 3-30 characters long and can only contain letters, numbers, underscores, dashes, and periods.',
+				);
+			}
+			if (UsersHelper::findByUsername($customUsername) !== null) {
+				return GeneralHelper::badRequest('Username already exists');
+			}
+		}
+
+		// Check if user already exists with this OAuth provider
+		$existingUser = OAuthHelper::findByProviderSub($provider, $userData['sub']);
+		if ($existingUser) {
+			return GeneralHelper::conflict('Account already exists with this OAuth provider');
+		}
+
+		// Check if email is already in use
+		if ($userData['email'] && UsersHelper::findByEmail($userData['email']) !== null) {
+			return GeneralHelper::conflict(
+				'An account with this email already exists. Please log in and link your OAuth provider.',
+			);
+		}
+
+		// Create user with OAuth data
+		$user = OAuthHelper::createUserFromOAuth($provider, $userData, $customUsername);
+		if (!$user) {
+			return GeneralHelper::internalError('Failed to create user');
+		}
+
+		// Log user in and issue token
+		$this->finalizeLogin($user, $request);
+		$token = UsersHelper::issueToken($user);
+
+		$data = [
+			'user' => UsersHelper::serializeUser($user, $user),
+			'session_token' => $token,
+		];
+
+		return new JsonResponse($data, Response::HTTP_CREATED);
 	}
 
 	#endregion

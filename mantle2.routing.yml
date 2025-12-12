@@ -166,6 +166,69 @@ mantle2.users.unsubscribe:
           type: string
   methods: [GET, POST]
 
+#region OAuth Routes
+mantle2.users.oauth.discord:
+  path: '/v2/users/oauth/discord'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::oauthDiscord'
+    _title: 'Discord OAuth Login'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Sign in or sign up with Discord OAuth'
+    schema/200: loginResponse()
+    schema/400: Invalid or missing id_token
+    schema/401: Invalid OAuth token
+  methods: [POST]
+
+mantle2.users.oauth.github:
+  path: '/v2/users/oauth/github'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::oauthGitHub'
+    _title: 'GitHub OAuth Login'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Sign in or sign up with GitHub OAuth'
+    schema/200: loginResponse()
+    schema/400: Invalid or missing id_token
+    schema/401: Invalid OAuth token
+  methods: [POST]
+
+mantle2.users.oauth.microsoft:
+  path: '/v2/users/oauth/microsoft'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::oauthMicrosoft'
+    _title: 'Microsoft OAuth Login'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Sign in or sign up with Microsoft OAuth'
+    schema/200: loginResponse()
+    schema/400: Invalid or missing id_token
+    schema/401: Invalid OAuth token
+  methods: [POST]
+
+mantle2.users.oauth.facebook:
+  path: '/v2/users/oauth/facebook'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::oauthFacebook'
+    _title: 'Facebook OAuth Login'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Sign in or sign up with Facebook OAuth'
+    schema/200: loginResponse()
+    schema/400: Invalid or missing id_token
+    schema/401: Invalid OAuth token
+  methods: [POST]
+
+#endregion
+
 #region User - By ID
 mantle2.users.id.get:
   path: '/v2/users/{id}'
@@ -665,7 +728,7 @@ mantle2.users.id.change_password:
     id: '\d+'
   options:
     tags: Users,Password
-    description: Changes password for a user using either a reset token or current password verification
+    description: 'Changes password for a user using either a reset token or current password verification. OAuth-only users (without existing passwords) can set their first password without providing old_password or token.'
     schema/200: passwordChangeResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
@@ -681,9 +744,31 @@ mantle2.users.id.change_password:
         required: false
       old_password:
         type: string
-        description: Current password for verification (alternative to token)
+        description: Current password for verification (alternative to token, not required for OAuth-only users)
         required: false
     body/schema: $passwordChangeFlexibleBody
+  methods: [POST]
+
+mantle2.users.id.set_password:
+  path: '/v2/users/{id}/set_password'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::setPassword'
+    _title: 'Set Password for User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Password
+    description: 'Sets or updates password for a user. For OAuth-only users, no old_password is required. For users with existing passwords, old_password is required.'
+    schema/200: passwordSetResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    body/schema: $passwordSetBody
   methods: [POST]
 
 mantle2.users.id.subscribe:
@@ -1476,7 +1561,7 @@ mantle2.users.username.change_password:
     username: '@[\w.]+'
   options:
     tags: Users,Password
-    description: Changes password for a user using either a reset token or current password verification
+    description: 'Changes password for a user using either a reset token or current password verification. OAuth-only users (without existing passwords) can set their first password without providing old_password or token.'
     schema/200: passwordChangeResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
@@ -1492,7 +1577,7 @@ mantle2.users.username.change_password:
         required: false
       old_password:
         type: string
-        description: Current password for verification (alternative to token)
+        description: Current password for verification (alternative to token, not required for OAuth-only users)
         required: false
     body/schema: $passwordChangeFlexibleBody
   methods: [POST]
@@ -2208,7 +2293,7 @@ mantle2.users.current.change_password:
     _access: 'TRUE'
   options:
     tags: Users,Password
-    description: Changes password for the current user using either a reset token or current password verification
+    description: 'Changes password for the current user using either a reset token or current password verification. OAuth-only users (without existing passwords) can set their first password without providing old_password or token.'
     schema/200: passwordChangeResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
@@ -2220,7 +2305,7 @@ mantle2.users.current.change_password:
         required: false
       old_password:
         type: string
-        description: Current password for verification (alternative to token)
+        description: Current password for verification (alternative to token, not required for OAuth-only users)
         required: false
     body/schema: $passwordChangeFlexibleBody
   methods: [POST]

@@ -1,0 +1,199 @@
+<?php
+
+namespace Drupal\mantle2\Service;
+
+use Drupal;
+use Exception;
+use Drupal\openid_connect\Plugin\OpenIDConnectClientManager;
+use Drupal\user\Entity\User;
+use Drupal\user\UserInterface;
+use Drupal\Core\Entity\EntityStorageException;
+
+class OAuthHelper
+{
+	public static array $providers = ['microsoft', 'discord', 'github', 'facebook'];
+
+	public static function validateToken(string $provider, string $token): ?array
+	{
+		/** @var OpenIDConnectClientManager $clientManager */
+		$clientManager = Drupal::service('plugin.manager.openid_connect_client');
+
+		try {
+			$client = $clientManager->createInstance($provider);
+			$userInfo = $client->decodeIdToken($token);
+
+			if (!$userInfo) {
+				return null;
+			}
+
+			return [
+				'sub' => $userInfo['sub'] ?? null,
+				'email' => $userInfo['email'] ?? null,
+				'name' => $userInfo['name'] ?? null,
+				'given_name' => $userInfo['given_name'] ?? null,
+				'family_name' => $userInfo['family_name'] ?? null,
+				'picture' => $userInfo['picture'] ?? null,
+			];
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('OAuth validation failed: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return null;
+		}
+	}
+
+	public static function findOrCreateUser(string $provider, array $userData): ?UserInterface
+	{
+		$sub = $userData['sub'];
+		$email = $userData['email'];
+
+		$existing = self::findByProviderSub($provider, $sub);
+		if ($existing) {
+			return $existing;
+		}
+
+		if ($email) {
+			$existingByEmail = UsersHelper::findByEmail($email);
+			if ($existingByEmail) {
+				self::linkProvider($existingByEmail, $provider, $sub);
+				return $existingByEmail;
+			}
+		}
+
+		return self::createUserFromOAuth($provider, $userData);
+	}
+
+	public static function findByProviderSub(string $provider, string $sub): ?UserInterface
+	{
+		try {
+			$users = Drupal::entityTypeManager()
+				->getStorage('user')
+				->loadByProperties([
+					"field_oauth_{$provider}_sub" => $sub,
+				]);
+
+			return $users ? reset($users) : null;
+		} catch (Exception $e) {
+			return null;
+		}
+	}
+
+	public static function createUserFromOAuth(
+		string $provider,
+		array $userData,
+		?string $customUsername = null,
+	): ?UserInterface {
+		$email = $userData['email'] ?? null;
+		$givenName = $userData['given_name'] ?? null;
+		$familyName = $userData['family_name'] ?? null;
+
+		// Determine username
+		if ($customUsername) {
+			$username = $customUsername;
+		} else {
+			// Generate from email, name, or fallback
+			if ($email) {
+				$baseUsername = explode('@', $email)[0];
+			} elseif ($givenName) {
+				$baseUsername = strtolower($givenName);
+			} else {
+				// Fallback: use provider + random suffix
+				$baseUsername = $provider . '_user_' . bin2hex(random_bytes(4));
+			}
+			$username = self::generateUniqueUsername($baseUsername);
+		}
+
+		$user = User::create([
+			'name' => $username,
+			'status' => 1,
+		]);
+
+		if ($email) {
+			$user->setEmail($email);
+			$user->set('field_email_verified', true); // OAuth emails are pre-verified
+		}
+
+		if ($givenName) {
+			$user->set('field_first_name', $givenName);
+		}
+		if ($familyName) {
+			$user->set('field_last_name', $familyName);
+		}
+
+		// store OAuth provider sub
+		$user->set("field_oauth_{$provider}_sub", $userData['sub']);
+		$user->activate();
+
+		try {
+			$user->save();
+			return $user;
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to create OAuth user: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return null;
+		}
+	}
+
+	// link OAuth provider to existing user
+	public static function linkProvider(UserInterface $user, string $provider, string $sub): bool
+	{
+		// check if provider is already linked to another account
+		$existingUser = self::findByProviderSub($provider, $sub);
+		if ($existingUser && $existingUser->id() !== $user->id()) {
+			return false; // Provider already linked to different account
+		}
+
+		$user->set("field_oauth_{$provider}_sub", $sub);
+
+		try {
+			$user->save();
+			return true;
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error('Failed to link OAuth provider: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return false;
+		}
+	}
+
+	public static function hasProviderLinked(UserInterface $user, string $provider): bool
+	{
+		$sub = $user->get("field_oauth_{$provider}_sub")->value ?? null;
+		return !empty($sub);
+	}
+
+	public static function getLinkedProviders(UserInterface $user): array
+	{
+		$linked = [];
+
+		foreach (self::$providers as $provider) {
+			if (self::hasProviderLinked($user, $provider)) {
+				$linked[] = $provider;
+			}
+		}
+
+		return $linked;
+	}
+
+	// find unique username based on base string
+	private static function generateUniqueUsername(string $base): string
+	{
+		$username = preg_replace('/[^a-z0-9_.-]/', '', strtolower($base));
+		$username = substr($username, 0, 30);
+
+		if (UsersHelper::findByUsername($username) === null) {
+			return $username;
+		}
+
+		// add number suffix if username exists
+		$counter = 1;
+		while (true) {
+			$testUsername = substr($username, 0, 27) . $counter;
+			if (UsersHelper::findByUsername($testUsername) === null) {
+				return $testUsername;
+			}
+			$counter++;
+		}
+	}
+}
