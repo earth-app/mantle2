@@ -167,6 +167,14 @@ class OAuthHelper
 			$user->set('field_email_verified', true);
 		}
 
+		// Set first_name and last_name if they're empty
+		if (empty($user->get('field_first_name')->value) && !empty($userData['given_name'])) {
+			$user->set('field_first_name', $userData['given_name']);
+		}
+		if (empty($user->get('field_last_name')->value) && !empty($userData['family_name'])) {
+			$user->set('field_last_name', $userData['family_name']);
+		}
+
 		try {
 			$user->save();
 			return true;
