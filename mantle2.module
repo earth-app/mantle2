@@ -64,7 +64,11 @@ function mantle2_mail($key, &$message, $params)
 	}
 
 	// determine if this email should include unsubscribe
-	$includeUnsubscribe = in_array($key, ['new_login', 'new_password'], true);
+	$includeUnsubscribe = in_array(
+		$key,
+		['new_login', 'new_password', 'oauth_provider_linked', 'oauth_provider_unlinked'],
+		true,
+	);
 	$unsubscribeUrl = $params['unsubscribe_url'] ?? null; // Frontend URL for body link
 
 	switch ($key) {
@@ -150,6 +154,42 @@ function mantle2_mail($key, &$message, $params)
 				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
 			}
 			break;
+		case 'oauth_provider_linked':
+			$message['subject'] = 'The Earth App - OAuth Provider Linked';
+
+			$providerName = ucfirst($params['provider'] ?? 'Unknown');
+			$markdown = "@$username, A new OAuth provider has been linked to your account.\n\n
+			**Provider:** {$providerName}\n
+			**Time:** {$params['time']}\n
+			**IP:** {$params['ip']}\n\n
+			If you did not perform this action, please secure your account immediately by unlinking the provider and changing your password.";
+
+			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
+
+			if (isset($params['unsubscribe_api_url'])) {
+				$message['headers']['List-Unsubscribe'] =
+					'<' . $params['unsubscribe_api_url'] . '>';
+				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+			}
+			break;
+		case 'oauth_provider_unlinked':
+			$message['subject'] = 'The Earth App - OAuth Provider Unlinked';
+
+			$providerName = ucfirst($params['provider'] ?? 'Unknown');
+			$markdown = "@$username, An OAuth provider has been unlinked from your account.\n\n
+			**Provider:** {$providerName}\n
+			**Time:** {$params['time']}\n
+			**IP:** {$params['ip']}\n\n
+			If you did not perform this action, please secure your account immediately and re-link the provider if necessary.";
+
+			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
+
+			if (isset($params['unsubscribe_api_url'])) {
+				$message['headers']['List-Unsubscribe'] =
+					'<' . $params['unsubscribe_api_url'] . '>';
+				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+			}
+			break;
 	}
 }
 
@@ -163,6 +203,8 @@ function mantle2_mail_alter(&$message)
 		'mantle2_email_change_notification',
 		'mantle2_email_change_verification',
 		'mantle2_email_change_confirmed',
+		'mantle2_oauth_provider_linked',
+		'mantle2_oauth_provider_unlinked',
 	];
 
 	if (
@@ -183,7 +225,12 @@ function mantle2_mail_alter(&$message)
 	}
 
 	// Add List-Unsubscribe headers for specific email types
-	$unsubscribableMessages = ['mantle2_new_login', 'mantle2_new_password'];
+	$unsubscribableMessages = [
+		'mantle2_new_login',
+		'mantle2_new_password',
+		'mantle2_oauth_provider_linked',
+		'mantle2_oauth_provider_unlinked',
+	];
 	if (in_array($message['id'], $unsubscribableMessages, true)) {
 		if (isset($message['params']['unsubscribe_api_url'])) {
 			$message['headers']['List-Unsubscribe'] =

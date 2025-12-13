@@ -1674,6 +1674,35 @@ class UsersController extends ControllerBase
 				if (!$success) {
 					return GeneralHelper::internalError('Failed to link OAuth provider');
 				}
+
+				// send notification for OAuth provider linked
+				$providerName = ucfirst($provider);
+				$currentIP = $request->getClientIp() ?? 'Unknown';
+				$date = new DateTimeImmutable();
+				$timestamp = $date->format(DATE_ATOM);
+
+				UsersHelper::addNotification(
+					$sessionUser,
+					Drupal::translation()->translate('New OAuth Provider Linked'),
+					Drupal::translation()->translate(
+						"A new OAuth provider ({$providerName}) has been linked to your account.\n\n" .
+							"Time: {$timestamp}\n" .
+							"IP: {$currentIP}\n\n" .
+							"If this wasn't you, please secure your account immediately.",
+					),
+					null,
+					'info',
+					'system',
+				);
+
+				if (UsersHelper::isSubscribed($sessionUser)) {
+					UsersHelper::sendEmail($sessionUser, 'oauth_provider_linked', [
+						'provider' => $provider,
+						'time' => $timestamp,
+						'ip' => $currentIP,
+					]);
+				}
+
 				$user = $sessionUser;
 			} else {
 				// Try email matching
@@ -1697,6 +1726,35 @@ class UsersController extends ControllerBase
 					if (!$success) {
 						return GeneralHelper::internalError('Failed to link OAuth provider');
 					}
+
+					// send notification for OAuth provider linked
+					$providerName = ucfirst($provider);
+					$currentIP = $request->getClientIp() ?? 'Unknown';
+					$date = new DateTimeImmutable();
+					$timestamp = $date->format(DATE_ATOM);
+
+					UsersHelper::addNotification(
+						$existingEmailUser,
+						Drupal::translation()->translate('New OAuth Provider Linked'),
+						Drupal::translation()->translate(
+							"A new OAuth provider ({$providerName}) has been linked to your account.\n\n" .
+								"Time: {$timestamp}\n" .
+								"IP: {$currentIP}\n\n" .
+								"If this wasn't you, please secure your account immediately.",
+						),
+						null,
+						'info',
+						'system',
+					);
+
+					if (UsersHelper::isSubscribed($existingEmailUser)) {
+						UsersHelper::sendEmail($existingEmailUser, 'oauth_provider_linked', [
+							'provider' => $provider,
+							'time' => $timestamp,
+							'ip' => $currentIP,
+						]);
+					}
+
 					$user = $existingEmailUser;
 				} else {
 					// no existing account found
@@ -1721,7 +1779,7 @@ class UsersController extends ControllerBase
 				}
 			}
 		}
-		$this->finalizeLogin($user, $request);
+		$this->finalizeLogin($user, $request, true);
 		$token = UsersHelper::issueToken($user);
 
 		$data = [
@@ -1754,6 +1812,34 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest(
 				'Cannot unlink: this is your only login method. Set a password first.',
 			);
+		}
+
+		// send notification for OAuth provider unlinked
+		$providerName = ucfirst($provider);
+		$currentIP = $request->getClientIp() ?? 'Unknown';
+		$date = new DateTimeImmutable();
+		$timestamp = $date->format(DATE_ATOM);
+
+		UsersHelper::addNotification(
+			$user,
+			Drupal::translation()->translate('OAuth Provider Unlinked'),
+			Drupal::translation()->translate(
+				"An OAuth provider ({$providerName}) has been unlinked from your account.\n\n" .
+					"Time: {$timestamp}\n" .
+					"IP: {$currentIP}\n\n" .
+					"If this wasn't you, please secure your account immediately.",
+			),
+			null,
+			'info',
+			'system',
+		);
+
+		if (UsersHelper::isSubscribed($user)) {
+			UsersHelper::sendEmail($user, 'oauth_provider_unlinked', [
+				'provider' => $provider,
+				'time' => $timestamp,
+				'ip' => $currentIP,
+			]);
 		}
 
 		return new JsonResponse(
@@ -1952,10 +2038,13 @@ class UsersController extends ControllerBase
 
 	// Utility Functions
 
-	private function finalizeLogin(UserInterface $account, ?Request $request = null): void
-	{
+	private function finalizeLogin(
+		UserInterface $account,
+		?Request $request = null,
+		bool $skipNewIpCheck = false,
+	): void {
 		// Check for new IP address and send notification if needed
-		if ($request) {
+		if ($request && !$skipNewIpCheck) {
 			$this->checkAndNotifyNewIP($account, $request);
 		}
 
