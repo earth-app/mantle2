@@ -20,8 +20,12 @@ class CorsSubscriber implements EventSubscriberInterface
 		'https://earth-app.com',
 		'https://app.earth-app.com',
 		'https://cloud.earth-app.com',
-		'http://localhost:3000', // local development, TODO remove on launch
+		'capacitor://localhost', // ios
+		'http://localhost', // android
+		'http://localhost:3000',
 		'http://127.0.0.1:3000',
+		'http://localhost:3001',
+		'http://127.0.0.1:3001',
 	];
 
 	public function onRespond(ResponseEvent $event)
