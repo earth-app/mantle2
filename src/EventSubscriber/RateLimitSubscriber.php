@@ -52,7 +52,14 @@ class RateLimitSubscriber implements EventSubscriberInterface
 				: null) ??
 				($request->getClientIp() ?? 'anonymous'));
 
-		$isAuthenticated = UsersHelper::getOwnerOfRequest($request) !== null;
+		$requester = UsersHelper::getOwnerOfRequest($request) ?? null;
+
+		// don't check if admin
+		if (UsersHelper::isAdmin($requester)) {
+			return;
+		}
+
+		$isAuthenticated = $requester !== null;
 		$globalConfig = $this->getGlobalConfig($isAuthenticated);
 		$globalCheck = $this->checkLimit(
 			$isAuthenticated ? 'global:auth' : 'global:anon',
