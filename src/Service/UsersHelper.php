@@ -613,6 +613,12 @@ class UsersHelper
 				$requester,
 				'PRIVATE',
 			),
+			'max_circle_count' => self::tryVisible(
+				self::getMaxCircleCount($user),
+				$user,
+				$requester,
+				'PRIVATE',
+			),
 		];
 	}
 
@@ -1224,8 +1230,6 @@ class UsersHelper
 		}
 	}
 
-	public const MAX_CIRCLE_SIZE = 250;
-
 	/**
 	 * @return UserInterface[]
 	 */
@@ -1283,6 +1287,22 @@ class UsersHelper
 		return count($circle);
 	}
 
+	public static function getMaxCircleCount(?UserInterface $user = null): int
+	{
+		if ($user == null) {
+			return 100;
+		}
+
+		$accountType = self::getAccountType($user);
+		return match ($accountType) {
+			AccountType::FREE => 50,
+			AccountType::PRO => 500,
+			AccountType::WRITER => 500,
+			AccountType::ORGANIZER => 1000,
+			AccountType::ADMINISTRATOR => 1000,
+		};
+	}
+
 	public static function isInCircle(UserInterface $user1, UserInterface $user2): bool
 	{
 		if ($user1->id() === $user2->id()) {
@@ -1319,7 +1339,9 @@ class UsersHelper
 
 			$circle = $user->get('field_circle')->value ?? '[]';
 			$circle0 = $circle ? json_decode($circle, true) : [];
-			if (count($circle0) >= self::MAX_CIRCLE_SIZE) {
+
+			$max = self::getMaxCircleCount($user);
+			if (count($circle0) >= $max) {
 				Drupal::logger('mantle2')->warning(
 					'User %uid has reached the maximum circle size and cannot add more members.',
 					[

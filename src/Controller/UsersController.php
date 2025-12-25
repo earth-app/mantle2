@@ -985,8 +985,9 @@ class UsersController extends ControllerBase
 		}
 
 		$count = UsersHelper::getCircleCount($user);
-		if ($count >= UsersHelper::MAX_CIRCLE_SIZE) {
-			return GeneralHelper::badRequest('Circle size limit reached');
+		$max = UsersHelper::getMaxCircleCount($user);
+		if ($count >= $max) {
+			return GeneralHelper::badRequest('Circle size limit of ' . $max . ' reached');
 		}
 
 		$result = UsersHelper::addToCircle($user, $friend);
