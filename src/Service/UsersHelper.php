@@ -1160,52 +1160,66 @@ class UsersHelper
 
 	public static function addFriend(UserInterface $user, UserInterface $friend): bool
 	{
-		$friends = $user->get('field_friends')->value ?? '[]';
-		$friends0 = $friends ? json_decode($friends, true) : [];
-		if (in_array($friend->id(), $friends0, true)) {
+		try {
+			$friends = $user->get('field_friends')->value ?? '[]';
+			$friends0 = $friends ? json_decode($friends, true) : [];
+			if (in_array($friend->id(), $friends0, true)) {
+				return false;
+			}
+
+			$friends0[] = $friend->id();
+			$user->set('field_friends', json_encode($friends0));
+			$user->save();
+
+			$name = $user->getAccountName();
+			self::addNotification(
+				$friend,
+				Drupal::translation()->translate('New Friend Added'),
+				Drupal::translation()->translate("$name has added you as a friend."),
+				"/profile/{$user->id()}",
+				'info',
+				'system',
+			);
+
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to add friend: %message', [
+				'%message' => $e->getMessage(),
+			]);
 			return false;
 		}
-
-		$friends0[] = $friend->id();
-		$user->set('field_friends', json_encode($friends0));
-		$user->save();
-
-		$name = $user->getAccountName();
-		self::addNotification(
-			$friend,
-			Drupal::translation()->translate('New Friend Added'),
-			Drupal::translation()->translate("$name has added you as a friend."),
-			"/profile/{$user->id()}",
-			'info',
-			'system',
-		);
-
-		return true;
 	}
 
 	public static function removeFriend(UserInterface $user, UserInterface $friend): bool
 	{
-		$friends = $user->get('field_friends')->value ?? '[]';
-		$friends0 = $friends ? json_decode($friends, true) : [];
-		if (!in_array($friend->id(), $friends0, true)) {
+		try {
+			$friends = $user->get('field_friends')->value ?? '[]';
+			$friends0 = $friends ? json_decode($friends, true) : [];
+			if (!in_array($friend->id(), $friends0, true)) {
+				return false;
+			}
+
+			$friends0 = array_filter($friends0, fn($id) => $id !== $friend->id());
+			$user->set('field_friends', json_encode($friends0));
+			$user->save();
+
+			$name = $user->getAccountName();
+			self::addNotification(
+				$friend,
+				Drupal::translation()->translate('Friend Removed'),
+				Drupal::translation()->translate("$name has removed you as a friend."),
+				"/profile/{$user->id()}",
+				'info',
+				'system',
+			);
+
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to remove friend: %message', [
+				'%message' => $e->getMessage(),
+			]);
 			return false;
 		}
-
-		$friends0 = array_filter($friends0, fn($id) => $id !== $friend->id());
-		$user->set('field_friends', json_encode($friends0));
-		$user->save();
-
-		$name = $user->getAccountName();
-		self::addNotification(
-			$friend,
-			Drupal::translation()->translate('Friend Removed'),
-			Drupal::translation()->translate("$name has removed you as a friend."),
-			"/profile/{$user->id()}",
-			'info',
-			'system',
-		);
-
-		return true;
 	}
 
 	/**
@@ -1277,60 +1291,98 @@ class UsersHelper
 
 	public static function addToCircle(UserInterface $user, UserInterface $member): bool
 	{
-		if ($user->id() === $member->id()) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to add themselves to their own circle.',
-				[
-					'%uid' => $user->id(),
-				],
+		try {
+			if ($user->id() === $member->id()) {
+				Drupal::logger('mantle2')->warning(
+					'User %uid attempted to add themselves to their own circle.',
+					[
+						'%uid' => $user->id(),
+					],
+				);
+				return false;
+			}
+
+			if (!self::isAddedFriend($user, $member)) {
+				Drupal::logger('mantle2')->warning(
+					'User %uid is not a friend of %friend_uid and cannot be added to the circle.',
+					[
+						'%uid' => $user->id(),
+						'%friend_uid' => $member->id(),
+					],
+				);
+				return false;
+			}
+
+			$circle = self::getCircle($user);
+			if (in_array($member, $circle, true)) {
+				return false;
+			}
+
+			$circle[] = $member->id();
+			$user->set('field_circle', json_encode($circle));
+			$user->save();
+
+			self::addNotification(
+				$member,
+				Drupal::translation()->translate('Added to Circle'),
+				Drupal::translation()->translate("You have been added to %name's circle.", [
+					'%name' => $user->getAccountName(),
+				]),
+				"/profile/{$user->id()}",
+				'info',
+				'system',
 			);
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to add to circle: %message', [
+				'%message' => $e->getMessage(),
+			]);
 			return false;
 		}
-
-		if (!self::isAddedFriend($user, $member)) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid is not a friend of %friend_uid and cannot be added to the circle.',
-				[
-					'%uid' => $user->id(),
-					'%friend_uid' => $member->id(),
-				],
-			);
-			return false;
-		}
-
-		$circle = self::getCircle($user);
-		if (in_array($member, $circle, true)) {
-			return false;
-		}
-
-		$circle[] = $member->id();
-		$user->set('field_circle', json_encode($circle));
-		$user->save();
-		return true;
 	}
 
 	public static function removeFromCircle(UserInterface $user, UserInterface $member): bool
 	{
-		if ($user->id() === $member->id()) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to remove themselves from their own circle.',
-				[
-					'%uid' => $user->id(),
-				],
+		try {
+			if ($user->id() === $member->id()) {
+				Drupal::logger('mantle2')->warning(
+					'User %uid attempted to remove themselves from their own circle.',
+					[
+						'%uid' => $user->id(),
+					],
+				);
+				return false;
+			}
+
+			$circle = self::getCircle($user);
+			if (!in_array($member, $circle, true)) {
+				return false;
+			}
+
+			$circle = array_filter($circle, fn($id) => $id !== $member->id());
+			$user->set('field_circle', json_encode($circle));
+			$user->save();
+
+			self::addNotification(
+				$member,
+				Drupal::translation()->translate('Removed from Circle'),
+				Drupal::translation()->translate("You have been removed from %name's circle.", [
+					'%name' => $user->getAccountName(),
+				]),
+				"/profile/{$user->id()}",
+				'info',
+				'system',
 			);
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to remove from circle: %message', [
+				'%message' => $e->getMessage(),
+			]);
 			return false;
 		}
-
-		$circle = self::getCircle($user);
-		if (!in_array($member, $circle, true)) {
-			return false;
-		}
-
-		$circle = array_filter($circle, fn($id) => $id !== $member->id());
-		$user->set('field_circle', json_encode($circle));
-		$user->save();
-		return true;
 	}
+
+	public const MAX_ACTIVITIES = 10;
 
 	/**
 	 * @param UserInterface $user
@@ -1348,18 +1400,24 @@ class UsersHelper
 	 */
 	public static function setActivities(UserInterface $user, array $activities): void
 	{
-		if (count($activities) > 10) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid has exceeded the maximum number of activities.',
-				[
-					'%uid' => $user->id(),
-				],
-			);
-			return;
-		}
+		try {
+			if (count($activities) > self::MAX_ACTIVITIES) {
+				Drupal::logger('mantle2')->warning(
+					'User %uid has exceeded the maximum number of activities.',
+					[
+						'%uid' => $user->id(),
+					],
+				);
+				return;
+			}
 
-		$user->set('field_activities', json_encode($activities));
-		$user->save();
+			$user->set('field_activities', json_encode($activities));
+			$user->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to set activities: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
 	}
 
 	public static function hasActivity(UserInterface $user, string $id): bool
@@ -1373,7 +1431,7 @@ class UsersHelper
 		$activities = self::getActivities($user);
 		$activities[] = $activity;
 
-		if (count($activities) + 1 > 10) {
+		if (count($activities) + 1 > self::MAX_ACTIVITIES) {
 			Drupal::logger('mantle2')->warning(
 				'User %uid has exceeded the maximum number of activities.',
 				[

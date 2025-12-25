@@ -874,6 +874,24 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Cannot remove yourself from your own friends list');
 		}
 
+		// remove friend in circle if they are in circle
+		if (UsersHelper::isInCircle($user, $friend)) {
+			$result = UsersHelper::removeFromCircle($user, $friend);
+			if (!$result) {
+				Drupal::logger('mantle2')->error(
+					'Failed to remove user %friend from circle of user %user while removing friend',
+					[
+						'friend' => $friend->id(),
+						'user' => $user->id(),
+					],
+				);
+
+				return GeneralHelper::internalError(
+					'Failed to remove friend from circle while removing friend',
+				);
+			}
+		}
+
 		$result = UsersHelper::removeFriend($user, $friend);
 		if (!$result) {
 			return GeneralHelper::conflict('Friend is not added');
