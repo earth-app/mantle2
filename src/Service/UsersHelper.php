@@ -1234,7 +1234,7 @@ class UsersHelper
 		string $search = '',
 		string $sort = 'desc',
 	): array {
-		$circleValue = $user->get('field_circle')->value ?? '{}';
+		$circleValue = $user->get('field_circle')->value ?? '[]';
 
 		/** @var int[] $circle */
 		$circle = $circleValue ? json_decode($circleValue, true) : [];
@@ -1265,7 +1265,7 @@ class UsersHelper
 
 	public static function getCircleCount(UserInterface $user, string $search = ''): int
 	{
-		$circleValue = $user->get('field_circle')->value ?? '{}';
+		$circleValue = $user->get('field_circle')->value ?? '[]';
 
 		/** @var int[] $circle */
 		$circle = $circleValue ? json_decode($circleValue, true) : [];
@@ -1315,13 +1315,14 @@ class UsersHelper
 				return false;
 			}
 
-			$circle = self::getCircle($user);
-			if (in_array($member, $circle, true)) {
+			$circle = $user->get('field_circle')->value ?? '[]';
+			$circle0 = $circle ? json_decode($circle, true) : [];
+			if (in_array($member->id(), $circle0, true)) {
 				return false;
 			}
 
-			$circle[] = $member->id();
-			$user->set('field_circle', json_encode($circle));
+			$circle0[] = $member->id();
+			$user->set('field_circle', json_encode($circle0));
 			$user->save();
 
 			self::addNotification(
@@ -1356,13 +1357,15 @@ class UsersHelper
 				return false;
 			}
 
-			$circle = self::getCircle($user);
-			if (!in_array($member, $circle, true)) {
+			$circle = $user->get('field_circle')->value ?? '[]';
+			$circle0 = $circle ? json_decode($circle, true) : [];
+			if (!in_array($member->id(), $circle0, true)) {
 				return false;
 			}
 
-			$circle = array_filter($circle, fn($id) => $id !== $member->id());
-			$user->set('field_circle', json_encode($circle));
+			$circle0 = array_filter($circle0, fn($id) => $id !== $member->id());
+
+			$user->set('field_circle', json_encode($circle0));
 			$user->save();
 
 			self::addNotification(
