@@ -1088,6 +1088,19 @@ class Mantle2Schemas
 		]);
 	}
 
+	public static function friendResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'user' => self::user(),
+				'friend' => self::user(),
+				'is_mutual' => self::$bool,
+			],
+			'required' => ['user', 'is_mutual', 'friend'],
+		];
+	}
+
 	public static function event(): array
 	{
 		return [

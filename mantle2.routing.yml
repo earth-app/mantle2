@@ -630,7 +630,7 @@ mantle2.users.id.friends.add:
   options:
     tags: Users,Friends
     description: Adds a friend for the user by their identifier
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -656,7 +656,7 @@ mantle2.users.id.friends.remove:
   options:
     tags: Users,Friends
     description: Removes a friend for the user by their identifier
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1443,7 +1443,7 @@ mantle2.users.username.friends.add:
   options:
     tags: Users,Friends
     description: Adds a friend for the user by their username
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1469,7 +1469,7 @@ mantle2.users.username.friends.remove:
   options:
     tags: Users,Friends
     description: Removes a friend for the user by their username
-    schema/200: user()
+    schema/200: friendResponse()
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User or friend not found
@@ -2206,7 +2206,7 @@ mantle2.users.current.friends.add:
   options:
     tags: Users,Friends
     description: Adds a friend for the user based on the session ID
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -2228,7 +2228,7 @@ mantle2.users.current.friends.remove:
   options:
     tags: Users,Friends
     description: Removes a friend for the user based on the session ID
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
