@@ -127,6 +127,9 @@ class CampaignHelper
 					return 'No recently added activities found';
 				}
 
+				// limit to 10 activities
+				$acitvities = array_slice($acitvities, 0, 10);
+
 				return implode("\n", array_map([self::class, 'formatActivity'], $acitvities));
 			},
 			// Prompts
@@ -176,6 +179,34 @@ class CampaignHelper
 		return $filtered ? reset($filtered) : null;
 	}
 
+	private static array $emojiMap = [
+		'hobby' => '🎨',
+		'sport' => '💪',
+		'work' => '💼',
+		'study' => '📚',
+		'travel' => '✈️',
+		'social' => '🤝',
+		'relaxation' => '🧘',
+		'health' => '🍎',
+		'project' => '🛠️',
+		'personal_goals' => '🎯',
+		'community_service' => '🌍',
+		'creative' => '🎭',
+		'family' => '👪',
+		'holiday' => '🎉',
+		'entertainment' => '🎬',
+		'learning' => '🧠',
+		'nature' => '🌲',
+		'technology' => '💻',
+		'art' => '🖌️',
+		'spirituality' => '🕉️',
+		'finance' => '💰',
+		'home_improvement' => '🏡',
+		'pets' => '🐾',
+		'fashion' => '👗',
+		'other' => '🔖',
+	];
+
 	private static function formatActivity(Activity $activity): string
 	{
 		$name = $activity->getName();
@@ -183,7 +214,22 @@ class CampaignHelper
 		$desc = trim($activity->getDescription());
 		$desc = strlen($desc) > 250 ? substr($desc, 0, 247) . '...' : $desc;
 
-		return "[**$name**](https://app.earth-app.com/activities/$id)\n*$desc*\n";
+		// find three emojis for matching types
+		$emojis = '';
+		$i = 0;
+		foreach ($activity->getTypes() as $type) {
+			if ($i >= 3) {
+				break;
+			}
+
+			$typeLower = strtolower($type);
+			if (isset(self::$emojiMap[$typeLower])) {
+				$emojis .= self::$emojiMap[$typeLower] . ' ';
+				$i++;
+			}
+		}
+
+		return "[**$emojis $name**](https://app.earth-app.com/activities/$id)\n*$desc*\n";
 	}
 
 	private static function formatPrompt(Prompt $prompt): string
