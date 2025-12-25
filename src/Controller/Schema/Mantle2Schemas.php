@@ -904,6 +904,11 @@ class Mantle2Schemas
 					'example' => 5,
 					'description' => 'Number of users in the user\'s private circle',
 				],
+				'max_circle_count' => [
+					'type' => 'integer',
+					'example' => 100,
+					'description' => 'Maximum number of users allowed in the private circle',
+				],
 				'message' => [
 					'type' => 'string',
 					'description' => 'Optional message about the operation performed',
