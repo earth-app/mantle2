@@ -971,7 +971,14 @@ class UsersController extends ControllerBase
 			return GeneralHelper::conflict('Friend is already in circle');
 		}
 
-		return new JsonResponse(UsersHelper::serializeUser($user, $requester), Response::HTTP_OK);
+		return new JsonResponse(
+			[
+				'user' => UsersHelper::serializeUser($user, $requester),
+				'friend' => UsersHelper::serializeUser($friend, $requester),
+				'is_mutual' => UsersHelper::isMutualFriend($user, $friend),
+			],
+			Response::HTTP_OK,
+		);
 	}
 
 	// DELETE /v2/users/current/circle
@@ -1011,7 +1018,14 @@ class UsersController extends ControllerBase
 			return GeneralHelper::conflict('Friend is not in circle');
 		}
 
-		return new JsonResponse(UsersHelper::serializeUser($user, $requester), Response::HTTP_OK);
+		return new JsonResponse(
+			[
+				'user' => UsersHelper::serializeUser($user, $requester),
+				'friend' => UsersHelper::serializeUser($friend, $requester),
+				'is_mutual' => UsersHelper::isMutualFriend($user, $friend),
+			],
+			Response::HTTP_OK,
+		);
 	}
 
 	// POST /v2/users/reset_password

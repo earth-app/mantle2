@@ -1118,7 +1118,12 @@ class Mantle2Schemas
 			'properties' => [
 				'user' => self::user(),
 				'friend' => self::user(),
-				'is_mutual' => self::$bool,
+				'is_mutual' => [
+					'type' => 'boolean',
+					'description' =>
+						'Indicates if the friendship is mutual (both users have added each other)',
+					'example' => true,
+				],
 			],
 			'required' => ['user', 'is_mutual', 'friend'],
 		];

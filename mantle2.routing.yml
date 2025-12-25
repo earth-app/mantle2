@@ -717,7 +717,7 @@ mantle2.users.id.circle.add:
   options:
     tags: Users,Friends
     description: Adds a user to their circle by their identifier
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -743,7 +743,7 @@ mantle2.users.id.circle.remove:
   options:
     tags: Users,Friends
     description: Removes a user from their circle by their identifier
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1529,7 +1529,7 @@ mantle2.users.username.circle.add:
   options:
     tags: Users,Friends
     description: Adds a user to their circle by their username
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1555,7 +1555,7 @@ mantle2.users.username.circle.remove:
   options:
     tags: Users,Friends
     description: Removes a user from their circle by their username
-    schema/200: user()
+    schema/200: friendResponse()
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User or friend not found
@@ -2281,7 +2281,7 @@ mantle2.users.current.circle.add:
   options:
     tags: Users,Friends
     description: Adds a user to the current user's circle based on the session ID
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -2303,7 +2303,7 @@ mantle2.users.current.circle.remove:
   options:
     tags: Users,Friends
     description: Removes a user from the current user's circle based on the session ID
-    schema/200: user()
+    schema/200: friendResponse()
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
