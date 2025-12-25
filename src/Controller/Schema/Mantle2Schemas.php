@@ -853,6 +853,11 @@ class Mantle2Schemas
 					'description' => 'Indicates if the user is a friend of the requesting user',
 					'example' => true,
 				],
+				'is_my_friend' => [
+					'type' => 'boolean',
+					'description' => 'Indicates if the requesting user is a friend of this user',
+					'example' => false,
+				],
 				'is_mutual' => [
 					'type' => 'boolean',
 					'description' =>
@@ -886,6 +891,12 @@ class Mantle2Schemas
 					'description' =>
 						'Indicates if the user is in the private circle of the requesting user',
 					'example' => false,
+				],
+				'is_in_my_circle' => [
+					'type' => 'boolean',
+					'description' =>
+						'Indicates if the requesting user is in this user\'s private circle',
+					'example' => true,
 				],
 				'circle' => self::idArray(),
 				'circle_count' => [

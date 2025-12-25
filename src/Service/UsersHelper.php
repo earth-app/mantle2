@@ -578,6 +578,7 @@ class UsersHelper
 			],
 			'activities' => self::getActivities($user),
 			'is_friend' => $requester ? self::isAddedFriend($requester, $user) : false,
+			'is_my_friend' => $requester ? self::isAddedFriend($user, $requester) : false,
 			'is_mutual' => $requester ? self::isMutualFriend($user, $requester) : false,
 			'friends' => self::tryVisible(
 				json_decode($user->get('field_friends')->value ?? '[]', true),
@@ -599,6 +600,7 @@ class UsersHelper
 				'PRIVATE',
 			),
 			'is_in_circle' => $requester && self::isInCircle($user, $requester),
+			'is_in_my_circle' => $requester && self::isInCircle($requester, $user),
 			'circle' => self::tryVisible(
 				json_decode($user->get('field_circle')->value ?? '[]', true),
 				$user,
