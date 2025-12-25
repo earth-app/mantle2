@@ -849,6 +849,22 @@ class Mantle2Schemas
 				],
 				'activities' => self::activitiesList(),
 				'friends' => self::idArray(),
+				'added_count' => [
+					'type' => 'integer',
+					'example' => 42,
+					'description' => 'Total number of friends the user has added',
+				],
+				'mutual_count' => [
+					'type' => 'integer',
+					'example' => 10,
+					'description' => 'Number of mutual friends with the requesting user',
+				],
+				'non_mutual_count' => [
+					'type' => 'integer',
+					'example' => 32,
+					'description' =>
+						'Number of non-mutual friends the user has (friends only added by them)',
+				],
 				'email_change_pending' => [
 					'type' => 'boolean',
 					'description' => 'Indicates if an email change verification is pending',

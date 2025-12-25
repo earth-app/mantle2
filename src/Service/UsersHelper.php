@@ -577,11 +577,25 @@ class UsersHelper
 				'field_privacy' => $privacy,
 			],
 			'activities' => self::getActivities($user),
+			'is_friend' => $requester ? self::isAddedFriend($requester, $user) : false,
 			'friends' => self::tryVisible(
 				json_decode($user->get('field_friends')->value ?? '[]', true),
 				$user,
 				$requester,
 				$privacy['friends'] ?? 'MUTUAL',
+			),
+			'added_count' => self::tryVisible(
+				self::getAddedFriendsCount($user),
+				$user,
+				$requester,
+				$privacy['friends'] ?? 'MUTUAL',
+			),
+			'mutual_count' => self::getMutualFriendsCount($user, $requester),
+			'non_mutual_count' => self::tryVisible(
+				self::getNonMutualFriendsCount($user),
+				$user,
+				$requester,
+				'PRIVATE',
 			),
 		];
 	}
@@ -863,6 +877,10 @@ class UsersHelper
 		string $search = '',
 		string $sort = 'desc',
 	): array {
+		if ($user === null) {
+			return [];
+		}
+
 		$friendsValue = $user->get('field_friends')->value ?? '[]';
 
 		/** @var int[] $friends*/
@@ -919,9 +937,13 @@ class UsersHelper
 
 	public static function isMutualFriend(UserInterface $user1, UserInterface $user2): bool
 	{
-		$user1Friends = self::getAddedFriends($user1);
-		$user2Friends = self::getAddedFriends($user2);
-		return !empty(array_intersect($user1Friends, $user2Friends));
+		try {
+			$friends1 = json_decode($user1->get('field_friends')->value ?? '[]', true) ?: [];
+			$friends2 = json_decode($user2->get('field_friends')->value ?? '[]', true) ?: [];
+			return !empty(array_intersect($friends1, $friends2));
+		} catch (Exception $e) {
+			return false;
+		}
 	}
 
 	public static function getMutualFriends(
@@ -931,55 +953,94 @@ class UsersHelper
 		string $search = '',
 		string $sort = 'desc',
 	): array {
-		$userFriends = self::getAddedFriends($user);
-		$friendCounts = [];
-
-		// Count how many of user's friends each person is connected to
-		foreach ($userFriends as $friend) {
-			$friendsOfFriend = self::getAddedFriends($friend);
-			foreach ($friendsOfFriend as $potentialMutual) {
-				// Skip the original user
-				if ($potentialMutual === $user) {
-					continue;
-				}
-
-				$friendCounts[$potentialMutual->id()] =
-					($friendCounts[$potentialMutual->id()] ?? 0) + 1;
+		try {
+			$userFriendsIds = json_decode($user->get('field_friends')->value ?? '[]', true) ?: [];
+			if (empty($userFriendsIds)) {
+				return [];
 			}
-		}
 
-		$mutual = [];
-		foreach ($friendCounts as $personId => $count) {
-			if ($count >= 2) {
-				// Adjust threshold as needed
-				$potentialUser = self::findById($personId);
-				if ($potentialUser) {
-					$mutual[] = $potentialUser;
+			$userFriends = array_filter(array_map(fn($id) => self::findById($id), $userFriendsIds));
+			$friendCounts = [];
+
+			// Count how many of user's friends each person is connected to
+			foreach ($userFriends as $friend) {
+				$friendsOfFriendIds =
+					json_decode($friend->get('field_friends')->value ?? '[]', true) ?: [];
+				foreach ($friendsOfFriendIds as $potentialMutualId) {
+					if ($potentialMutualId === $user->id()) {
+						continue;
+					}
+					$friendCounts[$potentialMutualId] =
+						($friendCounts[$potentialMutualId] ?? 0) + 1;
 				}
 			}
+
+			$mutual = [];
+			foreach ($friendCounts as $personId => $count) {
+				if ($count >= 2) {
+					$potentialUser = self::findById($personId);
+					if ($potentialUser) {
+						$mutual[] = $potentialUser;
+					}
+				}
+			}
+
+			// Apply search filter
+			if (!empty($search)) {
+				$mutual = array_filter(
+					$mutual,
+					fn($u) => str_contains($u->getAccountName(), $search),
+				);
+			}
+
+			// Apply sorting
+			if ($sort === 'rand') {
+				shuffle($mutual);
+			} else {
+				usort($mutual, function ($a, $b) use ($sort) {
+					$aTime = $a->getCreatedTime();
+					$bTime = $b->getCreatedTime();
+					return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
+				});
+			}
+
+			// Apply pagination
+			$offset = ($page - 1) * $limit;
+			return array_slice($mutual, $offset, $limit);
+		} catch (Exception $e) {
+			return [];
+		}
+	}
+
+	public static function getMutualFriendsCount(
+		UserInterface $user,
+		?UserInterface $requester = null,
+		string $search = '',
+	): int {
+		if (!$requester) {
+			return 0;
 		}
 
-		// Apply search filter
-		if (!empty($search)) {
-			$mutual = array_filter($mutual, function ($u) use ($search) {
-				return str_contains($u->getAccountName(), $search);
-			});
-		}
+		try {
+			$userFriendsIds = json_decode($user->get('field_friends')->value ?? '[]', true) ?: [];
+			$requesterFriendsIds =
+				json_decode($requester->get('field_friends')->value ?? '[]', true) ?: [];
 
-		// Apply sorting
-		if ($sort === 'rand') {
-			shuffle($mutual);
-		} else {
-			usort($mutual, function ($a, $b) use ($sort) {
-				$aTime = $a->getCreatedTime();
-				$bTime = $b->getCreatedTime();
-				return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
-			});
-		}
+			$mutualIds = array_intersect($userFriendsIds, $requesterFriendsIds);
 
-		// Apply pagination
-		$offset = ($page - 1) * $limit;
-		return array_slice($mutual, $offset, $limit);
+			if (!empty($search)) {
+				$mutualUsers = array_filter(array_map(fn($id) => self::findById($id), $mutualIds));
+				$mutualUsers = array_filter(
+					$mutualUsers,
+					fn($u) => str_contains($u->getAccountName(), $search),
+				);
+				return count($mutualUsers);
+			}
+
+			return count($mutualIds);
+		} catch (Exception $e) {
+			return 0;
+		}
 	}
 
 	public static function getNonMutualFriends(
@@ -989,47 +1050,98 @@ class UsersHelper
 		string $search = '',
 		string $sort = 'desc',
 	): array {
-		$userFriends = self::getAddedFriends($user);
-		$nonMutual = [];
-
-		foreach ($userFriends as $friend) {
-			$friendsOfFriend = self::getAddedFriends($friend);
-			foreach ($friendsOfFriend as $potentialNonMutual) {
-				if ($potentialNonMutual === $user) {
-					continue;
-				}
-
-				$nonMutual[$potentialNonMutual->id()] =
-					($nonMutual[$potentialNonMutual->id()] ?? 0) + 1;
+		try {
+			$userFriendsIds = json_decode($user->get('field_friends')->value ?? '[]', true) ?: [];
+			if (empty($userFriendsIds)) {
+				return [];
 			}
+
+			$userFriends = array_filter(array_map(fn($id) => self::findById($id), $userFriendsIds));
+			$nonMutual = [];
+
+			foreach ($userFriends as $friend) {
+				$friendsOfFriendIds =
+					json_decode($friend->get('field_friends')->value ?? '[]', true) ?: [];
+				foreach ($friendsOfFriendIds as $potentialNonMutualId) {
+					if ($potentialNonMutualId === $user->id()) {
+						continue;
+					}
+					$nonMutual[$potentialNonMutualId] =
+						($nonMutual[$potentialNonMutualId] ?? 0) + 1;
+				}
+			}
+
+			$nonMutual = array_filter($nonMutual, fn($count) => $count === 1);
+			$nonMutualUsers = array_filter(
+				array_map(fn($id) => self::findById($id), array_keys($nonMutual)),
+			);
+
+			// Apply search filter
+			if (!empty($search)) {
+				$nonMutualUsers = array_filter(
+					$nonMutualUsers,
+					fn($u) => str_contains($u->getAccountName(), $search),
+				);
+			}
+
+			// Apply sorting
+			if ($sort === 'rand') {
+				shuffle($nonMutualUsers);
+			} else {
+				usort($nonMutualUsers, function ($a, $b) use ($sort) {
+					$aTime = $a->getCreatedTime();
+					$bTime = $b->getCreatedTime();
+					return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
+				});
+			}
+
+			// Apply pagination
+			$offset = ($page - 1) * $limit;
+			return array_slice($nonMutualUsers, $offset, $limit);
+		} catch (Exception $e) {
+			return [];
 		}
+	}
 
-		$nonMutual = array_filter($nonMutual, fn($count) => $count === 1);
-		$nonMutualUsers = array_filter(
-			array_map(fn($id) => self::findById($id), array_keys($nonMutual)),
-		);
+	public static function getNonMutualFriendsCount(UserInterface $user, string $search = ''): int
+	{
+		try {
+			$userFriendsIds = json_decode($user->get('field_friends')->value ?? '[]', true) ?: [];
+			if (empty($userFriendsIds)) {
+				return 0;
+			}
 
-		// Apply search filter
-		if (!empty($search)) {
-			$nonMutualUsers = array_filter($nonMutualUsers, function ($u) use ($search) {
-				return str_contains($u->getAccountName(), $search);
-			});
+			$userFriends = array_filter(array_map(fn($id) => self::findById($id), $userFriendsIds));
+			$nonMutual = [];
+
+			foreach ($userFriends as $friend) {
+				$friendsOfFriendIds =
+					json_decode($friend->get('field_friends')->value ?? '[]', true) ?: [];
+				foreach ($friendsOfFriendIds as $potentialNonMutualId) {
+					if ($potentialNonMutualId === $user->id()) {
+						continue;
+					}
+					$nonMutual[$potentialNonMutualId] =
+						($nonMutual[$potentialNonMutualId] ?? 0) + 1;
+				}
+			}
+
+			$nonMutual = array_filter($nonMutual, fn($count) => $count === 1);
+			$nonMutualUsers = array_filter(
+				array_map(fn($id) => self::findById($id), array_keys($nonMutual)),
+			);
+
+			if (!empty($search)) {
+				$nonMutualUsers = array_filter(
+					$nonMutualUsers,
+					fn($u) => str_contains($u->getAccountName(), $search),
+				);
+			}
+
+			return count($nonMutualUsers);
+		} catch (Exception $e) {
+			return 0;
 		}
-
-		// Apply sorting
-		if ($sort === 'rand') {
-			shuffle($nonMutualUsers);
-		} else {
-			usort($nonMutualUsers, function ($a, $b) use ($sort) {
-				$aTime = $a->getCreatedTime();
-				$bTime = $b->getCreatedTime();
-				return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
-			});
-		}
-
-		// Apply pagination
-		$offset = ($page - 1) * $limit;
-		return array_slice($nonMutualUsers, $offset, $limit);
 	}
 
 	public static function addFriend(UserInterface $user, UserInterface $friend): bool
