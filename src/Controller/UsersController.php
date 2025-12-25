@@ -821,6 +821,10 @@ class UsersController extends ControllerBase
 			return GeneralHelper::notFound('Friend not found');
 		}
 
+		if ($user->id() === $friend->id()) {
+			return GeneralHelper::badRequest('Cannot add yourself as a friend');
+		}
+
 		// Ensure friend is visible
 		$friend = UsersHelper::checkVisibility($friend, $request);
 		if ($friend instanceof JsonResponse) {
@@ -864,6 +868,10 @@ class UsersController extends ControllerBase
 		$friend = UsersHelper::findBy($friendId);
 		if (!$friend) {
 			return GeneralHelper::notFound('Friend not found');
+		}
+
+		if ($user->id() === $friend->id()) {
+			return GeneralHelper::badRequest('Cannot remove yourself from your own friends list');
 		}
 
 		$result = UsersHelper::removeFriend($user, $friend);
@@ -950,6 +958,10 @@ class UsersController extends ControllerBase
 			return GeneralHelper::notFound('Friend not found');
 		}
 
+		if ($user->id() === $friend->id()) {
+			return GeneralHelper::badRequest('Cannot add yourself to your own circle');
+		}
+
 		if (!UsersHelper::isAddedFriend($user, $friend)) {
 			return GeneralHelper::badRequest('Only friends can be added to circle');
 		}
@@ -984,6 +996,10 @@ class UsersController extends ControllerBase
 		$friend = UsersHelper::findBy($friendId);
 		if (!$friend) {
 			return GeneralHelper::notFound('Friend not found');
+		}
+
+		if ($user->id() === $friend->id()) {
+			return GeneralHelper::badRequest('Cannot remove yourself to your own circle');
 		}
 
 		if (!UsersHelper::isInCircle($user, $friend)) {

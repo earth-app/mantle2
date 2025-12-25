@@ -578,6 +578,7 @@ class UsersHelper
 			],
 			'activities' => self::getActivities($user),
 			'is_friend' => $requester ? self::isAddedFriend($requester, $user) : false,
+			'is_mutual' => $requester ? self::isMutualFriend($user, $requester) : false,
 			'friends' => self::tryVisible(
 				json_decode($user->get('field_friends')->value ?? '[]', true),
 				$user,
@@ -593,6 +594,19 @@ class UsersHelper
 			'mutual_count' => self::getMutualFriendsCount($user, $requester),
 			'non_mutual_count' => self::tryVisible(
 				self::getNonMutualFriendsCount($user),
+				$user,
+				$requester,
+				'PRIVATE',
+			),
+			'is_in_circle' => $requester && self::isInCircle($user, $requester),
+			'circle' => self::tryVisible(
+				json_decode($user->get('field_circle')->value ?? '[]', true),
+				$user,
+				$requester,
+				'PRIVATE',
+			),
+			'circle_count' => self::tryVisible(
+				self::getCircleCount($user),
 				$user,
 				$requester,
 				'PRIVATE',
@@ -1233,14 +1247,46 @@ class UsersHelper
 		return array_slice($circleUsers, ($page - 1) * $limit, $limit);
 	}
 
+	public static function getCircleCount(UserInterface $user, string $search = ''): int
+	{
+		$circleValue = $user->get('field_circle')->value ?? '{}';
+
+		/** @var int[] $circle */
+		$circle = $circleValue ? json_decode($circleValue, true) : [];
+		if (!empty($search)) {
+			$circleUsers = array_filter(array_map(fn($id) => self::findById($id), $circle));
+			$circleUsers = array_filter(
+				$circleUsers,
+				fn($u) => str_contains($u->getAccountName(), $search),
+			);
+			return count($circleUsers);
+		}
+
+		return count($circle);
+	}
+
 	public static function isInCircle(UserInterface $user1, UserInterface $user2): bool
 	{
+		if ($user1->id() === $user2->id()) {
+			return false; // cannot be in own circle
+		}
+
 		$circle = self::getCircle($user1);
 		return in_array($user2, $circle, true);
 	}
 
 	public static function addToCircle(UserInterface $user, UserInterface $member): bool
 	{
+		if ($user->id() === $member->id()) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid attempted to add themselves to their own circle.',
+				[
+					'%uid' => $user->id(),
+				],
+			);
+			return false;
+		}
+
 		if (!self::isAddedFriend($user, $member)) {
 			Drupal::logger('mantle2')->warning(
 				'User %uid is not a friend of %friend_uid and cannot be added to the circle.',
@@ -1265,6 +1311,16 @@ class UsersHelper
 
 	public static function removeFromCircle(UserInterface $user, UserInterface $member): bool
 	{
+		if ($user->id() === $member->id()) {
+			Drupal::logger('mantle2')->warning(
+				'User %uid attempted to remove themselves from their own circle.',
+				[
+					'%uid' => $user->id(),
+				],
+			);
+			return false;
+		}
+
 		$circle = self::getCircle($user);
 		if (!in_array($member, $circle, true)) {
 			return false;

@@ -848,6 +848,17 @@ class Mantle2Schemas
 					],
 				],
 				'activities' => self::activitiesList(),
+				'is_friend' => [
+					'type' => 'boolean',
+					'description' => 'Indicates if the user is a friend of the requesting user',
+					'example' => true,
+				],
+				'is_mutual' => [
+					'type' => 'boolean',
+					'description' =>
+						'Indicates if the user is a mutual friend with the requesting user',
+					'example' => false,
+				],
 				'friends' => self::idArray(),
 				'added_count' => [
 					'type' => 'integer',
@@ -869,6 +880,18 @@ class Mantle2Schemas
 					'type' => 'boolean',
 					'description' => 'Indicates if an email change verification is pending',
 					'example' => true,
+				],
+				'is_in_circle' => [
+					'type' => 'boolean',
+					'description' =>
+						'Indicates if the user is in the private circle of the requesting user',
+					'example' => false,
+				],
+				'circle' => self::idArray(),
+				'circle_count' => [
+					'type' => 'integer',
+					'example' => 5,
+					'description' => 'Number of users in the user\'s private circle',
 				],
 				'message' => [
 					'type' => 'string',
