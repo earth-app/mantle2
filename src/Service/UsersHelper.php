@@ -1224,6 +1224,8 @@ class UsersHelper
 		}
 	}
 
+	public const MAX_CIRCLE_SIZE = 250;
+
 	/**
 	 * @return UserInterface[]
 	 */
@@ -1317,6 +1319,16 @@ class UsersHelper
 
 			$circle = $user->get('field_circle')->value ?? '[]';
 			$circle0 = $circle ? json_decode($circle, true) : [];
+			if (count($circle0) >= self::MAX_CIRCLE_SIZE) {
+				Drupal::logger('mantle2')->warning(
+					'User %uid has reached the maximum circle size and cannot add more members.',
+					[
+						'%uid' => $user->id(),
+					],
+				);
+				return false;
+			}
+
 			if (in_array($member->id(), $circle0, true)) {
 				return false;
 			}

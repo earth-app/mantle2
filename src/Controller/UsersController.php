@@ -984,6 +984,11 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Only friends can be added to circle');
 		}
 
+		$count = UsersHelper::getCircleCount($user);
+		if ($count >= UsersHelper::MAX_CIRCLE_SIZE) {
+			return GeneralHelper::badRequest('Circle size limit reached');
+		}
+
 		$result = UsersHelper::addToCircle($user, $friend);
 		if (!$result) {
 			return GeneralHelper::conflict('Friend is already in circle');
