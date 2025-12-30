@@ -160,8 +160,23 @@ class CampaignHelper
 			},
 		];
 
+		$randomPlaceholders = ['{activity.random}', '{prompt.random}', '{article.random}'];
+
 		foreach ($placeholders as $placeholder => $callback) {
-			if (str_contains($text, $placeholder)) {
+			if (!str_contains($text, $placeholder)) {
+				continue;
+			}
+
+			// for random placeholders, replace one occurrence at a time
+			if (in_array($placeholder, $randomPlaceholders)) {
+				while (str_contains($text, $placeholder)) {
+					$pos = strpos($text, $placeholder);
+					if ($pos === false) {
+						break;
+					}
+					$text = substr_replace($text, $callback(), $pos, strlen($placeholder));
+				}
+			} else {
 				$text = str_replace($placeholder, $callback(), $text);
 			}
 		}
@@ -309,7 +324,7 @@ class CampaignHelper
 
 				// check global filter
 				if ($globalFilterName && method_exists(self::class, $globalFilterName)) {
-					if ($globalFilterResults[$globalFilterName] ?? null === null) {
+					if (!array_key_exists($globalFilterName, $globalFilterResults)) {
 						$result = self::$globalFilterName();
 						$globalFilterResults[$globalFilterName] = $result;
 					}
