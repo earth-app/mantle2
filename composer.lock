@@ -267,16 +267,16 @@
         },
         {
             "name": "drupal/core",
-            "version": "11.3.1",
+            "version": "11.3.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drupal/core.git",
-                "reference": "d3e8dd05dc47a8f6ca14713ba4ec1fc52952407d"
+                "reference": "5af5a94a47a04fdcb96608651409173b99d155a0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/drupal/core/zipball/d3e8dd05dc47a8f6ca14713ba4ec1fc52952407d",
-                "reference": "d3e8dd05dc47a8f6ca14713ba4ec1fc52952407d",
+                "url": "https://api.github.com/repos/drupal/core/zipball/5af5a94a47a04fdcb96608651409173b99d155a0",
+                "reference": "5af5a94a47a04fdcb96608651409173b99d155a0",
                 "shasum": ""
             },
             "require": {
@@ -434,13 +434,13 @@
             ],
             "description": "Drupal is an open source content management platform powering millions of websites and applications.",
             "support": {
-                "source": "https://github.com/drupal/core/tree/11.3.1"
+                "source": "https://github.com/drupal/core/tree/11.3.2"
             },
-            "time": "2025-12-18T14:22:29+00:00"
+            "time": "2026-01-08T09:19:50+00:00"
         },
         {
             "name": "drupal/core-composer-scaffold",
-            "version": "11.3.1",
+            "version": "11.3.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drupal/core-composer-scaffold.git",
@@ -484,7 +484,7 @@
                 "drupal"
             ],
             "support": {
-                "source": "https://github.com/drupal/core-composer-scaffold/tree/11.3.1"
+                "source": "https://github.com/drupal/core-composer-scaffold/tree/11.3.2"
             },
             "time": "2025-10-13T16:03:31+00:00"
         },
@@ -7079,7 +7079,7 @@
         },
         {
             "name": "drupal/core-dev",
-            "version": "11.3.1",
+            "version": "11.3.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/drupal/core-dev.git",
@@ -7129,7 +7129,7 @@
             ],
             "description": "require-dev dependencies from drupal/drupal; use in addition to drupal/core-recommended to run tests from drupal/core.",
             "support": {
-                "source": "https://github.com/drupal/core-dev/tree/11.3.1"
+                "source": "https://github.com/drupal/core-dev/tree/11.3.2"
             },
             "time": "2025-12-15T09:20:07+00:00"
         },
