@@ -351,12 +351,7 @@ class EventsController extends ControllerBase
 			return GeneralHelper::notFound('Event not found');
 		}
 
-		$result = $event->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($eventId);
-		$result['host'] = UsersHelper::serializeUser($event->getHost(), $user);
-		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
-
+		$result = EventsHelper::serializeEvent($event, $node, $user);
 		return new JsonResponse($result, Response::HTTP_OK);
 	}
 
