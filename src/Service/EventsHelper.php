@@ -156,4 +156,14 @@ class EventsHelper
 		);
 		$node->save();
 	}
+
+	public static function serializeEvent(Event $event, Node $node, ?UserInterface $user): array
+	{
+		$result = $event->jsonSerialize();
+		$result['id'] = GeneralHelper::formatId($node->id());
+		$result['host'] = UsersHelper::serializeUser($event->getHost(), $user);
+		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+		return $result;
+	}
 }

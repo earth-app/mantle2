@@ -6,7 +6,6 @@ use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Event;
 use Drupal\mantle2\Custom\EventType;
@@ -36,6 +35,7 @@ class EventsController extends ControllerBase
 			return $pagination;
 		}
 
+		$requester = UsersHelper::getOwnerOfRequest($request);
 		$limit = $pagination['limit'];
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
@@ -172,10 +172,7 @@ class EventsController extends ControllerBase
 			foreach ($nodes as $node) {
 				$event = EventsHelper::nodeToEvent($node);
 				if ($event) {
-					$item = $event->jsonSerialize();
-					$item['id'] = GeneralHelper::formatId($node->id());
-					$item['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-					$item['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+					$item = EventsHelper::serializeEvent($event, $node, $requester);
 					$data[] = $item;
 				}
 			}
@@ -327,11 +324,7 @@ class EventsController extends ControllerBase
 		);
 
 		$node = EventsHelper::createEvent($event, $user);
-
-		$result = $event->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($node->id());
-		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+		$result = EventsHelper::serializeEvent($event, $node, $user);
 
 		return new JsonResponse($result, Response::HTTP_CREATED);
 	}
@@ -360,6 +353,7 @@ class EventsController extends ControllerBase
 
 		$result = $event->jsonSerialize();
 		$result['id'] = GeneralHelper::formatId($eventId);
+		$result['host'] = UsersHelper::serializeUser($event->getHost(), $user);
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
@@ -529,12 +523,10 @@ class EventsController extends ControllerBase
 		}
 
 		EventsHelper::updateEvent($node, $event);
-		$result = $event->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($eventId);
-		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
-
-		return new JsonResponse($result, Response::HTTP_OK);
+		return new JsonResponse(
+			EventsHelper::serializeEvent($event, $node, $user),
+			Response::HTTP_OK,
+		);
 	}
 
 	// DELETE /v2/events/{eventId}
@@ -665,7 +657,10 @@ class EventsController extends ControllerBase
 		EventsHelper::updateEvent($node, $event);
 
 		return new JsonResponse(
-			['user' => UsersHelper::serializeUser($user), 'event' => $event],
+			[
+				'user' => UsersHelper::serializeUser($user),
+				'event' => EventsHelper::serializeEvent($event, $node, $user),
+			],
 			Response::HTTP_OK,
 		);
 	}
@@ -702,9 +697,11 @@ class EventsController extends ControllerBase
 		}
 
 		EventsHelper::updateEvent($node, $event);
-
 		return new JsonResponse(
-			['user' => UsersHelper::serializeUser($user), 'event' => $event],
+			[
+				'user' => UsersHelper::serializeUser($user),
+				'event' => EventsHelper::serializeEvent($event, $node, $user),
+			],
 			Response::HTTP_OK,
 		);
 	}
