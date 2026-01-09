@@ -1152,6 +1152,7 @@ class Mantle2Schemas
 			'properties' => [
 				'id' => self::$id,
 				'hostId' => self::$id,
+				'host' => self::user(),
 				'name' => self::text(50),
 				'description' => self::text(3000),
 				'type' => self::eventType(),
@@ -1166,10 +1167,13 @@ class Mantle2Schemas
 				'date' => self::$date,
 				'end_date' => self::$date,
 				'visibility' => self::visibility(),
+				'created_at' => self::$date,
+				'updated_at' => self::$date,
 			],
 			'required' => [
 				'id',
 				'hostId',
+				'host',
 				'name',
 				'description',
 				'type',
