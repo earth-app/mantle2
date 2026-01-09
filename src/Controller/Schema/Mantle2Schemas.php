@@ -564,25 +564,8 @@ class Mantle2Schemas
 
 	public static function eventCreate(): array
 	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'name' => self::text(50),
-				'description' => self::text(3000),
-				'type' => self::eventType(),
-				'location' => [
-					'type' => 'object',
-					'properties' => [
-						'latitude' => ['type' => 'number', 'example' => 37.7749],
-						'longitude' => ['type' => 'number', 'example' => -122.4194],
-					],
-				],
-				'date' => ['type' => 'integer', 'example' => 1736400000000],
-				'end_date' => ['type' => 'integer', 'example' => 1736403600000],
-				'visibility' => self::visibility(),
-			],
-			'required' => ['name', 'type', 'date', 'visibility'],
-		];
+		$data = self::eventUpdate();
+		return [...$data, 'required' => ['name', 'type', 'date', 'visibility']];
 	}
 
 	public static function eventUpdate(): array
@@ -601,8 +584,8 @@ class Mantle2Schemas
 						'longitude' => ['type' => 'number', 'example' => -122.4194],
 					],
 				],
-				'date' => self::$date,
-				'endDate' => self::$date,
+				'date' => ['type' => 'integer', 'example' => 1736400000000],
+				'end_date' => ['type' => 'integer', 'example' => 1736403600000],
 				'visibility' => self::visibility(),
 			],
 		];
