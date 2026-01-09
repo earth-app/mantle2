@@ -67,6 +67,7 @@ class Event implements JsonSerializable
 			],
 			'date' => $this->date,
 			'end_date' => $this->endDate,
+			'attendee_count' => $this->getAttendeesCount(),
 			'visibility' => $this->visibility->value,
 		];
 	}

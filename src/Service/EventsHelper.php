@@ -164,6 +164,8 @@ class EventsHelper
 		$result['host'] = UsersHelper::serializeUser($event->getHost(), $user);
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+		$result['is_attending'] = $user ? in_array($user->id(), $event->getAttendeeIds()) : false;
+
 		return $result;
 	}
 }

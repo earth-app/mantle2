@@ -1150,6 +1150,8 @@ class Mantle2Schemas
 				'date' => self::$date,
 				'end_date' => self::$date,
 				'visibility' => self::visibility(),
+				'attendee_count' => self::$number,
+				'is_attending' => self::$bool,
 				'created_at' => self::$date,
 				'updated_at' => self::$date,
 			],
