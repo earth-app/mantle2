@@ -86,7 +86,7 @@ class UsersController extends ControllerBase
 
 				// Get total count for random
 				$countQuery = clone $query;
-				$total = $countQuery->countQuery()->execute()->fetchField();
+				$total = (int) $countQuery->countQuery()->execute()->fetchField();
 
 				$query->orderRandom()->range($page * $limit, $limit);
 				$uids = $query->execute()->fetchCol();
@@ -113,7 +113,7 @@ class UsersController extends ControllerBase
 				}
 
 				$countQuery = clone $query;
-				$total = $countQuery->count()->execute();
+				$total = (int) $countQuery->count()->execute();
 
 				// Add sorting
 				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
@@ -2011,7 +2011,7 @@ class UsersController extends ControllerBase
 
 		$data = UsersHelper::getUserPrompts($visible, $limit, $page, $search, $sort);
 		$prompts = $data['prompts'];
-		$total = $data['total'];
+		$total = (int) $data['total'];
 
 		return new JsonResponse([
 			'limit' => $limit,

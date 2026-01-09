@@ -2328,7 +2328,7 @@ class UsersHelper
 			}
 
 			$countQuery = clone $query;
-			$count = $countQuery->count()->execute();
+			$count = (int) $countQuery->count()->execute();
 
 			// Handle random sorting differently
 			if ($sort === 'rand') {
@@ -2408,7 +2408,7 @@ class UsersHelper
 			}
 
 			$countQuery = clone $query;
-			$count = $countQuery->count()->execute();
+			$count = (int) $countQuery->count()->execute();
 
 			// add sorting
 			$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';
@@ -2481,7 +2481,7 @@ class UsersHelper
 			}
 
 			$countQuery = clone $query;
-			$count = $countQuery->count()->execute();
+			$count = (int) $countQuery->count()->execute();
 
 			// Handle random sorting differently
 			if ($sort === 'rand') {

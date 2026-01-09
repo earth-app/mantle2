@@ -98,7 +98,7 @@ class PromptsController extends ControllerBase
 
 				// Get total count for random
 				$countQuery = clone $query;
-				$total = $countQuery->countQuery()->execute()->fetchField();
+				$total = (int) $countQuery->countQuery()->execute()->fetchField();
 
 				$query->orderRandom()->range($page * $limit, $limit);
 				$nids = $query->execute()->fetchCol();
@@ -142,7 +142,7 @@ class PromptsController extends ControllerBase
 				}
 
 				$countQuery = clone $query;
-				$total = $countQuery->count()->execute();
+				$total = (int) $countQuery->count()->execute();
 
 				// Add sorting
 				$sortDirection = $sort === 'desc' ? 'DESC' : 'ASC';

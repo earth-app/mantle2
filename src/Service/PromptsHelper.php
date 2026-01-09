@@ -284,7 +284,7 @@ class PromptsHelper
 			);
 		}
 
-		return $query->count()->execute();
+		return (int) $query->count()->execute();
 	}
 
 	/**
@@ -412,7 +412,7 @@ class PromptsHelper
 			->condition('uid', $user->id())
 			->condition('status', 1);
 
-		$count = $query->count()->execute();
+		$count = (int) $query->count()->execute();
 
 		return $count > 0;
 	}
