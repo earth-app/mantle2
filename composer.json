@@ -4,7 +4,7 @@
 	"type": "project",
 	"require": {
 		"php": "^8.4",
-		"drupal/core": "^11.2",
+		"drupal/core": "^11.3",
 		"symfony/event-dispatcher": "^7.3",
 		"drupal/json_field": "^1.4",
 		"ext-json": "*",
@@ -23,9 +23,9 @@
 		}
 	},
 	"require-dev": {
-		"drush/drush": "^13.6",
+		"drush/drush": "^13.7",
 		"phpunit/phpunit": "^11.5",
-		"drupal/core-dev": "^11.2"
+		"drupal/core-dev": "^11.3"
 	},
 	"autoload-dev": {
 		"psr-4": {
@@ -43,7 +43,8 @@
 			"php-http/discovery": true,
 			"phpstan/extension-installer": true,
 			"tbachert/spi": true,
-			"dealerdirect/phpcodesniffer-composer-installer": true
+			"dealerdirect/phpcodesniffer-composer-installer": true,
+			"drupal/core-composer-scaffold": false
 		}
 	}
 }
