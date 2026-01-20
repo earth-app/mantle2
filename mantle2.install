@@ -669,23 +669,23 @@ function mantle2_install(): void
 			],
 			'cardinality' => 1,
 		],
-	]);
-
-	// Add Event Attendees Field
-	createField(
-		'node',
-		'field_event_attendees',
-		'entity_reference',
-		'Event Attendees',
-		true,
-		null,
 		[
-			'target_type' => 'user',
+			'name' => 'field_event_attendees',
+			'type' => 'entity_reference',
+			'label' => 'Event Attendees',
+			'required' => false,
+			'settings' => [
+				'target_type' => 'user',
+			],
+			'cardinality' => -1,
 		],
-		[],
-		-1,
-		'event',
-	);
+		[
+			'name' => 'field_event_fields',
+			'type' => 'json',
+			'label' => 'Event Fields',
+			'required' => false,
+		],
+	]);
 
 	// Prompts
 

@@ -23,6 +23,7 @@ class Event implements JsonSerializable
 	private Visibility $visibility;
 	/** @var int[] $attendees */
 	private array $attendees = [];
+	private array $fields = [];
 
 	public function __construct(
 		int $hostId,
@@ -36,6 +37,7 @@ class Event implements JsonSerializable
 		?int $endDate = null,
 		Visibility $visibility = Visibility::PUBLIC,
 		array $attendees = [],
+		array $fields = [],
 	) {
 		$this->hostId = $hostId;
 		$this->name = $name;
@@ -48,6 +50,7 @@ class Event implements JsonSerializable
 		$this->endDate = $endDate;
 		$this->visibility = $visibility;
 		$this->attendees = $attendees;
+		$this->fields = $fields;
 	}
 
 	public function jsonSerialize(): array
@@ -69,6 +72,7 @@ class Event implements JsonSerializable
 			'end_date' => $this->endDate,
 			'attendee_count' => $this->getAttendeesCount(),
 			'visibility' => $this->visibility->value,
+			'fields' => $this->fields,
 		];
 	}
 
@@ -236,5 +240,15 @@ class Event implements JsonSerializable
 	public function removeAttendee(int $userId): void
 	{
 		$this->attendees = array_filter($this->attendees, fn(int $id) => $id !== $userId);
+	}
+
+	public function getFields(): array
+	{
+		return $this->fields;
+	}
+
+	public function setFields(array $fields): void
+	{
+		$this->fields = $fields;
 	}
 }

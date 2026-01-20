@@ -587,6 +587,7 @@ class Mantle2Schemas
 				'date' => ['type' => 'integer', 'example' => 1736400000000],
 				'end_date' => ['type' => 'integer', 'example' => 1736403600000],
 				'visibility' => self::visibility(),
+				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
 			],
 		];
 	}
@@ -1154,6 +1155,7 @@ class Mantle2Schemas
 				'is_attending' => self::$bool,
 				'created_at' => self::$date,
 				'updated_at' => self::$date,
+				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
 			],
 			'required' => [
 				'id',

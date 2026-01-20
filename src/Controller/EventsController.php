@@ -41,6 +41,11 @@ class EventsController extends ControllerBase
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
+		$filter_after = $request->query->get('filter_after');
+		$filter_before = $request->query->get('filter_before');
+		$filter_ends_after = $request->query->get('filter_ends_after');
+		$filter_ends_before = $request->query->get('filter_ends_before');
+
 		try {
 			// Handle random sorting separately using database query
 			if ($sort === 'rand') {
@@ -153,6 +158,23 @@ class EventsController extends ControllerBase
 						->orConditionGroup()
 						->condition('field_event_name', $search, 'CONTAINS');
 					$query->condition($group);
+				}
+
+				// Apply date filters
+				if ($filter_after !== null && is_numeric($filter_after)) {
+					$query->condition('field_event_date', (int) $filter_after, '>=');
+				}
+
+				if ($filter_before !== null && is_numeric($filter_before)) {
+					$query->condition('field_event_date', (int) $filter_before, '<=');
+				}
+
+				if ($filter_ends_after !== null && is_numeric($filter_ends_after)) {
+					$query->condition('field_event_end_date', (int) $filter_ends_after, '>=');
+				}
+
+				if ($filter_ends_before !== null && is_numeric($filter_ends_before)) {
+					$query->condition('field_event_end_date', (int) $filter_ends_before, '<=');
 				}
 
 				$countQuery = clone $query;
@@ -310,6 +332,17 @@ class EventsController extends ControllerBase
 			}
 		}
 
+		$fields = $body['fields'] ?? ['link' => ''];
+		if (!is_array($fields)) {
+			return GeneralHelper::badRequest('Invalid fields type');
+		}
+
+		foreach ($fields as $key => $value) {
+			if (!is_string($key) || !is_string($value)) {
+				return GeneralHelper::badRequest('Invalid field entry type');
+			}
+		}
+
 		$event = new Event(
 			$user->id(),
 			$name,
@@ -321,6 +354,8 @@ class EventsController extends ControllerBase
 			$date,
 			$endDate,
 			$visibility0,
+			[],
+			$fields,
 		);
 
 		$node = EventsHelper::createEvent($event, $user);
@@ -390,6 +425,7 @@ class EventsController extends ControllerBase
 		$date = $body['date'] ?? null;
 		$endDate = $body['end_date'] ?? null;
 		$visibility = $body['visibility'] ?? null;
+		$fields = $body['fields'] ?? null;
 
 		if ($name !== null) {
 			if (!is_string($name) || strlen($name) > 50) {
@@ -510,6 +546,20 @@ class EventsController extends ControllerBase
 			}
 
 			$event->setVisibility($visibility0);
+		}
+
+		if ($fields !== null) {
+			if (!is_array($fields)) {
+				return GeneralHelper::badRequest('Invalid fields type');
+			}
+
+			foreach ($fields as $key => $value) {
+				if (!is_string($key) || !is_string($value)) {
+					return GeneralHelper::badRequest('Invalid field entry type');
+				}
+			}
+
+			$event->setFields($fields);
 		}
 
 		$node = Node::load($eventId);
