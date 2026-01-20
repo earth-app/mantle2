@@ -103,7 +103,64 @@ class EventsController extends ControllerBase
 
 				if ($search) {
 					$fn = $query->leftJoin('node__field_event_name', 'fn', 'fn.entity_id = n.nid');
-					$query->condition("$fn.field_event_name_value", "%$search%", 'LIKE');
+					$fd = $query->leftJoin(
+						'node__field_event_description',
+						'fd',
+						'fd.entity_id = n.nid',
+					);
+					$ff = $query->leftJoin(
+						'node__field_event_fields',
+						'ff',
+						'ff.entity_id = n.nid',
+					);
+
+					$searchGroup = $query
+						->orConditionGroup()
+						->condition("$fn.field_event_name_value", "%$search%", 'LIKE')
+						->condition("$fd.field_event_description_value", "%$search%", 'LIKE')
+						->condition(
+							"$ff.field_event_fields_value",
+							'%"moho_id"%:%"' . $search . '"%',
+							'LIKE',
+						);
+					$query->condition($searchGroup);
+				}
+
+				// Apply date filters
+				if ($filter_after !== null && is_numeric($filter_after)) {
+					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
+					$query->condition("$fd.field_event_date_value", (int) $filter_after, '>=');
+				}
+
+				if ($filter_before !== null && is_numeric($filter_before)) {
+					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
+					$query->condition("$fd.field_event_date_value", (int) $filter_before, '<=');
+				}
+
+				if ($filter_ends_after !== null && is_numeric($filter_ends_after)) {
+					$fed = $query->leftJoin(
+						'node__field_event_end_date',
+						'fed',
+						'fed.entity_id = n.nid',
+					);
+					$query->condition(
+						"$fed.field_event_end_date_value",
+						(int) $filter_ends_after,
+						'>=',
+					);
+				}
+
+				if ($filter_ends_before !== null && is_numeric($filter_ends_before)) {
+					$fed = $query->leftJoin(
+						'node__field_event_end_date',
+						'fed',
+						'fed.entity_id = n.nid',
+					);
+					$query->condition(
+						"$fed.field_event_end_date_value",
+						(int) $filter_ends_before,
+						'<=',
+					);
 				}
 
 				// Get total count for random
@@ -156,7 +213,9 @@ class EventsController extends ControllerBase
 				if ($search) {
 					$group = $query
 						->orConditionGroup()
-						->condition('field_event_name', $search, 'CONTAINS');
+						->condition('field_event_name', $search, 'CONTAINS')
+						->condition('field_event_description', $search, 'CONTAINS')
+						->condition('field_event_fields', '"moho_id":"' . $search, 'CONTAINS');
 					$query->condition($group);
 				}
 
