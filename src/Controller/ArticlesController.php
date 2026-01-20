@@ -63,11 +63,17 @@ class ArticlesController extends ControllerBase
 						'fd',
 						'fd.entity_id = n.nid',
 					);
+					$fc = $query->leftJoin(
+						'node__field_article_content',
+						'fc',
+						'fc.entity_id = n.nid',
+					);
 
 					$group = $query
 						->orConditionGroup()
 						->condition("$ft.field_article_title_value", "%$search%", 'LIKE')
-						->condition("$fd.field_article_description_value", "%$search%", 'LIKE');
+						->condition("$fd.field_article_description_value", "%$search%", 'LIKE')
+						->condition("$fc.field_article_content_value", "%$search%", 'LIKE');
 					$query->condition($group);
 				}
 
@@ -85,6 +91,7 @@ class ArticlesController extends ControllerBase
 					$group = $query->orConditionGroup();
 					$group->condition('field_article_title', $search, 'CONTAINS');
 					$group->condition('field_article_description', $search, 'CONTAINS');
+					$group->condition('field_article_content', $search, 'CONTAINS');
 					$query->condition($group);
 				}
 
@@ -105,11 +112,7 @@ class ArticlesController extends ControllerBase
 			foreach ($nodes as $node) {
 				$article = ArticlesHelper::nodeToArticle($node);
 				if ($article) {
-					$item = $article->jsonSerialize();
-
-					$item['author'] = UsersHelper::serializeUser($article->getAuthor(), $requester);
-					$item['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-					$item['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+					$item = ArticlesHelper::serializeArticle($article, $requester);
 					$data[] = $item;
 				}
 			}
@@ -297,11 +300,7 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load created article');
 		}
 
-		$item = $article->jsonSerialize();
-		$item['author'] = UsersHelper::serializeUser($article->getAuthor(), $user);
-		$item['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-		$item['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
-
+		$item = ArticlesHelper::serializeArticle($article, $user);
 		return new JsonResponse($item, Response::HTTP_CREATED);
 	}
 
@@ -319,11 +318,7 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load article');
 		}
 
-		$item = $article->jsonSerialize();
-		$item['author'] = UsersHelper::serializeUser($article->getAuthor(), $requester);
-		$item['created_at'] = GeneralHelper::dateToIso($articleId->getCreatedTime());
-		$item['updated_at'] = GeneralHelper::dateToIso($articleId->getChangedTime());
-
+		$item = ArticlesHelper::serializeArticle($article, $requester);
 		return new JsonResponse($item, Response::HTTP_OK);
 	}
 
@@ -450,11 +445,7 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load updated article');
 		}
 
-		$item = $article->jsonSerialize();
-		$item['author'] = UsersHelper::serializeUser($article->getAuthor(), $user);
-		$item['created_at'] = GeneralHelper::dateToIso($articleId->getCreatedTime());
-		$item['updated_at'] = GeneralHelper::dateToIso($articleId->getChangedTime());
-
+		$item = ArticlesHelper::serializeArticle($article, $user);
 		return new JsonResponse($item, Response::HTTP_OK);
 	}
 

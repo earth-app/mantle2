@@ -46,6 +46,18 @@ class ArticlesHelper
 		);
 	}
 
+	public static function serializeArticle(Article $article, ?UserInterface $user): array
+	{
+		$result = $article->jsonSerialize();
+		$result['author'] = UsersHelper::serializeUser($article->getAuthor(), $user);
+		$result['created_at'] = GeneralHelper::dateToIso($article->getCreatedAt());
+		$result['updated_at'] = GeneralHelper::dateToIso($article->getUpdatedAt());
+		$result['can_edit'] =
+			$article->getAuthorId() === $user?->id() || UsersHelper::isAdmin($user);
+
+		return $result;
+	}
+
 	public static function validateOcean(array $ocean): JsonResponse|array
 	{
 		if (!is_array($ocean)) {

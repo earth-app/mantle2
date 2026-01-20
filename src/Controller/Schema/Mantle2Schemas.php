@@ -1336,6 +1336,11 @@ class Mantle2Schemas
 				'color_hex' => self::$hexCode,
 				'author_id' => self::$id,
 				'author' => self::user(),
+				'can_edit' => [
+					'type' => 'boolean',
+					'description' => 'Indicates if the requesting user can edit this article',
+					'example' => true,
+				],
 				'created_at' => self::$date,
 				'updated_at' => self::$date,
 				'ocean' => self::oceanArticle(),
