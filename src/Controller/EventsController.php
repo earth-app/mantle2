@@ -292,11 +292,16 @@ class EventsController extends ControllerBase
 		$description = $body['description'] ?? null;
 		$type = $body['type'] ?? null;
 		$activityTypes = $body['activities'] ?? [];
-		$latitude = $body['location']['latitude'] ?? null;
-		$longitude = $body['location']['longitude'] ?? null;
 		$date = $body['date'] ?? null;
 		$endDate = $body['end_date'] ?? null;
 		$visibility = $body['visibility'] ?? null;
+
+		$latitude = null;
+		$longitude = null;
+		if (isset($body['location'])) {
+			$latitude = $body['location']['latitude'] ?? null;
+			$longitude = $body['location']['longitude'] ?? null;
+		}
 
 		if (!$name || !is_string($name) || strlen($name) > 50) {
 			return GeneralHelper::badRequest(
@@ -479,12 +484,17 @@ class EventsController extends ControllerBase
 		$description = $body['description'] ?? null;
 		$type = $body['type'] ?? null;
 		$activityTypes = $body['activities'] ?? null;
-		$latitude = $body['location']['latitude'] ?? null;
-		$longitude = $body['location']['longitude'] ?? null;
 		$date = $body['date'] ?? null;
 		$endDate = $body['end_date'] ?? null;
 		$visibility = $body['visibility'] ?? null;
 		$fields = $body['fields'] ?? null;
+
+		$latitude = null;
+		$longitude = null;
+		if (isset($body['location'])) {
+			$latitude = $body['location']['latitude'] ?? null;
+			$longitude = $body['location']['longitude'] ?? null;
+		}
 
 		if ($name !== null) {
 			if (!is_string($name) || strlen($name) > 50) {
