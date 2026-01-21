@@ -226,6 +226,13 @@ class EventsHelper
 			'field_event_enddate',
 			$event->getEndDate() ? date('Y-m-d\TH:i:s', $event->getEndDate()) : null,
 		);
+		$node->set(
+			'field_visibility',
+			GeneralHelper::findOrdinal(Visibility::cases(), $event->getVisibility()),
+		);
+		$node->set('field_event_fields', json_encode($event->getFields()));
+
+		$node->save();
 
 		return $node;
 	}

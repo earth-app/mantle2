@@ -427,11 +427,7 @@ class EventsController extends ControllerBase
 	// GET /v2/events/{eventId}
 	public function getEvent(int $eventId, Request $request): JsonResponse
 	{
-		$user = UsersHelper::findByRequest($request);
-		if ($user instanceof JsonResponse) {
-			return $user;
-		}
-
+		$user = UsersHelper::getOwnerOfRequest($request);
 		$node = Node::load($eventId);
 		if (!$node) {
 			return GeneralHelper::notFound('Event not found');
