@@ -93,7 +93,7 @@ class GeneralHelper
 			}
 
 			$search = trim($search);
-			if (strlen($search) > 40) {
+			if (strlen($search) > 150) {
 				return self::badRequest("Search term '$search' too long");
 			}
 
