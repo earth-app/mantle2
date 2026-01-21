@@ -92,8 +92,9 @@ class PromptsController extends ControllerBase
 				}
 
 				if ($search) {
+					$escapedSearch = Drupal::database()->escapeLike($search);
 					$fp = $query->leftJoin('node__field_prompt', 'fp', 'fp.entity_id = n.nid');
-					$query->condition("$fp.field_prompt_value", "%$search%", 'LIKE');
+					$query->condition("$fp.field_prompt_value", "%$escapedSearch%", 'LIKE');
 				}
 
 				// Get total count for random

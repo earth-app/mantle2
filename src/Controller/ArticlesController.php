@@ -53,6 +53,7 @@ class ArticlesController extends ControllerBase
 					->condition('n.type', 'article');
 
 				if ($search) {
+					$escapedSearch = Drupal::database()->escapeLike($search);
 					$ft = $query->leftJoin(
 						'node__field_article_title',
 						'ft',
@@ -71,10 +72,13 @@ class ArticlesController extends ControllerBase
 
 					$group = $query
 						->orConditionGroup()
-						->condition("$ft.field_article_title_value", "%$search%", 'LIKE')
-						->condition("$fd.field_article_description_value", "%$search%", 'LIKE')
-						->condition("$fc.field_article_content_value", "%$search%", 'LIKE');
-					$query->condition($group);
+						->condition("$ft.field_article_title_value", "%$escapedSearch%", 'LIKE')
+						->condition(
+							"$fd.field_article_description_value",
+							"%$escapedSearch%",
+							'LIKE',
+						)
+						->condition("$fc.field_article_content_value", "%$escapedSearch%", 'LIKE');
 				}
 
 				// Get total count for random

@@ -102,6 +102,7 @@ class EventsController extends ControllerBase
 				}
 
 				if ($search) {
+					$escapedSearch = Drupal::database()->escapeLike($search);
 					$fn = $query->leftJoin('node__field_event_name', 'fn', 'fn.entity_id = n.nid');
 					$fd = $query->leftJoin(
 						'node__field_event_description',
@@ -116,11 +117,11 @@ class EventsController extends ControllerBase
 
 					$searchGroup = $query
 						->orConditionGroup()
-						->condition("$fn.field_event_name_value", "%$search%", 'LIKE')
-						->condition("$fd.field_event_description_value", "%$search%", 'LIKE')
+						->condition("$fn.field_event_name_value", "%$escapedSearch%", 'LIKE')
+						->condition("$fd.field_event_description_value", "%$escapedSearch%", 'LIKE')
 						->condition(
 							"$ff.field_event_fields_value",
-							'%"moho_id"%:%"' . $search . '"%',
+							'%"moho_id"%:%"' . $escapedSearch . '"%',
 							'LIKE',
 						);
 					$query->condition($searchGroup);

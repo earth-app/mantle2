@@ -193,8 +193,9 @@ class PromptsHelper
 				->condition('c.field_name', $fieldName);
 
 			if ($search) {
+				$escapedSearch = Drupal::database()->escapeLike($search);
 				$cb = $query->leftJoin('comment__comment_body', 'cb', 'cb.entity_id = c.cid');
-				$query->condition("$cb.comment_body_value", "%$search%", 'LIKE');
+				$query->condition("$cb.comment_body_value", "%$escapedSearch%", 'LIKE');
 			}
 
 			$query->orderRandom()->range(($page - 1) * $limit, $limit);

@@ -49,6 +49,7 @@ class ActivityController extends ControllerBase
 					->condition('n.type', 'activity');
 
 				if ($search) {
+					$escapedSearch = Drupal::database()->escapeLike($search);
 					$fi = $query->leftJoin('node__field_activity_id', 'fi', 'fi.entity_id = n.nid');
 					$fn = $query->leftJoin(
 						'node__field_activity_name',
@@ -68,10 +69,14 @@ class ActivityController extends ControllerBase
 
 					$group = $query
 						->orConditionGroup()
-						->condition("$fi.field_activity_id_value", "%$search%", 'LIKE')
-						->condition("$fn.field_activity_name_value", "%$search%", 'LIKE')
-						->condition("$fd.field_activity_description_value", "%$search%", 'LIKE')
-						->condition("$fa.field_activity_aliases_value", "%$search%", 'LIKE');
+						->condition("$fi.field_activity_id_value", "%$escapedSearch%", 'LIKE')
+						->condition("$fn.field_activity_name_value", "%$escapedSearch%", 'LIKE')
+						->condition(
+							"$fd.field_activity_description_value",
+							"%$escapedSearch%",
+							'LIKE',
+						)
+						->condition("$fa.field_activity_aliases_value", "%$escapedSearch%", 'LIKE');
 					$query->condition($group);
 				}
 

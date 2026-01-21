@@ -73,14 +73,15 @@ class UsersController extends ControllerBase
 				}
 
 				if ($search) {
+					$escapedSearch = Drupal::database()->escapeLike($search);
 					$fn = $query->leftJoin('user__field_first_name', 'fn', 'fn.entity_id = u.uid');
 					$fl = $query->leftJoin('user__field_last_name', 'fl', 'fl.entity_id = u.uid');
 
 					$group = $query
 						->orConditionGroup()
-						->condition('u.name', "%$search%", 'LIKE')
-						->condition("$fn.field_first_name_value", "%$search%", 'LIKE')
-						->condition("$fl.field_last_name_value", "%$search%", 'LIKE');
+						->condition('u.name', "%$escapedSearch%", 'LIKE')
+						->condition("$fn.field_first_name_value", "%$escapedSearch%", 'LIKE')
+						->condition("$fl.field_last_name_value", "%$escapedSearch%", 'LIKE');
 					$query->condition($group);
 				}
 
