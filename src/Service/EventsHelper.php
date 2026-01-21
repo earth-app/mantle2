@@ -46,8 +46,10 @@ class EventsHelper
 		$latitude = (float) ($node->get('field_event_location_latitude')->value ?? 0.0);
 		$longitude = (float) ($node->get('field_event_location_longitude')->value ?? 0.0);
 
-		$date = $node->get('field_event_date')->value;
-		$end_date = $node->get('field_event_enddate')->value;
+		$date = strtotime($node->get('field_event_date')->value);
+		$end_date = $node->get('field_event_enddate')->value
+			? strtotime($node->get('field_event_enddate')->value)
+			: null;
 
 		$visibility_value = $node->get('field_visibility')->value ?? 1;
 		$visibility = Visibility::cases()[$visibility_value] ?? Visibility::UNLISTED;
@@ -161,8 +163,11 @@ class EventsHelper
 
 		$node->set('field_event_location_latitude', $event->getLatitude() ?? 0.0);
 		$node->set('field_event_location_longitude', $event->getLongitude() ?? 0.0);
-		$node->set('field_event_date', $event->getDate());
-		$node->set('field_event_enddate', $event->getEndDate());
+		$node->set('field_event_date', date('Y-m-d\TH:i:s', $event->getDate()));
+		$node->set(
+			'field_event_enddate',
+			$event->getEndDate() ? date('Y-m-d\TH:i:s', $event->getEndDate()) : null,
+		);
 		$node->set(
 			'field_visibility',
 			GeneralHelper::findOrdinal(Visibility::cases(), $event->getVisibility()),
@@ -216,16 +221,11 @@ class EventsHelper
 
 		$node->set('field_event_location_latitude', $event->getLatitude() ?? 0.0);
 		$node->set('field_event_location_longitude', $event->getLongitude() ?? 0.0);
-		$node->set('field_event_date', $event->getDate());
-		$node->set('field_event_enddate', $event->getEndDate());
+		$node->set('field_event_date', date('Y-m-d\TH:i:s', $event->getDate()));
 		$node->set(
-			'field_visibility',
-			GeneralHelper::findOrdinal(Visibility::cases(), $event->getVisibility()),
+			'field_event_enddate',
+			$event->getEndDate() ? date('Y-m-d\TH:i:s', $event->getEndDate()) : null,
 		);
-		$node->set('field_event_attendees', array_map('intval', $event->getAttendeeIds()));
-		$node->set('field_event_fields', json_encode($event->getFields()));
-
-		$node->save();
 
 		return $node;
 	}
