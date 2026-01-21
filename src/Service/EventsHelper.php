@@ -78,8 +78,19 @@ class EventsHelper
 		);
 	}
 
-	public static function validateFields(array $fields): JsonResponse|array
-	{
+	private static $allowedFields = [
+		'moho_id',
+		'link',
+		'info',
+		'max_in_person',
+		'max_online',
+		'icon',
+	];
+
+	public static function validateFields(
+		array $fields,
+		?UserInterface $user = null,
+	): JsonResponse|array {
 		if (!is_array($fields)) {
 			return GeneralHelper::badRequest('Field "fields" must be an object');
 		}
@@ -89,16 +100,83 @@ class EventsHelper
 				return GeneralHelper::badRequest('Field keys must be strings');
 			}
 
-			if (strlen($key) > 50) {
-				return GeneralHelper::badRequest('Field keys must be at most 50 characters');
+			if (!in_array($key, self::$allowedFields, true)) {
+				return GeneralHelper::badRequest("Field '$key' is not allowed");
 			}
 
-			if (!is_string($value)) {
-				return GeneralHelper::badRequest('Field values must be strings');
+			if ($key === 'moho_id') {
+				if (!$user || $user->id() !== UsersHelper::cloud()->id()) {
+					return GeneralHelper::forbidden('You do not have permission to set moho_id');
+				}
+
+				if (!is_string($value)) {
+					return GeneralHelper::badRequest('Field moho_id must be a string');
+				}
 			}
 
-			if (strlen($value) > 10000) {
-				return GeneralHelper::badRequest('Field values must be at most 10,000 characters');
+			if ($key === 'link') {
+				if (!is_string($value)) {
+					return GeneralHelper::badRequest('Field link must be a string');
+				}
+				if ($value !== '' && !filter_var($value, FILTER_VALIDATE_URL)) {
+					return GeneralHelper::badRequest('Field link must be a valid URL');
+				}
+			}
+
+			if ($key === 'info') {
+				if (!is_string($value)) {
+					return GeneralHelper::badRequest('Field info must be a string');
+				}
+				if (strlen($value) > 1000) {
+					return GeneralHelper::badRequest('Field info must be at most 1000 characters');
+				}
+			}
+
+			if ($key === 'max_in_person') {
+				if (!is_numeric($value) && !is_int($value)) {
+					return GeneralHelper::badRequest('Field max_in_person must be a number');
+				}
+				$maxValue = is_string($value) ? (int) $value : $value;
+				if ($maxValue <= 0) {
+					return GeneralHelper::badRequest(
+						'Field max_in_person must be a positive number',
+					);
+				}
+				if ($user) {
+					$capacity = UsersHelper::getMaxEventAttendees($user);
+					if ($maxValue > $capacity) {
+						return GeneralHelper::badRequest(
+							"Field max_in_person cannot exceed your attendance capacity of $capacity",
+						);
+					}
+				}
+			}
+
+			if ($key === 'max_online') {
+				if (!is_numeric($value) && !is_int($value)) {
+					return GeneralHelper::badRequest('Field max_online must be a number');
+				}
+				$maxValue = is_string($value) ? (int) $value : $value;
+				if ($maxValue <= 0) {
+					return GeneralHelper::badRequest('Field max_online must be a positive number');
+				}
+				if ($user) {
+					$capacity = UsersHelper::getMaxEventAttendees($user);
+					if ($maxValue > $capacity) {
+						return GeneralHelper::badRequest(
+							"Field max_online cannot exceed your attendance capacity of $capacity",
+						);
+					}
+				}
+			}
+
+			if ($key === 'icon') {
+				if (!is_string($value)) {
+					return GeneralHelper::badRequest('Field icon must be a string');
+				}
+				if (strlen($value) > 128) {
+					return GeneralHelper::badRequest('Field icon must be at most 128 characters');
+				}
 			}
 		}
 

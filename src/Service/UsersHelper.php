@@ -193,7 +193,8 @@ class UsersHelper
 	{
 		if ($request->headers->has('X-Admin-Key')) {
 			$adminKey = $request->headers->get('X-Admin-Key');
-			if ($adminKey && $adminKey === CloudHelper::getAdminKey()) {
+			$expectedKey = CloudHelper::getAdminKey();
+			if ($adminKey && $expectedKey && hash_equals($expectedKey, $adminKey)) {
 				return self::cloud();
 			}
 		}
@@ -238,7 +239,8 @@ class UsersHelper
 	{
 		if ($request->headers->has('X-Admin-Key')) {
 			$adminKey = $request->headers->get('X-Admin-Key');
-			if ($adminKey && $adminKey === CloudHelper::getAdminKey()) {
+			$expectedKey = CloudHelper::getAdminKey();
+			if ($adminKey && $expectedKey && hash_equals($expectedKey, $adminKey)) {
 				return self::cloud();
 			}
 		}
@@ -1602,7 +1604,8 @@ class UsersHelper
 		}
 
 		// admin key points to root user
-		if ($token === CloudHelper::getAdminKey()) {
+		$expectedKey = CloudHelper::getAdminKey();
+		if ($expectedKey && hash_equals($expectedKey, $token)) {
 			return UsersHelper::cloud();
 		}
 

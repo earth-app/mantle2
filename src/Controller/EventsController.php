@@ -398,7 +398,7 @@ class EventsController extends ControllerBase
 		}
 
 		$fields = $body['fields'] ?? ['link' => ''];
-		$validatedFields = EventsHelper::validateFields($fields);
+		$validatedFields = EventsHelper::validateFields($fields, $user);
 		if ($validatedFields instanceof JsonResponse) {
 			return $validatedFields;
 		}
@@ -610,7 +610,7 @@ class EventsController extends ControllerBase
 		}
 
 		if ($fields !== null) {
-			$validatedFields = EventsHelper::validateFields($fields);
+			$validatedFields = EventsHelper::validateFields($fields, $user);
 			if ($validatedFields instanceof JsonResponse) {
 				return $validatedFields;
 			}
