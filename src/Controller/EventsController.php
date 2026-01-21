@@ -139,12 +139,12 @@ class EventsController extends ControllerBase
 
 				if ($filter_ends_after !== null && is_numeric($filter_ends_after)) {
 					$fed = $query->leftJoin(
-						'node__field_event_end_date',
+						'node__field_event_enddate',
 						'fed',
 						'fed.entity_id = n.nid',
 					);
 					$query->condition(
-						"$fed.field_event_end_date_value",
+						"$fed.field_event_enddate_value",
 						(int) $filter_ends_after,
 						'>=',
 					);
@@ -152,12 +152,12 @@ class EventsController extends ControllerBase
 
 				if ($filter_ends_before !== null && is_numeric($filter_ends_before)) {
 					$fed = $query->leftJoin(
-						'node__field_event_end_date',
+						'node__field_event_enddate',
 						'fed',
 						'fed.entity_id = n.nid',
 					);
 					$query->condition(
-						"$fed.field_event_end_date_value",
+						"$fed.field_event_enddate_value",
 						(int) $filter_ends_before,
 						'<=',
 					);
@@ -229,11 +229,11 @@ class EventsController extends ControllerBase
 				}
 
 				if ($filter_ends_after !== null && is_numeric($filter_ends_after)) {
-					$query->condition('field_event_end_date', (int) $filter_ends_after, '>=');
+					$query->condition('field_event_enddate', (int) $filter_ends_after, '>=');
 				}
 
 				if ($filter_ends_before !== null && is_numeric($filter_ends_before)) {
-					$query->condition('field_event_end_date', (int) $filter_ends_before, '<=');
+					$query->condition('field_event_enddate', (int) $filter_ends_before, '<=');
 				}
 
 				$countQuery = clone $query;
