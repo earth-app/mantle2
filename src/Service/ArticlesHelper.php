@@ -58,10 +58,34 @@ class ArticlesHelper
 		return $result;
 	}
 
-	public static function validateOcean(array $ocean): JsonResponse|array
-	{
+	public static function validateOcean(
+		array $ocean,
+		?UserInterface $user = null,
+	): JsonResponse|array {
+		// Only root user (UsersHelper::cloud) can create ocean articles
+		if ($user && $user->id() !== UsersHelper::cloud()->id()) {
+			return GeneralHelper::forbidden('Only the root user can create ocean articles');
+		}
+
 		if (!is_array($ocean)) {
 			return GeneralHelper::badRequest('Field ocean must be an array');
+		}
+
+		// Validate key and value lengths
+		foreach ($ocean as $key => $value) {
+			if (!is_string($key)) {
+				return GeneralHelper::badRequest('Ocean field keys must be strings');
+			}
+
+			if (strlen($key) > 50) {
+				return GeneralHelper::badRequest('Ocean field keys must be at most 50 characters');
+			}
+
+			if (is_string($value) && strlen($value) > 10000) {
+				return GeneralHelper::badRequest(
+					'Ocean field string values must be at most 10,000 characters',
+				);
+			}
 		}
 
 		$validOceanFields = [

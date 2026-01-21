@@ -281,10 +281,7 @@ class ArticlesController extends ControllerBase
 		// Validate ocean article
 		$ocean = $body['ocean'] ?? null;
 		if ($ocean !== null) {
-			$ocean = ArticlesHelper::validateOcean($ocean);
-			if ($ocean instanceof JsonResponse) {
-				return $ocean;
-			}
+			$ocean = ArticlesHelper::validateOcean($ocean, $user);
 		}
 
 		// Create the article node
@@ -417,7 +414,7 @@ class ArticlesController extends ControllerBase
 		// Validate ocean article
 		$ocean = $body['ocean'] ?? null;
 		if ($ocean !== null) {
-			$ocean = ArticlesHelper::validateOcean($ocean);
+			$ocean = ArticlesHelper::validateOcean($ocean, $user);
 			if ($ocean instanceof JsonResponse) {
 				return $ocean;
 			}

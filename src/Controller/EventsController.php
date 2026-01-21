@@ -398,14 +398,9 @@ class EventsController extends ControllerBase
 		}
 
 		$fields = $body['fields'] ?? ['link' => ''];
-		if (!is_array($fields)) {
-			return GeneralHelper::badRequest('Invalid fields type');
-		}
-
-		foreach ($fields as $key => $value) {
-			if (!is_string($key) || !is_string($value)) {
-				return GeneralHelper::badRequest('Invalid field entry type');
-			}
+		$validatedFields = EventsHelper::validateFields($fields);
+		if ($validatedFields instanceof JsonResponse) {
+			return $validatedFields;
 		}
 
 		$event = new Event(
@@ -619,17 +614,12 @@ class EventsController extends ControllerBase
 		}
 
 		if ($fields !== null) {
-			if (!is_array($fields)) {
-				return GeneralHelper::badRequest('Invalid fields type');
+			$validatedFields = EventsHelper::validateFields($fields);
+			if ($validatedFields instanceof JsonResponse) {
+				return $validatedFields;
 			}
 
-			foreach ($fields as $key => $value) {
-				if (!is_string($key) || !is_string($value)) {
-					return GeneralHelper::badRequest('Invalid field entry type');
-				}
-			}
-
-			$event->setFields($fields);
+			$event->setFields($validatedFields);
 		}
 
 		$node = Node::load($eventId);
