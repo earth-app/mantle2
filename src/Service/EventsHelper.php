@@ -179,6 +179,17 @@ class EventsHelper
 					return GeneralHelper::badRequest('Field icon must be at most 128 characters');
 				}
 			}
+
+			if ($key === 'address') {
+				if (!is_string($value)) {
+					return GeneralHelper::badRequest('Field address must be a string');
+				}
+				if (strlen($value) > 255) {
+					return GeneralHelper::badRequest(
+						'Field address must be at most 255 characters',
+					);
+				}
+			}
 		}
 
 		return $fields;
