@@ -84,6 +84,7 @@ class EventsHelper
 		'info',
 		'max_in_person',
 		'max_online',
+		'address',
 		'icon',
 	];
 
