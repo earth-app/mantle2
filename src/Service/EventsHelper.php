@@ -225,35 +225,7 @@ class EventsHelper
 			'status' => 1,
 		]);
 
-		$node->set('field_host_id', $event->getHostId());
-		$node->set('field_event_name', $event->getName());
-		$node->set('field_event_description', $event->getDescription() ?? '');
-		$node->set(
-			'field_event_type',
-			GeneralHelper::findOrdinal(EventType::cases(), $event->getType()),
-		);
-
-		$typeValues = array_map(
-			fn(ActivityType $type) => GeneralHelper::findOrdinal(ActivityType::cases(), $type),
-			$event->getActivityTypes(),
-		);
-		$node->set('field_event_activity_types', $typeValues);
-
-		$node->set('field_event_location_latitude', $event->getLatitude() ?? 0.0);
-		$node->set('field_event_location_longitude', $event->getLongitude() ?? 0.0);
-		$node->set('field_event_date', date('Y-m-d\TH:i:s', $event->getDate()));
-		$node->set(
-			'field_event_enddate',
-			$event->getEndDate() ? date('Y-m-d\TH:i:s', $event->getEndDate()) : null,
-		);
-		$node->set(
-			'field_visibility',
-			GeneralHelper::findOrdinal(Visibility::cases(), $event->getVisibility()),
-		);
-		$node->set('field_event_attendees', array_map('intval', $event->getAttendeeIds()));
-		$node->set('field_event_fields', json_encode($event->getFields()));
-
-		$node->save();
+		self::updateEvent($node, $event);
 
 		// Notify the host that their event was created
 		if ($author) {
@@ -299,15 +271,13 @@ class EventsHelper
 
 		$node->set('field_event_location_latitude', $event->getLatitude() ?? 0.0);
 		$node->set('field_event_location_longitude', $event->getLongitude() ?? 0.0);
-		$node->set('field_event_date', date('Y-m-d\TH:i:s', $event->getDate()));
-		$node->set(
-			'field_event_enddate',
-			$event->getEndDate() ? date('Y-m-d\TH:i:s', $event->getEndDate()) : null,
-		);
+		$node->set('field_event_date', $event->getDate());
+		$node->set('field_event_enddate', $event->getEndDate());
 		$node->set(
 			'field_visibility',
 			GeneralHelper::findOrdinal(Visibility::cases(), $event->getVisibility()),
 		);
+		$node->set('field_event_attendees', array_map('intval', $event->getAttendeeIds()));
 		$node->set('field_event_fields', json_encode($event->getFields()));
 
 		$node->save();
