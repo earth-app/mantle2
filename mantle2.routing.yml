@@ -2823,6 +2823,27 @@ mantle2.events:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.events.random:
+  path: '/v2/events/random'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::randomEvent'
+    _title: 'Get Random Events'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Events
+    description: Retrieves random events
+    schema/200: eventsList()
+    schema/404: No events found
+    query:
+      count:
+        type: integer
+        minimum: 1
+        maximum: 25
+        default: 5
+        description: The number of random events to retrieve
+  methods: [GET]
+
 mantle2.events.create:
   path: '/v2/events'
   defaults:

@@ -156,7 +156,7 @@ class ArticlesController extends ControllerBase
 			$nids = $query->execute()->fetchCol();
 
 			if (empty($nids)) {
-				return GeneralHelper::notFound('No prompts found');
+				return GeneralHelper::notFound('No articles found');
 			}
 
 			$results = [];
@@ -165,7 +165,7 @@ class ArticlesController extends ControllerBase
 				$node = Node::load($randomNid);
 
 				if (!$node) {
-					return GeneralHelper::internalError('Failed to load random prompt');
+					return GeneralHelper::internalError('Failed to load random article');
 				}
 
 				$article = ArticlesHelper::nodeToArticle($node);

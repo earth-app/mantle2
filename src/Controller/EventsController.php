@@ -19,6 +19,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use UnexpectedValueException;
 
 class EventsController extends ControllerBase
 {
@@ -269,6 +270,58 @@ class EventsController extends ControllerBase
 			return GeneralHelper::internalError(
 				'Failed to load events storage: ' . $e->getMessage(),
 			);
+		}
+	}
+
+	// GET /v2/events/random
+	public function randomEvent(Request $request): JsonResponse
+	{
+		$requester = UsersHelper::getOwnerOfRequest($request);
+
+		try {
+			$count = $request->query->getInt('count', 5);
+			if ($count < 1 || $count > 25) {
+				return GeneralHelper::badRequest('Count must be between 1 and 25');
+			}
+
+			$connection = Drupal::database();
+			$query = $connection
+				->select('node_field_data', 'n')
+				->fields('n', ['nid'])
+				->condition('n.status', 1)
+				->condition('n.type', 'event');
+
+			$query->orderRandom()->range(0, $count);
+			$nids = $query->execute()->fetchCol();
+
+			if (empty($nids)) {
+				return GeneralHelper::notFound('No events found');
+			}
+
+			$results = [];
+
+			foreach ($nids as $randomNid) {
+				$node = Node::load($randomNid);
+
+				if (!$node) {
+					return GeneralHelper::internalError('Failed to load random event');
+				}
+
+				$event = EventsHelper::nodeToEvent($node);
+				if (!$event) {
+					return GeneralHelper::internalError('Failed to load random event');
+				}
+
+				$results[] = EventsHelper::serializeEvent($event, $node, $requester);
+			}
+
+			return new JsonResponse($results, Response::HTTP_OK);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		} catch (UnexpectedValueException $e) {
+			return GeneralHelper::badRequest('Invalid count parameter: ' . $e->getMessage());
 		}
 	}
 
