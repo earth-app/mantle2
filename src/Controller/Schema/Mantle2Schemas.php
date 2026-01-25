@@ -10,6 +10,42 @@ use Drupal\mantle2\Service\OAuthHelper;
 
 class Mantle2Schemas
 {
+	// Error Response Base Schema
+	public static array $errorResponse = [
+		'type' => 'object',
+		'properties' => [
+			'error' => ['type' => 'string', 'example' => 'Error message'],
+			'code' => ['type' => 'number', 'example' => 400],
+		],
+		'required' => ['error', 'code'],
+	];
+
+	public static array $conflictError = [
+		'type' => 'object',
+		'properties' => [
+			'error' => ['type' => 'string', 'example' => 'Conflict'],
+			'message' => ['type' => 'string', 'example' => 'Duplicate entry found'],
+		],
+		'required' => ['error', 'message'],
+	];
+
+	public static array $rateLimitError = [
+		'type' => 'object',
+		'properties' => [
+			'error' => ['type' => 'string', 'example' => 'Rate limit exceeded'],
+			'message' => [
+				'type' => 'string',
+				'example' => 'Please wait 120 seconds before trying again',
+			],
+			'retry_after' => [
+				'type' => 'integer',
+				'example' => 120,
+				'description' => 'Seconds to wait before retrying',
+			],
+		],
+		'required' => ['error', 'message', 'retry_after'],
+	];
+
 	// Error Responses
 
 	public static function E400($description = 'Bad request'): array
@@ -18,20 +54,7 @@ class Mantle2Schemas
 			'description' => $description,
 			'content' => [
 				'application/json' => [
-					'schema' => [
-						'type' => 'object',
-						'properties' => [
-							'error' => [
-								'type' => 'string',
-								'example' => $description,
-							],
-							'code' => [
-								'type' => 'number',
-								'example' => 400,
-							],
-						],
-						'required' => ['error', 'code'],
-					],
+					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
 				],
 			],
 		];
@@ -43,20 +66,7 @@ class Mantle2Schemas
 			'description' => $description,
 			'content' => [
 				'application/json' => [
-					'schema' => [
-						'type' => 'object',
-						'properties' => [
-							'error' => [
-								'type' => 'string',
-								'example' => $description,
-							],
-							'code' => [
-								'type' => 'number',
-								'example' => 401,
-							],
-						],
-						'required' => ['error', 'code'],
-					],
+					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
 				],
 			],
 		];
@@ -68,20 +78,7 @@ class Mantle2Schemas
 			'description' => $description,
 			'content' => [
 				'application/json' => [
-					'schema' => [
-						'type' => 'object',
-						'properties' => [
-							'error' => [
-								'type' => 'string',
-								'example' => $description,
-							],
-							'code' => [
-								'type' => 'number',
-								'example' => 402,
-							],
-						],
-						'required' => ['error', 'code'],
-					],
+					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
 				],
 			],
 		];
@@ -93,20 +90,7 @@ class Mantle2Schemas
 			'description' => $description,
 			'content' => [
 				'application/json' => [
-					'schema' => [
-						'type' => 'object',
-						'properties' => [
-							'error' => [
-								'type' => 'string',
-								'example' => $description,
-							],
-							'code' => [
-								'type' => 'number',
-								'example' => 403,
-							],
-						],
-						'required' => ['error', 'code'],
-					],
+					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
 				],
 			],
 		];
@@ -118,20 +102,7 @@ class Mantle2Schemas
 			'description' => $description,
 			'content' => [
 				'application/json' => [
-					'schema' => [
-						'type' => 'object',
-						'properties' => [
-							'error' => [
-								'type' => 'string',
-								'example' => $description,
-							],
-							'code' => [
-								'type' => 'number',
-								'example' => 404,
-							],
-						],
-						'required' => ['error', 'code'],
-					],
+					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
 				],
 			],
 		];
@@ -143,14 +114,7 @@ class Mantle2Schemas
 			'description' => $description,
 			'content' => [
 				'application/json' => [
-					'schema' => [
-						'type' => 'object',
-						'properties' => [
-							'error' => ['type' => 'string', 'example' => 'Conflict'],
-							'message' => ['type' => 'string', 'example' => 'Duplicate entry found'],
-						],
-						'required' => ['error', 'message'],
-					],
+					'schema' => ['$ref' => '#/components/schemas/ConflictError'],
 				],
 			],
 		];
@@ -162,22 +126,7 @@ class Mantle2Schemas
 			'description' => $description,
 			'content' => [
 				'application/json' => [
-					'schema' => [
-						'type' => 'object',
-						'properties' => [
-							'error' => ['type' => 'string', 'example' => 'Rate limit exceeded'],
-							'message' => [
-								'type' => 'string',
-								'example' => 'Please wait 120 seconds before trying again',
-							],
-							'retry_after' => [
-								'type' => 'integer',
-								'example' => 120,
-								'description' => 'Seconds to wait before retrying',
-							],
-						],
-						'required' => ['error', 'message', 'retry_after'],
-					],
+					'schema' => ['$ref' => '#/components/schemas/RateLimitError'],
 				],
 			],
 		];
@@ -793,26 +742,26 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$number,
-				'username' => self::$username,
-				'created_at' => self::$date,
-				'updated_at' => self::$date,
-				'last_login' => self::$date,
+				'id' => ['$ref' => '#/components/schemas/Number'],
+				'username' => ['$ref' => '#/components/schemas/Username'],
+				'created_at' => ['$ref' => '#/components/schemas/Date'],
+				'updated_at' => ['$ref' => '#/components/schemas/Date'],
+				'last_login' => ['$ref' => '#/components/schemas/Date'],
 				'account' => [
 					'type' => 'object',
 					'properties' => [
-						'id' => self::$id,
-						'username' => self::$username,
-						'email' => self::$email,
-						'first_name' => self::$name,
-						'last_name' => self::$name,
+						'id' => ['$ref' => '#/components/schemas/Id'],
+						'username' => ['$ref' => '#/components/schemas/Username'],
+						'email' => ['$ref' => '#/components/schemas/Email'],
+						'first_name' => ['$ref' => '#/components/schemas/Name'],
+						'last_name' => ['$ref' => '#/components/schemas/Name'],
 						'address' => self::text(),
 						'bio' => self::text(500),
 						'country' => ['type' => 'string'],
 						'phone_number' => ['type' => 'integer'],
-						'visibility' => self::visibility(),
-						'email_verified' => self::$bool,
-						'subscribed' => self::$bool,
+						'visibility' => ['$ref' => '#/components/schemas/Visibility'],
+						'email_verified' => ['$ref' => '#/components/schemas/Bool'],
+						'subscribed' => ['$ref' => '#/components/schemas/Bool'],
 						'has_password' => [
 							'type' => 'boolean',
 							'description' =>
@@ -828,10 +777,13 @@ class Mantle2Schemas
 							'description' => 'List of OAuth providers linked to this account',
 							'example' => ['discord', 'github'],
 						],
-						'field_privacy' => self::userFieldPrivacy(),
+						'field_privacy' => ['$ref' => '#/components/schemas/UserFieldPrivacy'],
 					],
 				],
-				'activities' => self::activitiesList(),
+				'activities' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/Activity'],
+				],
 				'is_friend' => [
 					'type' => 'boolean',
 					'description' => 'Indicates if the user is a friend of the requesting user',
@@ -848,7 +800,7 @@ class Mantle2Schemas
 						'Indicates if the user is a mutual friend with the requesting user',
 					'example' => false,
 				],
-				'friends' => self::idArray(),
+				'friends' => ['$ref' => '#/components/schemas/IdArray'],
 				'added_count' => [
 					'type' => 'integer',
 					'example' => 42,
@@ -882,7 +834,7 @@ class Mantle2Schemas
 						'Indicates if the requesting user is in this user\'s private circle',
 					'example' => true,
 				],
-				'circle' => self::idArray(),
+				'circle' => ['$ref' => '#/components/schemas/IdArray'],
 				'circle_count' => [
 					'type' => 'integer',
 					'example' => 5,
@@ -912,7 +864,10 @@ class Mantle2Schemas
 	{
 		return [
 			'type' => 'object',
-			'properties' => ['user' => self::user(), 'session_token' => self::$sessionToken],
+			'properties' => [
+				'user' => ['$ref' => '#/components/schemas/User'],
+				'session_token' => ['$ref' => '#/components/schemas/SessionToken'],
+			],
 			'required' => ['user', 'session_token'],
 		];
 	}
@@ -922,9 +877,9 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$id,
-				'username' => self::$username,
-				'session_token' => self::$sessionToken,
+				'id' => ['$ref' => '#/components/schemas/Id'],
+				'username' => ['$ref' => '#/components/schemas/Username'],
+				'session_token' => ['$ref' => '#/components/schemas/SessionToken'],
 			],
 			'required' => ['id', 'username', 'session_token'],
 		];
@@ -936,8 +891,8 @@ class Mantle2Schemas
 			'type' => 'object',
 			'properties' => [
 				'message' => ['type' => 'string', 'example' => 'Logout successful'],
-				'session_token' => self::$sessionToken,
-				'user' => self::user(),
+				'session_token' => ['$ref' => '#/components/schemas/SessionToken'],
+				'user' => ['$ref' => '#/components/schemas/User'],
 			],
 			'required' => ['message', 'session_token'],
 		];
@@ -952,7 +907,7 @@ class Mantle2Schemas
 					'type' => 'string',
 					'example' => 'Verification email sent to user@example.com',
 				],
-				'email' => self::$email,
+				'email' => ['$ref' => '#/components/schemas/Email'],
 			],
 			'required' => ['message'],
 		];
@@ -967,7 +922,7 @@ class Mantle2Schemas
 					'type' => 'string',
 					'example' => 'Email verified successfully for user@example.com',
 				],
-				'email' => self::$email,
+				'email' => ['$ref' => '#/components/schemas/Email'],
 			],
 			'required' => ['message'],
 		];
@@ -1051,8 +1006,8 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'user' => self::user(),
-				'session_token' => self::$sessionToken,
+				'user' => ['$ref' => '#/components/schemas/User'],
+				'session_token' => ['$ref' => '#/components/schemas/SessionToken'],
 			],
 			'required' => ['user', 'session_token'],
 		];
@@ -1081,15 +1036,15 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$id,
-				'user_id' => self::$id,
+				'id' => ['$ref' => '#/components/schemas/Id'],
+				'user_id' => ['$ref' => '#/components/schemas/Id'],
 				'type' => ['type' => 'string', 'example' => 'info'],
 				'title' => self::text(100, 1, 'Notification Title'),
 				'message' => self::text(500, 1, 'You have a new message.'),
 				'source' => ['type' => 'string', 'example' => 'system'],
 				'created_at' => ['type' => 'integer', 'example' => 1736400000000],
 				'link' => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
-				'read' => self::$bool,
+				'read' => ['$ref' => '#/components/schemas/Bool'],
 			],
 			'required' => ['id', 'type', 'source', 'title', 'message', 'created_at', 'read'],
 		];
@@ -1100,12 +1055,12 @@ class Mantle2Schemas
 		return self::paginated([
 			'type' => 'object',
 			'properties' => [
-				'unread_count' => self::$number,
-				'has_warnings' => self::$bool,
-				'has_errors' => self::$bool,
+				'unread_count' => ['$ref' => '#/components/schemas/Number'],
+				'has_warnings' => ['$ref' => '#/components/schemas/Bool'],
+				'has_errors' => ['$ref' => '#/components/schemas/Bool'],
 				'items' => [
 					'type' => 'array',
-					'items' => self::notification(),
+					'items' => ['$ref' => '#/components/schemas/Notification'],
 				],
 			],
 		]);
@@ -1116,8 +1071,8 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'user' => self::user(),
-				'friend' => self::user(),
+				'user' => ['$ref' => '#/components/schemas/User'],
+				'friend' => ['$ref' => '#/components/schemas/User'],
 				'is_mutual' => [
 					'type' => 'boolean',
 					'description' =>
@@ -1134,13 +1089,16 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$id,
-				'hostId' => self::$id,
-				'host' => self::user(),
+				'id' => ['$ref' => '#/components/schemas/Id'],
+				'hostId' => ['$ref' => '#/components/schemas/Id'],
+				'host' => ['$ref' => '#/components/schemas/User'],
 				'name' => self::text(50),
 				'description' => self::text(3000),
-				'type' => self::eventType(),
-				'activities' => ['type' => 'array', 'items' => self::activityType()],
+				'type' => ['$ref' => '#/components/schemas/EventType'],
+				'activities' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/ActivityType'],
+				],
 				'location' => [
 					'type' => 'object',
 					'properties' => [
@@ -1148,13 +1106,13 @@ class Mantle2Schemas
 						'longitude' => ['type' => 'number', 'example' => -122.4194],
 					],
 				],
-				'date' => self::$date,
-				'end_date' => self::$date,
-				'visibility' => self::visibility(),
-				'attendee_count' => self::$number,
-				'is_attending' => self::$bool,
-				'created_at' => self::$date,
-				'updated_at' => self::$date,
+				'date' => ['$ref' => '#/components/schemas/Date'],
+				'end_date' => ['$ref' => '#/components/schemas/Date'],
+				'visibility' => ['$ref' => '#/components/schemas/Visibility'],
+				'attendee_count' => ['$ref' => '#/components/schemas/Number'],
+				'is_attending' => ['$ref' => '#/components/schemas/Bool'],
+				'created_at' => ['$ref' => '#/components/schemas/Date'],
+				'updated_at' => ['$ref' => '#/components/schemas/Date'],
 				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
 			],
 			'required' => [
@@ -1174,13 +1132,17 @@ class Mantle2Schemas
 	{
 		return self::paginated(self::event());
 	}
+	public static function eventsList(): array
+	{
+		return ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Event']];
+	}
 	public static function attendeeResponse(): array
 	{
 		return [
 			'type' => 'object',
 			'properties' => [
-				'user' => self::user(),
-				'event' => self::event(),
+				'user' => ['$ref' => '#/components/schemas/User'],
+				'event' => ['$ref' => '#/components/schemas/Event'],
 			],
 			'required' => ['user', 'event'],
 		];
@@ -1192,11 +1154,14 @@ class Mantle2Schemas
 			'type' => 'object',
 			'properties' => [
 				'id' => ['type' => 'string', 'example' => 'hiking'],
-				'name' => self::$text,
-				'description' => self::$text,
-				'types' => ['type' => 'array', 'items' => self::activityType()],
-				'created_at' => self::$date,
-				'updated_at' => self::$date,
+				'name' => ['$ref' => '#/components/schemas/Text'],
+				'description' => ['$ref' => '#/components/schemas/Text'],
+				'types' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/ActivityType'],
+				],
+				'created_at' => ['$ref' => '#/components/schemas/Date'],
+				'updated_at' => ['$ref' => '#/components/schemas/Date'],
 				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
 			],
 			'required' => ['id', 'name', 'types', 'created_at', 'fields'],
@@ -1208,7 +1173,7 @@ class Mantle2Schemas
 	}
 	public static function activitiesList(): array
 	{
-		return ['type' => 'array', 'items' => self::activity()];
+		return ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Activity']];
 	}
 	public static function activitiesJson(): array
 	{
@@ -1254,14 +1219,14 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$id,
-				'prompt' => self::$text,
-				'visibility' => self::userPrivacy(),
-				'responses_count' => self::$number,
-				'owner_id' => self::$id,
-				'owner' => self::user(),
-				'created_at' => self::$date,
-				'updated_at' => self::$date,
+				'id' => ['$ref' => '#/components/schemas/Id'],
+				'prompt' => ['$ref' => '#/components/schemas/Text'],
+				'visibility' => ['$ref' => '#/components/schemas/UserPrivacy'],
+				'responses_count' => ['$ref' => '#/components/schemas/Number'],
+				'owner_id' => ['$ref' => '#/components/schemas/Id'],
+				'owner' => ['$ref' => '#/components/schemas/User'],
+				'created_at' => ['$ref' => '#/components/schemas/Date'],
+				'updated_at' => ['$ref' => '#/components/schemas/Date'],
 			],
 			'required' => ['id', 'prompt', 'visibility', 'created_at', 'responses_count', 'owner'],
 		];
@@ -1272,7 +1237,7 @@ class Mantle2Schemas
 	}
 	public static function promptsList(): array
 	{
-		return ['type' => 'array', 'items' => self::prompt()];
+		return ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Prompt']];
 	}
 
 	public static function promptResponse(): array
@@ -1280,12 +1245,12 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$id,
-				'prompt_id' => self::$id,
+				'id' => ['$ref' => '#/components/schemas/Id'],
+				'prompt_id' => ['$ref' => '#/components/schemas/Id'],
 				'response' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 700],
-				'owner' => self::user(),
-				'created_at' => self::$date,
-				'updated_at' => self::$date,
+				'owner' => ['$ref' => '#/components/schemas/User'],
+				'created_at' => ['$ref' => '#/components/schemas/Date'],
+				'updated_at' => ['$ref' => '#/components/schemas/Date'],
 			],
 			'required' => ['id', 'prompt_id', 'response', 'created_at'],
 		];
@@ -1300,7 +1265,7 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'prompt' => self::prompt(),
+				'prompt' => ['$ref' => '#/components/schemas/Prompt'],
 				'count' => ['type' => 'integer', 'example' => 42],
 			],
 			'required' => ['prompt', 'count'],
@@ -1312,7 +1277,7 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => self::$id,
+				'id' => ['$ref' => '#/components/schemas/Id'],
 				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 100],
 				'description' => [
 					'type' => 'string',
@@ -1332,18 +1297,18 @@ class Mantle2Schemas
 					'minLength' => 50,
 					'maxLength' => 10000,
 				],
-				'color' => self::$number,
-				'color_hex' => self::$hexCode,
-				'author_id' => self::$id,
-				'author' => self::user(),
+				'color' => ['$ref' => '#/components/schemas/Number'],
+				'color_hex' => ['$ref' => '#/components/schemas/HexCode'],
+				'author_id' => ['$ref' => '#/components/schemas/Id'],
+				'author' => ['$ref' => '#/components/schemas/User'],
 				'can_edit' => [
 					'type' => 'boolean',
 					'description' => 'Indicates if the requesting user can edit this article',
 					'example' => true,
 				],
-				'created_at' => self::$date,
-				'updated_at' => self::$date,
-				'ocean' => self::oceanArticle(),
+				'created_at' => ['$ref' => '#/components/schemas/Date'],
+				'updated_at' => ['$ref' => '#/components/schemas/Date'],
+				'ocean' => ['$ref' => '#/components/schemas/OceanArticle'],
 			],
 			'required' => [
 				'id',
@@ -1362,7 +1327,7 @@ class Mantle2Schemas
 	}
 	public static function articlesList(): array
 	{
-		return ['type' => 'array', 'items' => self::article()];
+		return ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/Article']];
 	}
 
 	public static function oceanArticle(): array
@@ -1462,6 +1427,98 @@ class Mantle2Schemas
 				'ocean' => self::oceanArticle(),
 				'color' => self::$hexCode,
 			],
+		];
+	}
+
+	/**
+	 * Get all schemas for OpenAPI components/schemas section.
+	 * This method returns all reusable schema definitions that can be
+	 * referenced via $ref in the OpenAPI spec.
+	 */
+	public static function getAllSchemas(): array
+	{
+		return [
+			// Error schemas
+			'ErrorResponse' => self::$errorResponse,
+			'ConflictError' => self::$conflictError,
+			'RateLimitError' => self::$rateLimitError,
+
+			// Core types
+			'Info' => self::$info,
+			'Text' => self::$text,
+			'Number' => self::$number,
+			'Id' => self::$id,
+			'Username' => self::$username,
+			'Password' => self::$password,
+			'Email' => self::$email,
+			'Date' => self::$date,
+			'HexCode' => self::$hexCode,
+			'Bool' => self::$bool,
+			'SessionToken' => self::$sessionToken,
+			'Name' => self::$name,
+
+			// Parameters
+			'UsernameParam' => self::$usernameParam,
+			'IdParam' => self::$idParam,
+			'UuidParam' => self::$uuidParam,
+
+			// Enums
+			'ActivityType' => self::activityType(),
+			'Visibility' => self::visibility(),
+			'UserPrivacy' => self::userPrivacy(),
+			'EventType' => self::eventType(),
+			'SortOrder' => self::sortOrder(),
+
+			// Arrays
+			'StringArray' => self::$stringArray,
+			'IdArray' => self::idArray(),
+
+			// Request bodies
+			'UserCreate' => self::userCreate(),
+			'UserUpdate' => self::userUpdate(),
+			'UserUpdateJson' => self::userUpdateJson(),
+			'UserFieldPrivacy' => self::userFieldPrivacy(),
+			'UserFieldPrivacyJson' => self::userFieldPrivacyJson(),
+			'EventCreate' => self::eventCreate(),
+			'EventUpdate' => self::eventUpdate(),
+			'PromptCreate' => self::promptCreate(),
+			'PromptResponseBody' => self::$promptResponseBody,
+			'PasswordResetBody' => self::$passwordResetBody,
+			'PasswordChangeBody' => self::$passwordChangeBody,
+			'PasswordChangeFlexibleBody' => self::$passwordChangeFlexibleBody,
+			'PasswordSetBody' => self::$passwordSetBody,
+			'OAuthLoginBody' => self::$oauthLoginBody,
+			'ArticleBody' => self::$articleBody,
+			'ActivityCreate' => self::activityCreate(),
+			'ActivityUpdate' => self::activityUpdate(),
+			'UserActivitiesSet' => self::$userActivitiesSet,
+
+			// Response objects
+			'User' => self::user(),
+			'SignupResponse' => self::signupResponse(),
+			'LoginResponse' => self::loginResponse(),
+			'LogoutResponse' => self::logoutResponse(),
+			'EmailVerificationSent' => self::emailVerificationSent(),
+			'EmailVerified' => self::emailVerified(),
+			'EmailChangeInitiated' => self::emailChangeInitiated(),
+			'EmailChangeCompleted' => self::emailChangeCompleted(),
+			'PasswordChangeResponse' => self::passwordChangeResponse(),
+			'PasswordSetResponse' => self::passwordSetResponse(),
+			'OAuthLoginResponse' => self::oauthLoginResponse(),
+			'SubscriptionResponse' => self::subscriptionResponse(),
+			'Notification' => self::notification(),
+			'FriendResponse' => self::friendResponse(),
+			'Event' => self::event(),
+			'AttendeeResponse' => self::attendeeResponse(),
+			'Activity' => self::activity(),
+			'ActivitiesJson' => self::activitiesJson(),
+			'Prompt' => self::prompt(),
+			'PromptResponse' => self::promptResponse(),
+			'PromptResponsesCount' => self::promptResponsesCount(),
+			'Article' => self::article(),
+			'OceanArticle' => self::oceanArticle(),
+			'ArticleCreate' => self::articleCreate(),
+			'ArticleUpdate' => self::articleUpdate(),
 		];
 	}
 }

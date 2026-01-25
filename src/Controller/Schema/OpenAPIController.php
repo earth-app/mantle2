@@ -196,6 +196,15 @@ class OpenAPIController extends ControllerBase
 				'title' => '@earth-app/mantle2',
 				'description' => 'Backend API for The Earth App, powered by Drupal',
 				'version' => '1.0.0',
+				'contact' => [
+					'name' => 'The Earth App',
+					'url' => 'https://earth-app.com',
+					'email' => 'support@earth-app.com',
+				],
+				'license' => [
+					'name' => 'Apache 2.0 License',
+					'url' => 'https://opensource.org/licenses/Apache-2.0',
+				],
 			],
 			'servers' => [
 				[
@@ -223,6 +232,7 @@ class OpenAPIController extends ControllerBase
 						'bearerFormat' => 'JWT',
 					],
 				],
+				'schemas' => Mantle2Schemas::getAllSchemas(),
 			],
 			'security' => [
 				[
@@ -249,7 +259,12 @@ class OpenAPIController extends ControllerBase
 			return ['type' => 'object'];
 		}
 
-		// Property reference: "$propName"
+		$schemaName = $this->getSchemaNameFromSpec($spec);
+		if ($schemaName !== null && $this->schemaExistsInComponents($schemaName)) {
+			return ['$ref' => '#/components/schemas/' . $schemaName];
+		}
+
+		// Property reference: "$propName" - fallback for inline resolution
 		if ($spec[0] === '$') {
 			$prop = substr($spec, 1);
 			if ($prop !== '' && property_exists(Mantle2Schemas::class, $prop)) {
@@ -257,7 +272,7 @@ class OpenAPIController extends ControllerBase
 			}
 		}
 
-		// Method reference: "method" or "method()"
+		// Method reference: "method" or "method()" - fallback for inline resolution
 		$method = $spec;
 		if (str_ends_with($method, '()')) {
 			$method = substr($method, 0, -2);
@@ -266,7 +281,40 @@ class OpenAPIController extends ControllerBase
 			return Mantle2Schemas::$method();
 		}
 
-		// Fallback
+		// fallback
 		return ['type' => 'object'];
+	}
+
+	private function getSchemaNameFromSpec(string $spec): ?string
+	{
+		// Property reference: "$propName"
+		if ($spec[0] === '$') {
+			$prop = substr($spec, 1);
+			return $this->toPascalCase($prop);
+		}
+
+		// Method reference: "method" or "method()"
+		$method = $spec;
+		if (str_ends_with($method, '()')) {
+			$method = substr($method, 0, -2);
+		}
+		// Convert from camelCase to PascalCase
+		return $this->toPascalCase($method);
+	}
+
+	private function toPascalCase(string $str): string
+	{
+		// Handle snake_case
+		$str = str_replace('_', ' ', $str);
+		// Capitalize first letter of each word
+		$str = ucwords($str);
+		// Remove spaces
+		return str_replace(' ', '', $str);
+	}
+
+	private function schemaExistsInComponents(string $schemaName): bool
+	{
+		$allSchemas = Mantle2Schemas::getAllSchemas();
+		return array_key_exists($schemaName, $allSchemas);
 	}
 }
