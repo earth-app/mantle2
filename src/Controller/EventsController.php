@@ -333,6 +333,13 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
+		$count = UsersHelper::getUserEventsCount($user);
+		if ($count >= UsersHelper::getMaxEventsCount($user)) {
+			return GeneralHelper::paymentRequired(
+				'You have reached your event limit. Upgrade to create more events',
+			);
+		}
+
 		$body = json_decode($request->getContent(), true);
 		if (json_last_error() !== JSON_ERROR_NONE) {
 			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());

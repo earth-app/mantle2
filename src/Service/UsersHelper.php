@@ -2532,6 +2532,24 @@ class UsersHelper
 		}
 	}
 
+	public static function getUserEventsCount(UserInterface $user): int
+	{
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('node');
+			$query = $storage
+				->getQuery()
+				->condition('type', 'event')
+				->condition('field_host_id', $user->id());
+
+			return (int) $query->count()->execute();
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error('Failed to retrieve user events count: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return 0;
+		}
+	}
+
 	public static function getMaxEventAttendees(UserInterface $user): int
 	{
 		$type = self::getAccountType($user)->name;
@@ -2540,6 +2558,17 @@ class UsersHelper
 			'PRO', 'WRITER' => 5000,
 			'ORGANIZER' => 1_000_000,
 			default => 100,
+		};
+	}
+
+	public static function getMaxEventsCount(UserInterface $user): int
+	{
+		$type = self::getAccountType($user)->name;
+		return match ($type) {
+			'ADMINISTRATOR' => PHP_INT_MAX,
+			'PRO', 'WRITER' => 50,
+			'ORGANIZER' => 200,
+			default => 20,
 		};
 	}
 
