@@ -1169,6 +1169,48 @@ mantle2.users.id.events:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.id.events.attending:
+  path: '/v2/users/{id}/events/attending'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEvents'
+    identifier: '{id}'
+    _title: 'Get User Attending Events by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Events
+    description: 'Retrieves events the user is hosting or attending, filtered by event visibility'
+    schema/200: events()
+    schema/400: Invalid Pagination Parameters
+    schema/404: User not found
+    parameters:
+      id:
+        type: integer
+        description: The user ID
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
 #endregion
 #region User - By Username
 
@@ -2020,6 +2062,47 @@ mantle2.users.username.events:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.username.events.attending:
+  path: '/v2/users/{username}/events/attending'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEvents'
+    identifier: '{username}'
+    _title: 'Get User Attending Events by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Events
+    description: Retrieves a list of events the user is hosting or attending
+    schema/200: events()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
 #endregion
 #region User - Current User
 
@@ -2739,6 +2822,42 @@ mantle2.users.current.events:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.current.events.attending:
+  path: '/v2/users/current/events/attending'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEvents'
+    _title: 'Get Current User Attending Events'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Events
+    description: 'Retrieves events the current user is hosting or attending'
+    schema/200: events()
+    schema/400: Invalid Pagination Parameters
+    schema/401: Unauthorized
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
 #endregion
 
 ## Activity Routes
@@ -3137,88 +3256,6 @@ mantle2.events.current:
     schema/200: events()
     schema/400: Invalid Pagination Parameters
     schema/401: Unauthorized
-    query:
-      limit:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 25
-        description: The number of results to return per page
-      page:
-        type: integer
-        minimum: 1
-        default: 1
-        description: The page number to retrieve
-      search:
-        type: string
-        default: ''
-        description: The search term to filter results
-      sort:
-        type: string
-        enum: [asc, desc, rand]
-        default: desc
-        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
-  methods: [GET]
-
-mantle2.events.id:
-  path: '/v2/events/{id}'
-  defaults:
-    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEvents'
-    _title: 'Get User Events by ID'
-  requirements:
-    _access: 'TRUE'
-    id: '\d+'
-  options:
-    tags: Events,Users
-    description: 'Retrieves events for a user by ID (hosting or attending), filtered by event visibility'
-    schema/200: events()
-    schema/400: Invalid Pagination Parameters
-    schema/404: User not found
-    parameters:
-      id:
-        type: integer
-        description: The user ID
-    query:
-      limit:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 25
-        description: The number of results to return per page
-      page:
-        type: integer
-        minimum: 1
-        default: 1
-        description: The page number to retrieve
-      search:
-        type: string
-        default: ''
-        description: The search term to filter results
-      sort:
-        type: string
-        enum: [asc, desc, rand]
-        default: desc
-        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
-  methods: [GET]
-
-mantle2.events.username:
-  path: '/v2/events/{username}'
-  defaults:
-    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEvents'
-    _title: 'Get User Events by Username'
-  requirements:
-    _access: 'TRUE'
-    username: '@[\w.]+'
-  options:
-    tags: Events,Users
-    description: 'Retrieves events for a user by username (hosting or attending), filtered by event visibility'
-    schema/200: events()
-    schema/400: Invalid Pagination Parameters
-    schema/404: User not found
-    parameters:
-      username:
-        type: string
-        description: The username
     query:
       limit:
         type: integer

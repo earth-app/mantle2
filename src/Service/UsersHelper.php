@@ -2477,7 +2477,8 @@ class UsersHelper
 			$query = $storage
 				->getQuery()
 				->condition('type', 'event')
-				->condition('field_host_id', $user->id());
+				->condition('field_host_id', $user->id())
+				->accessCheck(false);
 
 			if (!empty($search)) {
 				$query->condition('field_event_name', $search, 'CONTAINS');

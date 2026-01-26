@@ -904,8 +904,9 @@ class EventsController extends ControllerBase
 	}
 
 	// GET /v2/events/current
-	// GET /v2/events/{id}
-	// GET /v2/events/{username}
+	// GET /v2/users/current/events/attending
+	// GET /v2/users/{id}/events/attending
+	// GET /v2/users/{username}/events/attending
 	public function getUserEvents(Request $request, ?string $identifier = null): JsonResponse
 	{
 		$requester = UsersHelper::getOwnerOfRequest($request);
