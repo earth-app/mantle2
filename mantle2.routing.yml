@@ -1173,7 +1173,6 @@ mantle2.users.id.events.attending:
   path: '/v2/users/{id}/events/attending'
   defaults:
     _controller: '\Drupal\mantle2\Controller\EventsController::getUserEvents'
-    identifier: '{id}'
     _title: 'Get User Attending Events by ID'
   requirements:
     _access: 'TRUE'
@@ -2066,7 +2065,6 @@ mantle2.users.username.events.attending:
   path: '/v2/users/{username}/events/attending'
   defaults:
     _controller: '\Drupal\mantle2\Controller\EventsController::getUserEvents'
-    identifier: '{username}'
     _title: 'Get User Attending Events by Username'
   requirements:
     _access: 'TRUE'
