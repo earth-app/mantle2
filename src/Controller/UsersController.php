@@ -2074,37 +2074,6 @@ class UsersController extends ControllerBase
 
 	#region Event Routes
 
-	// GET /v2/events/current
-	public function userEvents(Request $request): JsonResponse
-	{
-		$requester = UsersHelper::getOwnerOfRequest($request);
-		if (!$requester) {
-			return GeneralHelper::unauthorized();
-		}
-
-		$pagination = GeneralHelper::paginatedParameters($request);
-		if ($pagination instanceof JsonResponse) {
-			return $pagination;
-		}
-
-		$limit = $pagination['limit'];
-		$page = $pagination['page'] - 1;
-		$search = $pagination['search'];
-		$sort = $pagination['sort'];
-
-		$data = UsersHelper::getUserEvents($requester, $limit, $page, $search, $sort);
-		$events = $data['events'];
-		$total = $data['total'];
-
-		return new JsonResponse([
-			'limit' => $limit,
-			'page' => $page + 1,
-			'search' => $search,
-			'items' => $events,
-			'total' => $total,
-		]);
-	}
-
 	// GET /v2/users/current/events
 	// GET /v2/users/{id}/events
 	// GET /v2/users/{username}/events

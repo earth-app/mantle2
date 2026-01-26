@@ -902,4 +902,55 @@ class EventsController extends ControllerBase
 			Response::HTTP_OK,
 		);
 	}
+
+	// GET /v2/events/current
+	// GET /v2/events/{id}
+	// GET /v2/events/{username}
+	public function getUserEvents(Request $request, ?string $identifier = null): JsonResponse
+	{
+		$requester = UsersHelper::getOwnerOfRequest($request);
+
+		if ($identifier !== null) {
+			$targetUser = UsersHelper::findBy($identifier);
+			if (!$targetUser) {
+				return GeneralHelper::notFound('User not found');
+			}
+		} else {
+			if (!$requester) {
+				return GeneralHelper::unauthorized();
+			}
+			$targetUser = $requester;
+		}
+
+		$pagination = GeneralHelper::paginatedParameters($request);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		$limit = $pagination['limit'];
+		$page = $pagination['page'] - 1;
+		$search = $pagination['search'];
+		$sort = $pagination['sort'];
+
+		$data = UsersHelper::getUserEvents($targetUser, $limit, $page, $search, $sort);
+		$events = $data['events'];
+		$total = $data['total'];
+
+		if ($identifier !== null) {
+			$events = array_values(
+				array_filter($events, function ($event) use ($requester) {
+					return EventsHelper::isVisible($event, $requester);
+				}),
+			);
+			$total = count($events);
+		}
+
+		return new JsonResponse([
+			'limit' => $limit,
+			'page' => $page + 1,
+			'search' => $search,
+			'items' => $events,
+			'total' => $total,
+		]);
+	}
 }
