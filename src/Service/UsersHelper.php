@@ -2465,7 +2465,7 @@ class UsersHelper
 		}
 	}
 
-	public static function getUserEvents(
+	public static function getUserHostedEvents(
 		UserInterface $user,
 		int $limit = 25,
 		int $page = 1,
@@ -2509,6 +2509,99 @@ class UsersHelper
 			}
 
 			$nodes = $storage->loadMultiple($nids);
+
+			return [
+				'events' => array_values(
+					array_filter(
+						array_map(
+							fn($node) => $node ? EventsHelper::nodeToEvent($node) : null,
+							$nodes,
+						),
+					),
+				),
+				'total' => $count,
+			];
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error('Failed to retrieve user events: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return [
+				'events' => [],
+				'total' => 0,
+			];
+		}
+	}
+
+	/**
+	 * Get events the user is hosting OR attending.
+	 */
+	public static function getUserEvents(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+		string $sort = 'desc',
+	) {
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('node');
+
+			// Get events where user is host
+			$hostQuery = $storage
+				->getQuery()
+				->condition('type', 'event')
+				->condition('field_host_id', $user->id())
+				->accessCheck(false);
+
+			if (!empty($search)) {
+				$hostQuery->condition('field_event_name', $search, 'CONTAINS');
+			}
+
+			$hostNids = $hostQuery->execute();
+
+			// Get events where user is attendee
+			$attendeeQuery = $storage
+				->getQuery()
+				->condition('type', 'event')
+				->condition('field_event_attendees', $user->id(), 'IN')
+				->accessCheck(false);
+
+			if (!empty($search)) {
+				$attendeeQuery->condition('field_event_name', $search, 'CONTAINS');
+			}
+
+			$attendeeNids = $attendeeQuery->execute();
+
+			// Merge and deduplicate event IDs
+			$allNids = array_unique(
+				array_merge(array_values($hostNids), array_values($attendeeNids)),
+			);
+			$count = count($allNids);
+
+			if (empty($allNids)) {
+				return [
+					'events' => [],
+					'total' => 0,
+				];
+			}
+
+			// Load all nodes to sort them properly
+			$nodes = $storage->loadMultiple($allNids);
+
+			// Handle sorting
+			if ($sort === 'rand') {
+				shuffle($nodes);
+			} else {
+				$sortDirection = $sort === 'desc' ? -1 : 1;
+				usort($nodes, function ($a, $b) use ($sortDirection) {
+					if (!$a instanceof Node || !$b instanceof Node) {
+						return 0;
+					}
+					return ($a->getCreatedTime() - $b->getCreatedTime()) * $sortDirection;
+				});
+			}
+
+			// Apply pagination
+			$nodes = array_slice($nodes, $page * $limit, $limit);
 
 			return [
 				'events' => array_values(

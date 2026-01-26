@@ -2092,12 +2092,60 @@ class UsersController extends ControllerBase
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
-		$events = UsersHelper::getUserEvents($requester, $limit, $page, $search, $sort);
+		$data = UsersHelper::getUserEvents($requester, $limit, $page, $search, $sort);
+		$events = $data['events'];
+		$total = $data['total'];
+
 		return new JsonResponse([
 			'limit' => $limit,
 			'page' => $page + 1,
 			'search' => $search,
 			'items' => $events,
+			'total' => $total,
+		]);
+	}
+
+	// GET /v2/users/current/events
+	// GET /v2/users/{id}/events
+	// GET /v2/users/{username}/events
+	public function userHostedEvents(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$resolved = $this->resolveUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		if (!$resolved) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$visible = UsersHelper::checkVisibility($resolved, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		$pagination = GeneralHelper::paginatedParameters($request);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		$limit = $pagination['limit'];
+		$page = $pagination['page'] - 1;
+		$search = $pagination['search'];
+		$sort = $pagination['sort'];
+
+		$data = UsersHelper::getUserHostedEvents($visible, $limit, $page, $search, $sort);
+		$events = $data['events'];
+		$total = $data['total'];
+
+		return new JsonResponse([
+			'limit' => $limit,
+			'page' => $page + 1,
+			'items' => $events,
+			'total' => $total,
 		]);
 	}
 

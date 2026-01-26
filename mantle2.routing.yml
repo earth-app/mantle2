@@ -1129,6 +1129,46 @@ mantle2.users.id.articles:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.id.events:
+  path: '/v2/users/{id}/events'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userHostedEvents'
+    _title: 'Get User Hosted Events by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Events
+    description: Retrieves a list of events hosted by the user
+    schema/200: events()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
 #endregion
 #region User - By Username
 
@@ -1940,6 +1980,46 @@ mantle2.users.username.articles:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.username.events:
+  path: '/v2/users/{username}/events'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userHostedEvents'
+    _title: 'Get User Hosted Events by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@\w+'
+  options:
+    tags: Users,Events
+    description: Retrieves a list of events hosted by the user
+    schema/200: events()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
 #endregion
 #region User - Current User
 
@@ -2623,6 +2703,42 @@ mantle2.users.current.articles:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.current.events:
+  path: '/v2/users/current/events'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userHostedEvents'
+    _title: 'Get Current User Hosted Events'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Events
+    description: Retrieves a list of events hosted by the current user
+    schema/200: events()
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
 #endregion
 
 ## Activity Routes
@@ -3017,7 +3133,7 @@ mantle2.events.current:
     _access: 'TRUE'
   options:
     tags: Events,Users
-    description: Retrieves events for the current user
+    description: Retrieves events the current user is hosting or attending
     schema/200: events()
     schema/400: Invalid Pagination Parameters
     schema/401: Unauthorized
