@@ -422,7 +422,7 @@ class EventsController extends ControllerBase
 		}
 
 		if ($latitude !== null) {
-			if (!$longitude) {
+			if ($longitude === null) {
 				return GeneralHelper::badRequest('Longitude is required when latitude is provided');
 			}
 
@@ -435,7 +435,7 @@ class EventsController extends ControllerBase
 		}
 
 		if ($longitude !== null) {
-			if (!$latitude) {
+			if ($latitude === null) {
 				return GeneralHelper::badRequest('Latitude is required when longitude is provided');
 			}
 
@@ -597,7 +597,7 @@ class EventsController extends ControllerBase
 		}
 
 		if ($latitude !== null) {
-			if (!$longitude) {
+			if ($longitude === null) {
 				return GeneralHelper::badRequest('Longitude is required when latitude is provided');
 			}
 
@@ -611,7 +611,7 @@ class EventsController extends ControllerBase
 		}
 
 		if ($longitude !== null) {
-			if (!$latitude) {
+			if ($latitude === null) {
 				return GeneralHelper::badRequest('Latitude is required when longitude is provided');
 			}
 
