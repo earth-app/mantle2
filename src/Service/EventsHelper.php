@@ -106,7 +106,7 @@ class EventsHelper
 			}
 
 			if ($key === 'moho_id') {
-				if (!$user || $user->id() !== UsersHelper::cloud()->id()) {
+				if (!UsersHelper::isAdmin($user)) {
 					return GeneralHelper::forbidden('You do not have permission to set moho_id');
 				}
 
