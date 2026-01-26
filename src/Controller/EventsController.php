@@ -940,9 +940,16 @@ class EventsController extends ControllerBase
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
+		$requester = UsersHelper::getOwnerOfRequest($request);
 		$data = UsersHelper::getUserEvents($visible, $limit, $page, $search, $sort);
-		$events = $data['events'];
+		$nodes = $data['nodes'];
 		$total = $data['total'];
+
+		// Serialize events with IDs
+		$events = array_map(function ($node) use ($requester) {
+			$event = EventsHelper::nodeToEvent($node);
+			return EventsHelper::serializeEvent($event, $node, $requester);
+		}, $nodes);
 
 		return new JsonResponse([
 			'limit' => $limit,

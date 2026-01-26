@@ -2504,7 +2504,7 @@ class UsersHelper
 
 			if (empty($nids)) {
 				return [
-					'events' => [],
+					'nodes' => [],
 					'total' => $count,
 				];
 			}
@@ -2512,14 +2512,7 @@ class UsersHelper
 			$nodes = $storage->loadMultiple($nids);
 
 			return [
-				'events' => array_values(
-					array_filter(
-						array_map(
-							fn($node) => $node ? EventsHelper::nodeToEvent($node) : null,
-							$nodes,
-						),
-					),
-				),
+				'nodes' => array_values($nodes),
 				'total' => $count,
 			];
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
@@ -2527,7 +2520,7 @@ class UsersHelper
 				'%message' => $e->getMessage(),
 			]);
 			return [
-				'events' => [],
+				'nodes' => [],
 				'total' => 0,
 			];
 		}
@@ -2580,7 +2573,7 @@ class UsersHelper
 
 			if (empty($allNids)) {
 				return [
-					'events' => [],
+					'nodes' => [],
 					'total' => 0,
 				];
 			}
@@ -2605,14 +2598,7 @@ class UsersHelper
 			$nodes = array_slice($nodes, $page * $limit, $limit);
 
 			return [
-				'events' => array_values(
-					array_filter(
-						array_map(
-							fn($node) => $node ? EventsHelper::nodeToEvent($node) : null,
-							$nodes,
-						),
-					),
-				),
+				'nodes' => array_values($nodes),
 				'total' => $count,
 			];
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
@@ -2620,7 +2606,7 @@ class UsersHelper
 				'%message' => $e->getMessage(),
 			]);
 			return [
-				'events' => [],
+				'nodes' => [],
 				'total' => 0,
 			];
 		}

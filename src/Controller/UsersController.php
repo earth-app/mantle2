@@ -20,6 +20,7 @@ use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ActivityHelper;
+use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\OAuthHelper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
@@ -2106,9 +2107,16 @@ class UsersController extends ControllerBase
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
+		$requester = UsersHelper::getOwnerOfRequest($request);
 		$data = UsersHelper::getUserHostedEvents($visible, $limit, $page, $search, $sort);
-		$events = $data['events'];
+		$nodes = $data['nodes'];
 		$total = $data['total'];
+
+		// Serialize events with IDs
+		$events = array_map(function ($node) use ($requester) {
+			$event = EventsHelper::nodeToEvent($node);
+			return EventsHelper::serializeEvent($event, $node, $requester);
+		}, $nodes);
 
 		return new JsonResponse([
 			'limit' => $limit,
