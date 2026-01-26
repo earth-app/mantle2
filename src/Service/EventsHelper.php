@@ -3,6 +3,7 @@
 namespace Drupal\mantle2\Service;
 
 use Drupal;
+use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Event;
 use Drupal\mantle2\Custom\EventType;
@@ -38,10 +39,33 @@ class EventsHelper
 		$event_type_value = $node->get('field_event_type')->value;
 		$event_type = EventType::cases()[$event_type_value] ?? EventType::HYBRID;
 
-		$activity_types = array_map(
-			fn(int $ordinal) => ActivityType::cases()[$ordinal] ?? ActivityType::OTHER,
-			array_column($node->get('field_event_activity_types')->getValue(), 'value'),
-		);
+		// Load activities from JSON field
+		$activities_raw = $node->get('field_event_activity_types')->value;
+		$activities_data = $activities_raw ? json_decode($activities_raw, true) : [];
+		$activities = [];
+
+		if (is_array($activities_data)) {
+			foreach ($activities_data as $activityData) {
+				if (is_array($activityData)) {
+					$type = $activityData['type'] ?? null;
+					if ($type === 'activity') {
+						try {
+							$activities[] = Activity::fromArray($activityData);
+						} catch (\Exception $e) {
+							// Skip invalid activities
+						}
+					} elseif ($type === 'activity_type') {
+						$value = $activityData['value'] ?? null;
+						if ($value) {
+							$activityType = ActivityType::tryFrom($value);
+							if ($activityType) {
+								$activities[] = $activityType;
+							}
+						}
+					}
+				}
+			}
+		}
 
 		$latitude = (float) ($node->get('field_event_location_latitude')->value ?? 0.0);
 		$longitude = (float) ($node->get('field_event_location_longitude')->value ?? 0.0);
@@ -67,7 +91,7 @@ class EventsHelper
 			$name,
 			$description,
 			$event_type,
-			$activity_types,
+			$activities,
 			$latitude,
 			$longitude,
 			$date,
@@ -275,11 +299,19 @@ class EventsHelper
 			GeneralHelper::findOrdinal(EventType::cases(), $event->getType()),
 		);
 
-		$typeValues = array_map(
-			fn(ActivityType $type) => GeneralHelper::findOrdinal(ActivityType::cases(), $type),
-			$event->getActivityTypes(),
-		);
-		$node->set('field_event_activity_types', $typeValues);
+		// Serialize activities to JSON
+		$activitiesData = array_map(function ($activity) {
+			if ($activity instanceof Activity) {
+				return array_merge(['type' => 'activity'], $activity->jsonSerialize());
+			} elseif ($activity instanceof ActivityType) {
+				return [
+					'type' => 'activity_type',
+					'value' => $activity->value,
+				];
+			}
+			return null;
+		}, $event->getActivities());
+		$node->set('field_event_activity_types', json_encode(array_filter($activitiesData)));
 
 		$node->set('field_event_location_latitude', $event->getLatitude() ?? 0.0);
 		$node->set('field_event_location_longitude', $event->getLongitude() ?? 0.0);

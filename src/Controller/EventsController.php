@@ -6,10 +6,12 @@ use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Controller\ControllerBase;
+use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Event;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\ActivityHelper;
 use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
@@ -404,18 +406,35 @@ class EventsController extends ControllerBase
 			}
 		}
 
-		$activityTypes0 = [];
+		$activities0 = [];
 		if (is_array($activityTypes)) {
-			foreach ($activityTypes as $activityType) {
-				if (!is_string($activityType)) {
-					return GeneralHelper::badRequest('Invalid activity type');
-				}
-				$activityType0 = ActivityType::tryFrom($activityType);
-				if (!$activityType0) {
-					return GeneralHelper::badRequest('Invalid activity type');
+			if (count($activityTypes) > Event::MAX_ACTIVITIES) {
+				return GeneralHelper::badRequest(
+					'Too many activities, max is ' . Event::MAX_ACTIVITIES,
+				);
+			}
+
+			foreach ($activityTypes as $activityValue) {
+				if (!is_string($activityValue)) {
+					return GeneralHelper::badRequest('Each activity must be a string');
 				}
 
-				$activityTypes0[] = $activityType0;
+				// Try to parse as ActivityType enum first
+				$activityType = ActivityType::tryFrom(strtoupper($activityValue));
+				if ($activityType) {
+					$activities0[] = $activityType;
+				} else {
+					// Otherwise, treat as Activity ID
+					$activity = ActivityHelper::getActivity(strtolower($activityValue));
+					if (!$activity) {
+						return GeneralHelper::badRequest(
+							'Invalid activity: "' .
+								$activityValue .
+								'" is not a valid ActivityType or Activity ID',
+						);
+					}
+					$activities0[] = $activity;
+				}
 			}
 		} else {
 			return GeneralHelper::badRequest('Invalid activity types');
@@ -468,7 +487,7 @@ class EventsController extends ControllerBase
 			$name,
 			$description ?? '',
 			$type0,
-			$activityTypes0,
+			$activities0,
 			(float) ($latitude ?? 0),
 			(float) ($longitude ?? 0),
 			$date,
@@ -577,20 +596,37 @@ class EventsController extends ControllerBase
 		}
 
 		if ($activityTypes !== null) {
-			$activityTypes0 = [];
+			$activities0 = [];
 			if (is_array($activityTypes)) {
-				foreach ($activityTypes as $activityType) {
-					if (!is_string($activityType)) {
-						return GeneralHelper::badRequest("Invalid activity type: $activityType");
-					}
-					$activityType0 = ActivityType::tryFrom($activityType);
-					if (!$activityType0) {
-						return GeneralHelper::badRequest("Invalid activity type: $activityType");
+				if (count($activityTypes) > Event::MAX_ACTIVITIES) {
+					return GeneralHelper::badRequest(
+						'Too many activities, max is ' . Event::MAX_ACTIVITIES,
+					);
+				}
+
+				foreach ($activityTypes as $activityValue) {
+					if (!is_string($activityValue)) {
+						return GeneralHelper::badRequest('Each activity must be a string');
 					}
 
-					$activityTypes0[] = $activityType0;
+					// Try to parse as ActivityType enum first
+					$activityType = ActivityType::tryFrom(strtoupper($activityValue));
+					if ($activityType) {
+						$activities0[] = $activityType;
+					} else {
+						// Otherwise, treat as Activity ID
+						$activity = ActivityHelper::getActivity(strtolower($activityValue));
+						if (!$activity) {
+							return GeneralHelper::badRequest(
+								'Invalid activity: "' .
+									$activityValue .
+									'" is not a valid ActivityType or Activity ID',
+							);
+						}
+						$activities0[] = $activity;
+					}
 				}
-				$event->setActivityTypes($activityTypes0);
+				$event->setActivities($activities0);
 			} else {
 				return GeneralHelper::badRequest('Invalid activity types');
 			}

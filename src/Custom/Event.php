@@ -3,10 +3,10 @@
 namespace Drupal\mantle2\Custom;
 
 use Drupal\mantle2\Service\GeneralHelper;
-use Drupal\mantle2\Service\UsersHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use JsonSerializable;
+use InvalidArgumentException;
 
 class Event implements JsonSerializable
 {
@@ -14,7 +14,7 @@ class Event implements JsonSerializable
 	private string $name;
 	private string $description;
 	private EventType $type;
-	/** @var ActivityType[] $activities */
+	/** @var array<Activity|ActivityType> $activities */
 	private array $activities;
 	private float $latitude;
 	private float $longitude;
@@ -24,6 +24,8 @@ class Event implements JsonSerializable
 	/** @var int[] $attendees */
 	private array $attendees = [];
 	private array $fields = [];
+
+	public const int MAX_ACTIVITIES = 20;
 
 	public function __construct(
 		int $hostId,
@@ -39,6 +41,20 @@ class Event implements JsonSerializable
 		array $attendees = [],
 		array $fields = [],
 	) {
+		if (count($activities) > self::MAX_ACTIVITIES) {
+			throw new InvalidArgumentException(
+				'Too many activities, max is ' . self::MAX_ACTIVITIES,
+			);
+		}
+
+		foreach ($activities as $activity) {
+			if (!($activity instanceof Activity) && !($activity instanceof ActivityType)) {
+				throw new InvalidArgumentException(
+					'Activity must be an instance of Activity or ActivityType',
+				);
+			}
+		}
+
 		$this->hostId = $hostId;
 		$this->name = $name;
 		$this->description = $description;
@@ -60,10 +76,17 @@ class Event implements JsonSerializable
 			'name' => $this->name,
 			'description' => $this->description,
 			'type' => $this->type->value,
-			'activities' => array_map(
-				fn(ActivityType $activity) => $activity->value,
-				$this->activities,
-			),
+			'activities' => array_map(function ($activity) {
+				if ($activity instanceof Activity) {
+					return array_merge(['type' => 'activity'], $activity->jsonSerialize());
+				} elseif ($activity instanceof ActivityType) {
+					return [
+						'type' => 'activity_type',
+						'value' => $activity->value,
+					];
+				}
+				return null;
+			}, $this->activities),
 			'location' => [
 				'latitude' => $this->latitude,
 				'longitude' => $this->longitude,
@@ -117,15 +140,29 @@ class Event implements JsonSerializable
 	}
 
 	/**
-	 * @return array<ActivityType>
+	 * @return array<Activity|ActivityType>
 	 */
-	public function getActivityTypes(): array
+	public function getActivities(): array
 	{
 		return $this->activities;
 	}
 
-	public function setActivityTypes(array $activities): void
+	public function setActivities(array $activities): void
 	{
+		if (count($activities) > self::MAX_ACTIVITIES) {
+			throw new InvalidArgumentException(
+				'Too many activities, max is ' . self::MAX_ACTIVITIES,
+			);
+		}
+
+		foreach ($activities as $activity) {
+			if (!($activity instanceof Activity) && !($activity instanceof ActivityType)) {
+				throw new InvalidArgumentException(
+					'Activity must be an instance of Activity or ActivityType',
+				);
+			}
+		}
+
 		$this->activities = $activities;
 	}
 
