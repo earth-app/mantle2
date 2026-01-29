@@ -100,6 +100,7 @@ class EventsHelper
 			$visibility,
 			$attendees,
 			$fields,
+			GeneralHelper::formatId($node->id()),
 		);
 	}
 
@@ -342,7 +343,6 @@ class EventsHelper
 	public static function serializeEvent(Event $event, Node $node, ?UserInterface $user): array
 	{
 		$result = $event->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($node->id());
 		$result['host'] = UsersHelper::serializeUser($event->getHost(), $user);
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
@@ -373,12 +373,16 @@ class EventsHelper
 		return $result;
 	}
 
-	public static function getRandomEvent(): ?Event
+	public static function getRandomEvent(bool $upcoming = false): ?Event
 	{
 		$query = Drupal::entityQuery('node')
 			->condition('type', 'event')
 			->condition('status', 1)
 			->accessCheck(false);
+
+		if ($upcoming) {
+			$query->condition('field_event_date', time(), '>=');
+		}
 
 		$nids = $query->execute();
 
@@ -392,13 +396,17 @@ class EventsHelper
 		return $node ? self::nodeToEvent($node) : null;
 	}
 
-	public static function getRandomEvents(int $count = 5): array
+	public static function getRandomEvents(int $count = 5, bool $upcoming = false): array
 	{
 		$query = Drupal::entityQuery('node')
 			->condition('type', 'event')
 			->condition('status', 1)
 			->accessCheck(false)
 			->range(0, $count);
+
+		if ($upcoming) {
+			$query->condition('field_event_date', time(), '>=');
+		}
 
 		$nids = $query->execute();
 

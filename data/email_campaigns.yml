@@ -50,6 +50,11 @@
 
     {article.random}
     {article.random}
+
+    ## New Opportunities
+
+    {event.upcoming}
+    {event.upcoming}
 - id: daily_article
   title: Your Daily Earth App Article
   filter: verifiedFilter
@@ -80,6 +85,10 @@
     ## This Week's Prompts
 
     {prompt.weekly}
+
+    ## This Week's Events
+
+    {event.upcoming}
 
     Stay engaged and keep exploring!
 - id: new_activities

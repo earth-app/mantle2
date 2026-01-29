@@ -6,6 +6,7 @@ use Drupal;
 use Drupal\Core\Serialization\Yaml;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\Article;
+use Drupal\mantle2\Custom\Event;
 use Drupal\mantle2\Custom\Prompt;
 use Drupal\mantle2\Service\ActivityHelper;
 use Drupal\mantle2\Service\ArticlesHelper;
@@ -158,9 +159,19 @@ class CampaignHelper
 
 				return implode("\n", array_map([self::class, 'formatArticle'], $articles));
 			},
+			// Events
+			'{event.upcoming}' => function () use ($user) {
+				$event = EventsHelper::getRandomEvent(true);
+				return $event ? self::formatEvent($event) : 'No upcoming event found';
+			},
 		];
 
-		$randomPlaceholders = ['{activity.random}', '{prompt.random}', '{article.random}'];
+		$randomPlaceholders = [
+			'{activity.random}',
+			'{prompt.random}',
+			'{article.random}',
+			'{event.upcoming}',
+		];
 
 		foreach ($placeholders as $placeholder => $callback) {
 			if (!str_contains($text, $placeholder)) {
@@ -268,6 +279,18 @@ class CampaignHelper
 		$summary = strlen($summary) > 700 ? substr($summary, 0, 697) . '...' : $summary;
 
 		return "[**$title** by @$author](https://app.earth-app.com/articles/$id)\n*$date*\n\n$summary\n";
+	}
+
+	private static function formatEvent(Event $event): string
+	{
+		$name = $event->getName();
+		$description = trim($event->getDescription());
+		$description =
+			strlen($description) > 300 ? substr($description, 0, 297) . '...' : $description;
+		$id = $event->getId();
+		$date = date('F j, Y', $event->getDate());
+
+		return "[**$name**](https://app.earth-app.com/events/$id)\n*$date*\n$description\n";
 	}
 
 	// Cron Job

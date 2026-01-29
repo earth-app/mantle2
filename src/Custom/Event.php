@@ -10,6 +10,7 @@ use InvalidArgumentException;
 
 class Event implements JsonSerializable
 {
+	private string $id;
 	private int $hostId;
 	private string $name;
 	private string $description;
@@ -40,6 +41,7 @@ class Event implements JsonSerializable
 		Visibility $visibility = Visibility::PUBLIC,
 		array $attendees = [],
 		array $fields = [],
+		string $id = '',
 	) {
 		if (count($activities) > self::MAX_ACTIVITIES) {
 			throw new InvalidArgumentException(
@@ -67,11 +69,13 @@ class Event implements JsonSerializable
 		$this->visibility = $visibility;
 		$this->attendees = $attendees;
 		$this->fields = $fields;
+		$this->id = $id;
 	}
 
 	public function jsonSerialize(): array
 	{
 		return [
+			'id' => $this->id,
 			'hostId' => GeneralHelper::formatId($this->hostId),
 			'name' => $this->name,
 			'description' => $this->description,
@@ -99,6 +103,11 @@ class Event implements JsonSerializable
 			'visibility' => $this->visibility->value,
 			'fields' => $this->fields,
 		];
+	}
+
+	public function getId(): string
+	{
+		return $this->id;
 	}
 
 	public function getHost(): UserInterface
