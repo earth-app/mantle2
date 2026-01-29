@@ -113,6 +113,7 @@ class EventsHelper
 		'max_online',
 		'address',
 		'icon',
+		'cancelled',
 	];
 
 	public static function validateFields(
@@ -215,6 +216,12 @@ class EventsHelper
 					return GeneralHelper::badRequest(
 						'Field address must be at most 255 characters',
 					);
+				}
+			}
+
+			if ($key === 'cancelled') {
+				if (!is_bool($value)) {
+					return GeneralHelper::badRequest('Field cancelled must be a boolean');
 				}
 			}
 		}

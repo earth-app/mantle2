@@ -356,6 +356,10 @@ class EventsController extends ControllerBase
 			return $event;
 		}
 
+		if ($event->getFields()['cancelled'] ?? false) {
+			return GeneralHelper::badRequest('Cannot create an event as cancelled');
+		}
+
 		$node = EventsHelper::createEvent($event, $user);
 		$result = EventsHelper::serializeEvent($event, $node, $user);
 
@@ -540,6 +544,10 @@ class EventsController extends ControllerBase
 			return GeneralHelper::notFound('Event not found');
 		}
 
+		if ($event->getFields()['cancelled'] ?? false) {
+			return GeneralHelper::badRequest('Cannot sign up for a cancelled event');
+		}
+
 		if ($event->isAttendee($user->id())) {
 			return GeneralHelper::conflict('You are already signed up for this event');
 		}
@@ -662,5 +670,104 @@ class EventsController extends ControllerBase
 			'items' => $events,
 			'total' => $total,
 		]);
+	}
+
+	// POST /v2/events/{eventId}/cancel
+	public function cancelEvent(int $eventId, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$event = EventsHelper::loadEventNode($eventId);
+		if (!$event) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('You are not allowed to cancel this event');
+		}
+
+		$fields = $event->getFields();
+		$fields['cancelled'] = true;
+		$event->setFields($fields);
+
+		$node = Node::load($eventId);
+		if (!$node) {
+			return GeneralHelper::internalError('Failed to load event node');
+		}
+
+		EventsHelper::updateEvent($node, $event);
+
+		// Notify all attendees
+		$attendees = $event->getAttendees();
+		foreach ($attendees as $attendee) {
+			if ($attendee->id() !== $user->id()) {
+				UsersHelper::addNotification(
+					$attendee,
+					'Event Cancelled',
+					"The event '{$event->getName()}' has been cancelled by the host.",
+					'/events/' . $eventId,
+					'info',
+					$event->getHost()->getAccountName(),
+				);
+			}
+		}
+
+		return new JsonResponse(
+			EventsHelper::serializeEvent($event, $node, $user),
+			Response::HTTP_OK,
+		);
+	}
+
+	// POST /v2/events/{eventId}/uncancel
+	public function uncancelEvent(int $eventId, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$event = EventsHelper::loadEventNode($eventId);
+		if (!$event) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('You are not allowed to uncancel this event');
+		}
+
+		// Update the cancelled field
+		$fields = $event->getFields();
+		$fields['cancelled'] = false;
+		$event->setFields($fields);
+
+		$node = Node::load($eventId);
+		if (!$node) {
+			return GeneralHelper::internalError('Failed to load event node');
+		}
+
+		EventsHelper::updateEvent($node, $event);
+
+		// Notify all attendees
+		$attendees = $event->getAttendees();
+		foreach ($attendees as $attendee) {
+			if ($attendee->id() !== $user->id()) {
+				UsersHelper::addNotification(
+					$attendee,
+					'Event Reinstated',
+					"The event '{$event->getName()}' has been reinstated by the host.",
+					'/events/' . $eventId,
+					'info',
+					$event->getHost()->getAccountName(),
+				);
+			}
+		}
+
+		return new JsonResponse(
+			EventsHelper::serializeEvent($event, $node, $user),
+			Response::HTTP_OK,
+		);
 	}
 }
