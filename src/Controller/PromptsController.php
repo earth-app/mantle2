@@ -158,14 +158,9 @@ class PromptsController extends ControllerBase
 				$node = Node::load($nid);
 				if ($node) {
 					$obj = PromptsHelper::nodeToPrompt($node);
-					$data[] = array_merge($obj->jsonSerialize(), [
-						'id' => GeneralHelper::formatId($nid),
-						'owner' => UsersHelper::serializeUser($obj->getOwner(), $user),
-						'responses_count' => PromptsHelper::getCommentsCount($node),
-						'has_responded' => $user ? PromptsHelper::hasResponded($user, $node) : null,
-						'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
-						'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
-					]);
+					$serialized = PromptsHelper::serializePrompt($obj, $node, $user);
+					$serialized['id'] = GeneralHelper::formatId($nid);
+					$data[] = $serialized;
 				}
 			}
 
@@ -249,13 +244,8 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::internalError('Failed to create prompt');
 		}
 
-		$result = $obj->jsonSerialize();
+		$result = PromptsHelper::serializePrompt($obj, $node, $user);
 		$result['id'] = GeneralHelper::formatId($node->id()); // set real id
-		$result['owner'] = UsersHelper::serializeUser($obj->getOwner(), $user);
-		$result['responses_count'] = 0;
-		$result['has_responded'] = false;
-		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 
 		return new JsonResponse($result, Response::HTTP_CREATED);
 	}
@@ -328,13 +318,7 @@ class PromptsController extends ControllerBase
 				}
 
 				$data = PromptsHelper::nodeToPrompt($node);
-				$result = $data->jsonSerialize();
-				$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
-				$result['responses_count'] = PromptsHelper::getCommentsCount($node);
-				$result['has_responded'] = $user ? PromptsHelper::hasResponded($user, $node) : null;
-				$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-				$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
-
+				$result = PromptsHelper::serializePrompt($data, $node, $user);
 				$results[] = $result;
 			}
 
@@ -365,13 +349,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		$result = $data->jsonSerialize();
-		$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
-		$result['responses_count'] = PromptsHelper::getCommentsCount($prompt);
-		$result['has_responded'] = $user ? PromptsHelper::hasResponded($user, $prompt) : null;
-		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
-
+		$result = PromptsHelper::serializePrompt($data, $prompt, $user);
 		return new JsonResponse($result);
 	}
 
@@ -444,13 +422,7 @@ class PromptsController extends ControllerBase
 
 		PromptsHelper::updatePrompt($prompt, $data);
 
-		$result = $data->jsonSerialize();
-		$result['owner'] = UsersHelper::serializeUser($data->getOwner(), $user);
-		$result['responses_count'] = PromptsHelper::getCommentsCount($prompt);
-		$result['has_responded'] = PromptsHelper::hasResponded($user, $prompt);
-		$result['created_at'] = GeneralHelper::dateToIso($prompt->getCreatedTime());
-		$result['updated_at'] = GeneralHelper::dateToIso($prompt->getChangedTime());
-
+		$result = PromptsHelper::serializePrompt($data, $prompt, $user);
 		return new JsonResponse($result);
 	}
 
@@ -514,18 +486,17 @@ class PromptsController extends ControllerBase
 			'page' => $page,
 			'total' => $total,
 			'limit' => $limit,
-			'items' => array_map(function ($r) use ($request) {
-				$owner = $r->getOwner();
-				if (UsersHelper::checkVisibility($owner, $request) instanceof JsonResponse) {
-					$r->hideOwnerId();
-				}
+			'items' => array_values(
+				array_filter(
+					array_map(function ($r) use ($user) {
+						$result = PromptsHelper::serializePromptResponse($r, $user);
+						$result['created_at'] = GeneralHelper::dateToIso($r->getCreatedAt());
+						$result['updated_at'] = GeneralHelper::dateToIso($r->getUpdatedAt());
 
-				$result = $r->jsonSerialize();
-				$result['created_at'] = GeneralHelper::dateToIso($r->getCreatedAt());
-				$result['updated_at'] = GeneralHelper::dateToIso($r->getUpdatedAt());
-
-				return $result;
-			}, $responses),
+						return $result;
+					}, $responses),
+				),
+			),
 		]);
 	}
 
@@ -593,7 +564,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load created response');
 		}
 
-		$res = $result->jsonSerialize();
+		$res = PromptsHelper::serializePromptResponse($result, $user);
 		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
 		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
@@ -626,11 +597,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load response');
 		}
 
-		if (UsersHelper::checkVisibility($response->getOwner(), $request) instanceof JsonResponse) {
-			$result->hideOwnerId();
-		}
-
-		$res = $result->jsonSerialize();
+		$res = PromptsHelper::serializePromptResponse($result, $user);
 		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
 		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 
@@ -706,11 +673,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load updated response');
 		}
 
-		if (UsersHelper::checkVisibility($response->getOwner(), $request) instanceof JsonResponse) {
-			$result->hideOwnerId();
-		}
-
-		$res = $result->jsonSerialize();
+		$res = PromptsHelper::serializePromptResponse($result, $user);
 		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
 		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
 

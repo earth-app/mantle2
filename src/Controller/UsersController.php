@@ -136,7 +136,9 @@ class UsersController extends ControllerBase
 			});
 
 			$data = array_values(
-				array_map(fn($user) => UsersHelper::serializeUser($user, $requester), $users),
+				array_filter(
+					array_map(fn($user) => UsersHelper::serializeUser($user, $requester), $users),
+				),
 			);
 			return new JsonResponse([
 				'page' => $page + 1,
@@ -787,7 +789,9 @@ class UsersController extends ControllerBase
 				);
 		}
 
-		$data = array_map(fn($u) => UsersHelper::serializeUser($u, $requester), $friends);
+		$data = array_values(
+			array_filter(array_map(fn($u) => UsersHelper::serializeUser($u, $requester), $friends)),
+		);
 		return new JsonResponse(
 			[
 				'limit' => $limit,
@@ -941,7 +945,9 @@ class UsersController extends ControllerBase
 		$sort = $pagination['sort'];
 
 		$circle = UsersHelper::getCircle($visible, $limit, $page, $search, $sort);
-		$data = array_map(fn($u) => UsersHelper::serializeUser($u, $requester), $circle);
+		$data = array_values(
+			array_filter(array_map(fn($u) => UsersHelper::serializeUser($u, $requester), $circle)),
+		);
 
 		return new JsonResponse(
 			[

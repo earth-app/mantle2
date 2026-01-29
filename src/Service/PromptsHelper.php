@@ -165,6 +165,42 @@ class PromptsHelper
 		);
 	}
 
+	public static function serializePrompt(
+		Prompt $prompt,
+		Node $node,
+		?UserInterface $requester = null,
+	): array {
+		$result = $prompt->jsonSerialize();
+		$result['owner'] = UsersHelper::serializeUser($prompt->getOwner(), $requester);
+		$result['responses_count'] = self::getCommentsCount($node);
+		$result['has_responded'] = $requester ? self::hasResponded($requester, $node) : null;
+		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
+		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
+
+		return $result;
+	}
+
+	public static function serializePromptResponse(
+		PromptResponse $response,
+		?UserInterface $requester = null,
+	): array {
+		if ($response->getOwnerId() === -1) {
+			return [
+				'id' => GeneralHelper::formatId($response->getId()),
+				'prompt_id' => GeneralHelper::formatId($response->getPromptId()),
+				'response' => $response->getResponse(),
+			];
+		}
+
+		$owner = UsersHelper::serializeUser($response->getOwner(), $requester);
+		return [
+			'id' => GeneralHelper::formatId($response->getId()),
+			'prompt_id' => GeneralHelper::formatId($response->getPromptId()),
+			'response' => $response->getResponse(),
+			'owner' => $owner,
+		];
+	}
+
 	/**
 	 * @return array<Comment>
 	 */
