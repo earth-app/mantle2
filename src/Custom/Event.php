@@ -19,7 +19,9 @@ class Event implements JsonSerializable
 	private array $activities;
 	private float $latitude;
 	private float $longitude;
+	/** @var int Unix timestamp in MILLISECONDS */
 	private int $date;
+	/** @var ?int Unix timestamp in MILLISECONDS */
 	private ?int $endDate = null;
 	private Visibility $visibility;
 	/** @var int[] $attendees */

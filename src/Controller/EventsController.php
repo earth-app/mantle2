@@ -130,15 +130,17 @@ class EventsController extends ControllerBase
 					$query->condition($searchGroup);
 				}
 
-				// Apply date filters
+				// Apply date filters - convert millisecond timestamps to ISO datetime strings
 				if ($filter_after !== null && is_numeric($filter_after)) {
 					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
-					$query->condition("$fd.field_event_date_value", (int) $filter_after, '>=');
+					$date_str = date('Y-m-d\TH:i:s', (int) $filter_after / 1000);
+					$query->condition("$fd.field_event_date_value", $date_str, '>=');
 				}
 
 				if ($filter_before !== null && is_numeric($filter_before)) {
 					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
-					$query->condition("$fd.field_event_date_value", (int) $filter_before, '<=');
+					$date_str = date('Y-m-d\TH:i:s', (int) $filter_before / 1000);
+					$query->condition("$fd.field_event_date_value", $date_str, '<=');
 				}
 
 				if ($filter_ends_after !== null && is_numeric($filter_ends_after)) {
@@ -147,11 +149,8 @@ class EventsController extends ControllerBase
 						'fed',
 						'fed.entity_id = n.nid',
 					);
-					$query->condition(
-						"$fed.field_event_enddate_value",
-						(int) $filter_ends_after,
-						'>=',
-					);
+					$date_str = date('Y-m-d\TH:i:s', (int) $filter_ends_after / 1000);
+					$query->condition("$fed.field_event_enddate_value", $date_str, '>=');
 				}
 
 				if ($filter_ends_before !== null && is_numeric($filter_ends_before)) {
@@ -160,11 +159,8 @@ class EventsController extends ControllerBase
 						'fed',
 						'fed.entity_id = n.nid',
 					);
-					$query->condition(
-						"$fed.field_event_enddate_value",
-						(int) $filter_ends_before,
-						'<=',
-					);
+					$date_str = date('Y-m-d\TH:i:s', (int) $filter_ends_before / 1000);
+					$query->condition("$fed.field_event_enddate_value", $date_str, '<=');
 				}
 
 				// Get total count for random
@@ -223,21 +219,25 @@ class EventsController extends ControllerBase
 					$query->condition($group);
 				}
 
-				// Apply date filters
+				// Apply date filters - convert millisecond timestamps to ISO datetime strings
 				if ($filter_after !== null && is_numeric($filter_after)) {
-					$query->condition('field_event_date', (int) $filter_after, '>=');
+					$date_str = date('Y-m-d\TH:i:s', (int) $filter_after / 1000);
+					$query->condition('field_event_date', $date_str, '>=');
 				}
 
 				if ($filter_before !== null && is_numeric($filter_before)) {
-					$query->condition('field_event_date', (int) $filter_before, '<=');
+					$date_str = date('Y-m-d\TH:i:s', (int) $filter_before / 1000);
+					$query->condition('field_event_date', $date_str, '<=');
 				}
 
 				if ($filter_ends_after !== null && is_numeric($filter_ends_after)) {
-					$query->condition('field_event_enddate', (int) $filter_ends_after, '>=');
+					$date_str = date('Y-m-d\TH:i:s', (int) $filter_ends_after / 1000);
+					$query->condition('field_event_enddate', $date_str, '>=');
 				}
 
 				if ($filter_ends_before !== null && is_numeric($filter_ends_before)) {
-					$query->condition('field_event_enddate', (int) $filter_ends_before, '<=');
+					$date_str = date('Y-m-d\TH:i:s', (int) $filter_ends_before / 1000);
+					$query->condition('field_event_enddate', $date_str, '<=');
 				}
 
 				$countQuery = clone $query;

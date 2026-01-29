@@ -253,4 +253,72 @@ function mantle2_cron()
 
 	// Check for events starting or ending soon and notify attendees
 	EventsHelper::checkEventNotifications();
+
+	// Fix malformed event dates (dates stored in seconds instead of milliseconds)
+	mantle2_fix_event_dates();
+}
+
+function mantle2_fix_event_dates(): void
+{
+	try {
+		$storage = Drupal::entityTypeManager()->getStorage('node');
+		$query = $storage
+			->getQuery()
+			->condition('type', 'event')
+			->condition('status', 1)
+			->accessCheck(false);
+
+		$nids = $query->execute();
+		if (empty($nids)) {
+			return;
+		}
+
+		$fixed_count = 0;
+		$threshold_date = '2000-01-01T00:00:00'; // Dates before year 2000 are invalid
+
+		foreach ($nids as $nid) {
+			$node = Drupal\node\Entity\Node::load($nid);
+			if (!$node) {
+				continue;
+			}
+
+			$needs_update = false;
+
+			$date_value = $node->get('field_event_date')->value;
+			if ($date_value && $date_value < $threshold_date) {
+				// Date is in seconds, convert to milliseconds (multiply by 1000)
+				$timestamp_seconds = strtotime($date_value);
+				$timestamp_millis = $timestamp_seconds * 1000;
+				$new_date = date('Y-m-d\TH:i:s', $timestamp_millis / 1000);
+				$node->set('field_event_date', $new_date);
+				$needs_update = true;
+			}
+
+			$end_date_value = $node->get('field_event_enddate')->value;
+			if ($end_date_value && $end_date_value < $threshold_date) {
+				// Date is in seconds, convert to milliseconds (multiply by 1000)
+				$timestamp_seconds = strtotime($end_date_value);
+				$timestamp_millis = $timestamp_seconds * 1000;
+				$new_end_date = date('Y-m-d\TH:i:s', $timestamp_millis / 1000);
+				$node->set('field_event_enddate', $new_end_date);
+				$needs_update = true;
+			}
+
+			if ($needs_update) {
+				$node->save();
+				$fixed_count++;
+			}
+		}
+
+		if ($fixed_count > 0) {
+			Drupal::logger('mantle2')->notice(
+				'[cron] Fixed %count event(s) with malformed dates.',
+				['%count' => $fixed_count],
+			);
+		}
+	} catch (Exception $e) {
+		Drupal::logger('mantle2')->error('[cron] Failed to fix event dates: %message', [
+			'%message' => $e->getMessage(),
+		]);
+	}
 }

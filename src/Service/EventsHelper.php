@@ -71,9 +71,10 @@ class EventsHelper
 		$latitude = (float) ($node->get('field_event_location_latitude')->value ?? 0.0);
 		$longitude = (float) ($node->get('field_event_location_longitude')->value ?? 0.0);
 
-		$date = strtotime($node->get('field_event_date')->value);
+		// Convert datetime string to Unix timestamp in MILLISECONDS
+		$date = strtotime($node->get('field_event_date')->value) * 1000;
 		$end_date = $node->get('field_event_enddate')->value
-			? strtotime($node->get('field_event_enddate')->value)
+			? strtotime($node->get('field_event_enddate')->value) * 1000
 			: null;
 
 		$visibility_value = $node->get('field_visibility')->value ?? 1;
@@ -359,15 +360,18 @@ class EventsHelper
 		}
 
 		// timing info
+		$now = time() * 1000; // Convert to milliseconds for comparison
 		$timing = [];
 		$timing['has_passed'] = $event->getRawEndDate()
-			? time() > $event->getRawEndDate()
-			: time() > $event->getRawDate();
+			? $now > $event->getRawEndDate()
+			: $now > $event->getRawDate();
 		$timing['is_ongoing'] = $event->getRawEndDate()
-			? time() >= $event->getRawDate() && time() <= $event->getRawEndDate()
+			? $now >= $event->getRawDate() && $now <= $event->getRawEndDate()
 			: false;
-		$timing['starts_in'] = $event->getRawDate() - time();
-		$timing['ends_in'] = $event->getRawEndDate() ? $event->getRawEndDate() - time() : null;
+		$timing['starts_in'] = (int) (($event->getRawDate() - $now) / 1000); // Convert to seconds
+		$timing['ends_in'] = $event->getRawEndDate()
+			? (int) (($event->getRawEndDate() - $now) / 1000)
+			: null;
 		$result['timing'] = $timing;
 
 		return $result;
@@ -381,7 +385,9 @@ class EventsHelper
 			->accessCheck(false);
 
 		if ($upcoming) {
-			$query->condition('field_event_date', time(), '>=');
+			// Drupal datetime fields are in ISO format, so we need current date in ISO format
+			$now = date('Y-m-d\TH:i:s', time());
+			$query->condition('field_event_date', $now, '>=');
 		}
 
 		$nids = $query->execute();
@@ -405,7 +411,9 @@ class EventsHelper
 			->range(0, $count);
 
 		if ($upcoming) {
-			$query->condition('field_event_date', time(), '>=');
+			// Drupal datetime fields are in ISO format, so we need current date in ISO format
+			$now = date('Y-m-d\TH:i:s', time());
+			$query->condition('field_event_date', $now, '>=');
 		}
 
 		$nids = $query->execute();
@@ -434,8 +442,9 @@ class EventsHelper
 			return;
 		}
 
-		$now = time();
-		$oneHourFromNow = $now + 3600; // Next cron run
+		// Event dates are stored in milliseconds, convert current time to milliseconds
+		$now = time() * 1000;
+		$oneHourFromNow = $now + 3600 * 1000; // Next cron run in milliseconds
 
 		foreach ($nids as $nid) {
 			$node = Node::load($nid);
@@ -448,12 +457,12 @@ class EventsHelper
 			$endTime = $event->getRawEndDate();
 
 			if ($startTime > $now && $startTime <= $oneHourFromNow) {
-				$minutesUntilStart = (int) ceil(($startTime - $now) / 60);
+				$minutesUntilStart = (int) ceil(($startTime - $now) / 60000); // milliseconds to minutes
 				self::notifyEventStarting($event, $node, $minutesUntilStart);
 			}
 
 			if ($endTime && $endTime > $now && $endTime <= $oneHourFromNow) {
-				$minutesUntilEnd = (int) ceil(($endTime - $now) / 60);
+				$minutesUntilEnd = (int) ceil(($endTime - $now) / 60000); // milliseconds to minutes
 				self::notifyEventEnding($event, $node, $minutesUntilEnd);
 			}
 		}

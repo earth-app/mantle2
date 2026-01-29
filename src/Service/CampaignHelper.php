@@ -288,7 +288,8 @@ class CampaignHelper
 		$description =
 			strlen($description) > 300 ? substr($description, 0, 297) . '...' : $description;
 		$id = $event->getId();
-		$date = date('F j, Y', $event->getDate());
+		// Convert milliseconds to seconds for date formatting
+		$date = date('F j, Y', $event->getRawDate() / 1000);
 
 		return "[**$name**](https://app.earth-app.com/events/$id)\n*$date*\n$description\n";
 	}
