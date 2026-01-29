@@ -9,6 +9,7 @@ use Drupal\mantle2\Custom\Event;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\node\Entity\Node;
+use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -348,6 +349,27 @@ class EventsHelper
 		$result['is_attending'] = $user ? in_array($user->id(), $event->getAttendeeIds()) : false;
 		$result['can_edit'] = $event->getHostId() === $user?->id() || UsersHelper::isAdmin($user);
 
+		// filter out internal fields (those starting with _)
+		if (isset($result['fields']) && is_array($result['fields'])) {
+			$result['fields'] = array_filter(
+				$result['fields'],
+				fn($key) => !str_starts_with($key, '_'),
+				ARRAY_FILTER_USE_KEY,
+			);
+		}
+
+		// timing info
+		$timing = [];
+		$timing['has_passed'] = $event->getRawEndDate()
+			? time() > $event->getRawEndDate()
+			: time() > $event->getRawDate();
+		$timing['is_ongoing'] = $event->getRawEndDate()
+			? time() >= $event->getRawDate() && time() <= $event->getRawEndDate()
+			: false;
+		$timing['starts_in'] = $event->getRawDate() - time();
+		$timing['ends_in'] = $event->getRawEndDate() ? $event->getRawEndDate() - time() : null;
+		$result['timing'] = $timing;
+
 		return $result;
 	}
 
@@ -385,5 +407,103 @@ class EventsHelper
 		}
 
 		return array_map(fn($nid) => self::getEventByNid($nid), $nids);
+	}
+
+	/**
+	 * Check for events starting or ending soon and notify attendees.
+	 * Called by cron (runs hourly).
+	 */
+	public static function checkEventNotifications(): void
+	{
+		$query = Drupal::entityQuery('node')
+			->condition('type', 'event')
+			->condition('status', 1)
+			->accessCheck(false);
+
+		$nids = $query->execute();
+
+		if (empty($nids)) {
+			return;
+		}
+
+		$now = time();
+		$oneHourFromNow = $now + 3600; // Next cron run
+
+		foreach ($nids as $nid) {
+			$node = Node::load($nid);
+			if (!$node) {
+				continue;
+			}
+
+			$event = self::nodeToEvent($node);
+			$startTime = $event->getRawDate();
+			$endTime = $event->getRawEndDate();
+
+			if ($startTime > $now && $startTime <= $oneHourFromNow) {
+				$minutesUntilStart = (int) ceil(($startTime - $now) / 60);
+				self::notifyEventStarting($event, $node, $minutesUntilStart);
+			}
+
+			if ($endTime && $endTime > $now && $endTime <= $oneHourFromNow) {
+				$minutesUntilEnd = (int) ceil(($endTime - $now) / 60);
+				self::notifyEventEnding($event, $node, $minutesUntilEnd);
+			}
+		}
+	}
+
+	/**
+	 * Notify attendees that an event is starting soon.
+	 */
+	private static function notifyEventStarting(Event $event, Node $node, int $minutes): void
+	{
+		$eventUrl = '/events/' . GeneralHelper::formatId($node->id());
+		$attendeeIds = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
+
+		foreach ($attendeeIds as $userId) {
+			$user = \Drupal\user\Entity\User::load($userId);
+			if ($user) {
+				UsersHelper::addNotification(
+					$user,
+					'Event Starting Soon',
+					"The event \"{$event->getName()}\" starts in $minutes minutes!",
+					$eventUrl,
+					'info',
+					'system',
+				);
+			}
+		}
+
+		Drupal::logger('mantle2')->notice(
+			'[cron] Notified attendees that event "@event" (ID: @id) starts in @minutes minutes.',
+			['@event' => $event->getName(), '@id' => $node->id(), '@minutes' => $minutes],
+		);
+	}
+
+	/**
+	 * Notify attendees that an event is ending soon.
+	 */
+	private static function notifyEventEnding(Event $event, Node $node, int $minutes): void
+	{
+		$eventUrl = '/events/' . GeneralHelper::formatId($node->id());
+		$attendeeIds = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
+
+		foreach ($attendeeIds as $userId) {
+			$user = \Drupal\user\Entity\User::load($userId);
+			if ($user) {
+				UsersHelper::addNotification(
+					$user,
+					'Event Ending Soon',
+					"The event \"{$event->getName()}\" ends in $minutes minutes!",
+					$eventUrl,
+					'info',
+					'system',
+				);
+			}
+		}
+
+		Drupal::logger('mantle2')->notice(
+			'[cron] Notified attendees that event "@event" (ID: @id) ends in @minutes minutes.',
+			['@event' => $event->getName(), '@id' => $node->id(), '@minutes' => $minutes],
+		);
 	}
 }

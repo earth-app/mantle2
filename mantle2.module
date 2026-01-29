@@ -3,6 +3,7 @@
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\CampaignHelper;
+use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 
 function mantle2_help($route_name, RouteMatchInterface $route_match)
@@ -249,4 +250,7 @@ function mantle2_cron()
 
 	// Run Email Campaigns
 	CampaignHelper::runEmailCampaigns();
+
+	// Check for events starting or ending soon and notify attendees
+	EventsHelper::checkEventNotifications();
 }
