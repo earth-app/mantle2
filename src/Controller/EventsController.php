@@ -351,151 +351,10 @@ class EventsController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
-		$name = $body['name'] ?? null;
-		$description = $body['description'] ?? null;
-		$type = $body['type'] ?? null;
-		$activityTypes = $body['activities'] ?? [];
-		$date = $body['date'] ?? null;
-		$endDate = $body['end_date'] ?? null;
-		$visibility = $body['visibility'] ?? null;
-
-		$latitude = null;
-		$longitude = null;
-		if (isset($body['location'])) {
-			$latitude = $body['location']['latitude'] ?? null;
-			$longitude = $body['location']['longitude'] ?? null;
+		$event = EventsHelper::validateEventData($body, $user);
+		if ($event instanceof JsonResponse) {
+			return $event;
 		}
-
-		if (!$name || !is_string($name) || strlen($name) > 50) {
-			return GeneralHelper::badRequest(
-				'Missing or invalid name; Max length is 50 characters',
-			);
-		}
-
-		if ($description && (!is_string($description) || strlen($description) > 3000)) {
-			return GeneralHelper::badRequest('Invalid description; Max length is 3000 characters');
-		}
-
-		if (!$type || !is_string($type)) {
-			return GeneralHelper::badRequest('Missing or invalid type');
-		}
-
-		$type0 = EventType::tryFrom($type);
-		if (!$type0) {
-			return GeneralHelper::badRequest('Invalid event type');
-		}
-
-		if (!$date || !is_integer($date)) {
-			return GeneralHelper::badRequest('Missing or invalid date');
-		}
-
-		if (!$visibility || !is_string($visibility)) {
-			return GeneralHelper::badRequest('Missing or invalid visibility');
-		}
-
-		$visibility0 = Visibility::tryFrom($visibility);
-		if (!$visibility0) {
-			return GeneralHelper::badRequest('Invalid visibility');
-		}
-
-		if ($visibility0 === Visibility::PUBLIC) {
-			if (!UsersHelper::isPro($user)) {
-				return GeneralHelper::paymentRequired(
-					'Public events are not available on free accounts',
-				);
-			}
-		}
-
-		$activities0 = [];
-		if (is_array($activityTypes)) {
-			if (count($activityTypes) > Event::MAX_ACTIVITIES) {
-				return GeneralHelper::badRequest(
-					'Too many activities, max is ' . Event::MAX_ACTIVITIES,
-				);
-			}
-
-			foreach ($activityTypes as $activityValue) {
-				if (!is_string($activityValue)) {
-					return GeneralHelper::badRequest('Each activity must be a string');
-				}
-
-				// Try to parse as ActivityType enum first
-				$activityType = ActivityType::tryFrom(strtoupper($activityValue));
-				if ($activityType) {
-					$activities0[] = $activityType;
-				} else {
-					// Otherwise, treat as Activity ID
-					$activity = ActivityHelper::getActivity(strtolower($activityValue));
-					if (!$activity) {
-						return GeneralHelper::badRequest(
-							'Invalid activity: "' .
-								$activityValue .
-								'" is not a valid ActivityType or Activity ID',
-						);
-					}
-					$activities0[] = $activity;
-				}
-			}
-		} else {
-			return GeneralHelper::badRequest('Invalid activity types');
-		}
-
-		if ($latitude !== null) {
-			if ($longitude === null) {
-				return GeneralHelper::badRequest('Longitude is required when latitude is provided');
-			}
-
-			if (!is_float($latitude) && !is_int($latitude)) {
-				return GeneralHelper::badRequest('Invalid latitude');
-			}
-			if ($latitude < -90 || $latitude > 90) {
-				return GeneralHelper::badRequest('Invalid latitude');
-			}
-		}
-
-		if ($longitude !== null) {
-			if ($latitude === null) {
-				return GeneralHelper::badRequest('Latitude is required when longitude is provided');
-			}
-
-			if (!is_float($longitude) && !is_int($longitude)) {
-				return GeneralHelper::badRequest('Invalid longitude');
-			}
-			if ($longitude < -180 || $longitude > 180) {
-				return GeneralHelper::badRequest('Invalid longitude');
-			}
-		}
-
-		if ($endDate !== null) {
-			if (!is_integer($endDate)) {
-				return GeneralHelper::badRequest('Invalid end date');
-			}
-
-			if ($endDate < $date) {
-				return GeneralHelper::badRequest('End date must be after or equal to start date');
-			}
-		}
-
-		$fields = $body['fields'] ?? ['link' => ''];
-		$validatedFields = EventsHelper::validateFields($fields, $user);
-		if ($validatedFields instanceof JsonResponse) {
-			return $validatedFields;
-		}
-
-		$event = new Event(
-			$user->id(),
-			$name,
-			$description ?? '',
-			$type0,
-			$activities0,
-			(float) ($latitude ?? 0),
-			(float) ($longitude ?? 0),
-			$date,
-			$endDate,
-			$visibility0,
-			[],
-			$fields,
-		);
 
 		$node = EventsHelper::createEvent($event, $user);
 		$result = EventsHelper::serializeEvent($event, $node, $user);
@@ -551,167 +410,9 @@ class EventsController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON');
 		}
 
-		$name = $body['name'] ?? null;
-		$description = $body['description'] ?? null;
-		$type = $body['type'] ?? null;
-		$activityTypes = $body['activities'] ?? null;
-		$date = $body['date'] ?? null;
-		$endDate = $body['end_date'] ?? null;
-		$visibility = $body['visibility'] ?? null;
-		$fields = $body['fields'] ?? null;
-
-		$latitude = null;
-		$longitude = null;
-		if (isset($body['location'])) {
-			$latitude = $body['location']['latitude'] ?? null;
-			$longitude = $body['location']['longitude'] ?? null;
-		}
-
-		if ($name !== null) {
-			if (!is_string($name) || strlen($name) > 50) {
-				return GeneralHelper::badRequest('Invalid name; Max length is 50 characters');
-			}
-			$event->setName($name);
-		}
-
-		if ($description !== null) {
-			if (!is_string($description) || strlen($description) > 3000) {
-				return GeneralHelper::badRequest(
-					'Invalid description; Max length is 3000 characters',
-				);
-			}
-			$event->setDescription($description);
-		}
-
-		if ($type !== null) {
-			if (!is_string($type)) {
-				return GeneralHelper::badRequest('Invalid type');
-			}
-
-			$type0 = EventType::tryFrom($type);
-			if (!$type0) {
-				return GeneralHelper::badRequest('Invalid event type');
-			}
-			$event->setType($type0);
-		}
-
-		if ($activityTypes !== null) {
-			$activities0 = [];
-			if (is_array($activityTypes)) {
-				if (count($activityTypes) > Event::MAX_ACTIVITIES) {
-					return GeneralHelper::badRequest(
-						'Too many activities, max is ' . Event::MAX_ACTIVITIES,
-					);
-				}
-
-				foreach ($activityTypes as $activityValue) {
-					if (!is_string($activityValue)) {
-						return GeneralHelper::badRequest('Each activity must be a string');
-					}
-
-					// Try to parse as ActivityType enum first
-					$activityType = ActivityType::tryFrom(strtoupper($activityValue));
-					if ($activityType) {
-						$activities0[] = $activityType;
-					} else {
-						// Otherwise, treat as Activity ID
-						$activity = ActivityHelper::getActivity(strtolower($activityValue));
-						if (!$activity) {
-							return GeneralHelper::badRequest(
-								'Invalid activity: "' .
-									$activityValue .
-									'" is not a valid ActivityType or Activity ID',
-							);
-						}
-						$activities0[] = $activity;
-					}
-				}
-				$event->setActivities($activities0);
-			} else {
-				return GeneralHelper::badRequest('Invalid activity types');
-			}
-		}
-
-		if ($latitude !== null) {
-			if ($longitude === null) {
-				return GeneralHelper::badRequest('Longitude is required when latitude is provided');
-			}
-
-			if (!is_float($latitude) && !is_int($latitude)) {
-				return GeneralHelper::badRequest("Invalid latitude: $latitude");
-			}
-			if ($latitude < -90 || $latitude > 90) {
-				return GeneralHelper::badRequest("Invalid latitude: $latitude");
-			}
-			$event->setLatitude((float) $latitude);
-		}
-
-		if ($longitude !== null) {
-			if ($latitude === null) {
-				return GeneralHelper::badRequest('Latitude is required when longitude is provided');
-			}
-
-			if (!is_float($longitude) && !is_int($longitude)) {
-				return GeneralHelper::badRequest("Invalid longitude: $longitude");
-			}
-			if ($longitude < -180 || $longitude > 180) {
-				return GeneralHelper::badRequest("Invalid longitude: $longitude");
-			}
-
-			$event->setLongitude((float) $longitude);
-		}
-
-		if ($date !== null) {
-			if (!is_integer($date)) {
-				return GeneralHelper::badRequest(
-					"Invalid date: $date; Must be in the form of a number",
-				);
-			}
-			$event->setDate($date);
-		}
-
-		if ($endDate !== null) {
-			if (!is_integer($endDate)) {
-				return GeneralHelper::badRequest(
-					"Invalid end date: $endDate; Must be in the form of a number",
-				);
-			}
-
-			if ($endDate < $event->getRawDate()) {
-				return GeneralHelper::badRequest('End date must be after or equal to start date');
-			}
-
-			$event->setEndDate($endDate);
-		}
-
-		if ($visibility !== null) {
-			if (!is_string($visibility)) {
-				return GeneralHelper::badRequest("Invalid visibility: $visibility");
-			}
-
-			$visibility0 = Visibility::tryFrom($visibility);
-			if (!$visibility0) {
-				return GeneralHelper::badRequest("Invalid visibility: $visibility");
-			}
-
-			if ($visibility0 === Visibility::PUBLIC) {
-				if (!UsersHelper::isPro($user)) {
-					return GeneralHelper::paymentRequired(
-						'Public events are not available on free accounts',
-					);
-				}
-			}
-
-			$event->setVisibility($visibility0);
-		}
-
-		if ($fields !== null) {
-			$validatedFields = EventsHelper::validateFields($fields, $user);
-			if ($validatedFields instanceof JsonResponse) {
-				return $validatedFields;
-			}
-
-			$event->setFields($validatedFields);
+		$result = EventsHelper::applyEventUpdates($event, $body, $user);
+		if ($result instanceof JsonResponse) {
+			return $result;
 		}
 
 		$node = Node::load($eventId);
@@ -802,9 +503,13 @@ class EventsController extends ControllerBase
 
 		$total = count($attendees);
 		$attendees = array_slice($attendees, $page * $limit, $limit);
-		$attendees = array_map(
-			fn(UserInterface $attendee) => UsersHelper::serializeUser($attendee),
-			$attendees,
+		$attendees = array_values(
+			array_filter(
+				array_map(
+					fn(UserInterface $attendee) => UsersHelper::serializeUser($attendee, $user),
+					$attendees,
+				),
+			),
 		);
 
 		return new JsonResponse(
@@ -855,7 +560,7 @@ class EventsController extends ControllerBase
 
 		return new JsonResponse(
 			[
-				'user' => UsersHelper::serializeUser($user),
+				'user' => UsersHelper::serializeUser($user, $user),
 				'event' => EventsHelper::serializeEvent($event, $node, $user),
 			],
 			Response::HTTP_OK,
@@ -896,7 +601,7 @@ class EventsController extends ControllerBase
 		EventsHelper::updateEvent($node, $event);
 		return new JsonResponse(
 			[
-				'user' => UsersHelper::serializeUser($user),
+				'user' => UsersHelper::serializeUser($user, $user),
 				'event' => EventsHelper::serializeEvent($event, $node, $user),
 			],
 			Response::HTTP_OK,
