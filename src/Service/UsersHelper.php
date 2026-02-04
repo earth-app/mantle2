@@ -2723,4 +2723,9 @@ class UsersHelper
 		$passField = $user->get('pass')->value;
 		return !empty($passField);
 	}
+
+	public static function getBadges(UserInterface $user): array
+	{
+		return CloudHelper::sendRequest('/v1/users/badges/' . $user->id(), 'GET');
+	}
 }

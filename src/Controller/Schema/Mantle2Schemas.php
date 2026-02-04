@@ -1084,6 +1084,34 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function badge(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'badge_id' => ['type' => 'string', 'example' => 'you_know_ball'],
+				'granted' => ['$ref' => '#/components/schemas/Bool'],
+				'granted_at' => ['$ref' => '#/components/schemas/Date'],
+				'progress' => [
+					'type' => 'number',
+					'example' => 0.75,
+					'minimum' => 0.0,
+					'maximum' => 1.0,
+					'description' => 'Progress towards earning the badge (0.0 to 1.0)',
+				],
+			],
+			'required' => ['badge_id', 'granted', 'progress'],
+		];
+	}
+
+	public static function badges(): array
+	{
+		return [
+			'type' => 'array',
+			'items' => ['$ref' => '#/components/schemas/Badge'],
+		];
+	}
+
 	public static function event(): array
 	{
 		return [
@@ -1508,6 +1536,7 @@ class Mantle2Schemas
 			'SubscriptionResponse' => self::subscriptionResponse(),
 			'Notification' => self::notification(),
 			'FriendResponse' => self::friendResponse(),
+			'Badge' => self::badge(),
 			'Event' => self::event(),
 			'AttendeeResponse' => self::attendeeResponse(),
 			'Activity' => self::activity(),

@@ -1169,6 +1169,30 @@ class UsersController extends ControllerBase
 		return new JsonResponse(['message' => 'Password changed successfully'], Response::HTTP_OK);
 	}
 
+	// GET /v2/users/current/badges
+	// GET /v2/users/{id}/badges
+	// GET /v2/users/{username}/badges
+	public function badges(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$resolved = $this->resolveUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+		if (!$resolved) {
+			return GeneralHelper::notFound('User not found');
+		}
+		$visible = UsersHelper::checkVisibility($resolved, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		$badges = UsersHelper::getBadges($visible);
+		return new JsonResponse($badges, Response::HTTP_OK);
+	}
+
 	#endregion
 
 	#region Email Verification

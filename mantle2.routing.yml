@@ -1210,6 +1210,23 @@ mantle2.users.id.events.attending:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.id.badges:
+  path: '/v2/users/{id}/badges'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userBadges'
+    _title: 'Get User Badges by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Badges
+    description: Retrieves a list of badges earned by the user
+    schema/200: badges()
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
 #endregion
 #region User - By Username
 
