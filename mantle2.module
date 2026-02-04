@@ -243,10 +243,10 @@ function mantle2_mail_alter(&$message)
 
 function mantle2_cron()
 {
-	// Delete expired prompts and articles
+	// Delete expired prompts, articles, and events
 	PromptsHelper::checkExpiredPrompts();
 	ArticlesHelper::checkExpiredArticles();
-	Drupal::logger('mantle2')->notice('[cron] mantle2 cron executed.');
+	EventsHelper::checkExpiredEvents();
 
 	// Run Email Campaigns
 	CampaignHelper::runEmailCampaigns();
@@ -256,6 +256,7 @@ function mantle2_cron()
 
 	// Fix malformed event dates (dates stored in seconds instead of milliseconds)
 	mantle2_fix_event_dates();
+	Drupal::logger('mantle2')->notice('[cron] mantle2 cron executed.');
 }
 
 function mantle2_fix_event_dates(): void

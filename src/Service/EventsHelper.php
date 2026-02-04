@@ -848,4 +848,44 @@ class EventsHelper
 			['@event' => $event->getName(), '@id' => $node->id(), '@minutes' => $minutes],
 		);
 	}
+
+	public const EXPIRED_EVENTS_TTL = 30 * 24 * 3600; // 30 days after end date in seconds
+
+	public static function checkExpiredEvents(): void
+	{
+		$query = Drupal::entityQuery('node')
+			->accessCheck(false)
+			->condition('type', 'event')
+			->condition('status', 1);
+
+		$nids = $query->execute();
+
+		if (empty($nids)) {
+			return;
+		}
+
+		$now = time() * 1000; // Convert to milliseconds
+		$expirationThreshold = $now - self::EXPIRED_EVENTS_TTL * 1000; // convert TTL to milliseconds
+
+		$nodes = Node::loadMultiple($nids);
+		foreach ($nodes as $node) {
+			$event = self::nodeToEvent($node);
+
+			$relevantDate = $event->getRawEndDate() ?? $event->getRawDate();
+			if ($relevantDate < $expirationThreshold) {
+				$host = $event->getHost();
+				if ($host instanceof User) {
+					UsersHelper::addNotification(
+						$host,
+						Drupal::translation()->translate('Event Expired'),
+						Drupal::translation()->translate(
+							"Your event \"{$event->getName()}\" has expired and been deleted.",
+						),
+					);
+				}
+
+				$node->delete();
+			}
+		}
+	}
 }
