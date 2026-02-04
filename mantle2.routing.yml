@@ -1185,8 +1185,7 @@ mantle2.users.id.events.attending:
     schema/404: User not found
     parameters:
       id:
-        type: integer
-        description: The user ID
+        type: string
     query:
       limit:
         type: integer
@@ -1755,7 +1754,7 @@ mantle2.users.username.subscribe:
     _title: 'Subscribe User to Marketing Emails by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Subscription
     description: Subscribes a user to marketing emails. Returns 200 if already subscribed, 201 if newly subscribed.
@@ -1776,7 +1775,7 @@ mantle2.users.username.unsubscribe:
     _title: 'Unsubscribe User from Marketing Emails by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Subscription
     description: Unsubscribes a user from marketing emails. Returns 200 if already unsubscribed, 201 if newly unsubscribed.
@@ -1797,7 +1796,7 @@ mantle2.users.username.notifications:
     _title: 'Get User Notifications by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,User Notifications
     description: Retrieves a list of notifications for a user by their username
@@ -1815,7 +1814,7 @@ mantle2.users.username.notifications.get:
     _title: 'Get User Notification by ID'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
     notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
@@ -1836,7 +1835,7 @@ mantle2.users.username.notifications.mark_all_read:
     _title: 'Mark All User Notifications as Read by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,User Notifications
     description: Marks all notifications for a user as read
@@ -1856,7 +1855,7 @@ mantle2.users.username.notifications.mark_all_unread:
     _title: 'Mark All User Notifications as Unread by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,User Notifications
     description: Marks all notifications for a user as unread
@@ -1876,7 +1875,7 @@ mantle2.users.username.notifications.mark_read:
     _title: 'Mark User Notification as Read by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
     notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
@@ -1899,7 +1898,7 @@ mantle2.users.username.notifications.mark_unread:
     _title: 'Mark User Notification as Unread by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
     notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
@@ -1922,7 +1921,7 @@ mantle2.users.username.notifications.delete:
     _title: 'Delete User Notification by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
     notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
@@ -1945,7 +1944,7 @@ mantle2.users.username.notifications.clear:
     _title: 'Clear User Notifications by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,User Notifications
     description: Clears all notifications for a user by their username
@@ -1965,7 +1964,7 @@ mantle2.users.username.prompts:
     _title: 'Get User Prompts by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Prompts
     description: Retrieves a list of prompts created by the user
@@ -2005,7 +2004,7 @@ mantle2.users.username.articles:
     _title: 'Get User Articles by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Articles
     description: Retrieves a list of articles created by the user
@@ -2045,7 +2044,7 @@ mantle2.users.username.events:
     _title: 'Get User Hosted Events by Username'
   requirements:
     _access: 'TRUE'
-    username: '@\w+'
+    username: '@[\w.]+'
   options:
     tags: Users,Events
     description: Retrieves a list of events hosted by the user
