@@ -1213,7 +1213,7 @@ mantle2.users.id.events.attending:
 mantle2.users.id.badges:
   path: '/v2/users/{id}/badges'
   defaults:
-    _controller: '\Drupal\mantle2\Controller\UsersController::userBadges'
+    _controller: '\Drupal\mantle2\Controller\UsersController::badges'
     _title: 'Get User Badges by ID'
   requirements:
     _access: 'TRUE'
@@ -2118,6 +2118,23 @@ mantle2.users.username.events.attending:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.username.badges:
+  path: '/v2/users/{username}/badges'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badges'
+    _title: 'Get User Badges by ID'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Badges
+    description: Retrieves a list of badges earned by the user
+    schema/200: badges()
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
 #endregion
 #region User - Current User
 
@@ -2871,6 +2888,20 @@ mantle2.users.current.events.attending:
         enum: [asc, desc, rand]
         default: desc
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.users.current.badges:
+  path: '/v2/users/current/badges'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badges'
+    _title: 'Get User Badges by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Badges
+    description: Retrieves a list of badges earned by the user
+    schema/200: badges()
+    schema/404: User not found
   methods: [GET]
 
 #endregion
