@@ -82,7 +82,15 @@ class CloudHelper
 			throw new Exception('Request Error: ' . curl_error($ch) . ' URL: ' . $url);
 		}
 
-		curl_close($ch);
+		unset($ch);
+
+		if ($httpCode === 204) {
+			return [];
+		}
+
+		if ($httpCode === 404) {
+			return [];
+		}
 
 		if ($httpCode < 200 || $httpCode >= 300) {
 			throw new Exception('HTTP Error: ' . $httpCode . ' Response: ' . $response);
