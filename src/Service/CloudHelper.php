@@ -79,7 +79,10 @@ class CloudHelper
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
 		if (curl_errno($ch)) {
-			throw new Exception('Request Error: ' . curl_error($ch) . ' URL: ' . $url);
+			throw new Exception(
+				'curl Error: ' . curl_error($ch) . ' URL: ' . $url,
+				curl_errno($ch),
+			);
 		}
 
 		unset($ch);
@@ -93,7 +96,7 @@ class CloudHelper
 		}
 
 		if ($httpCode < 200 || $httpCode >= 300) {
-			throw new Exception('HTTP Error: ' . $httpCode . ' Response: ' . $response);
+			throw new Exception('HTTP Error: ' . $httpCode . ' Response: ' . $response, $httpCode);
 		}
 
 		return json_decode($response, true) ?? [];

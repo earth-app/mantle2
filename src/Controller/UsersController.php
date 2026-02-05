@@ -1193,6 +1193,41 @@ class UsersController extends ControllerBase
 		return new JsonResponse($badges, Response::HTTP_OK);
 	}
 
+	// GET /v2/users/current/badges/{badgeId}
+	// GET /v2/users/{id}/badges/{badgeId}
+	// GET /v2/users/{username}/badges/{badgeId}
+	public function badge(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+		?string $badgeId = null,
+	): JsonResponse {
+		if (!$badgeId) {
+			return GeneralHelper::badRequest('Missing badgeId');
+		}
+
+		$resolved = $this->resolveUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		if (!$resolved) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$visible = UsersHelper::checkVisibility($resolved, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		$badge = UsersHelper::getBadge($visible, $badgeId);
+		if (!$badge) {
+			return GeneralHelper::notFound('Badge not found');
+		}
+
+		return new JsonResponse($badge, Response::HTTP_OK);
+	}
+
 	#endregion
 
 	#region Email Verification
@@ -1319,6 +1354,9 @@ class UsersController extends ControllerBase
 		// Clean up rate limit since email is now verified
 		$rateLimitKey = 'email_verification_rate_limit_' . $user->id();
 		RedisHelper::delete($rateLimitKey);
+
+		// badges: 'verified'
+		UsersHelper::grantBadge($user, 'verified');
 
 		return new JsonResponse(
 			[
@@ -1558,6 +1596,58 @@ class UsersController extends ControllerBase
 		}
 
 		return new JsonResponse($notification, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/{id}/notifications
+	// POST /v2/users/{username}/notifications
+	public function createUserNotification(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('Only admins can create notifications for other users');
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		if (!$body) {
+			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		$title = $body['title'] ?? null;
+		$description = $body['description'] ?? null;
+		$type = $body['type'] ?? 'info';
+		$link = $body['link'] ?? null;
+		$source = $body['source'] ?? null;
+
+		if (!$title || !$description) {
+			return GeneralHelper::badRequest('Missing title or description');
+		}
+
+		$notification = UsersHelper::addNotification(
+			$user,
+			$title,
+			$description,
+			$type,
+			$link,
+			$source,
+		);
+
+		// null means notification was ignored
+		if ($notification !== null) {
+			return new JsonResponse($notification, Response::HTTP_CREATED);
+		} else {
+			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+		}
 	}
 
 	// POST /v2/users/current/notifications/{notificationId}/mark_read

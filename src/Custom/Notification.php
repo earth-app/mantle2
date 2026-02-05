@@ -14,7 +14,7 @@ class Notification implements JsonSerializable
 	public string $title;
 	public string $message; // after first line break is full message; first line is summary
 	public ?string $link;
-	public string $type;
+	public string $type; // info, warning, error, success
 	public string $source = 'system'; // 'system', 'email', '<username>', etc
 	public bool $isRead = false;
 	public int $timestamp;

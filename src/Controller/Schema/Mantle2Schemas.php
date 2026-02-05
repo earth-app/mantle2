@@ -1052,7 +1052,7 @@ class Mantle2Schemas
 
 	public static function notifications(): array
 	{
-		return self::paginated([
+		return [
 			'type' => 'object',
 			'properties' => [
 				'unread_count' => ['$ref' => '#/components/schemas/Number'],
@@ -1063,7 +1063,37 @@ class Mantle2Schemas
 					'items' => ['$ref' => '#/components/schemas/Notification'],
 				],
 			],
-		]);
+		];
+	}
+
+	public static function userNotificationCreateJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'type' => [
+					'type' => 'string',
+					'example' => 'info',
+					'enum' => ['info', 'warning', 'error', 'success'],
+					'description' => 'Type of notification (e.g., info, warning, error)',
+				],
+				'title' => self::text(100, 1, 'Notification Title'),
+				'description' => self::text(500, 1, 'You have a new message.'),
+				'source' => [
+					'type' => 'string',
+					'example' => 'system',
+					'description' => 'Source of the notification (e.g., system, user)',
+				],
+				'link' => [
+					'type' => 'string',
+					'format' => 'uri',
+					'nullable' => true,
+					'description' => 'Optional link associated with the notification',
+				],
+			],
+			'required' => ['type', 'title', 'description', 'source'],
+		];
 	}
 
 	public static function friendResponse(): array

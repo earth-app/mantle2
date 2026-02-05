@@ -920,6 +920,28 @@ mantle2.users.id.notifications.get:
         type: string
   methods: [GET]
 
+mantle2.users.id.notifications.create:
+  path: '/v2/users/{id}/notifications'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::createUserNotification'
+    _title: 'Create User Notification by ID (Admin Only)'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,User Notifications
+    description: Creates a new notification for a user by their ID (Admin Only)
+    schema/201: notification()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    body/description: Notification data to create
+    body/schema: userNotificationCreateJson()
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
 mantle2.users.id.notifications.mark_all_read:
   path: '/v2/users/{id}/notifications/mark_all_read'
   defaults:
@@ -1224,6 +1246,27 @@ mantle2.users.id.badges:
     schema/404: User not found
     parameters:
       id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.badges.get:
+  path: '/v2/users/{id}/badges/{badgeId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badge'
+    _title: 'Get User Badge by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges
+    description: Retrieves a specific badge earned by the user
+    schema/200: badge()
+    schema/404: User or badge not found
+    parameters:
+      id:
+        type: string
+      badgeId:
         type: string
   methods: [GET]
 #endregion
@@ -1807,6 +1850,29 @@ mantle2.users.username.notifications:
         type: string
   methods: [GET]
 
+mantle2.users.username.notifications.create:
+  path: '/v2/users/{username}/notifications'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::createUserNotification'
+    _title: 'Create User Notification by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,User Notifications
+    description: Creates a new notification for a user by their username
+    schema/201: notification()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    body/description: Notification data to create
+    body/schema: userNotificationCreateJson()
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
 mantle2.users.username.notifications.get:
   path: '/v2/users/{username}/notifications/{notificationId}'
   defaults:
@@ -2132,6 +2198,27 @@ mantle2.users.username.badges:
     schema/404: User not found
     parameters:
       username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.badges.get:
+  path: '/v2/users/{username}/badges/{badgeId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badge'
+    _title: 'Get User Badge by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges
+    description: Retrieves a specific badge earned by the user
+    schema/200: badge()
+    schema/404: User or badge not found
+    parameters:
+      username:
+        type: string
+      badgeId:
         type: string
   methods: [GET]
 #endregion
@@ -2903,6 +2990,23 @@ mantle2.users.current.badges:
     schema/404: User not found
   methods: [GET]
 
+mantle2.users.current.badges.get:
+  path: '/v2/users/current/badges/{badgeId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badge'
+    _title: 'Get User Badge by Current User'
+  requirements:
+    _access: 'TRUE'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges
+    description: Retrieves a specific badge earned by the user
+    schema/200: badge()
+    schema/404: User or badge not found
+    parameters:
+      badgeId:
+        type: string
+  methods: [GET]
 #endregion
 
 ## Activity Routes

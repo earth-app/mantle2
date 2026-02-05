@@ -107,17 +107,25 @@ class PromptsHelper
 
 		$node->save();
 
-		// Notify the user that their prompt was published
 		if ($author) {
+			// Notify the user that their prompt was published
+			$promptUrl = '/prompts/' . GeneralHelper::formatId($node->id());
 			UsersHelper::addNotification(
 				$author,
 				Drupal::translation()->translate('Prompt Published'),
 				Drupal::translation()->translate(
 					"Your prompt \"{$prompt->getPrompt()}\" has been successfully published.",
 				),
-				null,
+				$promptUrl,
 				'info',
 				'system',
+			);
+
+			// badges: prompts_created
+			UsersHelper::trackBadgeProgress(
+				$author,
+				'prompts_created',
+				GeneralHelper::formatId($prompt->getId()),
 			);
 		}
 
@@ -293,6 +301,13 @@ class PromptsHelper
 		]);
 
 		$comment->save();
+
+		// badges: prompts_responded
+		UsersHelper::trackBadgeProgress(
+			$owner,
+			'prompts_responded',
+			GeneralHelper::formatId($response->id()),
+		);
 
 		return $comment;
 	}

@@ -299,6 +299,13 @@ class ArticlesHelper
 			'system',
 		);
 
+		// badges: articles_created
+		UsersHelper::trackBadgeProgress(
+			$author,
+			'articles_created',
+			GeneralHelper::formatId($node->id()),
+		);
+
 		return $node;
 	}
 

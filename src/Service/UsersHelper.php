@@ -121,7 +121,7 @@ class UsersHelper
 		}
 
 		// UNLISTED (and PRIVATE, see below) requires login
-		$user2 = self::findByRequestSilent($request);
+		$user2 = self::getOwnerOfRequest($request);
 		if (!$user2) {
 			return GeneralHelper::notFound();
 		}
@@ -230,58 +230,6 @@ class UsersHelper
 		}
 
 		return $user;
-	}
-
-	/**
-	 * Get user from request without error responses - returns null if not authenticated
-	 */
-	public static function findByRequestSilent(Request $request): ?UserInterface
-	{
-		if ($request->headers->has('X-Admin-Key')) {
-			$adminKey = $request->headers->get('X-Admin-Key');
-			$expectedKey = CloudHelper::getAdminKey();
-			if ($adminKey && $expectedKey && hash_equals($expectedKey, $adminKey)) {
-				return self::cloud();
-			}
-		}
-
-		$sessionId = GeneralHelper::getBearerToken($request);
-		if ($sessionId) {
-			// Try persistent API token lookup first.
-			$user = self::getUserByToken($sessionId);
-			if ($user instanceof UserInterface) {
-				return $user;
-			}
-
-			// Fallback to PHP session id semantics for legacy tokens.
-			$user = self::withSessionId($sessionId, function ($session) {
-				$uid = $session->get('uid');
-				return $uid ? User::load($uid) : null;
-			});
-			if ($user instanceof UserInterface) {
-				return $user;
-			}
-		}
-
-		$basicAuth = GeneralHelper::getBasicAuth($request);
-		if ($basicAuth) {
-			$username = $basicAuth['username'] ?? null;
-			$password = $basicAuth['password'] ?? null;
-
-			if ($username && $password) {
-				/** @var \Drupal\user\UserAuthInterface $userAuth */
-				$userAuth = Drupal::service('user.auth');
-				$uid = $userAuth->authenticate($username, $password);
-				if ($uid) {
-					$user = User::load($uid);
-					if ($user && !$user->isBlocked()) {
-						return $user;
-					}
-				}
-			}
-		}
-
-		return null;
 	}
 
 	public static function isVisible(
@@ -1182,14 +1130,35 @@ class UsersHelper
 			$user->save();
 
 			$name = $user->getAccountName();
-			self::addNotification(
-				$friend,
-				Drupal::translation()->translate('New Friend Added'),
-				Drupal::translation()->translate("$name has added you as a friend."),
-				"/profile/{$user->id()}",
-				'info',
-				'system',
-			);
+
+			if (self::isMutualFriend($user, $friend)) {
+				self::addNotification(
+					$friend,
+					Drupal::translation()->translate('New Mutual Friend'),
+					Drupal::translation()->translate(
+						"$name has added you as a friend. You are now mutual friends!",
+					),
+					"/profile/{$user->id()}",
+					'info',
+					'system',
+				);
+
+				// badges: friends_added
+				self::trackBadgeProgress(
+					$friend,
+					'friends_added',
+					GeneralHelper::formatId($friend->id()),
+				);
+			} else {
+				self::addNotification(
+					$friend,
+					Drupal::translation()->translate('New Friend Added'),
+					Drupal::translation()->translate("$name has added you as a friend."),
+					"/profile/{$user->id()}",
+					'info',
+					'system',
+				);
+			}
 
 			return true;
 		} catch (Exception $e) {
@@ -1454,6 +1423,10 @@ class UsersHelper
 
 			$user->set('field_activities', json_encode($activities));
 			$user->save();
+
+			// badges: activities_added
+			$names = array_map(fn($a) => $a->getName(), $activities);
+			self::trackBadgeProgress($user, 'activities_added', $names);
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Failed to set activities: %message', [
 				'%message' => $e->getMessage(),
@@ -1788,10 +1761,10 @@ class UsersHelper
 		?string $link = null,
 		string $type = 'info',
 		string $source = 'system',
-	): void {
+	): ?Notification {
 		// ignore notifications for root user
 		if ($user->id() === self::cloud()->id()) {
-			return;
+			return null;
 		}
 
 		$id = bin2hex(random_bytes(16));
@@ -1815,6 +1788,7 @@ class UsersHelper
 		}
 
 		self::setNotifications($user, $notifications);
+		return $notification;
 	}
 
 	public static function markNotificationAsRead(
@@ -2724,8 +2698,47 @@ class UsersHelper
 		return !empty($passField);
 	}
 
+	public static function getAllBadges(): array
+	{
+		return CloudHelper::sendRequest('/v1/users/badges', 'GET');
+	}
+
 	public static function getBadges(UserInterface $user): array
 	{
 		return CloudHelper::sendRequest('/v1/users/badges/' . $user->id(), 'GET');
+	}
+
+	public static function getBadge(UserInterface $user, string $badgeId): ?array
+	{
+		return CloudHelper::sendRequest('/v1/users/badges/' . $user->id() . '/' . $badgeId, 'GET');
+	}
+
+	public static function trackBadgeProgress(UserInterface $user, string $trackerId, $value): void
+	{
+		$trackerPath = '/v1/users/badges/' . $user->id() . '/track';
+		CloudHelper::sendRequest($trackerPath, 'POST', [
+			'tracker_id' => $trackerId,
+			'value' => $value,
+		]);
+	}
+
+	public static function grantBadge(UserInterface $user, string $badgeId): void
+	{
+		try {
+			$grantPath = '/v1/users/badges/' . $user->id() . '/' . $badgeId . '/grant';
+			CloudHelper::sendRequest($grantPath, 'POST');
+		} catch (Exception $e) {
+			// silently ignore already granted (409)
+			if ($e->getCode() !== 409) {
+				Drupal::logger('mantle2')->error(
+					'Failed to grant badge %badgeId to user %uid: %message',
+					[
+						'%badgeId' => $badgeId,
+						'%uid' => $user->id(),
+						'%message' => $e->getMessage(),
+					],
+				);
+			}
+		}
 	}
 }

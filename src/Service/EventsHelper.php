@@ -603,6 +603,13 @@ class EventsHelper
 				'info',
 				'system',
 			);
+
+			// badges: events_created
+			UsersHelper::trackBadgeProgress(
+				$author,
+				'events_created',
+				GeneralHelper::formatId($event->getId()),
+			);
 		}
 
 		return $node;
@@ -790,6 +797,10 @@ class EventsHelper
 				$minutesUntilEnd = (int) ceil(($endTime - $now) / 60000); // milliseconds to minutes
 				self::notifyEventEnding($event, $node, $minutesUntilEnd);
 			}
+
+			if ($endTime && $endTime <= $now) {
+				self::notifyEventEnded($event, $node);
+			}
 		}
 	}
 
@@ -802,7 +813,7 @@ class EventsHelper
 		$attendeeIds = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
 
 		foreach ($attendeeIds as $userId) {
-			$user = \Drupal\user\Entity\User::load($userId);
+			$user = User::load($userId);
 			if ($user) {
 				UsersHelper::addNotification(
 					$user,
@@ -830,7 +841,7 @@ class EventsHelper
 		$attendeeIds = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
 
 		foreach ($attendeeIds as $userId) {
-			$user = \Drupal\user\Entity\User::load($userId);
+			$user = User::load($userId);
 			if ($user) {
 				UsersHelper::addNotification(
 					$user,
@@ -847,6 +858,42 @@ class EventsHelper
 			'[cron] Notified attendees that event "@event" (ID: @id) ends in @minutes minutes.',
 			['@event' => $event->getName(), '@id' => $node->id(), '@minutes' => $minutes],
 		);
+	}
+
+	/**
+	 * Notify attendees that an event has ended.
+	 */
+	private static function notifyEventEnded(Event $event, Node $node): void
+	{
+		$eventUrl = '/events/' . GeneralHelper::formatId($node->id());
+		$attendeeIds = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
+
+		foreach ($attendeeIds as $userId) {
+			$user = User::load($userId);
+			if ($user) {
+				UsersHelper::addNotification(
+					$user,
+					'Event Ended',
+					"The event \"{$event->getName()}\" has ended.",
+					$eventUrl,
+					'info',
+					'system',
+				);
+
+				// badges: events_attended, event_types_attended
+				UsersHelper::trackBadgeProgress(
+					$user,
+					'events_attended',
+					GeneralHelper::formatId($event->getId()),
+				);
+
+				UsersHelper::trackBadgeProgress(
+					$user,
+					'event_types_attended',
+					$event->getType()->value,
+				);
+			}
+		}
 	}
 
 	public const EXPIRED_EVENTS_TTL = 30 * 24 * 3600; // 30 days after end date in seconds
