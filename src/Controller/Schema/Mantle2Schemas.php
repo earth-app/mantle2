@@ -1119,7 +1119,56 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'badge_id' => ['type' => 'string', 'example' => 'you_know_ball'],
+				'id' => ['type' => 'string', 'example' => 'you_know_ball'],
+				'name' => self::text(100),
+				'description' => self::text(500),
+				'icon' => ['type' => 'string', 'example' => 'mdi:star'],
+				'rarity' => [
+					'type' => 'string',
+					'enum' => ['normal', 'rare', 'amazing', 'green'],
+					'description' => 'Rarity level of the badge',
+					'example' => 'rare',
+				],
+				'tracker_id' => [
+					'type' => 'string',
+					'nullable' => true,
+					'description' => 'Optional ID of the tracker associated with this badge',
+					'example' => 'activities_added',
+				],
+			],
+			'required' => ['id', 'name', 'description', 'icon', 'rarity'],
+		];
+	}
+	public static function badges(): array
+	{
+		return [
+			'type' => 'array',
+			'items' => ['$ref' => '#/components/schemas/Badge'],
+		];
+	}
+
+	public static function userBadge(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'string', 'example' => 'you_know_ball'],
+				'name' => self::text(100),
+				'description' => self::text(500),
+				'icon' => ['type' => 'string', 'example' => 'mdi:star'],
+				'rarity' => [
+					'type' => 'string',
+					'enum' => ['normal', 'rare', 'amazing', 'green'],
+					'description' => 'Rarity level of the badge',
+					'example' => 'rare',
+				],
+				'tracker_id' => [
+					'type' => 'string',
+					'nullable' => true,
+					'description' => 'Optional ID of the tracker associated with this badge',
+					'example' => 'activities_added',
+				],
+				'user_id' => ['$ref' => '#/components/schemas/Id'],
 				'granted' => ['$ref' => '#/components/schemas/Bool'],
 				'granted_at' => ['$ref' => '#/components/schemas/Date'],
 				'progress' => [
@@ -1130,15 +1179,23 @@ class Mantle2Schemas
 					'description' => 'Progress towards earning the badge (0.0 to 1.0)',
 				],
 			],
-			'required' => ['badge_id', 'granted', 'progress'],
+			'required' => [
+				'id',
+				'name',
+				'description',
+				'icon',
+				'rarity',
+				'user_id',
+				'granted',
+				'progress',
+			],
 		];
 	}
-
-	public static function badges(): array
+	public static function userBadges(): array
 	{
 		return [
 			'type' => 'array',
-			'items' => ['$ref' => '#/components/schemas/Badge'],
+			'items' => ['$ref' => '#/components/schemas/UserBadge'],
 		];
 	}
 
@@ -1567,6 +1624,7 @@ class Mantle2Schemas
 			'Notification' => self::notification(),
 			'FriendResponse' => self::friendResponse(),
 			'Badge' => self::badge(),
+			'UserBadge' => self::userBadge(),
 			'Event' => self::event(),
 			'AttendeeResponse' => self::attendeeResponse(),
 			'Activity' => self::activity(),

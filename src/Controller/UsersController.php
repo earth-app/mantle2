@@ -4,7 +4,6 @@ namespace Drupal\mantle2\Controller;
 
 use DateTimeImmutable;
 use Drupal;
-use Exception;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\mantle2\Service\GeneralHelper;
@@ -1167,6 +1166,13 @@ class UsersController extends ControllerBase
 
 		UsersHelper::changePassword($user, $newPassword);
 		return new JsonResponse(['message' => 'Password changed successfully'], Response::HTTP_OK);
+	}
+
+	// GET /v2/users/badges
+	public function allBadges(): JsonResponse
+	{
+		$badges = UsersHelper::getAllBadges();
+		return new JsonResponse($badges, Response::HTTP_OK);
 	}
 
 	// GET /v2/users/current/badges

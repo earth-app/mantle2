@@ -166,6 +166,19 @@ mantle2.users.unsubscribe:
           type: string
   methods: [GET, POST]
 
+mantle2.users.badges:
+  path: '/v2/users/badges'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::allBadges'
+    _title: 'All Badges'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Badges
+    description: Retrieves a list of all badges
+    schema/200: badges()
+  methods: [GET]
+
 #region OAuth Routes
 mantle2.users.oauth.discord:
   path: '/v2/users/oauth/discord'
@@ -1242,7 +1255,7 @@ mantle2.users.id.badges:
   options:
     tags: Users,Badges
     description: Retrieves a list of badges earned by the user
-    schema/200: badges()
+    schema/200: userBadges()
     schema/404: User not found
     parameters:
       id:
@@ -1261,7 +1274,7 @@ mantle2.users.id.badges.get:
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
-    schema/200: badge()
+    schema/200: userBadge()
     schema/404: User or badge not found
     parameters:
       id:
@@ -2194,7 +2207,7 @@ mantle2.users.username.badges:
   options:
     tags: Users,Badges
     description: Retrieves a list of badges earned by the user
-    schema/200: badges()
+    schema/200: userBadges()
     schema/404: User not found
     parameters:
       username:
@@ -2213,7 +2226,7 @@ mantle2.users.username.badges.get:
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
-    schema/200: badge()
+    schema/200: userBadge()
     schema/404: User or badge not found
     parameters:
       username:
@@ -2986,7 +2999,7 @@ mantle2.users.current.badges:
   options:
     tags: Users,Badges
     description: Retrieves a list of badges earned by the user
-    schema/200: badges()
+    schema/200: userBadges()
     schema/404: User not found
   methods: [GET]
 
@@ -3001,7 +3014,7 @@ mantle2.users.current.badges.get:
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
-    schema/200: badge()
+    schema/200: userBadge()
     schema/404: User or badge not found
     parameters:
       badgeId:
