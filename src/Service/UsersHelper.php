@@ -2705,17 +2705,23 @@ class UsersHelper
 
 	public static function getBadges(UserInterface $user): array
 	{
-		return CloudHelper::sendRequest('/v1/users/badges/' . $user->id(), 'GET');
+		return CloudHelper::sendRequest(
+			'/v1/users/badges/' . GeneralHelper::formatId($user->id()),
+			'GET',
+		);
 	}
 
 	public static function getBadge(UserInterface $user, string $badgeId): ?array
 	{
-		return CloudHelper::sendRequest('/v1/users/badges/' . $user->id() . '/' . $badgeId, 'GET');
+		return CloudHelper::sendRequest(
+			'/v1/users/badges/' . GeneralHelper::formatId($user->id()) . '/' . $badgeId,
+			'GET',
+		);
 	}
 
 	public static function trackBadgeProgress(UserInterface $user, string $trackerId, $value): void
 	{
-		$trackerPath = '/v1/users/badges/' . $user->id() . '/track';
+		$trackerPath = '/v1/users/badges/' . GeneralHelper::formatId($user->id()) . '/track';
 		CloudHelper::sendRequest($trackerPath, 'POST', [
 			'tracker_id' => $trackerId,
 			'value' => $value,
@@ -2725,7 +2731,12 @@ class UsersHelper
 	public static function grantBadge(UserInterface $user, string $badgeId): void
 	{
 		try {
-			$grantPath = '/v1/users/badges/' . $user->id() . '/' . $badgeId . '/grant';
+			$grantPath =
+				'/v1/users/badges/' .
+				GeneralHelper::formatId($user->id()) .
+				'/' .
+				$badgeId .
+				'/grant';
 			CloudHelper::sendRequest($grantPath, 'POST');
 		} catch (Exception $e) {
 			// silently ignore already granted (409)
