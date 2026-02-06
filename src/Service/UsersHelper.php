@@ -673,19 +673,28 @@ class UsersHelper
 				);
 			}
 
+			$censor = $data['censor'] ?? false;
+			if (!is_bool($censor)) {
+				return GeneralHelper::badRequest('Field censor must be a boolean');
+			}
+
 			$flagResult = GeneralHelper::isFlagged($bio);
 			if ($flagResult['flagged']) {
-				Drupal::logger('mantle2')->warning(
-					'User %uid attempted to create flagged biography: %bio (matched: %matched)',
-					[
-						'%uid' => $user->id(),
-						'%bio' => $bio,
-						'%matched' => $flagResult['matched_word'],
-					],
-				);
-				return GeneralHelper::badRequest(
-					'Biography contains inappropriate content: ' . $flagResult['matched_word'],
-				);
+				if ($censor) {
+					$bio = GeneralHelper::censorText($bio);
+				} else {
+					Drupal::logger('mantle2')->warning(
+						'User %uid attempted to create flagged biography: %bio (matched: %matched)',
+						[
+							'%uid' => $user->id(),
+							'%bio' => $bio,
+							'%matched' => $flagResult['matched_word'],
+						],
+					);
+					return GeneralHelper::badRequest(
+						'Biography contains inappropriate content: ' . $flagResult['matched_word'],
+					);
+				}
 			}
 
 			$user->set('field_bio', $bio);
@@ -704,17 +713,6 @@ class UsersHelper
 		}
 
 		if (isset($data['phone_number'])) {
-			$phoneNumber = (int) $data['phone_number'];
-			if ($phoneNumber < 10000 || $phoneNumber > 9999999999) {
-				return GeneralHelper::badRequest(
-					'Invalid phone number: Must be between 10000 and 9999999999',
-				);
-			}
-
-			$user->set('field_phone', $phoneNumber);
-		}
-
-		if (isset($data['visibility'])) {
 			$visibility = trim((string) $data['visibility']);
 			$visibility0 = Visibility::tryFrom($visibility);
 			if ($visibility0 === null) {
@@ -1786,6 +1784,12 @@ class UsersHelper
 		if (count($notifications) > self::MAX_NOTIFICATIONS) {
 			$notifications = array_slice($notifications, -self::MAX_NOTIFICATIONS); // remove oldest notification
 		}
+
+		// notify via websocket
+		CloudHelper::sendWebsocketMessage('users', $user->id(), [
+			'type' => 'notification',
+			'data' => $notification->jsonSerialize(),
+		]);
 
 		self::setNotifications($user, $notifications);
 		return $notification;

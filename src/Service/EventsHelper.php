@@ -291,6 +291,38 @@ class EventsHelper
 			return GeneralHelper::badRequest('Invalid description; Max length is 3000 characters');
 		}
 
+		$censor = $body['censor'] ?? false;
+		if (!is_bool($censor)) {
+			return GeneralHelper::badRequest('Field censor must be a boolean');
+		}
+
+		// Check event name for inappropriate content
+		$flagResult = GeneralHelper::isFlagged($name);
+		if ($flagResult['flagged']) {
+			if ($censor) {
+				$name = GeneralHelper::censorText($name);
+			} else {
+				return GeneralHelper::badRequest(
+					'Event name contains inappropriate content: ' . $flagResult['matched_word'],
+				);
+			}
+		}
+
+		// Check event description for inappropriate content (if provided)
+		if ($description) {
+			$flagResult = GeneralHelper::isFlagged($description);
+			if ($flagResult['flagged']) {
+				if ($censor) {
+					$description = GeneralHelper::censorText($description);
+				} else {
+					return GeneralHelper::badRequest(
+						'Event description contains inappropriate content: ' .
+							$flagResult['matched_word'],
+					);
+				}
+			}
+		}
+
 		if (!$type || !is_string($type)) {
 			return GeneralHelper::badRequest('Missing or invalid type');
 		}
@@ -436,6 +468,24 @@ class EventsHelper
 			if (!is_string($name) || strlen($name) > 50) {
 				return GeneralHelper::badRequest('Invalid name; Max length is 50 characters');
 			}
+
+			$censor = $body['censor'] ?? false;
+			if (!is_bool($censor)) {
+				return GeneralHelper::badRequest('Field censor must be a boolean');
+			}
+
+			// Check event name for inappropriate content
+			$flagResult = GeneralHelper::isFlagged($name);
+			if ($flagResult['flagged']) {
+				if ($censor) {
+					$name = GeneralHelper::censorText($name);
+				} else {
+					return GeneralHelper::badRequest(
+						'Event name contains inappropriate content: ' . $flagResult['matched_word'],
+					);
+				}
+			}
+
 			$event->setName($name);
 		}
 
@@ -445,10 +495,25 @@ class EventsHelper
 					'Invalid description; Max length is 3000 characters',
 				);
 			}
-			$event->setDescription($description);
-		}
 
-		if ($type !== null) {
+			$censor = $body['censor'] ?? false;
+			if (!is_bool($censor)) {
+				return GeneralHelper::badRequest('Field censor must be a boolean');
+			}
+
+			// Check event description for inappropriate content
+			$flagResult = GeneralHelper::isFlagged($description);
+			if ($flagResult['flagged']) {
+				if ($censor) {
+					$description = GeneralHelper::censorText($description);
+				} else {
+					return GeneralHelper::badRequest(
+						'Event description contains inappropriate content: ' .
+							$flagResult['matched_word'],
+					);
+				}
+			}
+
 			if (!is_string($type)) {
 				return GeneralHelper::badRequest('Invalid type');
 			}
@@ -896,6 +961,14 @@ class EventsHelper
 		}
 	}
 
+	public static function deleteThumbnail(Node $node): void
+	{
+		CloudHelper::sendRequest(
+			'/v1/events/thumbnail/' . GeneralHelper::formatId($node->id()),
+			'DELETE',
+		);
+	}
+
 	public const EXPIRED_EVENTS_TTL = 30 * 24 * 3600; // 30 days after end date in seconds
 
 	public static function checkExpiredEvents(): void
@@ -932,6 +1005,7 @@ class EventsHelper
 				}
 
 				$node->delete();
+				self::deleteThumbnail($node);
 			}
 		}
 	}

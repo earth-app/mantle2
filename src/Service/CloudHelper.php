@@ -101,4 +101,12 @@ class CloudHelper
 
 		return json_decode($response, true) ?? [];
 	}
+
+	public static function sendWebsocketMessage(string $channel, string $id, array $data): array
+	{
+		return self::sendRequest('/ws/notify', 'POST', [
+			'channel' => $channel . ':' . $id,
+			'data' => $data,
+		]);
+	}
 }
