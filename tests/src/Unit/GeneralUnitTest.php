@@ -210,6 +210,59 @@ class GeneralUnitTest extends TestCase
 		];
 	}
 
+	#[Test]
+	#[TestDox('Test censoring bad words with asterisks')]
+	#[Group('mantle2/util')]
+	#[DataProvider('censorProvider')]
+	public function testCensorText(string $expected, string $value)
+	{
+		$result = GeneralHelper::censorText($value);
+		$this->assertEquals($expected, $result);
+	}
+
+	public static function censorProvider()
+	{
+		return [
+			'case 1' => ['***', 'ass'],
+			'case 2' => ['test', 'test'],
+			'case 3' => ['assumption', 'assumption'],
+			'case 4' => ['*******', 'fucking'],
+			'case 5' => ['******', 'shited'],
+			'case 6' => ['****', 'cunt'],
+			'case 7' => ['sh*t', 'sh*t'],
+			'case 8' => ['f**k', 'f**k'],
+			'case 9' => ['****', 'thot'],
+			'case 10' => ['sextillion', 'sextillion'],
+			'case 11' => ['********', 'cannabis'],
+			'case 12' => ['***', 'sex'],
+			'case 13' => ['****', 'shit'],
+			'case 14' => ['****', 'fuck'],
+			'case 15' => [
+				'i would really not like to **** myself today',
+				'i would really not like to shit myself today',
+			],
+			'case 16' => ['****', 'sexy'],
+			'case 17' => ['forethought', 'forethought'],
+			'case 18' => ['******', 'shitty'],
+			'case 19' => [
+				'today is a really great day to be a viking',
+				'today is a really great day to be a viking',
+			],
+			'case 20' => [
+				'i think the question fundamentally asks the wrong things',
+				'i think the question fundamentally asks the wrong things',
+			],
+			'case 21' => ['this is a ***** test', 'this is a bitch test'],
+			'case 22' => ['hello **** world', 'hello fuck world'],
+			'case 23' => ['what the ****', 'what the fuck'],
+			'case 24' => ['*****', 'whore'],
+			'case 25' => ['****', 'slut'],
+			'case 26' => ['stop being such a ****', 'stop being such a cunt'],
+			'case 27' => ['', ''],
+			'case 28' => ['ab', 'ab'],
+		];
+	}
+
 	// Networking Tests
 
 	#[Test]

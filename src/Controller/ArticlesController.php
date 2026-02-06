@@ -263,19 +263,28 @@ class ArticlesController extends ControllerBase
 			);
 		}
 
+		$censor = $body['censor'] ?? false;
+		if (!is_bool($censor)) {
+			return GeneralHelper::badRequest('Field censor must be a boolean');
+		}
+
 		$flagResult = GeneralHelper::isFlagged($content);
 		if ($flagResult['flagged']) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to create flagged article: %article (matched: %matched)',
-				[
-					'%uid' => $user->id(),
-					'%article' => $content,
-					'%matched' => $flagResult['matched_word'],
-				],
-			);
-			return GeneralHelper::badRequest(
-				'Article contains inappropriate content: ' . $flagResult['matched_word'],
-			);
+			if ($censor) {
+				$content = GeneralHelper::censorText($content);
+			} else {
+				Drupal::logger('mantle2')->warning(
+					'User %uid attempted to create flagged article: %article (matched: %matched)',
+					[
+						'%uid' => $user->id(),
+						'%article' => $content,
+						'%matched' => $flagResult['matched_word'],
+					],
+				);
+				return GeneralHelper::badRequest(
+					'Article contains inappropriate content: ' . $flagResult['matched_word'],
+				);
+			}
 		}
 
 		// Validate ocean article
@@ -408,6 +417,23 @@ class ArticlesController extends ControllerBase
 				return GeneralHelper::badRequest(
 					'Field content must be a string between 50 and 25,000 characters',
 				);
+			}
+
+			$censor = $body['censor'] ?? false;
+			if (!is_bool($censor)) {
+				return GeneralHelper::badRequest('Field censor must be a boolean');
+			}
+
+			$flagResult = GeneralHelper::isFlagged($content);
+			if ($flagResult['flagged']) {
+				if ($censor) {
+					$body['content'] = GeneralHelper::censorText($content);
+				} else {
+					return GeneralHelper::badRequest(
+						'Article content contains inappropriate language: ' .
+							$flagResult['matched_word'],
+					);
+				}
 			}
 		}
 

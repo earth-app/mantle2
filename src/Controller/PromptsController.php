@@ -222,19 +222,28 @@ class PromptsController extends ControllerBase
 			);
 		}
 
+		$censor = $body['censor'] ?? false;
+		if (!is_bool($censor)) {
+			return GeneralHelper::badRequest('Field censor must be a boolean');
+		}
+
 		$flagResult = GeneralHelper::isFlagged($data);
 		if ($flagResult['flagged']) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to create flagged prompt: %prompt (matched: %matched)',
-				[
-					'%uid' => $user->id(),
-					'%prompt' => $data,
-					'%matched' => $flagResult['matched_word'],
-				],
-			);
-			return GeneralHelper::badRequest(
-				'Prompt contains inappropriate content: ' . $flagResult['matched_word'],
-			);
+			if ($censor) {
+				$data = GeneralHelper::censorText($data);
+			} else {
+				Drupal::logger('mantle2')->warning(
+					'User %uid attempted to create flagged prompt: %prompt (matched: %matched)',
+					[
+						'%uid' => $user->id(),
+						'%prompt' => $data,
+						'%matched' => $flagResult['matched_word'],
+					],
+				);
+				return GeneralHelper::badRequest(
+					'Prompt contains inappropriate content: ' . $flagResult['matched_word'],
+				);
+			}
 		}
 
 		// temporary id (0) for new prompt
@@ -391,19 +400,31 @@ class PromptsController extends ControllerBase
 			$updated = true;
 		}
 
-		$flagResult = GeneralHelper::isFlagged($newPrompt);
-		if ($flagResult['flagged']) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to update flagged prompt: %prompt (matched: %matched)',
-				[
-					'%uid' => $user->id(),
-					'%prompt' => $newPrompt,
-					'%matched' => $flagResult['matched_word'],
-				],
-			);
-			return GeneralHelper::badRequest(
-				'Prompt contains inappropriate content: ' . $flagResult['matched_word'],
-			);
+		if (is_string($newPrompt)) {
+			$censor = $body['censor'] ?? false;
+			if (!is_bool($censor)) {
+				return GeneralHelper::badRequest('Field censor must be a boolean');
+			}
+
+			$flagResult = GeneralHelper::isFlagged($newPrompt);
+			if ($flagResult['flagged']) {
+				if ($censor) {
+					$data->setPrompt(GeneralHelper::censorText($newPrompt));
+					$updated = true;
+				} else {
+					Drupal::logger('mantle2')->warning(
+						'User %uid attempted to update flagged prompt: %prompt (matched: %matched)',
+						[
+							'%uid' => $user->id(),
+							'%prompt' => $newPrompt,
+							'%matched' => $flagResult['matched_word'],
+						],
+					);
+					return GeneralHelper::badRequest(
+						'Prompt contains inappropriate content: ' . $flagResult['matched_word'],
+					);
+				}
+			}
 		}
 
 		$newVisibility = $body['visibility'] ?? null;
@@ -647,19 +668,29 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid content');
 		}
 
+		$censor = $body['censor'] ?? false;
+		if (!is_bool($censor)) {
+			return GeneralHelper::badRequest('Field censor must be a boolean');
+		}
+
 		$flagResult = GeneralHelper::isFlagged($content);
 		if ($flagResult['flagged']) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to create flagged prompt response: %prompt (matched: %matched)',
-				[
-					'%uid' => $user->id(),
-					'%prompt' => $content,
-					'%matched' => $flagResult['matched_word'],
-				],
-			);
-			return GeneralHelper::badRequest(
-				'Prompt response contains inappropriate content: ' . $flagResult['matched_word'],
-			);
+			if ($censor) {
+				$content = GeneralHelper::censorText($content);
+			} else {
+				Drupal::logger('mantle2')->warning(
+					'User %uid attempted to create flagged prompt response: %prompt (matched: %matched)',
+					[
+						'%uid' => $user->id(),
+						'%prompt' => $content,
+						'%matched' => $flagResult['matched_word'],
+					],
+				);
+				return GeneralHelper::badRequest(
+					'Prompt response contains inappropriate content: ' .
+						$flagResult['matched_word'],
+				);
+			}
 		}
 
 		$response->set('comment_body', $content);

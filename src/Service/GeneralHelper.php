@@ -577,4 +577,59 @@ class GeneralHelper
 		$pattern = '/' . preg_quote($badWord, '/') . '(?:s|es|ed|ing|y)?/u';
 		return preg_match($pattern, $normalized);
 	}
+
+	/**
+	 * Censor bad words in text by replacing them with asterisks
+	 * @param string $text The text to censor
+	 * @return string The censored text with bad words replaced by asterisks
+	 */
+	public static function censorText(string $text): string
+	{
+		if (strlen($text) < 3) {
+			return $text;
+		}
+
+		if (self::$normalizedBadWords === null) {
+			self::$normalizedBadWords = [];
+			foreach (self::$badWords as $word) {
+				$wordNorm = self::normalize_text((string) $word);
+				if ($wordNorm !== '' && strlen($wordNorm) >= 2) {
+					self::$normalizedBadWords[] = $wordNorm;
+				}
+			}
+		}
+
+		// Split text into words and check each one
+		// We'll process the text word by word to preserve formatting
+		$words = preg_split('/(\s+)/', $text, -1, PREG_SPLIT_DELIM_CAPTURE);
+		$censored = [];
+
+		foreach ($words as $word) {
+			// Skip whitespace
+			if (preg_match('/^\s+$/', $word)) {
+				$censored[] = $word;
+				continue;
+			}
+
+			// Normalize and check if this word contains a bad word
+			$normalized = self::normalize_text($word);
+			$shouldCensor = false;
+
+			foreach (self::$normalizedBadWords as $wordNorm) {
+				if (self::containsBadWord($normalized, $wordNorm)) {
+					$shouldCensor = true;
+					break;
+				}
+			}
+
+			if ($shouldCensor) {
+				// Replace the entire word with asterisks
+				$censored[] = str_repeat('*', mb_strlen($word));
+			} else {
+				$censored[] = $word;
+			}
+		}
+
+		return implode('', $censored);
+	}
 }
