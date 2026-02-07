@@ -346,4 +346,33 @@ class ArticlesHelper
 		$nodes = Node::loadMultiple($nids);
 		return array_map([self::class, 'nodeToArticle'], $nodes);
 	}
+
+	public static function getArticleQuiz(string $articleId): array
+	{
+		$data = CloudHelper::sendRequest('/v1/articles/quiz?articleId=' . $articleId);
+		if (empty($data)) {
+			return [];
+		}
+
+		$count = count($data);
+		$multipleChoiceCount = count(
+			array_filter($data, function ($item) {
+				return $item['type'] === 'multiple_choice';
+			}),
+		);
+		$trueFalseCount = count(
+			array_filter($data, function ($item) {
+				return $item['type'] === 'true_false';
+			}),
+		);
+
+		return [
+			'questions' => $data,
+			'summary' => [
+				'total' => $count,
+				'multiple_choice_count' => $multipleChoiceCount,
+				'true_false_count' => $trueFalseCount,
+			],
+		];
+	}
 }

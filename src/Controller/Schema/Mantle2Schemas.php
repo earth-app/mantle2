@@ -238,13 +238,18 @@ class Mantle2Schemas
 
 	// String Types
 	public static array $text = ['type' => 'string', 'example' => 'Hello World'];
-	public static function text($maxLength = 100, $minLength = 1, $example = 'Hello World'): array
-	{
+	public static function text(
+		$maxLength = 100,
+		$minLength = 1,
+		$example = 'Hello World',
+		$description = 'The text',
+	): array {
 		return [
 			'type' => 'string',
 			'minLength' => $minLength,
 			'maxLength' => $maxLength,
 			'example' => $example,
+			'description' => $description,
 		];
 	}
 
@@ -1545,6 +1550,79 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function articleQuiz(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'questions' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/ArticleQuizQuestion'],
+				],
+				'summary' => [
+					'type' => 'object',
+					'properties' => [
+						'total' => [
+							'type' => 'integer',
+							'example' => 5,
+							'description' => 'Total number of quiz questions',
+						],
+						'multiple_choice_count' => [
+							'type' => 'integer',
+							'example' => 3,
+							'description' => 'Number of multiple choice questions',
+						],
+						'true_false_count' => [
+							'type' => 'integer',
+							'example' => 2,
+							'description' => 'Number of true/false questions',
+						],
+					],
+					'required' => ['total', 'multiple_choice_count', 'true_false_count'],
+				],
+			],
+			'required' => ['questions', 'summary'],
+		];
+	}
+
+	public static function articleQuizQuestion(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'question' => self::text(150, 1, 'What is the capital of France?'),
+				'type' => [
+					'type' => 'string',
+					'enum' => ['true_false', 'multiple_choice'],
+					'description' => 'Type of quiz question',
+					'example' => 'multiple_choice',
+				],
+				'options' => [
+					'type' => 'array',
+					'items' => self::text(100),
+					'example' => ['Paris', 'London', 'Berlin', 'Madrid'],
+					'description' =>
+						'Answer options for multiple choice questions. Not required for true/false questions.',
+				],
+				'correct_answer' => self::text(
+					150,
+					1,
+					'Paris',
+					'The correct answer to the quiz question',
+				),
+				'correct_answer_index' => [
+					'type' => 'integer',
+					'example' => 0,
+					'description' =>
+						'Index of the correct answer in the options array for multiple choice questions. Not required for true/false questions.',
+				],
+				'is_true' => self::$bool,
+				'is_false' => self::$bool,
+			],
+			'required' => ['question', 'type', 'options', 'correct_answer', 'correct_answer_index'],
+		];
+	}
+
 	/**
 	 * Get all schemas for OpenAPI components/schemas section.
 	 * This method returns all reusable schema definitions that can be
@@ -1636,6 +1714,8 @@ class Mantle2Schemas
 			'OceanArticle' => self::oceanArticle(),
 			'ArticleCreate' => self::articleCreate(),
 			'ArticleUpdate' => self::articleUpdate(),
+			'ArticleQuiz' => self::articleQuiz(),
+			'ArticleQuizQuestion' => self::articleQuizQuestion(),
 		];
 	}
 }

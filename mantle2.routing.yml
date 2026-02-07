@@ -3834,6 +3834,25 @@ mantle2.articles.get:
         description: The ID of the article to retrieve
   methods: [GET]
 
+mantle2.articles.get.quiz:
+  path: '/v2/articles/{articleId}/quiz'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::getArticleQuiz'
+    _title: 'Get Article Quiz'
+  requirements:
+    _access: 'TRUE'
+    articleId: \d+
+  options:
+    tags: Articles
+    description: Retrieves the quiz associated with a specific article
+    schema/200: articleQuiz()
+    schema/404: Not Found
+    parameters:
+      articleId:
+        type: entity:node
+        description: The ID of the article to retrieve the quiz for
+  methods: [GET]
+
 mantle2.articles.update:
   path: '/v2/articles/{articleId}'
   defaults:

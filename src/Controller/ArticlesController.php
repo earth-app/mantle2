@@ -332,6 +332,26 @@ class ArticlesController extends ControllerBase
 		return new JsonResponse($item, Response::HTTP_OK);
 	}
 
+	// GET /v2/articles/{articleId}/quiz
+	public function getArticleQuiz(Node $articleId): JsonResponse
+	{
+		if ($articleId->getType() !== 'article') {
+			return GeneralHelper::badRequest('ID does not point to an article');
+		}
+
+		$article = ArticlesHelper::nodeToArticle($articleId);
+		if (!$article) {
+			return GeneralHelper::internalError('Failed to load article');
+		}
+
+		$quiz = ArticlesHelper::getArticleQuiz($articleId->id());
+		if ($quiz === null) {
+			return GeneralHelper::notFound('Quiz not found for this article');
+		}
+
+		return new JsonResponse($quiz, Response::HTTP_OK);
+	}
+
 	// PATCH /v2/articles/{articleId}
 	public function updateArticle(Request $request, Node $articleId): JsonResponse
 	{
