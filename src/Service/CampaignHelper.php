@@ -54,6 +54,11 @@ class CampaignHelper
 
 	public static function unverifiedFilter(UserInterface $user): bool
 	{
+		// filter out inactive users
+		if (self::inactiveFilter($user)) {
+			return false;
+		}
+
 		return !UsersHelper::isEmailVerified($user);
 	}
 

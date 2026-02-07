@@ -2,7 +2,7 @@
   title: Verify Your Email Address
   filter: unverifiedFilter
   unsubscribable: false
-  interval: 259200 # 3 days
+  interval: 432000 # 5 days
   body: |-
     Hello @{user.username},
 
