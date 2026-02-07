@@ -639,6 +639,10 @@ class EventsController extends ControllerBase
 			}
 		}
 
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
 		$visible = UsersHelper::checkVisibility($user, $request);
 		if ($visible instanceof JsonResponse) {
 			return $visible;
