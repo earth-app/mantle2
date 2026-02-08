@@ -62,7 +62,11 @@ class PromptsHelper
 	{
 		$prompt = $node->get('field_prompt')->value;
 		$ownerId = (int) $node->get('field_owner_id')->value;
-		$visibility = Visibility::cases()[$node->get('field_visibility')->value ?? 0];
+		$visibilityValue = $node->get('field_visibility')->value ?? 0;
+		$visibilityCases = Visibility::cases();
+		$visibility = isset($visibilityCases[$visibilityValue])
+			? $visibilityCases[$visibilityValue]
+			: Visibility::UNLISTED;
 
 		return new Prompt($node->id(), $prompt, $ownerId, $visibility);
 	}

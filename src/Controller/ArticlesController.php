@@ -173,12 +173,7 @@ class ArticlesController extends ControllerBase
 					return GeneralHelper::internalError('Failed to convert node to article');
 				}
 
-				$result = $article->jsonSerialize();
-				$result['author'] = UsersHelper::serializeUser($article->getAuthor(), $requester);
-				$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
-				$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
-
-				$results[] = $result;
+				$results[] = ArticlesHelper::serializeArticle($article, $requester);
 			}
 
 			return new JsonResponse($results, Response::HTTP_OK);

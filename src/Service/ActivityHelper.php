@@ -57,16 +57,25 @@ class ActivityHelper
 		$name = $node->get('field_activity_name')->value;
 		$description = $node->get('field_activity_description')->value;
 
-		$activity_types = array_map(
-			fn(int $ordinal) => ActivityType::cases()[$ordinal]->name,
-			array_column($node->get('field_activity_types')->getValue(), 'value'),
-		);
+		$activityTypeCases = ActivityType::cases();
+		$activity_types = array_map(function (int $ordinal) use ($activityTypeCases) {
+			return isset($activityTypeCases[$ordinal]) ? $activityTypeCases[$ordinal]->name : null;
+		}, array_column($node->get('field_activity_types')->getValue(), 'value'));
+		$activity_types = array_filter($activity_types);
 
 		$activity_aliases_raw = $node->get('field_activity_aliases')->value;
-		$activity_aliases = $activity_aliases_raw ? json_decode($activity_aliases_raw, true) : [];
+		$activity_aliases = [];
+		if ($activity_aliases_raw) {
+			$decoded = json_decode($activity_aliases_raw, true);
+			$activity_aliases = is_array($decoded) ? $decoded : [];
+		}
 
 		$activity_fields_raw = $node->get('field_activity_fields')->value;
-		$activity_fields = $activity_fields_raw ? json_decode($activity_fields_raw, true) : [];
+		$activity_fields = [];
+		if ($activity_fields_raw) {
+			$decoded = json_decode($activity_fields_raw, true);
+			$activity_fields = is_array($decoded) ? $decoded : [];
+		}
 
 		return new Activity(
 			$activity_id,

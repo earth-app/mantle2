@@ -295,7 +295,8 @@ class UsersHelper
 		$privacy = $user->get('field_privacy')->value ?? '{}';
 		$privacy0 = [];
 		if ($privacy) {
-			$privacy0 = json_decode($privacy, true);
+			$decoded = json_decode($privacy, true);
+			$privacy0 = is_array($decoded) ? $decoded : [];
 		}
 
 		foreach (self::$defaultPrivacy as $key => $value) {
@@ -2596,6 +2597,7 @@ class UsersHelper
 			$storage = Drupal::entityTypeManager()->getStorage('node');
 			$query = $storage
 				->getQuery()
+				->accessCheck(false)
 				->condition('type', 'event')
 				->condition('field_host_id', $user->id());
 

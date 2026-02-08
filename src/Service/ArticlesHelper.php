@@ -26,11 +26,24 @@ class ArticlesHelper
 		$id = $node->id();
 		$title = $node->get('field_article_title')->value;
 		$description = $node->get('field_article_description')->value;
-		$tags = json_decode($node->get('field_article_tags')->value, true) ?? [];
+
+		$tagsRaw = $node->get('field_article_tags')->value;
+		$tags = [];
+		if ($tagsRaw) {
+			$decoded = json_decode($tagsRaw, true);
+			$tags = is_array($decoded) ? $decoded : [];
+		}
+
 		$content = $node->get('field_article_content')->value;
 		$authorId = $node->get('field_author_id')->target_id;
-		$color = (int) $node->get('field_article_color')->value;
-		$ocean = json_decode($node->get('field_ocean_article')->value, true) ?? [];
+		$color = (int) ($node->get('field_article_color')->value ?? 0);
+
+		$oceanRaw = $node->get('field_ocean_article')->value;
+		$ocean = [];
+		if ($oceanRaw) {
+			$decoded = json_decode($oceanRaw, true);
+			$ocean = is_array($decoded) ? $decoded : [];
+		}
 
 		return new Article(
 			$id,

@@ -38,7 +38,11 @@ class EventsHelper
 		$description = $node->get('field_event_description')->value ?? '';
 
 		$event_type_value = $node->get('field_event_type')->value;
-		$event_type = EventType::cases()[$event_type_value] ?? EventType::HYBRID;
+		$eventTypeCases = EventType::cases();
+		$event_type =
+			isset($eventTypeCases[$event_type_value]) && is_int($event_type_value)
+				? $eventTypeCases[$event_type_value]
+				: EventType::HYBRID;
 
 		// Load activities from JSON field
 		$activities_raw = $node->get('field_event_activity_types')->value;
@@ -72,13 +76,29 @@ class EventsHelper
 		$longitude = (float) ($node->get('field_event_location_longitude')->value ?? 0.0);
 
 		// Convert datetime string to Unix timestamp in MILLISECONDS
-		$date = strtotime($node->get('field_event_date')->value) * 1000;
-		$end_date = $node->get('field_event_enddate')->value
-			? strtotime($node->get('field_event_enddate')->value) * 1000
-			: null;
+		$dateValue = $node->get('field_event_date')->value;
+		if (!$dateValue) {
+			throw new \Exception('Event date is required');
+		}
+		$dateTimestamp = strtotime($dateValue);
+		if ($dateTimestamp === false) {
+			throw new \Exception('Invalid event date format');
+		}
+		$date = $dateTimestamp * 1000;
+
+		$endDateValue = $node->get('field_event_enddate')->value;
+		$end_date = null;
+		if ($endDateValue) {
+			$endTimestamp = strtotime($endDateValue);
+			$end_date = $endTimestamp !== false ? $endTimestamp * 1000 : null;
+		}
 
 		$visibility_value = $node->get('field_visibility')->value ?? 1;
-		$visibility = Visibility::cases()[$visibility_value] ?? Visibility::UNLISTED;
+		$visibilityCases = Visibility::cases();
+		$visibility =
+			isset($visibilityCases[$visibility_value]) && is_int($visibility_value)
+				? $visibilityCases[$visibility_value]
+				: Visibility::UNLISTED;
 
 		$attendees = array_column($node->get('field_event_attendees')->getValue(), 'target_id');
 
