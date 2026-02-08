@@ -2758,4 +2758,19 @@ class UsersHelper
 			}
 		}
 	}
+
+	public static function checkBadges(): void
+	{
+		$users = User::loadMultiple();
+		foreach ($users as $user) {
+			if ($user->id() === self::cloud()->id()) {
+				continue; // skip root user
+			}
+
+			// grant 'verified' badge if email is verified
+			if ($user->get('field_email_verified')->value) {
+				self::grantBadge($user, 'verified');
+			}
+		}
+	}
 }
