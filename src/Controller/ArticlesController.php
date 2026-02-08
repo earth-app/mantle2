@@ -340,7 +340,7 @@ class ArticlesController extends ControllerBase
 		}
 
 		$quiz = ArticlesHelper::getArticleQuiz($articleId->id());
-		if ($quiz === null) {
+		if ($quiz === null || empty($quiz) || empty($quiz['questions'])) {
 			return GeneralHelper::notFound('Quiz not found for this article');
 		}
 
