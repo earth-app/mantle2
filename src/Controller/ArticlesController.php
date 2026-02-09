@@ -310,15 +310,20 @@ class ArticlesController extends ControllerBase
 	}
 
 	// GET /v2/articles/{articleId}
-	public function getArticle(Request $request, Node $articleId): JsonResponse
+	public function getArticle(int $articleId, Request $request): JsonResponse
 	{
 		$requester = UsersHelper::getOwnerOfRequest($request);
 
-		if ($articleId->getType() !== 'article') {
+		$node = Node::load($articleId);
+		if (!$node) {
+			return GeneralHelper::notFound('Article not found');
+		}
+
+		if ($node->getType() !== 'article') {
 			return GeneralHelper::badRequest('ID does not point to an article');
 		}
 
-		$article = ArticlesHelper::nodeToArticle($articleId);
+		$article = ArticlesHelper::nodeToArticle($node);
 		if (!$article) {
 			return GeneralHelper::internalError('Failed to load article');
 		}
@@ -328,18 +333,23 @@ class ArticlesController extends ControllerBase
 	}
 
 	// GET /v2/articles/{articleId}/quiz
-	public function getArticleQuiz(Node $articleId): JsonResponse
+	public function getArticleQuiz(int $articleId): JsonResponse
 	{
-		if ($articleId->getType() !== 'article') {
+		$node = Node::load($articleId);
+		if (!$node) {
+			return GeneralHelper::notFound('Article not found');
+		}
+
+		if ($node->getType() !== 'article') {
 			return GeneralHelper::badRequest('ID does not point to an article');
 		}
 
-		$article = ArticlesHelper::nodeToArticle($articleId);
+		$article = ArticlesHelper::nodeToArticle($node);
 		if (!$article) {
 			return GeneralHelper::internalError('Failed to load article');
 		}
 
-		$quiz = ArticlesHelper::getArticleQuiz($articleId->id());
+		$quiz = ArticlesHelper::getArticleQuiz($articleId);
 		if ($quiz === null || empty($quiz) || empty($quiz['questions'])) {
 			return GeneralHelper::notFound('Quiz not found for this article');
 		}
@@ -348,9 +358,14 @@ class ArticlesController extends ControllerBase
 	}
 
 	// PATCH /v2/articles/{articleId}
-	public function updateArticle(Request $request, Node $articleId): JsonResponse
+	public function updateArticle(int $articleId, Request $request): JsonResponse
 	{
-		if ($articleId->getType() !== 'article') {
+		$node = Node::load($articleId);
+		if (!$node) {
+			return GeneralHelper::notFound('Article not found');
+		}
+
+		if ($node->getType() !== 'article') {
 			return GeneralHelper::badRequest('ID does not point to an article');
 		}
 
@@ -363,7 +378,7 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::paymentRequired('Upgrade to Organizer required');
 		}
 
-		$author = $articleId->get('field_author_id')->entity;
+		$author = $node->get('field_author_id')->entity;
 		if ($author && $author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You do not have permission to update this article.');
 		}
@@ -465,24 +480,24 @@ class ArticlesController extends ControllerBase
 		foreach ($updatableFields as $field) {
 			if (array_key_exists($field, $body)) {
 				if ($field === 'tags' || $field === 'ocean') {
-					$articleId->set("field_article_$field", json_encode($body[$field]));
+					$node->set("field_article_$field", json_encode($body[$field]));
 				} elseif ($field === 'color') {
 					$color0 = hexdec(substr($color, 1));
-					$articleId->set("field_article_$field", $color0);
+					$node->set("field_article_$field", $color0);
 				} else {
-					$articleId->set("field_article_$field", $body[$field]);
+					$node->set("field_article_$field", $body[$field]);
 				}
 			}
 		}
 
 		try {
-			$articleId->save();
+			$node->save();
 		} catch (Exception $e) {
 			return GeneralHelper::internalError('Failed to update article: ' . $e->getMessage());
 		}
 
 		// Load the updated article
-		$article = ArticlesHelper::nodeToArticle($articleId);
+		$article = ArticlesHelper::nodeToArticle($node);
 		if (!$article) {
 			return GeneralHelper::internalError('Failed to load updated article');
 		}
@@ -492,9 +507,14 @@ class ArticlesController extends ControllerBase
 	}
 
 	// DELETE /v2/articles/{articleId}
-	public function deleteArticle(Request $request, Node $articleId): JsonResponse
+	public function deleteArticle(int $articleId, Request $request): JsonResponse
 	{
-		if ($articleId->getType() !== 'article') {
+		$node = Node::load($articleId);
+		if (!$node) {
+			return GeneralHelper::notFound('Article not found');
+		}
+
+		if ($node->getType() !== 'article') {
 			return GeneralHelper::badRequest('ID does not point to an article');
 		}
 
@@ -507,13 +527,13 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::paymentRequired('Upgrade to Organizer required');
 		}
 
-		$author = $articleId->get('field_author_id')->entity;
+		$author = $node->get('field_author_id')->entity;
 		if ($author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You do not have permission to delete this article.');
 		}
 
 		try {
-			$articleId->delete();
+			$node->delete();
 		} catch (Exception $e) {
 			return GeneralHelper::internalError('Failed to delete article: ' . $e->getMessage());
 		}

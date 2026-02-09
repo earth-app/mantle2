@@ -342,14 +342,15 @@ class PromptsController extends ControllerBase
 	}
 
 	// GET /v2/prompts/{prompt}
-	public function getPrompt(Request $request, Node $prompt)
+	public function getPrompt(int $prompt, Request $request)
 	{
-		if (!$prompt || $prompt->getType() !== 'prompt') {
+		$node = Node::load($prompt);
+		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
 		$user = UsersHelper::getOwnerOfRequest($request);
-		$data = PromptsHelper::nodeToPrompt($prompt);
+		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
@@ -358,14 +359,15 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		$result = PromptsHelper::serializePrompt($data, $prompt, $user);
+		$result = PromptsHelper::serializePrompt($data, $node, $user);
 		return new JsonResponse($result);
 	}
 
 	// PATCH /v2/prompts/{prompt}
-	public function updatePrompt(Request $request, Node $prompt)
+	public function updatePrompt(int $prompt, Request $request)
 	{
-		if (!$prompt || $prompt->getType() !== 'prompt') {
+		$node = Node::load($prompt);
+		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
@@ -374,7 +376,7 @@ class PromptsController extends ControllerBase
 			return $user;
 		}
 
-		$data = PromptsHelper::nodeToPrompt($prompt);
+		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
@@ -441,16 +443,17 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('No changes provided');
 		}
 
-		PromptsHelper::updatePrompt($prompt, $data);
+		PromptsHelper::updatePrompt($node, $data);
 
-		$result = PromptsHelper::serializePrompt($data, $prompt, $user);
+		$result = PromptsHelper::serializePrompt($data, $node, $user);
 		return new JsonResponse($result);
 	}
 
 	// DELETE /v2/prompts/{prompt}
-	public function deletePrompt(Request $request, Node $prompt)
+	public function deletePrompt(int $prompt, Request $request)
 	{
-		if (!$prompt || $prompt->getType() !== 'prompt') {
+		$node = Node::load($prompt);
+		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
@@ -459,7 +462,7 @@ class PromptsController extends ControllerBase
 			return $user;
 		}
 
-		$data = PromptsHelper::nodeToPrompt($prompt);
+		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
@@ -468,20 +471,21 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::forbidden('You are not allowed to delete this prompt');
 		}
 
-		$prompt->delete();
+		$node->delete();
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
 
 	// GET /v2/prompts/{prompt}/responses
-	public function getPromptResponses(Request $request, Node $prompt)
+	public function getPromptResponses(int $prompt, Request $request)
 	{
-		if (!$prompt || $prompt->getType() !== 'prompt') {
+		$node = Node::load($prompt);
+		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
 		$user = UsersHelper::getOwnerOfRequest($request);
-		$data = PromptsHelper::nodeToPrompt($prompt);
+		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
@@ -500,8 +504,8 @@ class PromptsController extends ControllerBase
 		$search = $paginated['search'];
 		$sort = $paginated['sort'];
 
-		$responses = PromptsHelper::getResponses($prompt, $page, $limit, $search, $sort);
-		$total = PromptsHelper::getCommentsCount($prompt);
+		$responses = PromptsHelper::getResponses($node, $page, $limit, $search, $sort);
+		$total = PromptsHelper::getCommentsCount($node);
 
 		return new JsonResponse([
 			'page' => $page,
@@ -522,9 +526,10 @@ class PromptsController extends ControllerBase
 	}
 
 	// POST /v2/prompts/{prompt}/responses
-	public function createPromptResponse(Request $request, Node $prompt)
+	public function createPromptResponse(int $prompt, Request $request)
 	{
-		if (!$prompt || $prompt->getType() !== 'prompt') {
+		$node = Node::load($prompt);
+		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
@@ -533,7 +538,7 @@ class PromptsController extends ControllerBase
 			return $user;
 		}
 
-		$data = PromptsHelper::nodeToPrompt($prompt);
+		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
@@ -575,7 +580,7 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::forbidden('You do not have permission to post responses');
 		}
 
-		$response = PromptsHelper::addComment($user, $prompt, $content);
+		$response = PromptsHelper::addComment($user, $node, $content);
 		if (!$response) {
 			return GeneralHelper::internalError('Failed to create response');
 		}
@@ -593,14 +598,15 @@ class PromptsController extends ControllerBase
 	}
 
 	// GET /v2/prompts/{prompt}/responses/{response}
-	public function getPromptResponse(Request $request, Node $prompt, Comment $response)
+	public function getPromptResponse(int $prompt, int $response, Request $request)
 	{
-		if (!$prompt || $prompt->getType() !== 'prompt') {
+		$node = Node::load($prompt);
+		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
 		$user = UsersHelper::getOwnerOfRequest($request);
-		$data = PromptsHelper::nodeToPrompt($prompt);
+		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
@@ -609,26 +615,32 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		if ($response->getCommentedEntityId() != $prompt->id()) {
+		$comment = Comment::load($response);
+		if (!$comment) {
 			return GeneralHelper::notFound('Response not found');
 		}
 
-		$result = PromptsHelper::entityToPromptResponse($response);
+		if ($comment->getCommentedEntityId() != $node->id()) {
+			return GeneralHelper::notFound('Response not found');
+		}
+
+		$result = PromptsHelper::entityToPromptResponse($comment);
 		if (!$result) {
 			return GeneralHelper::internalError('Failed to load response');
 		}
 
 		$res = PromptsHelper::serializePromptResponse($result, $user);
-		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
-		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
+		$res['created_at'] = GeneralHelper::dateToIso($comment->getCreatedTime());
+		$res['updated_at'] = GeneralHelper::dateToIso($comment->getChangedTime());
 
 		return new JsonResponse($res, Response::HTTP_OK);
 	}
 
 	// PATCH /v2/prompts/{prompt}/responses/{response}
-	public function updatePromptResponse(Request $request, Node $prompt, Comment $response)
+	public function updatePromptResponse(int $prompt, int $response, Request $request)
 	{
-		if (!$prompt || $prompt->getType() !== 'prompt') {
+		$node = Node::load($prompt);
+		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
@@ -637,7 +649,7 @@ class PromptsController extends ControllerBase
 			return $user;
 		}
 
-		$data = PromptsHelper::nodeToPrompt($prompt);
+		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
@@ -646,11 +658,16 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		if ($response->getCommentedEntityId() != $prompt->id()) {
+		$comment = Comment::load($response);
+		if (!$comment) {
 			return GeneralHelper::notFound('Response not found');
 		}
 
-		if ($response->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($comment->getCommentedEntityId() != $node->id()) {
+			return GeneralHelper::notFound('Response not found');
+		}
+
+		if ($comment->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to update this response');
 		}
 
@@ -693,33 +710,38 @@ class PromptsController extends ControllerBase
 			}
 		}
 
-		$response->set('comment_body', $content);
-		$response->setChangedTime(time());
-		if (!$response->save()) {
+		$comment->set('comment_body', $content);
+		$comment->setChangedTime(time());
+		if (!$comment->save()) {
 			return GeneralHelper::internalError('Failed to update response');
 		}
 
-		$result = PromptsHelper::entityToPromptResponse($response);
+		$result = PromptsHelper::entityToPromptResponse($comment);
 		if (!$result) {
 			return GeneralHelper::internalError('Failed to load updated response');
 		}
 
 		$res = PromptsHelper::serializePromptResponse($result, $user);
-		$res['created_at'] = GeneralHelper::dateToIso($response->getCreatedTime());
-		$res['updated_at'] = GeneralHelper::dateToIso($response->getChangedTime());
+		$res['created_at'] = GeneralHelper::dateToIso($comment->getCreatedTime());
+		$res['updated_at'] = GeneralHelper::dateToIso($comment->getChangedTime());
 
 		return new JsonResponse($res, Response::HTTP_OK);
 	}
 
 	// DELETE /v2/prompts/{prompt}/responses/{response}
-	public function deletePromptResponse(Request $request, Node $prompt, Comment $response)
+	public function deletePromptResponse(int $prompt, int $response, Request $request)
 	{
+		$node = Node::load($prompt);
+		if (!$node || $node->getType() !== 'prompt') {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			return $user;
 		}
 
-		$data = PromptsHelper::nodeToPrompt($prompt);
+		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
@@ -728,15 +750,20 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
-		if ($response->getCommentedEntityId() != $prompt->id()) {
+		$comment = Comment::load($response);
+		if (!$comment) {
 			return GeneralHelper::notFound('Response not found');
 		}
 
-		if ($response->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($comment->getCommentedEntityId() != $node->id()) {
+			return GeneralHelper::notFound('Response not found');
+		}
+
+		if ($comment->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to delete this response');
 		}
 
-		$response->delete();
+		$comment->delete();
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}

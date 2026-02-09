@@ -3553,7 +3553,6 @@ mantle2.prompts.get:
     schema/404: Not Found
     parameters:
       prompt:
-        type: entity:node
         description: The ID of the prompt to retrieve
   methods: [GET]
 
@@ -3577,7 +3576,6 @@ mantle2.prompts.update:
     body/description: Prompt data to update
     parameters:
       prompt:
-        type: entity:node
         description: The ID of the prompt to update
   methods: [PATCH]
 
@@ -3599,7 +3597,6 @@ mantle2.prompts.delete:
     schema/404: Not Found
     parameters:
       prompt:
-        type: entity:node
         description: The ID of the prompt to delete
   methods: [DELETE]
 
@@ -3618,7 +3615,6 @@ mantle2.prompts.responses:
     schema/404: Not Found
     parameters:
       prompt:
-        type: entity:node
         description: The ID of the prompt to retrieve responses for
   methods: [GET]
 
@@ -3642,7 +3638,6 @@ mantle2.prompts.responses.create:
     body/description: Prompt response data to create
     parameters:
       prompt:
-        type: entity:node
         description: The ID of the prompt to create a response for
   methods: [POST]
 
@@ -3662,10 +3657,8 @@ mantle2.prompts.responses.get:
     schema/404: Not Found
     parameters:
       prompt:
-        type: entity:node
         description: The ID of the prompt to retrieve a response for
       response:
-        type: entity:comment
         description: The ID of the response to retrieve
   methods: [GET]
 
@@ -3690,10 +3683,8 @@ mantle2.prompts.responses.update:
     body/description: Prompt response data to update
     parameters:
       prompt:
-        type: entity:node
         description: The ID of the prompt to update a response for
       response:
-        type: entity:comment
         description: The ID of the response to update
   methods: [PATCH]
 
@@ -3716,10 +3707,8 @@ mantle2.prompts.responses.delete:
     schema/404: Not Found
     parameters:
       prompt:
-        type: entity:node
         description: The ID of the prompt to delete a response for
       response:
-        type: entity:comment
         description: The ID of the response to delete
   methods: [DELETE]
 
@@ -3830,7 +3819,6 @@ mantle2.articles.get:
     schema/404: Not Found
     parameters:
       articleId:
-        type: entity:node
         description: The ID of the article to retrieve
   methods: [GET]
 
@@ -3849,7 +3837,6 @@ mantle2.articles.get.quiz:
     schema/404: Not Found
     parameters:
       articleId:
-        type: entity:node
         description: The ID of the article to retrieve the quiz for
   methods: [GET]
 
@@ -3873,7 +3860,6 @@ mantle2.articles.update:
     body/description: Article data to update
     parameters:
       articleId:
-        type: entity:node
         description: The ID of the article to update
   methods: [PATCH]
 
@@ -3895,7 +3881,6 @@ mantle2.articles.delete:
     schema/404: Not Found
     parameters:
       articleId:
-        type: entity:node
         description: The ID of the article to delete
   methods: [DELETE]
 
