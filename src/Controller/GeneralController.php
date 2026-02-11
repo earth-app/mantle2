@@ -33,9 +33,14 @@ class GeneralController extends ControllerBase
 			return GeneralHelper::notFound('No MOTD set');
 		}
 
+		$icon = RedisHelper::get('motd_icon') ?? 'mdi:earth';
+		$type = RedisHelper::get('motd_type') ?? 'info';
+
 		$ttl = RedisHelper::ttl('motd');
 		return new JsonResponse([
 			'motd' => $motd,
+			'icon' => $icon,
+			'type' => $type,
 			'ttl' => $ttl,
 		]);
 	}
@@ -58,7 +63,21 @@ class GeneralController extends ControllerBase
 		}
 
 		$ttl = $data['ttl'] ?? 86400; // default to 24 hours
+		$icon = $data['icon'] ?? 'mdi:earth';
+		$type = $data['type'] ?? 'info';
+
 		RedisHelper::set('motd', $motd, $ttl);
-		return new JsonResponse(['motd' => $motd, 'ttl' => $ttl], Response::HTTP_CREATED);
+		if ($icon) {
+			RedisHelper::set('motd_icon', $icon, $ttl);
+		}
+
+		if ($type) {
+			RedisHelper::set('motd_type', $type, $ttl);
+		}
+
+		return new JsonResponse(
+			['motd' => $motd, 'ttl' => $ttl, 'icon' => $icon, 'type' => $type],
+			Response::HTTP_CREATED,
+		);
 	}
 }

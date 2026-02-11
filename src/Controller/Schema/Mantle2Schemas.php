@@ -753,6 +753,18 @@ class Mantle2Schemas
 					'example' => 3600,
 					'description' => 'Time in seconds until the MOTD should be refreshed',
 				],
+				'icon' => [
+					'type' => 'string',
+					'example' => 'mdi:earth',
+					'description' => 'Optional icon identifier for the MOTD',
+				],
+				'type' => [
+					'type' => 'string',
+					'enum' => ['info', 'warning', 'error', 'success'],
+					'default' => 'info',
+					'description' =>
+						'Type of the MOTD, can be used to indicate severity or category',
+				],
 			],
 			'required' => ['motd', 'ttl'],
 		];
