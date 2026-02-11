@@ -1141,13 +1141,6 @@ class UsersHelper
 					'info',
 					'system',
 				);
-
-				// badges: friends_added
-				self::trackBadgeProgress(
-					$friend,
-					'friends_added',
-					GeneralHelper::formatId($friend->id()),
-				);
 			} else {
 				self::addNotification(
 					$friend,
@@ -1422,10 +1415,6 @@ class UsersHelper
 
 			$user->set('field_activities', json_encode($activities));
 			$user->save();
-
-			// badges: activities_added
-			$names = array_map(fn($a) => $a->getName(), $activities);
-			self::trackBadgeProgress($user, 'activities_added', $names);
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Failed to set activities: %message', [
 				'%message' => $e->getMessage(),

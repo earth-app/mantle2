@@ -688,13 +688,6 @@ class EventsHelper
 				'info',
 				'system',
 			);
-
-			// badges: events_created
-			UsersHelper::trackBadgeProgress(
-				$author,
-				'events_created',
-				GeneralHelper::formatId($event->getId()),
-			);
 		}
 
 		return $node;
@@ -967,6 +960,8 @@ class EventsHelper
 				);
 
 				// badges: events_attended, event_types_attended
+				// These are tracked here (not in PostResponseSubscriber) because
+				// event ending happens via cron, not during a request/response cycle
 				UsersHelper::trackBadgeProgress(
 					$user,
 					'events_attended',

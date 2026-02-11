@@ -124,13 +124,6 @@ class PromptsHelper
 				'info',
 				'system',
 			);
-
-			// badges: prompts_created
-			UsersHelper::trackBadgeProgress(
-				$author,
-				'prompts_created',
-				GeneralHelper::formatId($prompt->getId()),
-			);
 		}
 
 		return $node;
@@ -305,13 +298,6 @@ class PromptsHelper
 		]);
 
 		$comment->save();
-
-		// badges: prompts_responded
-		UsersHelper::trackBadgeProgress(
-			$owner,
-			'prompts_responded',
-			GeneralHelper::formatId($response->id()),
-		);
 
 		return $comment;
 	}

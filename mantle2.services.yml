@@ -21,6 +21,11 @@ services:
     tags:
       - { name: event_subscriber }
 
+  mantle2.post_response_subscriber:
+    class: Drupal\mantle2\EventSubscriber\PostResponseSubscriber
+    tags:
+      - { name: event_subscriber }
+
   # Utility Classes
   mantle2.helper:
     class: Drupal\mantle2\Service\GeneralHelper
