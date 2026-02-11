@@ -54,6 +54,7 @@ mantle2.motd.get:
     tags: General
     description: Retrieve the current Message of the Day (MOTD)
     schema/200: motdResponse()
+  methods: [GET]
 
 mantle2.motd.set:
   path: /v2/motd
