@@ -28,13 +28,14 @@ class GeneralController extends ControllerBase
 
 	public function getMotd(): JsonResponse
 	{
-		$motd = RedisHelper::get('motd');
-		if ($motd == null) {
+		$data = RedisHelper::get('motd');
+		if (empty($data) || $data == null) {
 			return GeneralHelper::notFound('No MOTD set');
 		}
 
-		$icon = RedisHelper::get('motd_icon') ?? 'mdi:earth';
-		$type = RedisHelper::get('motd_type') ?? 'info';
+		$motd = $data['motd'] ?? null;
+		$icon = $data['icon'] ?? 'mdi:earth';
+		$type = $data['type'] ?? 'info';
 
 		$ttl = RedisHelper::ttl('motd');
 		return new JsonResponse([
@@ -66,14 +67,15 @@ class GeneralController extends ControllerBase
 		$icon = $data['icon'] ?? 'mdi:earth';
 		$type = $data['type'] ?? 'info';
 
-		RedisHelper::set('motd', $motd, $ttl);
-		if ($icon) {
-			RedisHelper::set('motd_icon', $icon, $ttl);
-		}
-
-		if ($type) {
-			RedisHelper::set('motd_type', $type, $ttl);
-		}
+		RedisHelper::set(
+			'motd',
+			[
+				'motd' => $motd,
+				'icon' => $icon,
+				'type' => $type,
+			],
+			$ttl,
+		);
 
 		return new JsonResponse(
 			['motd' => $motd, 'ttl' => $ttl, 'icon' => $icon, 'type' => $type],
