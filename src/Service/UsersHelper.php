@@ -480,6 +480,7 @@ class UsersHelper
 			'created_at' => date('c', $user->getCreatedTime()),
 			'updated_at' => date('c', $user->getChangedTime()),
 			'last_login' => date('c', $user->getLastLoginTime()),
+			'is_admin' => self::isAdmin($user),
 			'account' => [
 				'id' => GeneralHelper::formatId($user->id()),
 				'avatar_url' =>
