@@ -742,6 +742,22 @@ class Mantle2Schemas
 	];
 
 	// Return Objects
+	public static function motdResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'motd' => ['type' => 'string', 'example' => 'Welcome to the Earth App!'],
+				'ttl' => [
+					'type' => 'integer',
+					'example' => 3600,
+					'description' => 'Time in seconds until the MOTD should be refreshed',
+				],
+			],
+			'required' => ['motd', 'ttl'],
+		];
+	}
+
 	public static function user(): array
 	{
 		return [

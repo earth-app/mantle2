@@ -41,6 +41,33 @@ mantle2.info:
     description: Retrieve information about the mantle2 Module
   methods: [GET]
 
+# MOTD
+
+mantle2.motd.get:
+  path: /v2/motd
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\GeneralController::getMotd'
+    _title: 'Get Message of the Day'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: General
+    description: Retrieve the current Message of the Day (MOTD)
+    schema/200: motdResponse()
+
+mantle2.motd.set:
+  path: /v2/motd
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\GeneralController::setMotd'
+    _title: 'Set Message of the Day [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: General
+    description: Set the Message of the Day (MOTD)
+    schema/201: motdResponse()
+  methods: [POST]
+
 ## User Routes
 mantle2.users:
   path: '/v2/users'
