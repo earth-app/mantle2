@@ -512,6 +512,8 @@ class Mantle2Schemas
 				'last_login' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'account_type' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'circle' => ['$ref' => '#/$defs/never_public_privacy', 'default' => 'PRIVATE'],
+				'impact_points' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
+				'badges' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 			],
 		];
 	}

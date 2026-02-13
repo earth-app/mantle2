@@ -1195,6 +1195,12 @@ class UsersController extends ControllerBase
 			return $visible;
 		}
 
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		$privacy = UsersHelper::getFieldPrivacy($visible)['badges'] ?? 'PUBLIC';
+		if (!UsersHelper::isVisible($visible, $requester, $privacy)) {
+			return GeneralHelper::notFound('User not found');
+		}
+
 		$badges = UsersHelper::getBadges($visible);
 		return new JsonResponse($badges, Response::HTTP_OK);
 	}
@@ -1224,6 +1230,12 @@ class UsersController extends ControllerBase
 		$visible = UsersHelper::checkVisibility($resolved, $request);
 		if ($visible instanceof JsonResponse) {
 			return $visible;
+		}
+
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		$privacy = UsersHelper::getFieldPrivacy($visible)['badges'] ?? 'PUBLIC';
+		if (!UsersHelper::isVisible($visible, $requester, $privacy)) {
+			return GeneralHelper::notFound('User not found');
 		}
 
 		$badge = UsersHelper::getBadge($visible, $badgeId);

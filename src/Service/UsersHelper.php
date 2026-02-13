@@ -288,6 +288,8 @@ class UsersHelper
 		'friends' => 'MUTUAL',
 		'last_login' => 'PUBLIC',
 		'account_type' => 'PUBLIC',
+		'impact_points' => 'PUBLIC',
+		'badges' => 'PUBLIC',
 	];
 
 	public static function getFieldPrivacy(UserInterface $user)
@@ -570,6 +572,12 @@ class UsersHelper
 				$user,
 				$requester,
 				'PRIVATE',
+			),
+			'impact_points' => self::tryVisible(
+				PointsHelper::getPoints($user),
+				$user,
+				$requester,
+				$privacy['impact_points'] ?? 'PUBLIC',
 			),
 		];
 	}
