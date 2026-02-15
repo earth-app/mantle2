@@ -123,7 +123,7 @@ class UsersHelper
 		// UNLISTED (and PRIVATE, see below) requires login
 		$user2 = self::getOwnerOfRequest($request);
 		if (!$user2) {
-			return GeneralHelper::notFound();
+			return GeneralHelper::notFound('User not found');
 		}
 
 		// PRIVATE requires admin or as an added friend
@@ -132,7 +132,7 @@ class UsersHelper
 			!UsersHelper::isAdmin($user2) &&
 			!self::isAddedFriend($user2, $user)
 		) {
-			return GeneralHelper::notFound();
+			return GeneralHelper::notFound('User not found');
 		}
 
 		return $user;
