@@ -6,6 +6,7 @@ use Drupal;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Event;
+use Drupal\mantle2\Custom\EventImageSubmission;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\node\Entity\Node;
@@ -13,6 +14,7 @@ use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Exception;
 
 class EventsHelper
 {
@@ -1025,4 +1027,111 @@ class EventsHelper
 			}
 		}
 	}
+
+	#region Event Image Submissions
+
+	public static function submitImage(mixed $eventId, mixed $userId, string $photoUrl): ?string
+	{
+		if (!$eventId || !$userId || empty($photoUrl)) {
+			throw new InvalidArgumentException('Event ID, User ID, and photo URL are required');
+		}
+
+		$event = EventsHelper::getEventByNid($eventId);
+		if (!$event) {
+			throw new InvalidArgumentException('Event not found');
+		}
+
+		try {
+			$res = CloudHelper::sendRequest('/v1/events/submit_image', 'POST', [
+				'user_id' => $userId,
+				'event' => $event,
+				'photo_url' => $photoUrl,
+			]);
+
+			return $res['submission_id'] ?? null;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to submit image for event ID @eventId by user ID @userId: @message',
+				['@eventId' => $eventId, '@userId' => $userId, '@message' => $e->getMessage()],
+			);
+			return null;
+		}
+	}
+
+	/**
+	 * @var array<int, Drupal\mantle2\Custom\EventImageSubmission>|Drupal\mantle2\Custom\EventImageSubmission|null
+	 */
+	public static function retrieveImageSubmission(
+		mixed $userId = null,
+		mixed $eventId = null,
+		mixed $submissionId = null,
+		?int $limit = 25,
+		?int $page = 1,
+		?string $sort = 'asc',
+		?string $search = '',
+	) {
+		// at least one needs to be provided
+		if (!$userId && !$eventId && !$submissionId) {
+			return null;
+		}
+
+		$data = CloudHelper::sendRequest(
+			'/v1/events/retrieve_image' .
+				($userId ? '?user_id=' . $userId : '') .
+				($eventId ? '&event_id=' . $eventId : '') .
+				($submissionId ? '&submission_id=' . $submissionId : '') .
+				($limit !== null ? '&limit=' . $limit : '') .
+				($page !== null ? '&page=' . $page : '') .
+				($sort !== null ? '&sort=' . $sort : '') .
+				($search !== null ? '&search=' . urlencode($search) : ''),
+		);
+
+		if (!$data) {
+			return null;
+		}
+
+		$total = $data['total'] ?? 0;
+
+		// return single object (submission_id provided)
+		if ($submissionId !== null) {
+			if (isset($data['items'][0]) && $submissionId) {
+				return EventImageSubmission::fromArray($data['items'][0]);
+			}
+
+			return null;
+		}
+
+		if ($total == 0) {
+			return []; // if no results, return empty array
+		}
+
+		// returned array (event_id and/or user_id provided)
+		return array_map(fn($item) => EventImageSubmission::fromArray($item), $data['items']);
+	}
+
+	public static function deleteImageSubmission(mixed $submissionId): bool
+	{
+		if (!$submissionId) {
+			return false;
+		}
+
+		try {
+			CloudHelper::sendRequest(
+				'/v1/events/delete_image?submission_id=' . $submissionId,
+				'DELETE',
+			);
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to delete image submission ID @submissionId: @message',
+				[
+					'@submissionId' => $submissionId,
+					'@message' => $e->getMessage(),
+				],
+			);
+			return false;
+		}
+	}
+
+	#endregion
 }

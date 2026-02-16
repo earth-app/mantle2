@@ -126,6 +126,11 @@ class UsersHelper
 			return GeneralHelper::notFound('User not found');
 		}
 
+		// (user can see themselves)
+		if ($user->id() === $user2->id()) {
+			return $user;
+		}
+
 		// PRIVATE requires admin or as an added friend
 		if (
 			$visibility === Visibility::PRIVATE &&

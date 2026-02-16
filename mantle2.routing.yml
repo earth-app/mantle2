@@ -1272,6 +1272,88 @@ mantle2.users.id.events.attending:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.id.events.images:
+  path: '/v2/users/{id}/events/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEventImages'
+    _title: 'Get User Event Images by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Events,Event Images
+    description: Retrieves a list of image submissions for events the user is hosting or attending
+    schema/200: eventImageSubmissions()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.users.id.events.images.get:
+  path: '/v2/users/{id}/events/images/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEventImage'
+    _title: 'Get User Event Images for Event by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    eventId: '\d+'
+  options:
+    tags: Users,Events,Event Images
+    description: Retrieves a list of image submissions for a specific event the user is hosting or attending
+    schema/200: eventImageSubmissions()
+    schema/401: Unauthorized
+    schema/404: User or event not found
+    parameters:
+      id:
+        type: string
+      eventId:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+
 mantle2.users.id.badges:
   path: '/v2/users/{id}/badges'
   defaults:
@@ -2224,6 +2306,88 @@ mantle2.users.username.events.attending:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.username.events.images:
+  path: '/v2/users/{username}/events/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEventImages'
+    _title: 'Get User Event Images by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Events,Event Images
+    description: Retrieves a list of image submissions for events the user is hosting or attending
+    schema/200: eventImageSubmissions()
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.users.username.events.images.get:
+  path: '/v2/users/{username}/events/images/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEventImage'
+    _title: 'Get User Event Images for Event by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    eventId: '\d+'
+  options:
+    tags: Users,Events,Event Images
+    description: Retrieves a list of image submissions for a specific event the user is hosting or attending
+    schema/200: eventImageSubmissions()
+    schema/401: Unauthorized
+    schema/404: User or event not found
+    parameters:
+      username:
+        type: string
+      eventId:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+
 mantle2.users.username.badges:
   path: '/v2/users/{username}/badges'
   defaults:
@@ -3017,6 +3181,81 @@ mantle2.users.current.events.attending:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.current.events.images:
+  path: '/v2/users/current/events/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEventImages'
+    _title: 'Get User Event Images by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Events,Event Images
+    description: Retrieves a list of image submissions for events the user is hosting or attending
+    schema/200: eventImageSubmissions()
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.users.current.events.images.get:
+  path: '/v2/users/current/events/images/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEventImage'
+    _title: 'Get User Event Images for Event by Current User'
+  requirements:
+    _access: 'TRUE'
+    eventId: '\d+'
+  options:
+    tags: Users,Events,Event Images
+    description: Retrieves a list of image submissions for a specific event the user is hosting or attending
+    schema/200: eventImageSubmissions()
+    schema/401: Unauthorized
+    schema/404: User or event not found
+    parameters:
+      eventId:
+        type: string
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+
 mantle2.users.current.badges:
   path: '/v2/users/current/badges'
   defaults:
@@ -3510,6 +3749,199 @@ mantle2.events.current:
         default: desc
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
+
+mantle2.events.current.images:
+  path: '/v2/events/current/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEventImages'
+    _title: 'Get Current User Event Image Submissions'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Events,Event Images,Users
+    description: Retrieves image submissions for events the current user is hosting or attending
+    schema/200: eventImageSubmissions()
+    schema/400: Invalid Pagination Parameters
+    schema/401: Unauthorized
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.events.current.images.get:
+  path: '/v2/events/current/images/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getUserEventImage'
+    _title: 'Get Current User Event Image Submissions by Event ID'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events,Event Images,Users
+    description: Retrieves a specific image submission for events the current user is hosting or attending by image ID
+    schema/200: eventImageSubmission()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event or Image not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to retrieve image submissions for
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.events.images:
+  path: '/v2/events/{eventId}/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getEventImages'
+    _title: 'Get Event Image Submissions'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events,Event Images
+    description: Retrieves image submissions for a specific event
+    schema/200: eventImageSubmissions()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to retrieve image submissions for
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: desc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.events.images.get:
+  path: '/v2/events/{eventId}/images/{imageId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::getEventImage'
+    _title: 'Get Event Image Submission by ID'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+    imageId: '^[0-9a-f]{32}$'
+  options:
+    tags: Events,Event Images
+    description: Retrieves a specific image submission for a specific event by image ID
+    schema/200: eventImageSubmission()
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event or Image not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to retrieve the image submission from
+      imageId:
+        type: string
+        description: The UUID of the image submission to retrieve
+  methods: [GET]
+
+mantle2.events.images.post:
+  path: '/v2/events/{eventId}/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::submitEventImage'
+    _title: 'Submit Event Image'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+  options:
+    tags: Events,Event Images
+    description: Submits an image for a specific event
+    schema/201: eventImageSubmissionResponse()
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event not found
+    body/schema: eventImageSubmissionData()
+    body/description: Event image submission data
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to submit an image for
+  methods: [POST]
+
+mantle2.events.images.delete:
+  path: '/v2/events/{eventId}/images/{imageId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteEventImage'
+    _title: 'Delete Event Image'
+  requirements:
+    _access: 'TRUE'
+    eventId: \d+
+    imageId: '^[0-9a-f]{32}$'
+  options:
+    tags: Events,Event Images
+    description: Deletes an image submission for a specific event
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event or Image not found
+    parameters:
+      eventId:
+        type: integer
+        description: The ID of the event to delete an image from
+      imageId:
+        type: string
+        description: The UUID of the image to delete
 
 ## Prompt Routes
 mantle2.prompts:

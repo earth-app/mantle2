@@ -775,4 +775,330 @@ class EventsController extends ControllerBase
 			Response::HTTP_OK,
 		);
 	}
+
+	#region Event Image Submissions
+
+	// GET /v2/events/current/images
+	// GET /v2/users/current/events/images
+	// GET /v2/users/{id}/events/images
+	// GET /v2/users/{username}/events/images
+	public function getUserEventImages(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$identifier = $id ?? $username;
+		if ($identifier !== null) {
+			$user = UsersHelper::findBy($identifier);
+			if (!$user) {
+				return GeneralHelper::notFound('User not found');
+			}
+		} else {
+			$user = UsersHelper::findByRequest($request);
+			if (!$user) {
+				return GeneralHelper::unauthorized();
+			}
+		}
+
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$visible = UsersHelper::checkVisibility($user, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		$pagination = GeneralHelper::paginatedParameters($request);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		$limit = $pagination['limit'];
+		$page = $pagination['page'] - 1;
+		$search = $pagination['search'];
+		$sort = $pagination['sort'];
+
+		try {
+			$data = EventsHelper::retrieveImageSubmission(
+				$visible->id(),
+				null,
+				null,
+				$limit,
+				$page,
+				$search,
+				$sort,
+			);
+			return new JsonResponse(
+				[
+					'items' => $data,
+					'total' => count($data),
+					'page' => $page + 1,
+					'limit' => $limit,
+					'search' => $search,
+				],
+				Response::HTTP_OK,
+			);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
+	// GET /v2/events/current/images/{eventId}
+	// GET /v2/users/current/events/images/{eventId}
+	// GET /v2/users/{id}/events/images/{eventId}
+	// GET /v2/users/{username}/events/images/{eventId}
+	public function getUserEventImage(
+		int $eventId,
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$identifier = $id ?? $username;
+		if ($identifier !== null) {
+			$user = UsersHelper::findBy($identifier);
+			if (!$user) {
+				return GeneralHelper::notFound('User not found');
+			}
+		} else {
+			$user = UsersHelper::findByRequest($request);
+			if (!$user) {
+				return GeneralHelper::unauthorized();
+			}
+		}
+
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$visible = UsersHelper::checkVisibility($user, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		$pagination = GeneralHelper::paginatedParameters($request);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		$limit = $pagination['limit'];
+		$page = $pagination['page'] - 1;
+		$search = $pagination['search'];
+		$sort = $pagination['sort'];
+
+		try {
+			$data = EventsHelper::retrieveImageSubmission(
+				$visible->id(),
+				$eventId,
+				null,
+				$limit,
+				$page,
+				$search,
+				$sort,
+			);
+			if (empty($data)) {
+				return GeneralHelper::notFound('Image not found');
+			}
+
+			return new JsonResponse($data, Response::HTTP_OK);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
+	// GET /v2/events/{eventId}/images
+	public function getEventImages(int $eventId, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$event = EventsHelper::loadEventNode($eventId);
+		if (!$event) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if (!EventsHelper::isVisible($event, $user)) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		$pagination = GeneralHelper::paginatedParameters($request);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		$limit = $pagination['limit'];
+		$page = $pagination['page'] - 1;
+		$search = $pagination['search'];
+		$sort = $pagination['sort'];
+
+		try {
+			/** @var array<int, Drupal\mantle2\Custom\EventImageSubmission> $data */
+			$data = EventsHelper::retrieveImageSubmission(
+				null,
+				$eventId,
+				null,
+				$limit,
+				$page,
+				$search,
+				$sort,
+			);
+			return new JsonResponse(
+				[
+					'items' => $data,
+					'total' => count($data),
+					'page' => $page + 1,
+					'limit' => $limit,
+					'search' => $search,
+				],
+				Response::HTTP_OK,
+			);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
+	// GET /v2/events/{eventId}/images/{imageId}
+	public function getEventImage(int $eventId, int $imageId, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$event = EventsHelper::loadEventNode($eventId);
+		if (!$event) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if (!EventsHelper::isVisible($event, $user)) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		try {
+			/** @var Drupal\mantle2\Custom\EventImageSubmission $data */
+			$data = EventsHelper::retrieveImageSubmission(
+				null,
+				$eventId,
+				$imageId,
+				null,
+				null,
+				null,
+				null,
+			);
+			if (empty($data)) {
+				return GeneralHelper::notFound('Image not found');
+			}
+
+			return new JsonResponse($data, Response::HTTP_OK);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
+	// POST /v2/events/{eventId}/images
+	public function submitEventImage(int $eventId, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$event = EventsHelper::loadEventNode($eventId);
+		if (!$event) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if (!EventsHelper::isVisible($event, $user)) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if ($event->getFields()['cancelled'] ?? false) {
+			return GeneralHelper::badRequest('Cannot submit image to a cancelled event');
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		$photoUrl = $body['photo_url'] ?? null; // data URL only
+		if (!$photoUrl || !is_string($photoUrl) || !str_starts_with($photoUrl, 'data:image/')) {
+			return GeneralHelper::badRequest('Invalid or missing photo_url field');
+		}
+
+		try {
+			$submissionId = EventsHelper::submitImage($eventId, $user->id(), $photoUrl);
+			if ($submissionId === null) {
+				return GeneralHelper::internalError('Failed to submit image; unknown error');
+			}
+
+			return new JsonResponse(
+				[
+					'message' => 'Image submitted successfully',
+					'event_id' => $eventId,
+					'user_id' => $user->id(),
+					'submission_id' => $submissionId,
+					'photo_url' => $photoUrl,
+				],
+				Response::HTTP_CREATED,
+			);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
+	// DELETE /v2/events/{eventId}/images/{imageId}
+	public function deleteEventImage(int $eventId, int $imageId, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$event = EventsHelper::loadEventNode($eventId);
+		if (!$event) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if (!EventsHelper::isVisible($event, $user)) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		/** @var Drupal\mantle2\Custom\EventImageSubmission $submission */
+		$submission = EventsHelper::retrieveImageSubmission(null, null, $imageId);
+		if (!$submission) {
+			return GeneralHelper::notFound('Image not found');
+		}
+
+		if (!UsersHelper::isAdmin($user) && $submission->user_id !== $user->id()) {
+			return GeneralHelper::forbidden('You are not allowed to delete this image');
+		}
+
+		try {
+			$success = EventsHelper::deleteImageSubmission($eventId, $imageId, $user->id());
+			if (!$success) {
+				return GeneralHelper::internalError('Failed to delete image');
+			}
+
+			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
+	#endregion
 }
