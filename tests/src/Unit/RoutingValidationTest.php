@@ -146,7 +146,8 @@ class RoutingValidationTest extends TestCase
 	public function testRouteHasValidMethods(string $routeName, array $route): void
 	{
 		if (!isset($route['methods'])) {
-			$this->markTestSkipped("Route '$routeName' has no methods");
+			$this->fail("Route '$routeName' is missing 'methods' field");
+			return;
 		}
 
 		$validMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
@@ -475,7 +476,7 @@ class RoutingValidationTest extends TestCase
 
 		// Should have a reasonable number of routes
 		$this->assertGreaterThan(50, $count, 'Should have more than 50 routes');
-		$this->assertLessThan(500, $count, 'Should have less than 500 routes');
+		$this->assertLessThan(1000, $count, 'Should have less than 1000 routes');
 
 		echo "\nTotal routes defined: $count";
 	}

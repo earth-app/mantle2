@@ -14,6 +14,7 @@ mantle2.swaggerui:
     _title: 'Swagger UI'
   requirements:
     _access: 'TRUE'
+  methods: [GET]
 
 # Routes
 mantle2.hello:
@@ -1353,6 +1354,7 @@ mantle2.users.id.events.images.get:
         enum: [asc, desc, rand]
         default: desc
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
 
 mantle2.users.id.badges:
   path: '/v2/users/{id}/badges'
@@ -2387,6 +2389,7 @@ mantle2.users.username.events.images.get:
         enum: [asc, desc, rand]
         default: desc
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
 
 mantle2.users.username.badges:
   path: '/v2/users/{username}/badges'
@@ -3255,6 +3258,7 @@ mantle2.users.current.events.images.get:
         enum: [asc, desc, rand]
         default: desc
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
 
 mantle2.users.current.badges:
   path: '/v2/users/current/badges'
@@ -3942,6 +3946,7 @@ mantle2.events.images.delete:
       imageId:
         type: string
         description: The UUID of the image to delete
+  methods: [DELETE]
 
 ## Prompt Routes
 mantle2.prompts:
