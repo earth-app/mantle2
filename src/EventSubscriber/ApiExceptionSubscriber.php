@@ -38,6 +38,12 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
 		if ($exception instanceof HttpExceptionInterface) {
 			$statusCode = $exception->getStatusCode();
 			$message = $exception->getMessage() ?: $this->getDefaultMessage($statusCode);
+		} else {
+			$exceptionCode = $exception->getCode();
+			if ($exceptionCode >= 400 && $exceptionCode < 600) {
+				$statusCode = $exceptionCode;
+				$message = $exception->getMessage() ?: $this->getDefaultMessage($statusCode);
+			}
 		}
 
 		$response = new JsonResponse(

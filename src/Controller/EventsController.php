@@ -6,12 +6,7 @@ use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\mantle2\Custom\Activity;
-use Drupal\mantle2\Custom\ActivityType;
-use Drupal\mantle2\Custom\Event;
-use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
-use Drupal\mantle2\Service\ActivityHelper;
 use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
@@ -815,7 +810,7 @@ class EventsController extends ControllerBase
 		}
 
 		$limit = $pagination['limit'];
-		$page = $pagination['page'] - 1;
+		$page = max(0, $pagination['page'] - 1);
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
@@ -829,10 +824,11 @@ class EventsController extends ControllerBase
 				$search,
 				$sort,
 			);
+			$items = $data ?? [];
 			return new JsonResponse(
 				[
-					'items' => $data,
-					'total' => count($data),
+					'items' => $items,
+					'total' => count($items),
 					'page' => $page + 1,
 					'limit' => $limit,
 					'search' => $search,
@@ -933,12 +929,12 @@ class EventsController extends ControllerBase
 		}
 
 		$limit = $pagination['limit'];
-		$page = $pagination['page'] - 1;
+		$page = max(0, $pagination['page'] - 1);
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
 		try {
-			/** @var array<int, Drupal\mantle2\Custom\EventImageSubmission> $data */
+			/** @var array<int, Drupal\mantle2\Custom\EventImageSubmission>|null $data */
 			$data = EventsHelper::retrieveImageSubmission(
 				null,
 				$eventId,
@@ -948,10 +944,11 @@ class EventsController extends ControllerBase
 				$search,
 				$sort,
 			);
+			$items = $data ?? [];
 			return new JsonResponse(
 				[
-					'items' => $data,
-					'total' => count($data),
+					'items' => $items,
+					'total' => count($items),
 					'page' => $page + 1,
 					'limit' => $limit,
 					'search' => $search,
