@@ -1,0 +1,293 @@
+cache:
+  retrievals:
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)$'
+      methods: [GET]
+      key_template: 'user:profile:{uid}:req:{req_uid}'
+      ttl: 180
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/profile_photo$'
+      methods: [GET]
+      key_template: 'user:photo:{uid}:size:{size}'
+      ttl: 1800
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/activities$'
+      methods: [GET]
+      key_template: 'user:activities:{uid}'
+      ttl: 300
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/friends$'
+      methods: [GET]
+      key_template: 'user:friends:{uid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 120
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/circle$'
+      methods: [GET]
+      key_template: 'user:circle:{uid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 120
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/notifications$'
+      methods: [GET]
+      key_template: 'user:notifications:{uid}:p:{page}:l:{limit}:read:{read}'
+      ttl: 30
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/prompts$'
+      methods: [GET]
+      key_template: 'user:prompts:{uid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 300
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/articles$'
+      methods: [GET]
+      key_template: 'user:articles:{uid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 300
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/events$'
+      methods: [GET]
+      key_template: 'user:events:{uid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 300
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/events/attending$'
+      methods: [GET]
+      key_template: 'user:events_attending:{uid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 180
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/events/images$'
+      methods: [GET]
+      key_template: 'user:event_images:{uid}:req:{req_uid}:p:{page}:l:{limit}'
+      ttl: 600
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/badges$'
+      methods: [GET]
+      key_template: 'user:badges:{uid}'
+      ttl: 600
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/points$'
+      methods: [GET]
+      key_template: 'user:points:{uid}'
+      ttl: 180
+
+    - route: '^/v2/users$'
+      methods: [GET]
+      key_template: 'users:list:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}:act:{activities}'
+      ttl: 60
+
+    - route: '^/v2/prompts$'
+      methods: [GET]
+      key_template: 'prompts:list:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 120
+
+    - route: '^/v2/prompts/([0-9]+)$'
+      methods: [GET]
+      key_template: 'prompt:{pid}:req:{req_uid}'
+      ttl: 300
+
+    - route: '^/v2/prompts/([0-9]+)/responses$'
+      methods: [GET]
+      key_template: 'prompt:responses:{pid}:req:{req_uid}:p:{page}:l:{limit}:sort:{sort}'
+      ttl: 120
+
+    - route: '^/v2/articles$'
+      methods: [GET]
+      key_template: 'articles:list:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 180
+
+    - route: '^/v2/articles/([0-9]+)$'
+      methods: [GET]
+      key_template: 'article:{aid}:req:{req_uid}'
+      ttl: 300
+
+    - route: '^/v2/events$'
+      methods: [GET]
+      key_template: 'events:list:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}:type:{type}'
+      ttl: 120
+
+    - route: '^/v2/events/([0-9]+)$'
+      methods: [GET]
+      key_template: 'event:{eid}:req:{req_uid}'
+      ttl: 180
+
+    - route: '^/v2/events/([0-9]+)/attendees$'
+      methods: [GET]
+      key_template: 'event:attendees:{eid}:p:{page}:l:{limit}'
+      ttl: 120
+
+    - route: '^/v2/events/([0-9]+)/images$'
+      methods: [GET]
+      key_template: 'event:images:{eid}:req:{req_uid}'
+      ttl: 600
+
+    - route: '^/v2/activities$'
+      methods: [GET]
+      key_template: 'activities:list'
+      ttl: 3600
+
+    - route: '^/v2/users/badges$'
+      methods: [GET]
+      key_template: 'badges:list'
+      ttl: 3600
+
+  updates:
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)$'
+      methods: [PATCH]
+      invalidate_patterns:
+        - 'user:profile:{uid}:*'
+        - 'users:list:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/profile_photo$'
+      methods: [PUT]
+      invalidate_patterns:
+        - 'user:photo:{uid}:*'
+        - 'user:profile:{uid}:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/account_type$'
+      methods: [PUT]
+      invalidate_patterns:
+        - 'user:profile:{uid}:*'
+        - 'users:list:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/activities$'
+      methods: [PATCH, PUT]
+      invalidate_patterns:
+        - 'user:activities:{uid}'
+        - 'user:profile:{uid}:*'
+        - 'users:list:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/friends$'
+      methods: [PUT]
+      invalidate_patterns:
+        - 'user:friends:{uid}:*'
+        - 'user:friends:{friend_uid}:*'
+        - 'user:profile:{uid}:*'
+        - 'user:profile:{friend_uid}:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/circle$'
+      methods: [PUT]
+      invalidate_patterns:
+        - 'user:circle:{uid}:*'
+        - 'user:profile:{uid}:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/field_privacy$'
+      methods: [PATCH]
+      invalidate_patterns:
+        - 'user:profile:{uid}:*'
+
+    - route: '^/v2/prompts/([0-9]+)$'
+      methods: [PATCH]
+      invalidate_patterns:
+        - 'prompt:{pid}:*'
+        - 'prompts:list:*'
+        - 'user:prompts:*'
+
+    - route: '^/v2/prompts/([0-9]+)/responses$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'prompt:responses:{pid}:*'
+        - 'prompt:{pid}:*'
+
+    - route: '^/v2/articles/([0-9]+)$'
+      methods: [PATCH]
+      invalidate_patterns:
+        - 'article:{aid}:*'
+        - 'articles:list:*'
+        - 'user:articles:*'
+
+    - route: '^/v2/events/([0-9]+)$'
+      methods: [PATCH]
+      invalidate_patterns:
+        - 'event:{eid}:*'
+        - 'events:list:*'
+        - 'user:events:*'
+
+    - route: '^/v2/events/([0-9]+)/(signup|leave)$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'event:attendees:{eid}:*'
+        - 'event:{eid}:*'
+        - 'user:events_attending:*'
+
+    - route: '^/v2/events/([0-9]+)/images$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'event:images:{eid}:*'
+        - 'user:event_images:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/notifications$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'user:notifications:{uid}:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/notifications/mark_all_(read|unread)$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'user:notifications:{uid}:*'
+
+  deletes:
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'user:*:{uid}:*'
+        - 'users:list:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/activities$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'user:activities:{uid}'
+        - 'user:profile:{uid}:*'
+        - 'users:list:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/friends$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'user:friends:{uid}:*'
+        - 'user:friends:{friend_uid}:*'
+        - 'user:profile:{uid}:*'
+        - 'user:profile:{friend_uid}:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/circle$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'user:circle:{uid}:*'
+        - 'user:profile:{uid}:*'
+
+    - route: '^/v2/prompts/([0-9]+)$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'prompt:{pid}:*'
+        - 'prompts:list:*'
+        - 'user:prompts:*'
+
+    - route: '^/v2/articles/([0-9]+)$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'article:{aid}:*'
+        - 'articles:list:*'
+        - 'user:articles:*'
+
+    - route: '^/v2/events/([0-9]+)$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'event:{eid}:*'
+        - 'events:list:*'
+        - 'user:events:*'
+        - 'event:attendees:{eid}:*'
+        - 'event:images:{eid}:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/notifications/([0-9]+)$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'user:notifications:{uid}:*'
+
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/notifications/clear$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'user:notifications:{uid}:*'
+
+  exclusions:
+    - '/random'
+    - '/oauth/'
+    - '/login'
+    - '/logout'
+    - '/create'
+    - '/reset_password'
+    - '/verify_email'
+    - '/change_password'
+    - '/send_email_verification'

@@ -9,6 +9,12 @@ class PointsHelper
 {
 	public static function getPoints(UserInterface $user): int
 	{
+		$cacheKey = 'cloud:points:' . GeneralHelper::formatId($user->id());
+		$cached = RedisHelper::get($cacheKey);
+		if ($cached !== null) {
+			return $cached['points'] ?? 0;
+		}
+
 		$data = CloudHelper::sendRequest(
 			'/v1/users/impact_points/' . GeneralHelper::formatId($user->id()),
 		);
@@ -16,7 +22,9 @@ class PointsHelper
 			return 0;
 		}
 
-		return $data['points'] ?? 0;
+		$points = $data['points'] ?? 0;
+		RedisHelper::set($cacheKey, ['points' => $points], 180);
+		return $points;
 	}
 
 	public static function addPoints(UserInterface $user, int $points, string $reason = ''): int
@@ -38,12 +46,14 @@ class PointsHelper
 			return self::getPoints($user);
 		}
 
-		// optionally log the reason for adding points
 		Drupal::logger('mantle2')->info('Added %points points to user %uid: %reason', [
 			'%points' => $points,
 			'%uid' => $user->id(),
 			'%reason' => $reason ?: 'No reason provided',
 		]);
+
+		$cacheKey = 'cloud:points:' . GeneralHelper::formatId($user->id());
+		RedisHelper::set($cacheKey, ['points' => $newPoints], 180);
 
 		return $newPoints;
 	}
@@ -67,12 +77,14 @@ class PointsHelper
 			return self::getPoints($user);
 		}
 
-		// optionally log the reason for removing points
 		Drupal::logger('mantle2')->info('Removed %points points from user %uid: %reason', [
 			'%points' => $points,
 			'%uid' => $user->id(),
 			'%reason' => $reason ?: 'No reason provided',
 		]);
+
+		$cacheKey = 'cloud:points:' . GeneralHelper::formatId($user->id());
+		RedisHelper::set($cacheKey, ['points' => $newPoints], 180);
 
 		return $newPoints;
 	}
@@ -96,12 +108,14 @@ class PointsHelper
 			return self::getPoints($user);
 		}
 
-		// optionally log the reason for setting points
 		Drupal::logger('mantle2')->info('Set points for user %uid to %points: %reason', [
 			'%points' => $points,
 			'%uid' => $user->id(),
 			'%reason' => $reason ?: 'No reason provided',
 		]);
+
+		$cacheKey = 'cloud:points:' . GeneralHelper::formatId($user->id());
+		RedisHelper::set($cacheKey, ['points' => $newPoints], 180);
 
 		return $newPoints;
 	}

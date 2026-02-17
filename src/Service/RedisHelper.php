@@ -40,18 +40,13 @@ class RedisHelper
 	{
 		try {
 			$redis = self::getRedisClient();
+			$serializedData = json_encode($data);
 			if ($redis && !self::$use_cache_fallback) {
-				$serializedData = json_encode($data);
 				return $redis->setex($key, $ttl, $serializedData);
 			} else {
 				// Fallback to Drupal cache
 				$cache = Drupal::cache('mantle2');
-				$cache_data = (object) [
-					'data' => $data,
-					'created' => time(),
-					'expire' => time() + $ttl,
-				];
-				$cache->set($key, $cache_data, time() + $ttl);
+				$cache->set($key, $serializedData, time() + $ttl);
 				return true;
 			}
 		} catch (Exception $e) {
@@ -80,7 +75,7 @@ class RedisHelper
 				$cache = Drupal::cache('mantle2');
 				$cached = $cache->get($key);
 				if ($cached && $cached->expire > time()) {
-					return $cached->data;
+					return json_decode($cached->data, true);
 				}
 				return null;
 			}
@@ -162,5 +157,17 @@ class RedisHelper
 			]);
 			return -1;
 		}
+	}
+
+	public static function cache(string $key, callable $callback, int $ttl = 900): array
+	{
+		$data = self::get($key);
+		if ($data !== null) {
+			return $data;
+		}
+
+		$data = $callback();
+		self::set($key, $data, $ttl);
+		return $data;
 	}
 }

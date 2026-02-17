@@ -1,4 +1,12 @@
 services:
+  # Cache Bin
+  cache.mantle2:
+    class: Drupal\Core\Cache\CacheBackendInterface
+    tags:
+      - { name: cache.bin }
+    factory: ['@cache_factory', 'get']
+    arguments: [mantle2]
+
   # Event Subscribers
   mantle2.api_exception_subscriber:
     class: Drupal\mantle2\EventSubscriber\ApiExceptionSubscriber
@@ -23,6 +31,11 @@ services:
 
   mantle2.post_response_subscriber:
     class: Drupal\mantle2\EventSubscriber\PostResponseSubscriber
+    tags:
+      - { name: event_subscriber }
+
+  mantle2.response_cache_subscriber:
+    class: Drupal\mantle2\EventSubscriber\ResponseCacheSubscriber
     tags:
       - { name: event_subscriber }
 

@@ -803,13 +803,20 @@ class UsersHelper
 
 	public static function getProfilePhoto(UserInterface $user, int $size = 1024): string
 	{
+		$cacheKey = 'cloud:user:photo:' . $user->id() . ':' . $size;
+		$cached = RedisHelper::get($cacheKey);
+		if ($cached !== null) {
+			return $cached['photo'] ?? '';
+		}
+
 		try {
 			$res = CloudHelper::sendRequest(
 				'/v1/users/profile_photo/' . $user->id() . '?size=' . $size,
 				'GET',
 			);
 
-			$data = $res['data'] ?? null;
+			$data = $res['data'] ?? '';
+			RedisHelper::set($cacheKey, ['photo' => $data], 1800);
 			return $data ?: '';
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Failed to retrieve profile photo: %message', [
@@ -860,34 +867,48 @@ class UsersHelper
 			return [];
 		}
 
-		$friendsValue = $user->get('field_friends')->value ?? '[]';
-
-		/** @var int[] $friends*/
-		$friends = $friendsValue ? json_decode($friendsValue, true) : [];
-
-		// Load all friends as users for filtering and sorting
-		$friendUsers = array_filter(array_map(fn($id) => self::findById($id), $friends));
-
-		// Apply search filter
-		if (!empty($search)) {
-			$friendUsers = array_filter($friendUsers, function ($u) use ($search) {
-				return str_contains($u->getAccountName(), $search);
-			});
-		}
-
-		// Apply sorting
 		if ($sort === 'rand') {
+			$friendsValue = $user->get('field_friends')->value ?? '[]';
+			$friends = $friendsValue ? json_decode($friendsValue, true) : [];
+			$friendUsers = array_filter(array_map(fn($id) => self::findById($id), $friends));
 			shuffle($friendUsers);
-		} else {
-			usort($friendUsers, function ($a, $b) use ($sort) {
-				$aTime = $a->getCreatedTime();
-				$bTime = $b->getCreatedTime();
-				return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
-			});
+			return array_slice($friendUsers, ($page - 1) * $limit, $limit);
 		}
 
-		// Apply pagination
-		return array_slice($friendUsers, ($page - 1) * $limit, $limit);
+		$cacheKey =
+			'helper:friends:' .
+			$user->id() .
+			':' .
+			$page .
+			':' .
+			$limit .
+			':' .
+			md5($search) .
+			':' .
+			$sort;
+		return RedisHelper::cache(
+			$cacheKey,
+			function () use ($user, $limit, $page, $search, $sort) {
+				$friendsValue = $user->get('field_friends')->value ?? '[]';
+				$friends = $friendsValue ? json_decode($friendsValue, true) : [];
+				$friendUsers = array_filter(array_map(fn($id) => self::findById($id), $friends));
+
+				if (!empty($search)) {
+					$friendUsers = array_filter($friendUsers, function ($u) use ($search) {
+						return str_contains($u->getAccountName(), $search);
+					});
+				}
+
+				usort($friendUsers, function ($a, $b) use ($sort) {
+					$aTime = $a->getCreatedTime();
+					$bTime = $b->getCreatedTime();
+					return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
+				});
+
+				return array_slice($friendUsers, ($page - 1) * $limit, $limit);
+			},
+			120,
+		);
 	}
 
 	public static function getAddedFriendsCount(UserInterface $user, string $search = ''): int
@@ -933,59 +954,98 @@ class UsersHelper
 		string $sort = 'desc',
 	): array {
 		try {
-			$userFriendsIds = json_decode($user->get('field_friends')->value ?? '[]', true) ?: [];
-			if (empty($userFriendsIds)) {
-				return [];
-			}
-
-			$userFriends = array_filter(array_map(fn($id) => self::findById($id), $userFriendsIds));
-			$friendCounts = [];
-
-			// Count how many of user's friends each person is connected to
-			foreach ($userFriends as $friend) {
-				$friendsOfFriendIds =
-					json_decode($friend->get('field_friends')->value ?? '[]', true) ?: [];
-				foreach ($friendsOfFriendIds as $potentialMutualId) {
-					if ($potentialMutualId === $user->id()) {
-						continue;
-					}
-					$friendCounts[$potentialMutualId] =
-						($friendCounts[$potentialMutualId] ?? 0) + 1;
+			if ($sort === 'rand') {
+				$userFriendsIds =
+					json_decode($user->get('field_friends')->value ?? '[]', true) ?: [];
+				if (empty($userFriendsIds)) {
+					return [];
 				}
-			}
-
-			$mutual = [];
-			foreach ($friendCounts as $personId => $count) {
-				if ($count >= 2) {
-					$potentialUser = self::findById($personId);
-					if ($potentialUser) {
+				$userFriends = array_filter(
+					array_map(fn($id) => self::findById($id), $userFriendsIds),
+				);
+				$friendCounts = [];
+				foreach ($userFriends as $friend) {
+					$friendsOfFriendIds =
+						json_decode($friend->get('field_friends')->value ?? '[]', true) ?: [];
+					foreach ($friendsOfFriendIds as $potentialMutualId) {
+						if ($potentialMutualId === $user->id()) {
+							continue;
+						}
+						$friendCounts[$potentialMutualId] =
+							($friendCounts[$potentialMutualId] ?? 0) + 1;
+					}
+				}
+				$mutual = [];
+				foreach ($friendCounts as $personId => $count) {
+					if ($count >= 2 && ($potentialUser = self::findById($personId))) {
 						$mutual[] = $potentialUser;
 					}
 				}
-			}
-
-			// Apply search filter
-			if (!empty($search)) {
-				$mutual = array_filter(
-					$mutual,
-					fn($u) => str_contains($u->getAccountName(), $search),
-				);
-			}
-
-			// Apply sorting
-			if ($sort === 'rand') {
 				shuffle($mutual);
-			} else {
-				usort($mutual, function ($a, $b) use ($sort) {
-					$aTime = $a->getCreatedTime();
-					$bTime = $b->getCreatedTime();
-					return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
-				});
+				return array_slice($mutual, ($page - 1) * $limit, $limit);
 			}
 
-			// Apply pagination
-			$offset = ($page - 1) * $limit;
-			return array_slice($mutual, $offset, $limit);
+			$cacheKey =
+				'helper:mutual:' .
+				$user->id() .
+				':' .
+				$page .
+				':' .
+				$limit .
+				':' .
+				md5($search) .
+				':' .
+				$sort;
+			return RedisHelper::cache(
+				$cacheKey,
+				function () use ($user, $limit, $page, $search, $sort) {
+					$userFriendsIds =
+						json_decode($user->get('field_friends')->value ?? '[]', true) ?: [];
+					if (empty($userFriendsIds)) {
+						return [];
+					}
+
+					$userFriends = array_filter(
+						array_map(fn($id) => self::findById($id), $userFriendsIds),
+					);
+					$friendCounts = [];
+
+					foreach ($userFriends as $friend) {
+						$friendsOfFriendIds =
+							json_decode($friend->get('field_friends')->value ?? '[]', true) ?: [];
+						foreach ($friendsOfFriendIds as $potentialMutualId) {
+							if ($potentialMutualId === $user->id()) {
+								continue;
+							}
+							$friendCounts[$potentialMutualId] =
+								($friendCounts[$potentialMutualId] ?? 0) + 1;
+						}
+					}
+
+					$mutual = [];
+					foreach ($friendCounts as $personId => $count) {
+						if ($count >= 2 && ($potentialUser = self::findById($personId))) {
+							$mutual[] = $potentialUser;
+						}
+					}
+
+					if (!empty($search)) {
+						$mutual = array_filter(
+							$mutual,
+							fn($u) => str_contains($u->getAccountName(), $search),
+						);
+					}
+
+					usort($mutual, function ($a, $b) use ($sort) {
+						$aTime = $a->getCreatedTime();
+						$bTime = $b->getCreatedTime();
+						return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
+					});
+
+					return array_slice($mutual, ($page - 1) * $limit, $limit);
+				},
+				120,
+			);
 		} catch (Exception $e) {
 			return [];
 		}
@@ -1497,26 +1557,31 @@ class UsersHelper
 			$activitiesPool = array_map(fn($nid) => ActivityHelper::getActivityByNid($nid), $nids);
 
 			if (empty($userActivities)) {
-				// if no user activities, return random 3 from pool
-				$subPool = array_slice($activitiesPool, 0, 3);
-				return $subPool;
+				return array_slice($activitiesPool, 0, 3);
 			}
 
-			$res = CloudHelper::sendRequest('/v1/users/recommend_activities', 'POST', [
-				'all' => array_map(
-					fn(Activity $activity) => self::serializeForCloud($activity),
-					$activitiesPool,
-				),
-				'user' => array_map(
-					fn(Activity $activity) => self::serializeForCloud($activity),
-					$userActivities,
-				),
-			]);
+			$cacheKey = 'cloud:recommend:' . $user->id();
+			$recommendations = RedisHelper::cache(
+				$cacheKey,
+				function () use ($activitiesPool, $userActivities) {
+					return CloudHelper::sendRequest('/v1/users/recommend_activities', 'POST', [
+						'all' => array_map(
+							fn(Activity $activity) => self::serializeForCloud($activity),
+							$activitiesPool,
+						),
+						'user' => array_map(
+							fn(Activity $activity) => self::serializeForCloud($activity),
+							$userActivities,
+						),
+					]);
+				},
+				300,
+			);
 
 			return array_map(function ($a) {
 				$id = $a['id'] ?? null;
 				return $id ? ActivityHelper::getActivity($id) : null;
-			}, $res);
+			}, $recommendations);
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Failed to recommend activities: %message', [
 				'%message' => $e->getMessage(),
@@ -2703,14 +2768,27 @@ class UsersHelper
 
 	public static function getAllBadges(): array
 	{
-		return CloudHelper::sendRequest('/v1/users/badges', 'GET');
+		return RedisHelper::cache(
+			'cloud:badges:all',
+			function () {
+				return CloudHelper::sendRequest('/v1/users/badges', 'GET');
+			},
+			3600,
+		);
 	}
 
 	public static function getBadges(UserInterface $user): array
 	{
-		return CloudHelper::sendRequest(
-			'/v1/users/badges/' . GeneralHelper::formatId($user->id()),
-			'GET',
+		$cacheKey = 'cloud:badges:' . GeneralHelper::formatId($user->id());
+		return RedisHelper::cache(
+			$cacheKey,
+			function () use ($user) {
+				return CloudHelper::sendRequest(
+					'/v1/users/badges/' . GeneralHelper::formatId($user->id()),
+					'GET',
+				);
+			},
+			600,
 		);
 	}
 
