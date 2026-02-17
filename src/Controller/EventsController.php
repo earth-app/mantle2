@@ -810,7 +810,7 @@ class EventsController extends ControllerBase
 		}
 
 		$limit = $pagination['limit'];
-		$page = max(0, $pagination['page'] - 1);
+		$page = $pagination['page'];
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
@@ -880,7 +880,7 @@ class EventsController extends ControllerBase
 		}
 
 		$limit = $pagination['limit'];
-		$page = $pagination['page'] - 1;
+		$page = $pagination['page'];
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
@@ -929,7 +929,7 @@ class EventsController extends ControllerBase
 		}
 
 		$limit = $pagination['limit'];
-		$page = max(0, $pagination['page'] - 1);
+		$page = $pagination['page'];
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 

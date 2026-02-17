@@ -1080,10 +1080,10 @@ class EventsHelper
 				($userId ? '?user_id=' . $userId : '') .
 				($eventId ? '&event_id=' . $eventId : '') .
 				($submissionId ? '&submission_id=' . $submissionId : '') .
-				($limit !== null ? '&limit=' . $limit : '') .
-				($page !== null ? '&page=' . $page : '') .
-				($sort !== null ? '&sort=' . $sort : '') .
-				($search !== null ? '&search=' . urlencode($search) : ''),
+				($limit ? '&limit=' . $limit : '') .
+				($page ? '&page=' . $page : '') .
+				($sort ? '&sort=' . $sort : '') .
+				($search ? '&search=' . urlencode($search) : ''),
 		);
 
 		if (!$data) {
