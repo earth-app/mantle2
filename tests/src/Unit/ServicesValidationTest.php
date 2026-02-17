@@ -80,6 +80,14 @@ class ServicesValidationTest extends TestCase
 		}
 
 		$className = $service['class'];
+
+		// ignore classes that start with Drupal\
+		if (str_starts_with($className, 'Drupal\\')) {
+			$this->markTestSkipped(
+				"Service '$serviceName' class is a Drupal core class: $className",
+			);
+		}
+
 		$this->assertTrue(
 			class_exists($className),
 			"Service '$serviceName' class does not exist: $className",
@@ -92,6 +100,11 @@ class ServicesValidationTest extends TestCase
 	#[DataProvider('serviceProvider')]
 	public function testServiceNamingConventions(string $serviceName, array $service): void
 	{
+		// ignore cache bin service
+		if ($serviceName === 'cache.mantle2') {
+			$this->markTestSkipped("Skipping cache bin service '$serviceName'");
+		}
+
 		$this->assertStringStartsWith(
 			'mantle2.',
 			$serviceName,
@@ -103,6 +116,14 @@ class ServicesValidationTest extends TestCase
 			$serviceName,
 			"Service name '$serviceName' contains invalid characters",
 		);
+
+		$this->assertNotEmpty($service, "Service '$serviceName' definition is empty");
+		$this->assertArrayHasKey(
+			'class',
+			$service,
+			"Service '$serviceName' is missing 'class' key",
+		);
+		$this->assertNotEmpty($service['class'], "Service '$serviceName' has empty 'class' value");
 	}
 
 	#[Test]
