@@ -1043,6 +1043,21 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function impactPoints(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'points' => [
+					'type' => 'integer',
+					'example' => 1500,
+					'description' => 'Total impact points the user has accumulated',
+				],
+			],
+			'required' => ['points'],
+		];
+	}
+
 	public static function oauthLoginResponse(): array
 	{
 		return [
@@ -1857,6 +1872,7 @@ class Mantle2Schemas
 			'FriendResponse' => self::friendResponse(),
 			'Badge' => self::badge(),
 			'UserBadge' => self::userBadge(),
+			'ImpactPoints' => self::impactPoints(),
 			'Event' => self::event(),
 			'EventImageSubmission' => self::eventImageSubmission(),
 			'EventImageSubmissionScore' => self::eventImageSubmissionScore(),

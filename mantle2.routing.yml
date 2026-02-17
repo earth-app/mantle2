@@ -1394,6 +1394,24 @@ mantle2.users.id.badges.get:
       badgeId:
         type: string
   methods: [GET]
+
+mantle2.users.id.impact_points:
+  path: '/v2/users/{id}/points'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::points'
+    _title: 'Get User Impact Points by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Impact Points
+    description: Retrieves the total impact points accumulated by the user
+    schema/200: impactPoints()
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
 #endregion
 #region User - By Username
 
@@ -2429,6 +2447,24 @@ mantle2.users.username.badges.get:
       badgeId:
         type: string
   methods: [GET]
+
+mantle2.users.username.impact_points:
+  path: '/v2/users/{username}/points'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::points'
+    _title: 'Get User Impact Points by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Impact Points
+    description: Retrieves the total impact points accumulated by the user
+    schema/200: impactPoints()
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
 #endregion
 #region User - Current User
 
@@ -3291,6 +3327,21 @@ mantle2.users.current.badges.get:
       badgeId:
         type: string
   methods: [GET]
+
+mantle2.users.current.impact_points:
+  path: '/v2/users/current/points'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::points'
+    _title: 'Get User Impact Points by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Impact Points
+    description: Retrieves the total impact points accumulated by the user
+    schema/200: impactPoints()
+    schema/404: User not found
+  methods: [GET]
+
 #endregion
 
 ## Activity Routes

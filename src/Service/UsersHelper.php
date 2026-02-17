@@ -578,12 +578,6 @@ class UsersHelper
 				$requester,
 				'PRIVATE',
 			),
-			'impact_points' => self::tryVisible(
-				PointsHelper::getPoints($user),
-				$user,
-				$requester,
-				$privacy['impact_points'] ?? 'PUBLIC',
-			),
 		];
 	}
 

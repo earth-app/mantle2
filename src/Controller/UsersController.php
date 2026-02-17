@@ -21,6 +21,7 @@ use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ActivityHelper;
 use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\OAuthHelper;
+use Drupal\mantle2\Service\PointsHelper;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -1244,6 +1245,38 @@ class UsersController extends ControllerBase
 		}
 
 		return new JsonResponse($badge, Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/points
+	// GET /v2/users/{id}/points
+	// GET /v2/users/{username}/points
+	public function points(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$resolved = $this->resolveUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		if (!$resolved) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$visible = UsersHelper::checkVisibility($resolved, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		$privacy = UsersHelper::getFieldPrivacy($visible)['impact_points'] ?? 'PUBLIC';
+		if (!UsersHelper::isVisible($visible, $requester, $privacy)) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$points = PointsHelper::getPoints($visible);
+		return new JsonResponse(['points' => $points], Response::HTTP_OK);
 	}
 
 	#endregion
