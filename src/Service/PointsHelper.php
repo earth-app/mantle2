@@ -10,7 +10,7 @@ class PointsHelper
 	public static function getPoints(UserInterface $user): int
 	{
 		$data = CloudHelper::sendRequest(
-			'/v1/users/impact_points' . GeneralHelper::formatId($user->id()),
+			'/v1/users/impact_points/' . GeneralHelper::formatId($user->id()),
 		);
 		if (empty($data) || !is_array($data)) {
 			return 0;
