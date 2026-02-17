@@ -78,11 +78,25 @@ class CloudHelper
 		$response = curl_exec($ch);
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-		if (curl_errno($ch)) {
-			throw new Exception(
-				'curl Error: ' . curl_error($ch) . ' URL: ' . $url,
-				curl_errno($ch),
-			);
+		$curlError = curl_error($ch);
+		if ($curlError) {
+			// return empty on timeout or connection error
+			if (
+				str_contains($curlError, 'timed out') ||
+				str_contains($curlError, 'Failed to connect')
+			) {
+				Drupal::logger('mantle2')->warning(
+					'Cloud request timeout or connection error: @error for URL: @url',
+					[
+						'@error' => $curlError,
+						'@url' => $url,
+					],
+				);
+				return [];
+			}
+
+			// otherwise, throw an exception for other types of cURL errors
+			throw new Exception('cURL Error: ' . $curlError);
 		}
 
 		unset($ch);
