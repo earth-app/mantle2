@@ -829,7 +829,7 @@ class EventsController extends ControllerBase
 				[
 					'items' => $items,
 					'total' => count($items),
-					'page' => $page + 1,
+					'page' => $page,
 					'limit' => $limit,
 					'search' => $search,
 				],
@@ -949,7 +949,7 @@ class EventsController extends ControllerBase
 				[
 					'items' => $items,
 					'total' => count($items),
-					'page' => $page + 1,
+					'page' => $page,
 					'limit' => $limit,
 					'search' => $search,
 				],
