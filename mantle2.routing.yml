@@ -1313,6 +1313,26 @@ mantle2.users.id.events.images:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.id.events.images.delete_all:
+  path: '/v2/users/{id}/events/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteUserEventImages'
+    _title: 'Delete All User Event Images by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Events,Event Images
+    description: Deletes all image submissions the user has ever made
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [DELETE]
+
 mantle2.users.id.events.images.get:
   path: '/v2/users/{id}/events/images/{eventId}'
   defaults:
@@ -1355,6 +1375,29 @@ mantle2.users.id.events.images.get:
         default: desc
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
+
+mantle2.users.id.events.images.delete:
+  path: '/v2/users/{id}/events/images/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteUserEventImage'
+    _title: 'Delete User Event Images for Event by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    eventId: '\d+'
+  options:
+    tags: Users,Events,Event Images
+    description: Deletes a specific image submission for a specific event the user is hosting or attending
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or event not found
+    parameters:
+      id:
+        type: string
+      eventId:
+        type: string
+  methods: [DELETE]
 
 mantle2.users.id.badges:
   path: '/v2/users/{id}/badges'
@@ -2366,6 +2409,26 @@ mantle2.users.username.events.images:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.username.events.images.delete_all:
+  path: '/v2/users/{username}/events/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteUserEventImages'
+    _title: 'Delete All User Event Images by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Events,Event Images
+    description: Deletes all image submissions the user has ever made
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [DELETE]
+
 mantle2.users.username.events.images.get:
   path: '/v2/users/{username}/events/images/{eventId}'
   defaults:
@@ -2409,11 +2472,34 @@ mantle2.users.username.events.images.get:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.username.events.images.delete:
+  path: '/v2/users/{username}/events/images/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteUserEventImage'
+    _title: 'Delete User Event Images for Event by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    eventId: '\d+'
+  options:
+    tags: Users,Events,Event Images
+    description: Deletes a specific image submission for a specific event the user is hosting or attending
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or event not found
+    parameters:
+      username:
+        type: string
+      eventId:
+        type: string
+  methods: [DELETE]
+
 mantle2.users.username.badges:
   path: '/v2/users/{username}/badges'
   defaults:
     _controller: '\Drupal\mantle2\Controller\UsersController::badges'
-    _title: 'Get User Badges by ID'
+    _title: 'Get User Badges by Username'
   requirements:
     _access: 'TRUE'
     username: '@[\w.]+'
@@ -3256,6 +3342,22 @@ mantle2.users.current.events.images:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.users.current.events.images.delete_all:
+  path: '/v2/users/current/events/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteUserEventImages'
+    _title: 'Delete All User Event Images by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Events,Event Images
+    description: Deletes all image submissions the user has ever made
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+  methods: [DELETE]
+
 mantle2.users.current.events.images.get:
   path: '/v2/users/current/events/images/{eventId}'
   defaults:
@@ -3295,6 +3397,26 @@ mantle2.users.current.events.images.get:
         default: desc
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
+
+mantle2.users.current.events.images.delete:
+  path: '/v2/users/current/events/images/{eventId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteUserEventImage'
+    _title: 'Delete User Event Images for Event by Current User'
+  requirements:
+    _access: 'TRUE'
+    eventId: '\d+'
+  options:
+    tags: Users,Events,Event Images
+    description: Deletes a specific image submission for a specific event the user is hosting or attending
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or event not found
+    parameters:
+      eventId:
+        type: string
+  methods: [DELETE]
 
 mantle2.users.current.badges:
   path: '/v2/users/current/badges'
@@ -3841,6 +3963,22 @@ mantle2.events.current.images:
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
 
+mantle2.events.current.images.delete_all:
+  path: '/v2/events/current/images'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteUserEventImages'
+    _title: 'Delete All Current User Event Image Submissions'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Events,Event Images,Users
+    description: Deletes all image submissions the user has ever made
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+  methods: [DELETE]
+
 mantle2.events.current.images.get:
   path: '/v2/events/current/images/{eventId}'
   defaults:
@@ -3882,6 +4020,23 @@ mantle2.events.current.images.get:
         default: desc
         description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
   methods: [GET]
+
+mantle2.events.current.images.delete:
+  path: '/v2/events/current/images/{imageId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\EventsController::deleteUserEventImage'
+    _title: 'Delete Current User Event Image Submission by Image ID'
+  requirements:
+    _access: 'TRUE'
+    imageId: '^[0-9a-f]{32}$'
+  options:
+    tags: Events,Event Images,Users
+    description: Deletes a specific image submission for events the current user is hosting or attending by image ID
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Event or Image not found
+  methods: [DELETE]
 
 mantle2.events.images:
   path: '/v2/events/{eventId}/images'

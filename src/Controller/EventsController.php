@@ -842,6 +842,46 @@ class EventsController extends ControllerBase
 		}
 	}
 
+	// DELETE /v2/events/current/images
+	// DELETE /v2/users/current/events/images
+	// DELETE /v2/users/{id}/events/images
+	// DELETE /v2/users/{username}/events/images
+	public function deleteUserEventImages(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$identifier = $id ?? $username;
+		if ($identifier !== null) {
+			$user = UsersHelper::findByAuthorized($identifier, $request);
+			if (!$user) {
+				return GeneralHelper::notFound('User not found');
+			}
+		} else {
+			$user = UsersHelper::findByRequest($request);
+			if (!$user) {
+				return GeneralHelper::unauthorized();
+			}
+		}
+
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$result = EventsHelper::deleteImageSubmission(null, $user->id(), null);
+			if ($result instanceof JsonResponse) {
+				return $result;
+			}
+
+			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
 	// GET /v2/events/current/images/{eventId}
 	// GET /v2/users/current/events/images/{eventId}
 	// GET /v2/users/{id}/events/images/{eventId}
@@ -906,6 +946,47 @@ class EventsController extends ControllerBase
 				],
 				Response::HTTP_OK,
 			);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
+	// DELETE /v2/events/current/images/{eventId}
+	// DELETE /v2/users/current/events/images/{eventId}
+	// DELETE /v2/users/{id}/events/images/{eventId}
+	// DELETE /v2/users/{username}/events/images/{eventId}
+	public function deleteUserEventImage(
+		int $eventId,
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$identifier = $id ?? $username;
+		if ($identifier !== null) {
+			$user = UsersHelper::findByAuthorized($identifier, $request);
+			if (!$user) {
+				return GeneralHelper::notFound('User not found');
+			}
+		} else {
+			$user = UsersHelper::findByRequest($request);
+			if (!$user) {
+				return GeneralHelper::unauthorized();
+			}
+		}
+
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$result = EventsHelper::deleteImageSubmission(null, $user->id(), $eventId);
+			if ($result instanceof JsonResponse) {
+				return $result;
+			}
+
+			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
 				'Failed to load events storage: ' . $e->getMessage(),
@@ -1056,6 +1137,42 @@ class EventsController extends ControllerBase
 				],
 				Response::HTTP_CREATED,
 			);
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			return GeneralHelper::internalError(
+				'Failed to load events storage: ' . $e->getMessage(),
+			);
+		}
+	}
+
+	// DELETE /v2/events/{eventId}/images
+	public function deleteEventImages(int $eventId, Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$event = EventsHelper::loadEventNode($eventId);
+		if (!$event) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if (!EventsHelper::isVisible($event, $user)) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		// only delete if admin or host
+		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('You are not allowed to delete these images');
+		}
+
+		try {
+			$result = EventsHelper::deleteImageSubmission($eventId, null, null);
+			if ($result instanceof JsonResponse) {
+				return $result;
+			}
+
+			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
 				'Failed to load events storage: ' . $e->getMessage(),

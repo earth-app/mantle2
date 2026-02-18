@@ -46,7 +46,7 @@ class CloudHelper
 
 		$url = rtrim($cloud, '/') . '/' . ltrim($path, '/');
 		$payload = '';
-		if ($method === 'GET') {
+		if ($method === 'GET' || $method === 'DELETE') {
 			if (!empty($data)) {
 				$query = http_build_query($data);
 				$url .= (str_contains($url, '?') ? '&' : '?') . $query;
@@ -101,6 +101,13 @@ class CloudHelper
 
 		unset($ch);
 
+		// log that a request was sent
+		Drupal::logger('mantle2')->info('Sent Cloud Request: @method @url - @code', [
+			'@method' => $method,
+			'@url' => $url,
+			'@code' => $httpCode,
+		]);
+
 		if ($httpCode === 204) {
 			return [];
 		}
@@ -112,12 +119,6 @@ class CloudHelper
 		if ($httpCode < 200 || $httpCode >= 300) {
 			throw new Exception('HTTP Error: ' . $httpCode . ' Response: ' . $response, $httpCode);
 		}
-
-		// log that a request was sent
-		Drupal::logger('mantle2')->info('Sent Cloud Request: @method @url', [
-			'@method' => $method,
-			'@url' => $url,
-		]);
 
 		return json_decode($response, true) ?? [];
 	}

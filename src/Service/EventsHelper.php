@@ -1075,7 +1075,6 @@ class EventsHelper
 			return null;
 		}
 
-		// Build query params and pass them to CloudHelper to avoid malformed URLs
 		$queryParams = [];
 		if ($userId) {
 			$queryParams['user_id'] = $userId;
@@ -1119,17 +1118,31 @@ class EventsHelper
 		return array_map(fn($item) => EventImageSubmission::fromArray($item), $data['items']);
 	}
 
-	public static function deleteImageSubmission(mixed $submissionId): bool
-	{
-		if (!$submissionId) {
+	public static function deleteImageSubmission(
+		mixed $submissionId = null,
+		mixed $userId = null,
+		mixed $eventId = null,
+	): bool {
+		// at least one needs to be provided
+		if (!$submissionId && !$userId && !$eventId) {
 			return false;
 		}
 
+		$queryParams = [];
+		if ($submissionId) {
+			$queryParams['submission_id'] = $submissionId;
+		}
+
+		if ($userId) {
+			$queryParams['user_id'] = $userId;
+		}
+
+		if ($eventId) {
+			$queryParams['event_id'] = $eventId;
+		}
+
 		try {
-			CloudHelper::sendRequest(
-				'/v1/events/delete_image?submission_id=' . $submissionId,
-				'DELETE',
-			);
+			CloudHelper::sendRequest('/v1/events/delete_image', 'DELETE', $queryParams);
 			return true;
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error(
