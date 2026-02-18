@@ -821,8 +821,8 @@ class EventsController extends ControllerBase
 				null,
 				$limit,
 				$page,
-				$search,
 				$sort,
+				$search,
 			);
 			$items = $data ?? [];
 			return new JsonResponse(
@@ -932,8 +932,8 @@ class EventsController extends ControllerBase
 					null,
 					$limit,
 					$page,
-					$search,
 					$sort,
+					$search,
 				) ?? [];
 
 			return new JsonResponse(
@@ -1029,8 +1029,8 @@ class EventsController extends ControllerBase
 				null,
 				$limit,
 				$page,
-				$search,
 				$sort,
+				$search,
 			);
 			$items = $data ?? [];
 			return new JsonResponse(
