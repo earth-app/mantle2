@@ -885,20 +885,27 @@ class EventsController extends ControllerBase
 		$sort = $pagination['sort'];
 
 		try {
-			$data = EventsHelper::retrieveImageSubmission(
-				$visible->id(),
-				$eventId,
-				null,
-				$limit,
-				$page,
-				$search,
-				$sort,
-			);
-			if (empty($data)) {
-				return GeneralHelper::notFound('Image not found');
-			}
+			$data =
+				EventsHelper::retrieveImageSubmission(
+					$visible->id(),
+					$eventId,
+					null,
+					$limit,
+					$page,
+					$search,
+					$sort,
+				) ?? [];
 
-			return new JsonResponse($data, Response::HTTP_OK);
+			return new JsonResponse(
+				[
+					'items' => $data,
+					'total' => count($data ?? []),
+					'page' => $page,
+					'limit' => $limit,
+					'search' => $search,
+				],
+				Response::HTTP_OK,
+			);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
 				'Failed to load events storage: ' . $e->getMessage(),
