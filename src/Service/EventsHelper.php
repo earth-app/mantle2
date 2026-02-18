@@ -1075,21 +1075,31 @@ class EventsHelper
 			return null;
 		}
 
-		$data = CloudHelper::sendRequest(
-			'/v1/events/retrieve_image' .
-				($userId ? '?user_id=' . $userId : '') .
-				($eventId ? '&event_id=' . $eventId : '') .
-				($submissionId ? '&submission_id=' . $submissionId : '') .
-				($limit ? '&limit=' . $limit : '') .
-				($page ? '&page=' . $page : '') .
-				($sort ? '&sort=' . $sort : '') .
-				($search ? '&search=' . urlencode($search) : ''),
-		);
-
-		if (!$data) {
-			return null;
+		// Build query params and pass them to CloudHelper to avoid malformed URLs
+		$queryParams = [];
+		if ($userId) {
+			$queryParams['user_id'] = $userId;
+		}
+		if ($eventId) {
+			$queryParams['event_id'] = $eventId;
+		}
+		if ($submissionId) {
+			$queryParams['submission_id'] = $submissionId;
+		}
+		if ($limit) {
+			$queryParams['limit'] = $limit;
+		}
+		if ($page) {
+			$queryParams['page'] = $page;
+		}
+		if ($sort) {
+			$queryParams['sort'] = $sort;
+		}
+		if ($search !== null && $search !== '') {
+			$queryParams['search'] = $search;
 		}
 
+		$data = CloudHelper::sendRequest('/v1/events/retrieve_image', 'GET', $queryParams);
 		$total = $data['total'] ?? 0;
 
 		// return single object (submission_id provided)

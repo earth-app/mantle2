@@ -113,6 +113,12 @@ class CloudHelper
 			throw new Exception('HTTP Error: ' . $httpCode . ' Response: ' . $response, $httpCode);
 		}
 
+		// log that a request was sent
+		Drupal::logger('mantle2')->info('Sent Cloud Request: @method @url', [
+			'@method' => $method,
+			'@url' => $url,
+		]);
+
 		return json_decode($response, true) ?? [];
 	}
 
