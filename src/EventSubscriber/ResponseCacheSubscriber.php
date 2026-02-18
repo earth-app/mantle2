@@ -122,14 +122,21 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		$params = [];
 
 		if (preg_match('#' . $route . '#', $path, $matches)) {
-			if (isset($matches[1])) {
-				if (is_numeric($matches[1])) {
-					$params['uid'] = $matches[1];
-					$params['pid'] = $matches[1];
-					$params['aid'] = $matches[1];
-					$params['eid'] = $matches[1];
+			// Support multiple capture groups (uid, eid, etc.) and normalize numeric ids to ints
+			foreach ($matches as $i => $match) {
+				if ($i === 0) {
+					continue; // skip full match
+				}
+				if (is_numeric($match)) {
+					$val = (int) $match;
+					// assign common placeholders to numeric captures where appropriate
+					$params['uid'] = $params['uid'] ?? $val;
+					$params['pid'] = $params['pid'] ?? $val;
+					$params['aid'] = $params['aid'] ?? $val;
+					$params['eid'] = $params['eid'] ?? $val;
 				} else {
-					$user = UsersHelper::findByUsername($matches[1]);
+					// non-numeric capture is treated as username
+					$user = UsersHelper::findByUsername($match);
 					if ($user) {
 						$params['uid'] = $user->id();
 					}

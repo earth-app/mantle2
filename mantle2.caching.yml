@@ -45,6 +45,11 @@ cache:
       key_template: 'user:events:{uid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
       ttl: 300
 
+    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/events/images/([0-9]+)$'
+      methods: [GET]
+      key_template: 'user:event_images:{uid}:eid:{eid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      ttl: 600
+
     - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/events/attending$'
       methods: [GET]
       key_template: 'user:events_attending:{uid}:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}'
