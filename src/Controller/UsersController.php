@@ -767,12 +767,15 @@ class UsersController extends ControllerBase
 		$sort = $pagination['sort'];
 
 		$filter = $request->query->get('filter') ?? 'added';
+		$total = 0;
 		switch ($filter) {
 			case 'mutual':
 				$friends = UsersHelper::getMutualFriends($visible, $limit, $page, $search, $sort);
+				$total = UsersHelper::getMutualFriendsCount($visible, $requester, $search);
 				break;
 			case 'added':
 				$friends = UsersHelper::getAddedFriends($visible, $limit, $page, $search, $sort);
+				$total = UsersHelper::getAddedFriendsCount($visible, $search);
 				break;
 			case 'non_mutual':
 				$friends = UsersHelper::getNonMutualFriends(
@@ -782,6 +785,7 @@ class UsersController extends ControllerBase
 					$search,
 					$sort,
 				);
+				$total = UsersHelper::getNonMutualFriendsCount($visible, $search);
 				break;
 			default:
 				return GeneralHelper::badRequest(
@@ -798,6 +802,7 @@ class UsersController extends ControllerBase
 				'page' => $page + 1,
 				'search' => $search,
 				'items' => $data,
+				'total' => $total,
 			],
 			Response::HTTP_OK,
 		);

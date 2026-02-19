@@ -43,6 +43,7 @@ class EventsController extends ControllerBase
 		$filter_before = $request->query->get('filter_before');
 		$filter_ends_after = $request->query->get('filter_ends_after');
 		$filter_ends_before = $request->query->get('filter_ends_before');
+		$filter_is_upcoming = $request->query->get('filter_is_upcoming');
 
 		try {
 			// Handle random sorting separately using database query
@@ -126,6 +127,20 @@ class EventsController extends ControllerBase
 				}
 
 				// Apply date filters - convert millisecond timestamps to ISO datetime strings
+				if ($filter_is_upcoming !== null) {
+					if ($filter_is_upcoming !== 'true' && $filter_is_upcoming !== 'false') {
+						throw new UnexpectedValueException('Invalid filter_is_upcoming value');
+					}
+
+					$now_str = date('Y-m-d\TH:i:s', time());
+					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
+					if ($filter_is_upcoming) {
+						$query->condition("$fd.field_event_date_value", $now_str, '>=');
+					} else {
+						$query->condition("$fd.field_event_date_value", $now_str, '<');
+					}
+				}
+
 				if ($filter_after !== null && is_numeric($filter_after)) {
 					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
 					$date_str = date('Y-m-d\TH:i:s', (int) $filter_after / 1000);
@@ -262,11 +277,14 @@ class EventsController extends ControllerBase
 				'total' => $total,
 				'limit' => $limit,
 				'items' => $data,
+				'sort' => $sort,
 			]);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
 				'Failed to load events storage: ' . $e->getMessage(),
 			);
+		} catch (UnexpectedValueException $e) {
+			return GeneralHelper::badRequest('Invalid query parameter: ' . $e->getMessage());
 		}
 	}
 
@@ -518,6 +536,8 @@ class EventsController extends ControllerBase
 				'page' => $page + 1,
 				'items' => $attendees,
 				'total' => $total,
+				'sort' => $sort,
+				'search' => $search,
 			],
 			Response::HTTP_OK,
 		);
@@ -669,6 +689,8 @@ class EventsController extends ControllerBase
 			'page' => $page + 1,
 			'items' => $events,
 			'total' => $total,
+			'sort' => $sort,
+			'search' => $search,
 		]);
 	}
 
@@ -831,6 +853,7 @@ class EventsController extends ControllerBase
 					'total' => count($items),
 					'page' => $page,
 					'limit' => $limit,
+					'sort' => $sort,
 					'search' => $search,
 				],
 				Response::HTTP_OK,
@@ -942,6 +965,7 @@ class EventsController extends ControllerBase
 					'total' => count($data ?? []),
 					'page' => $page,
 					'limit' => $limit,
+					'sort' => $sort,
 					'search' => $search,
 				],
 				Response::HTTP_OK,

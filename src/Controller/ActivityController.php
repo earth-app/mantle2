@@ -130,6 +130,8 @@ class ActivityController extends ControllerBase
 				'total' => $total,
 				'limit' => $limit,
 				'items' => $data,
+				'sort' => $sort,
+				'search' => $search,
 			]);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(

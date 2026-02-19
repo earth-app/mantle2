@@ -785,6 +785,7 @@ class EventsHelper
 		$timing['ends_in'] = $event->getRawEndDate()
 			? (int) (($event->getRawEndDate() - $now) / 1000)
 			: null;
+		$timing['is_upcoming'] = $event->getRawDate() > $now;
 		$result['timing'] = $timing;
 
 		return $result;

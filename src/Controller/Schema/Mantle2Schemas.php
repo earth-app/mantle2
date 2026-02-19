@@ -173,6 +173,19 @@ class Mantle2Schemas
 					'items' => $itemSchema,
 					'description' => 'List of items on the current page',
 				],
+				'sort' => [
+					'type' => 'string',
+					'enum' => ['asc', 'desc', 'rand'],
+					'default' => 'desc',
+					'description' =>
+						'Sort order, if provided: asc (ascending/oldest first), desc (descending/newest first), rand (random)',
+				],
+				'search' => [
+					'type' => 'string',
+					'maxLength' => 40,
+					'default' => '',
+					'description' => 'Search query string, if available',
+				],
 			],
 			'required' => ['page', 'limit', 'total', 'items'],
 		];
