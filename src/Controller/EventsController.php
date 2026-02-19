@@ -127,50 +127,61 @@ class EventsController extends ControllerBase
 				}
 
 				// Apply date filters - convert millisecond timestamps to ISO datetime strings
-				if ($filter_is_upcoming !== null) {
-					if ($filter_is_upcoming !== 'true' && $filter_is_upcoming !== 'false') {
-						throw new UnexpectedValueException('Invalid filter_is_upcoming value');
-					}
-
-					$now_str = date('Y-m-d\TH:i:s', time());
-					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
-					if ($filter_is_upcoming) {
-						$query->condition("$fd.field_event_date_value", $now_str, '>=');
-					} else {
-						$query->condition("$fd.field_event_date_value", $now_str, '<');
-					}
-				}
-
 				if ($filter_after !== null && is_numeric($filter_after)) {
-					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
 					$date_str = date('Y-m-d\TH:i:s', (int) $filter_after / 1000);
-					$query->condition("$fd.field_event_date_value", $date_str, '>=');
+					$fe = $query->leftJoin('node__field_event_date', 'fe', 'fe.entity_id = n.nid');
+					$query->condition("$fe.delta", 0);
+					$query->condition("$fe.field_event_date_value", $date_str, '>=');
 				}
 
 				if ($filter_before !== null && is_numeric($filter_before)) {
-					$fd = $query->leftJoin('node__field_event_date', 'fd', 'fd.entity_id = n.nid');
 					$date_str = date('Y-m-d\TH:i:s', (int) $filter_before / 1000);
-					$query->condition("$fd.field_event_date_value", $date_str, '<=');
+					if (!isset($fe)) {
+						$fe = $query->leftJoin(
+							'node__field_event_date',
+							'fe',
+							'fe.entity_id = n.nid',
+						);
+						$query->condition("$fe.delta", 0);
+					}
+					$query->condition("$fe.field_event_date_value", $date_str, '<=');
 				}
 
 				if ($filter_ends_after !== null && is_numeric($filter_ends_after)) {
-					$fed = $query->leftJoin(
-						'node__field_event_enddate',
-						'fed',
-						'fed.entity_id = n.nid',
-					);
 					$date_str = date('Y-m-d\TH:i:s', (int) $filter_ends_after / 1000);
-					$query->condition("$fed.field_event_enddate_value", $date_str, '>=');
+					$fee = $query->leftJoin(
+						'node__field_event_enddate',
+						'fee',
+						'fee.entity_id = n.nid',
+					);
+					$query->condition("$fee.delta", 0);
+					$query->condition("$fee.field_event_enddate_value", $date_str, '>=');
 				}
 
 				if ($filter_ends_before !== null && is_numeric($filter_ends_before)) {
-					$fed = $query->leftJoin(
-						'node__field_event_enddate',
-						'fed',
-						'fed.entity_id = n.nid',
-					);
 					$date_str = date('Y-m-d\TH:i:s', (int) $filter_ends_before / 1000);
-					$query->condition("$fed.field_event_enddate_value", $date_str, '<=');
+					if (!isset($fee)) {
+						$fee = $query->leftJoin(
+							'node__field_event_enddate',
+							'fee',
+							'fee.entity_id = n.nid',
+						);
+						$query->condition("$fee.delta", 0);
+					}
+					$query->condition("$fee.field_event_enddate_value", $date_str, '<=');
+				}
+
+				if ($filter_is_upcoming === '1' || $filter_is_upcoming === 'true') {
+					$now = date('Y-m-d\TH:i:s');
+					if (!isset($fe)) {
+						$fe = $query->leftJoin(
+							'node__field_event_date',
+							'fe',
+							'fe.entity_id = n.nid',
+						);
+						$query->condition("$fe.delta", 0);
+					}
+					$query->condition("$fe.field_event_date_value", $now, '>=');
 				}
 
 				// Get total count for random
@@ -248,6 +259,11 @@ class EventsController extends ControllerBase
 				if ($filter_ends_before !== null && is_numeric($filter_ends_before)) {
 					$date_str = date('Y-m-d\TH:i:s', (int) $filter_ends_before / 1000);
 					$query->condition('field_event_enddate', $date_str, '<=');
+				}
+
+				if ($filter_is_upcoming === '1' || $filter_is_upcoming === 'true') {
+					$now = date('Y-m-d\TH:i:s');
+					$query->condition('field_event_date', $now, '>=');
 				}
 
 				$countQuery = clone $query;
