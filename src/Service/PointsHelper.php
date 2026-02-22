@@ -7,27 +7,28 @@ use Drupal\user\UserInterface;
 
 class PointsHelper
 {
-	public static function getPoints(UserInterface $user): int
+	public static function getPoints(UserInterface $user): array
 	{
 		$cacheKey = 'cloud:points:' . GeneralHelper::formatId($user->id());
 		$cached = RedisHelper::get($cacheKey);
 		if ($cached !== null) {
-			return $cached['points'] ?? 0;
+			return [$cached['points'] ?? 0, $cached['history'] ?? []];
 		}
 
 		$data = CloudHelper::sendRequest(
 			'/v1/users/impact_points/' . GeneralHelper::formatId($user->id()),
 		);
 		if (empty($data) || !is_array($data)) {
-			return 0;
+			return [0, []];
 		}
 
 		$points = $data['points'] ?? 0;
-		RedisHelper::set($cacheKey, ['points' => $points], 180);
-		return $points;
+		$history = $data['history'] ?? [];
+		RedisHelper::set($cacheKey, ['points' => $points, 'history' => $history], 180);
+		return [$points, $history];
 	}
 
-	public static function addPoints(UserInterface $user, int $points, string $reason = ''): int
+	public static function addPoints(UserInterface $user, int $points, string $reason = ''): array
 	{
 		$data = CloudHelper::sendRequest(
 			'/v1/users/impact_points/' . GeneralHelper::formatId($user->id()) . '/add',
@@ -43,9 +44,10 @@ class PointsHelper
 				'%uid' => $user->id(),
 				'%message' => json_encode($data),
 			]);
-			return self::getPoints($user);
+			return self::getPoints($user)[0];
 		}
 
+		$newHistory = $data['history'] ?? [];
 		Drupal::logger('mantle2')->info('Added %points points to user %uid: %reason', [
 			'%points' => $points,
 			'%uid' => $user->id(),
@@ -53,13 +55,16 @@ class PointsHelper
 		]);
 
 		$cacheKey = 'cloud:points:' . GeneralHelper::formatId($user->id());
-		RedisHelper::set($cacheKey, ['points' => $newPoints], 180);
+		RedisHelper::set($cacheKey, ['points' => $newPoints, 'history' => $newHistory], 180);
 
-		return $newPoints;
+		return [$newPoints, $newHistory];
 	}
 
-	public static function removePoints(UserInterface $user, int $points, string $reason = ''): int
-	{
+	public static function removePoints(
+		UserInterface $user,
+		int $points,
+		string $reason = '',
+	): array {
 		$data = CloudHelper::sendRequest(
 			'/v1/users/impact_points/' . GeneralHelper::formatId($user->id()) . '/remove',
 			'POST',
@@ -74,8 +79,10 @@ class PointsHelper
 				'%uid' => $user->id(),
 				'%message' => json_encode($data),
 			]);
-			return self::getPoints($user);
+			return self::getPoints($user)[0];
 		}
+
+		$newHistory = $data['history'] ?? [];
 
 		Drupal::logger('mantle2')->info('Removed %points points from user %uid: %reason', [
 			'%points' => $points,
@@ -84,12 +91,12 @@ class PointsHelper
 		]);
 
 		$cacheKey = 'cloud:points:' . GeneralHelper::formatId($user->id());
-		RedisHelper::set($cacheKey, ['points' => $newPoints], 180);
+		RedisHelper::set($cacheKey, ['points' => $newPoints, 'history' => $newHistory], 180);
 
-		return $newPoints;
+		return [$newPoints, $newHistory];
 	}
 
-	public static function setPoints(UserInterface $user, int $points, string $reason = ''): int
+	public static function setPoints(UserInterface $user, int $points, string $reason = ''): array
 	{
 		$data = CloudHelper::sendRequest(
 			'/v1/users/impact_points/' . GeneralHelper::formatId($user->id()) . '/set',
@@ -105,8 +112,10 @@ class PointsHelper
 				'%uid' => $user->id(),
 				'%message' => json_encode($data),
 			]);
-			return self::getPoints($user);
+			return self::getPoints($user)[0];
 		}
+
+		$newHistory = $data['history'] ?? [];
 
 		Drupal::logger('mantle2')->info('Set points for user %uid to %points: %reason', [
 			'%points' => $points,
@@ -115,8 +124,8 @@ class PointsHelper
 		]);
 
 		$cacheKey = 'cloud:points:' . GeneralHelper::formatId($user->id());
-		RedisHelper::set($cacheKey, ['points' => $newPoints], 180);
+		RedisHelper::set($cacheKey, ['points' => $newPoints, 'history' => $newHistory], 180);
 
-		return $newPoints;
+		return [$newPoints, $newHistory];
 	}
 }

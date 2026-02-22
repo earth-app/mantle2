@@ -1280,8 +1280,8 @@ class UsersController extends ControllerBase
 			return GeneralHelper::notFound('User not found');
 		}
 
-		$points = PointsHelper::getPoints($visible);
-		return new JsonResponse(['points' => $points], Response::HTTP_OK);
+		$data = PointsHelper::getPoints($visible);
+		return new JsonResponse(['points' => $data[0], 'history' => $data[1]], Response::HTTP_OK);
 	}
 
 	#endregion

@@ -1066,8 +1066,33 @@ class Mantle2Schemas
 					'example' => 1500,
 					'description' => 'Total impact points the user has accumulated',
 				],
+				'history' => [
+					'type' => 'array',
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'reason' => [
+								'type' => 'string',
+								'example' => 'Completed a beach cleanup event',
+							],
+							'difference' => [
+								'type' => 'integer',
+								'example' => 100,
+								'description' =>
+									'Number of points added (positive) or removed (negative) for this entry',
+							],
+							'timestamp' => [
+								'type' => 'integer',
+								'example' => 1736400000000,
+								'description' =>
+									'Unix timestamp in milliseconds when the points change occurred',
+							],
+						],
+						'required' => ['reason', 'difference'],
+					],
+				],
 			],
-			'required' => ['points'],
+			'required' => ['points', 'history'],
 		];
 	}
 
