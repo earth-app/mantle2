@@ -74,6 +74,11 @@ class CampaignHelper
 			return true;
 		}
 		$inactiveThreshold = strtotime('-2 weeks');
+		$ignoreThreshold = strtotime('-1 month'); // ignore dead users (no login for over a month)
+		if ($lastLogin < $ignoreThreshold) {
+			return false;
+		}
+
 		return $lastLogin < $inactiveThreshold;
 	}
 
