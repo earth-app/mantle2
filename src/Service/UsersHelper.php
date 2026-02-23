@@ -886,7 +886,8 @@ class UsersHelper
 			md5($search) .
 			':' .
 			$sort;
-		return RedisHelper::cache(
+
+		$friendIds = RedisHelper::cache(
 			$cacheKey,
 			function () use ($user, $limit, $page, $search, $sort) {
 				$friendsValue = $user->get('field_friends')->value ?? '[]';
@@ -905,10 +906,15 @@ class UsersHelper
 					return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
 				});
 
-				return array_slice($friendUsers, ($page - 1) * $limit, $limit);
+				$sliced = array_slice($friendUsers, ($page - 1) * $limit, $limit);
+				// Return only IDs for caching
+				return array_map(fn($user) => $user->id(), $sliced);
 			},
 			120,
 		);
+
+		// Re-fetch UserInterface objects from cached IDs
+		return array_filter(array_map(fn($id) => self::findById($id), $friendIds));
 	}
 
 	public static function getAddedFriendsCount(UserInterface $user, string $search = ''): int
@@ -996,7 +1002,8 @@ class UsersHelper
 				md5($search) .
 				':' .
 				$sort;
-			return RedisHelper::cache(
+
+			$mutualIds = RedisHelper::cache(
 				$cacheKey,
 				function () use ($user, $limit, $page, $search, $sort) {
 					$userFriendsIds =
@@ -1042,10 +1049,15 @@ class UsersHelper
 						return $sort === 'desc' ? $bTime <=> $aTime : $aTime <=> $bTime;
 					});
 
-					return array_slice($mutual, ($page - 1) * $limit, $limit);
+					$sliced = array_slice($mutual, ($page - 1) * $limit, $limit);
+					// Return only IDs for caching
+					return array_map(fn($user) => $user->id(), $sliced);
 				},
 				120,
 			);
+
+			// Re-fetch UserInterface objects from cached IDs
+			return array_filter(array_map(fn($id) => self::findById($id), $mutualIds));
 		} catch (Exception $e) {
 			return [];
 		}
