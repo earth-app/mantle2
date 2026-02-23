@@ -159,8 +159,13 @@ class RedisHelper
 		}
 	}
 
-	public static function cache(string $key, callable $callback, int $ttl = 900): array
+	public static function cache(?string $key, callable $callback, int $ttl = 900): array
 	{
+		// null or empty key implies no caching
+		if ($key === null || empty($key)) {
+			return $callback();
+		}
+
 		$data = self::get($key);
 		if ($data !== null) {
 			return $data;

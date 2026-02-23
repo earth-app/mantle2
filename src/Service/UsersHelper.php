@@ -480,105 +480,134 @@ class UsersHelper
 			return [];
 		}
 
-		return [
-			'id' => GeneralHelper::formatId($user->id()),
-			'username' => $user->getAccountName(),
-			'full_name' => self::getName($user, $requester),
-			'created_at' => date('c', $user->getCreatedTime()),
-			'updated_at' => date('c', $user->getChangedTime()),
-			'last_login' => date('c', $user->getLastLoginTime()),
-			'is_admin' => self::isAdmin($user),
-			'account' => [
-				'id' => GeneralHelper::formatId($user->id()),
-				'avatar_url' =>
-					'https://api.earth-app.com/v2/users/' .
-					GeneralHelper::formatId($user->id()) .
-					'/profile_photo',
-				'username' => $user->getAccountName(),
-				'first_name' => self::getFirstName($user, $requester),
-				'last_name' => self::getLastName($user, $requester),
-				'email' => self::getEmail($user, $requester),
-				'bio' => self::getBiography($user, $requester),
-				'phone_number' => self::getPhoneNumber($user, $requester),
-				'address' => self::getAddress($user, $requester),
-				'country' => self::getCountry($user, $requester),
-				'account_type' => self::tryVisible(
-					self::getAccountType($user)->name,
-					$user,
-					$requester,
-					$privacy['account_type'] ?? 'PUBLIC',
-				),
-				'email_verified' => self::tryVisible(
-					self::isEmailVerified($user),
-					$user,
-					$requester,
-					'PRIVATE',
-				),
-				'has_password' => self::tryVisible(
-					self::hasPassword($user),
-					$user,
-					$requester,
-					'PRIVATE',
-				),
-				'linked_providers' => self::tryVisible(
-					OAuthHelper::getLinkedProviders($user),
-					$user,
-					$requester,
-					'PRIVATE',
-				),
-				'subscribed' => self::tryVisible(
-					self::isSubscribed($user),
-					$user,
-					$requester,
-					'PRIVATE',
-				),
-				'visibility' => self::getVisibility($user)->name,
-				'field_privacy' => $privacy,
-			],
-			'activities' => self::getActivities($user),
-			'is_friend' => $requester ? self::isAddedFriend($requester, $user) : false,
-			'is_my_friend' => $requester ? self::isAddedFriend($user, $requester) : false,
-			'is_mutual' => $requester ? self::isMutualFriend($user, $requester) : false,
-			'friends' => self::tryVisible(
-				json_decode($user->get('field_friends')->value ?? '[]', true),
-				$user,
-				$requester,
-				$privacy['friends'] ?? 'MUTUAL',
-			),
-			'added_count' => self::tryVisible(
-				self::getAddedFriendsCount($user),
-				$user,
-				$requester,
-				$privacy['friends'] ?? 'MUTUAL',
-			),
-			'mutual_count' => self::getMutualFriendsCount($user, $requester),
-			'non_mutual_count' => self::tryVisible(
-				self::getNonMutualFriendsCount($user),
-				$user,
-				$requester,
-				'PRIVATE',
-			),
-			'is_in_circle' => $requester && self::isInCircle($user, $requester),
-			'is_in_my_circle' => $requester && self::isInCircle($requester, $user),
-			'circle' => self::tryVisible(
-				json_decode($user->get('field_circle')->value ?? '[]', true),
-				$user,
-				$requester,
-				'PRIVATE',
-			),
-			'circle_count' => self::tryVisible(
-				self::getCircleCount($user),
-				$user,
-				$requester,
-				'PRIVATE',
-			),
-			'max_circle_count' => self::tryVisible(
-				self::getMaxCircleCount($user),
-				$user,
-				$requester,
-				'PRIVATE',
-			),
-		];
+		// apply caching based on relationship to requester
+
+		$cacheKey = '';
+		// self or admin (PRIVATE)
+		if ($requester->id() === $user->id() || UsersHelper::isAdmin($requester)) {
+			$cacheKey = 'user:' . $user->id() . ':private';
+		}
+		// circle (CIRCLE)
+		elseif ($requester->id() !== $user->id() && self::isInCircle($user, $requester)) {
+			$cacheKey = 'user:' . $user->id() . ':circle:' . $requester->id();
+		}
+		// friend (MUTUAL)
+		elseif ($requester->id() !== $user->id() && self::isMutualFriend($user, $requester)) {
+			$cacheKey = 'user:' . $user->id() . ':mutual:' . $requester->id();
+		}
+		// anonymous (PUBLIC)
+		elseif (!$requester) {
+			$cacheKey = 'user:' . $user->id() . ':public';
+		} else {
+			// no caching for other relationships
+			$cacheKey = null;
+		}
+
+		return RedisHelper::cache(
+			$cacheKey,
+			function () use ($user, $requester, $privacy) {
+				return [
+					'id' => GeneralHelper::formatId($user->id()),
+					'username' => $user->getAccountName(),
+					'full_name' => self::getName($user, $requester),
+					'created_at' => date('c', $user->getCreatedTime()),
+					'updated_at' => date('c', $user->getChangedTime()),
+					'last_login' => date('c', $user->getLastLoginTime()),
+					'is_admin' => self::isAdmin($user),
+					'account' => [
+						'id' => GeneralHelper::formatId($user->id()),
+						'avatar_url' =>
+							'https://api.earth-app.com/v2/users/' .
+							GeneralHelper::formatId($user->id()) .
+							'/profile_photo',
+						'username' => $user->getAccountName(),
+						'first_name' => self::getFirstName($user, $requester),
+						'last_name' => self::getLastName($user, $requester),
+						'email' => self::getEmail($user, $requester),
+						'bio' => self::getBiography($user, $requester),
+						'phone_number' => self::getPhoneNumber($user, $requester),
+						'address' => self::getAddress($user, $requester),
+						'country' => self::getCountry($user, $requester),
+						'account_type' => self::tryVisible(
+							self::getAccountType($user)->name,
+							$user,
+							$requester,
+							$privacy['account_type'] ?? 'PUBLIC',
+						),
+						'email_verified' => self::tryVisible(
+							self::isEmailVerified($user),
+							$user,
+							$requester,
+							'PRIVATE',
+						),
+						'has_password' => self::tryVisible(
+							self::hasPassword($user),
+							$user,
+							$requester,
+							'PRIVATE',
+						),
+						'linked_providers' => self::tryVisible(
+							OAuthHelper::getLinkedProviders($user),
+							$user,
+							$requester,
+							'PRIVATE',
+						),
+						'subscribed' => self::tryVisible(
+							self::isSubscribed($user),
+							$user,
+							$requester,
+							'PRIVATE',
+						),
+						'visibility' => self::getVisibility($user)->name,
+						'field_privacy' => $privacy,
+					],
+					'activities' => self::getActivities($user),
+					'is_friend' => $requester ? self::isAddedFriend($requester, $user) : false,
+					'is_my_friend' => $requester ? self::isAddedFriend($user, $requester) : false,
+					'is_mutual' => $requester ? self::isMutualFriend($user, $requester) : false,
+					'friends' => self::tryVisible(
+						json_decode($user->get('field_friends')->value ?? '[]', true),
+						$user,
+						$requester,
+						$privacy['friends'] ?? 'MUTUAL',
+					),
+					'added_count' => self::tryVisible(
+						self::getAddedFriendsCount($user),
+						$user,
+						$requester,
+						$privacy['friends'] ?? 'MUTUAL',
+					),
+					'mutual_count' => self::getMutualFriendsCount($user, $requester),
+					'non_mutual_count' => self::tryVisible(
+						self::getNonMutualFriendsCount($user),
+						$user,
+						$requester,
+						'PRIVATE',
+					),
+					'is_in_circle' => $requester && self::isInCircle($user, $requester),
+					'is_in_my_circle' => $requester && self::isInCircle($requester, $user),
+					'circle' => self::tryVisible(
+						json_decode($user->get('field_circle')->value ?? '[]', true),
+						$user,
+						$requester,
+						'PRIVATE',
+					),
+					'circle_count' => self::tryVisible(
+						self::getCircleCount($user),
+						$user,
+						$requester,
+						'PRIVATE',
+					),
+					'max_circle_count' => self::tryVisible(
+						self::getMaxCircleCount($user),
+						$user,
+						$requester,
+						'PRIVATE',
+					),
+				];
+			},
+			90, // short TTL
+		);
 	}
 
 	public static function patchUser(
