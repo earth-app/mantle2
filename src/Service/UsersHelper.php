@@ -481,23 +481,23 @@ class UsersHelper
 		}
 
 		// apply caching based on relationship to requester
-
 		$cacheKey = '';
+
+		// anonymous (PUBLIC)
+		if (!$requester) {
+			$cacheKey = 'user:' . $user->id() . ':public';
+		}
 		// self or admin (PRIVATE)
-		if ($requester->id() === $user->id() || UsersHelper::isAdmin($requester)) {
+		elseif ($requester->id() === $user->id() || UsersHelper::isAdmin($requester)) {
 			$cacheKey = 'user:' . $user->id() . ':private';
 		}
 		// circle (CIRCLE)
-		elseif ($requester->id() !== $user->id() && self::isInCircle($user, $requester)) {
+		elseif (self::isInCircle($user, $requester)) {
 			$cacheKey = 'user:' . $user->id() . ':circle:' . $requester->id();
 		}
 		// friend (MUTUAL)
-		elseif ($requester->id() !== $user->id() && self::isMutualFriend($user, $requester)) {
+		elseif (self::isMutualFriend($user, $requester)) {
 			$cacheKey = 'user:' . $user->id() . ':mutual:' . $requester->id();
-		}
-		// anonymous (PUBLIC)
-		elseif (!$requester) {
-			$cacheKey = 'user:' . $user->id() . ':public';
 		} else {
 			// no caching for other relationships
 			$cacheKey = null;
@@ -963,15 +963,23 @@ class UsersHelper
 		return count($friends);
 	}
 
-	public static function isAddedFriend(UserInterface $user, UserInterface $friend): bool
+	public static function isAddedFriend(?UserInterface $user, ?UserInterface $friend): bool
 	{
+		if (!$user || !$friend) {
+			return false;
+		}
+
 		$friends = $user->get('field_friends')->value ?? '[]';
 		$friends = $friends ? json_decode($friends, true) : [];
 		return in_array($friend->id(), $friends, true);
 	}
 
-	public static function isMutualFriend(UserInterface $user1, UserInterface $user2): bool
+	public static function isMutualFriend(?UserInterface $user1, ?UserInterface $user2): bool
 	{
+		if (!$user1 || !$user2) {
+			return false;
+		}
+
 		try {
 			$friends1 = json_decode($user1->get('field_friends')->value ?? '[]', true) ?: [];
 			$friends2 = json_decode($user2->get('field_friends')->value ?? '[]', true) ?: [];
