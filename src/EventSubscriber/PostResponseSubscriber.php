@@ -60,19 +60,7 @@ class PostResponseSubscriber implements EventSubscriberInterface
 					UsersHelper::trackBadgeProgress($user, 'events_created', $id);
 				}
 			},
-			'PUT mantle2.users.id.friends.add' => function (?UserInterface $user, array $data) {
-				if ($user == null) {
-					return;
-				}
-				$friendData = $data['friend'] ?? null;
-				if ($friendData) {
-					$friendId = $friendData['id'] ?? null;
-					if ($friendId) {
-						UsersHelper::trackBadgeProgress($user, 'friends_added', $friendId);
-					}
-				}
-			},
-			'PUT mantle2.users.username.friends.add' => function (
+			'PUT mantle2.users.current.friends.add' => function (
 				?UserInterface $user,
 				array $data,
 			) {
@@ -87,23 +75,7 @@ class PostResponseSubscriber implements EventSubscriberInterface
 					}
 				}
 			},
-			'PATCH mantle2.users.id.activities.set' => function (
-				?UserInterface $user,
-				array $data,
-			) {
-				if ($user == null) {
-					return;
-				}
-				$activities = $data['activities'] ?? null;
-				if (is_array($activities)) {
-					$names = array_map(fn($a) => $a['name'] ?? null, $activities);
-					$names = array_filter($names, fn($n) => $n !== null);
-					if (!empty($names)) {
-						UsersHelper::trackBadgeProgress($user, 'activities_added', $names);
-					}
-				}
-			},
-			'PATCH mantle2.users.username.activities.set' => function (
+			'PATCH mantle2.users.current.activities.set' => function (
 				?UserInterface $user,
 				array $data,
 			) {
