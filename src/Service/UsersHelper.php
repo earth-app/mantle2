@@ -17,6 +17,7 @@ use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Exception;
+use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -520,6 +521,7 @@ class UsersHelper
 							'https://api.earth-app.com/v2/users/' .
 							GeneralHelper::formatId($user->id()) .
 							'/profile_photo',
+						'avatar_cosmetic' => PointsHelper::getAvatarCosmetic($user),
 						'username' => $user->getAccountName(),
 						'first_name' => self::getFirstName($user, $requester),
 						'last_name' => self::getLastName($user, $requester),
@@ -832,19 +834,28 @@ class UsersHelper
 
 	public static function getProfilePhoto(UserInterface $user, int $size = 1024): string
 	{
+		$selectedCosmetic = PointsHelper::getAvatarCosmetic($user);
 		$cacheKey = 'cloud:user:photo:' . $user->id() . ':' . $size;
+		if ($selectedCosmetic) {
+			$cacheKey .= ':' . $selectedCosmetic;
+		}
+
 		$cached = RedisHelper::get($cacheKey);
 		if ($cached !== null) {
 			return $cached['photo'] ?? '';
 		}
 
 		try {
-			$res = CloudHelper::sendRequest(
-				'/v1/users/profile_photo/' . $user->id() . '?size=' . $size,
-				'GET',
-			);
+			$res = CloudHelper::sendRequest('/v1/users/profile_photo/' . $user->id(), 'GET', [
+				'size' => $size,
+			]);
 
 			$data = $res['data'] ?? '';
+
+			if ($data && $selectedCosmetic) {
+				$data = PointsHelper::applyCosmetic($data, $selectedCosmetic) ?: $data;
+			}
+
 			RedisHelper::set($cacheKey, ['photo' => $data], 1800);
 			return $data ?: '';
 		} catch (Exception $e) {

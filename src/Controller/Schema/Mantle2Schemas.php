@@ -912,7 +912,7 @@ class Mantle2Schemas
 	}
 	public static function users(): array
 	{
-		return self::paginated(self::user());
+		return self::paginated(['$ref' => '#/components/schemas/User']);
 	}
 
 	public static function signupResponse(): array
@@ -1340,7 +1340,7 @@ class Mantle2Schemas
 	}
 	public static function events(): array
 	{
-		return self::paginated(self::event());
+		return self::paginated(['$ref' => '#/components/schemas/Event']);
 	}
 	public static function eventsList(): array
 	{
@@ -1386,7 +1386,7 @@ class Mantle2Schemas
 	}
 	public static function eventImageSubmissions(): array
 	{
-		return self::paginated(self::eventImageSubmission());
+		return self::paginated(['$ref' => '#/components/schemas/EventImageSubmission']);
 	}
 
 	public static function eventImageSubmissionScore(): array
@@ -1495,7 +1495,7 @@ class Mantle2Schemas
 	}
 	public static function activities(): array
 	{
-		return self::paginated(self::activity());
+		return self::paginated(['$ref' => '#/components/schemas/Activity']);
 	}
 	public static function activitiesList(): array
 	{
@@ -1559,7 +1559,7 @@ class Mantle2Schemas
 	}
 	public static function prompts(): array
 	{
-		return self::paginated(self::prompt());
+		return self::paginated(['$ref' => '#/components/schemas/Prompt']);
 	}
 	public static function promptsList(): array
 	{
@@ -1583,7 +1583,7 @@ class Mantle2Schemas
 	}
 	public static function promptResponses(): array
 	{
-		return self::paginated(self::promptResponse());
+		return self::paginated(['$ref' => '#/components/schemas/PromptResponse']);
 	}
 
 	public static function promptResponsesCount(): array
@@ -1649,7 +1649,7 @@ class Mantle2Schemas
 	}
 	public static function articles(): array
 	{
-		return self::paginated(self::article());
+		return self::paginated(['$ref' => '#/components/schemas/Article']);
 	}
 	public static function articlesList(): array
 	{
@@ -1719,7 +1719,7 @@ class Mantle2Schemas
 					'maxLength' => 10000,
 				],
 				'color' => self::$hexCode,
-				'ocean' => self::oceanArticle(),
+				'ocean' => ['$ref' => '#/components/schemas/OceanArticle'],
 			],
 			'required' => ['title', 'description', 'content'],
 		];
@@ -1750,7 +1750,7 @@ class Mantle2Schemas
 					'minLength' => 50,
 					'maxLength' => 10000,
 				],
-				'ocean' => self::oceanArticle(),
+				'ocean' => ['$ref' => '#/components/schemas/OceanArticle'],
 				'color' => self::$hexCode,
 			],
 		];
@@ -1826,6 +1826,106 @@ class Mantle2Schemas
 				'is_false' => self::$bool,
 			],
 			'required' => ['question', 'type', 'options', 'correct_answer', 'correct_answer_index'],
+		];
+	}
+
+	/**
+	 * Schema for a single cosmetic item.
+	 */
+	public static function cosmetic(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'key' => [
+					'type' => 'string',
+					'description' => 'Unique identifier for the cosmetic',
+					'example' => 'grayscale',
+				],
+				'price' => [
+					'type' => 'integer',
+					'description' => 'Cost in impact points',
+					'example' => 25,
+				],
+				'rarity' => [
+					'type' => 'string',
+					'enum' => ['normal', 'rare', 'amazing', 'green'],
+					'description' => 'Rarity tier of the cosmetic',
+					'example' => 'normal',
+				],
+			],
+			'required' => ['key', 'price', 'rarity'],
+		];
+	}
+
+	/**
+	 * Schema for the public cosmetics catalog.
+	 */
+	public static function cosmeticsCatalog(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'cosmetics' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/Cosmetic'],
+					'description' => 'List of all available cosmetics',
+				],
+			],
+			'required' => ['cosmetics'],
+		];
+	}
+
+	/**
+	 * Schema for user's cosmetic data (unlocked cosmetics and current selection).
+	 */
+	public static function userCosmetics(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'unlocked' => [
+					'type' => 'array',
+					'items' => ['type' => 'string'],
+					'description' => 'List of cosmetic keys the user has unlocked',
+					'example' => ['grayscale', 'invert'],
+				],
+				'current' => [
+					'type' => ['string', 'null'],
+					'description' => 'Currently selected cosmetic key, or null if none',
+					'example' => 'grayscale',
+				],
+			],
+			'required' => ['unlocked', 'current'],
+		];
+	}
+
+	/**
+	 * Schema for cosmetic purchase response.
+	 */
+	public static function cosmeticPurchaseResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'success' => [
+					'type' => 'boolean',
+					'description' => 'Whether the purchase was successful',
+					'example' => true,
+				],
+				'points' => [
+					'type' => 'integer',
+					'description' => 'Remaining impact points after purchase',
+					'example' => 75,
+				],
+				'unlocked' => [
+					'type' => 'array',
+					'items' => ['type' => 'string'],
+					'description' => 'Updated list of unlocked cosmetics',
+					'example' => ['grayscale', 'invert', 'sepia'],
+				],
+			],
+			'required' => ['success', 'points', 'unlocked'],
 		];
 	}
 
@@ -1906,26 +2006,47 @@ class Mantle2Schemas
 			'PasswordSetResponse' => self::passwordSetResponse(),
 			'OAuthLoginResponse' => self::oauthLoginResponse(),
 			'SubscriptionResponse' => self::subscriptionResponse(),
+			'MotdResponse' => self::motdResponse(),
 			'Notification' => self::notification(),
+			'Notifications' => self::notifications(),
 			'FriendResponse' => self::friendResponse(),
 			'Badge' => self::badge(),
+			'Badges' => self::badges(),
 			'UserBadge' => self::userBadge(),
+			'UserBadges' => self::userBadges(),
 			'ImpactPoints' => self::impactPoints(),
+			'Users' => self::users(),
 			'Event' => self::event(),
+			'Events' => self::events(),
+			'EventsList' => self::eventsList(),
 			'EventImageSubmission' => self::eventImageSubmission(),
+			'EventImageSubmissions' => self::eventImageSubmissions(),
+			'EventImageSubmissionResponse' => self::eventImageSubmissionResponse(),
 			'EventImageSubmissionScore' => self::eventImageSubmissionScore(),
 			'AttendeeResponse' => self::attendeeResponse(),
 			'Activity' => self::activity(),
+			'Activities' => self::activities(),
 			'ActivitiesJson' => self::activitiesJson(),
+			'ActivitiesList' => self::activitiesList(),
+			'ActivitiesIds' => self::activitiesIds(),
 			'Prompt' => self::prompt(),
+			'Prompts' => self::prompts(),
+			'PromptsList' => self::promptsList(),
 			'PromptResponse' => self::promptResponse(),
+			'PromptResponses' => self::promptResponses(),
 			'PromptResponsesCount' => self::promptResponsesCount(),
 			'Article' => self::article(),
+			'Articles' => self::articles(),
+			'ArticlesList' => self::articlesList(),
 			'OceanArticle' => self::oceanArticle(),
 			'ArticleCreate' => self::articleCreate(),
 			'ArticleUpdate' => self::articleUpdate(),
 			'ArticleQuiz' => self::articleQuiz(),
 			'ArticleQuizQuestion' => self::articleQuizQuestion(),
+			'Cosmetic' => self::cosmetic(),
+			'CosmeticsCatalog' => self::cosmeticsCatalog(),
+			'UserCosmetics' => self::userCosmetics(),
+			'CosmeticPurchaseResponse' => self::cosmeticPurchaseResponse(),
 		];
 	}
 }

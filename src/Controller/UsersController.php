@@ -493,6 +493,7 @@ class UsersController extends ControllerBase
 	): Response {
 		$resolved = $this->resolveUser($request, $id, $username);
 		$size = $request->query->getInt('size', 1024);
+		$cosmeticKey = $request->query->get('cosmetic');
 
 		if ($size < 32 || $size > 1024) {
 			return GeneralHelper::badRequest('Size must be between 32 and 1024');
@@ -510,6 +511,14 @@ class UsersController extends ControllerBase
 		}
 
 		$dataUrl = UsersHelper::getProfilePhoto($visible, $size);
+
+		if ($cosmeticKey) {
+			$availableCosmetics = PointsHelper::getAvailableCosmetics($visible);
+			if (in_array($cosmeticKey, $availableCosmetics)) {
+				$dataUrl = PointsHelper::applyCosmetic($dataUrl, $cosmeticKey);
+			}
+		}
+
 		return GeneralHelper::fromDataURL($dataUrl);
 	}
 
@@ -1282,6 +1291,99 @@ class UsersController extends ControllerBase
 
 		$data = PointsHelper::getPoints($visible);
 		return new JsonResponse(['points' => $data[0], 'history' => $data[1]], Response::HTTP_OK);
+	}
+
+	// GET /v2/users/cosmetics
+	public function getCosmeticsCatalog(): JsonResponse
+	{
+		$catalog = PointsHelper::getCosmeticsCatalog();
+		return new JsonResponse(['cosmetics' => $catalog], Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/profile_photo/cosmetic
+	// GET /v2/users/{id}/profile_photo/cosmetic
+	// GET /v2/users/{username}/profile_photo/cosmetic
+	public function getUserCosmetics(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$unlocked = PointsHelper::getAvailableCosmetics($user);
+		$current = PointsHelper::getAvatarCosmetic($user);
+
+		return new JsonResponse(
+			['unlocked' => $unlocked, 'current' => $current],
+			Response::HTTP_OK,
+		);
+	}
+
+	// PUT /v2/users/current/profile_photo/cosmetic
+	// PUT /v2/users/{id}/profile_photo/cosmetic
+	// PUT /v2/users/{username}/profile_photo/cosmetic
+	public function setUserCosmetic(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		if (!isset($body['current'])) {
+			return GeneralHelper::badRequest('Missing current field');
+		}
+
+		$cosmeticKey = $body['current'];
+		PointsHelper::setAvatarCosmetic($user, $cosmeticKey);
+
+		$unlocked = PointsHelper::getAvailableCosmetics($user);
+		$current = PointsHelper::getAvatarCosmetic($user);
+
+		return new JsonResponse(
+			['unlocked' => $unlocked, 'current' => $current],
+			Response::HTTP_OK,
+		);
+	}
+
+	// POST /v2/users/current/profile_photo/purchase_cosmetic
+	// POST /v2/users/{id}/profile_photo/purchase_cosmetic
+	// POST /v2/users/{username}/profile_photo/purchase_cosmetic
+	public function purchaseCosmetic(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$cosmeticKey = $request->query->get('key');
+		if (!$cosmeticKey) {
+			return GeneralHelper::badRequest('Missing key parameter');
+		}
+
+		$success = PointsHelper::purchaseCosmetic($user, $cosmeticKey);
+		if (!$success) {
+			return GeneralHelper::badRequest(
+				'Unable to purchase cosmetic. Check if it exists, you have enough points, and you don\'t already own it.',
+			);
+		}
+
+		[$points, $history] = PointsHelper::getPoints($user);
+		$unlocked = PointsHelper::getAvailableCosmetics($user);
+
+		return new JsonResponse(
+			['success' => true, 'points' => $points, 'unlocked' => $unlocked],
+			Response::HTTP_OK,
+		);
 	}
 
 	#endregion

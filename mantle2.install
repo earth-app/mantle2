@@ -520,6 +520,29 @@ function mantle2_install(): void
 		],
 	]);
 
+	/// Selected Cosmetic
+	createField('user', 'field_selected_cosmetic', 'string', 'Selected Cosmetic', false, '', [
+		'max_length' => 255,
+	]);
+
+	createField(
+		'user',
+		'field_available_cosmetics',
+		'json',
+		'Available Cosmetics',
+		false,
+		json_encode([]),
+		[
+			'schema' => [
+				'$schema' => 'http://json-schema.org/draft-07/schema#',
+				'type' => 'array',
+				'items' => [
+					'type' => 'string',
+				],
+			],
+		],
+	);
+
 	// Make sure the user form display shows all custom fields on fresh install.
 	mantle2_ensure_form_display('user', 'user');
 

@@ -54,7 +54,7 @@ mantle2.motd.get:
   options:
     tags: General
     description: Retrieve the current Message of the Day (MOTD)
-    schema/200: motdResponse()
+    schema/200: '#MotdResponse'
   methods: [GET]
 
 mantle2.motd.set:
@@ -67,7 +67,7 @@ mantle2.motd.set:
   options:
     tags: General
     description: Set the Message of the Day (MOTD)
-    schema/201: motdResponse()
+    schema/201: '#MotdResponse'
   methods: [POST]
 
 ## User Routes
@@ -81,7 +81,7 @@ mantle2.users:
   options:
     tags: Users
     description: Retrieves a list of Earth App users
-    schema/200: users()
+    schema/200: '#Users'
     schema/400: Invalid Pagination Parameters
     query:
       limit:
@@ -116,7 +116,7 @@ mantle2.users.login:
   options:
     tags: Users
     description: 'Log in to your Earth App account'
-    schema/200: loginResponse()
+    schema/200: '#LoginResponse'
     schema/400: Invalid login credentials
     schema/401: Unauthorized
   methods: [POST]
@@ -131,7 +131,7 @@ mantle2.users.logout:
   options:
     tags: Users
     description: Log out of your Earth App account
-    schema/200: logoutResponse()
+    schema/200: '#LogoutResponse'
     schema/401: Unauthorized
   methods: [POST]
 
@@ -145,7 +145,7 @@ mantle2.users.create:
   options:
     tags: Users
     description: Sign up for an Earth App account
-    schema/201: signupResponse()
+    schema/201: '#SignupResponse'
     schema/400: Bad User Data
   methods: [POST]
 
@@ -183,7 +183,7 @@ mantle2.users.unsubscribe:
   options:
     tags: Users
     description: Unsubscribe from email notifications using a secure token (no authentication required)
-    schema/200: subscriptionResponse()
+    schema/200: '#SubscriptionResponse'
     schema/400: Invalid or expired token
     parameters:
       token:
@@ -205,7 +205,20 @@ mantle2.users.badges:
   options:
     tags: Users,Badges
     description: Retrieves a list of all badges
-    schema/200: badges()
+    schema/200: '#Badges'
+  methods: [GET]
+
+mantle2.users.cosmetics:
+  path: '/v2/users/cosmetics'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getCosmeticsCatalog'
+    _title: 'Get Cosmetics Catalog'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Retrieve catalog of all available profile photo cosmetics with their prices and rarities
+    schema/200: '#CosmeticsCatalog'
   methods: [GET]
 
 #region OAuth Routes
@@ -219,7 +232,7 @@ mantle2.users.oauth.discord:
   options:
     tags: Users
     description: 'Sign in or sign up with Discord OAuth'
-    schema/200: loginResponse()
+    schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
   methods: [POST]
@@ -234,7 +247,7 @@ mantle2.users.oauth.github:
   options:
     tags: Users
     description: 'Sign in or sign up with GitHub OAuth'
-    schema/200: loginResponse()
+    schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
   methods: [POST]
@@ -249,7 +262,7 @@ mantle2.users.oauth.microsoft:
   options:
     tags: Users
     description: 'Sign in or sign up with Microsoft OAuth'
-    schema/200: loginResponse()
+    schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
   methods: [POST]
@@ -264,7 +277,7 @@ mantle2.users.oauth.facebook:
   options:
     tags: Users
     description: 'Sign in or sign up with Facebook OAuth'
-    schema/200: loginResponse()
+    schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
   methods: [POST]
@@ -279,7 +292,7 @@ mantle2.users.oauth.google:
   options:
     tags: Users
     description: 'Sign in or sign up with Google OAuth'
-    schema/200: loginResponse()
+    schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
   methods: [POST]
@@ -294,7 +307,7 @@ mantle2.users.oauth.discord.unlink:
   options:
     tags: Users
     description: 'Unlink Discord OAuth provider from your account'
-    schema/200: user()
+    schema/200: '#User'
     schema/400: Invalid or missing id_token, or cannot unlink only login method
     schema/401: Invalid OAuth token or not authenticated
   methods: [DELETE]
@@ -309,7 +322,7 @@ mantle2.users.oauth.github.unlink:
   options:
     tags: Users
     description: 'Unlink GitHub OAuth provider from your account'
-    schema/200: user()
+    schema/200: '#User'
     schema/400: Invalid or missing id_token, or cannot unlink only login method
     schema/401: Invalid OAuth token or not authenticated
   methods: [DELETE]
@@ -324,7 +337,7 @@ mantle2.users.oauth.microsoft.unlink:
   options:
     tags: Users
     description: 'Unlink Microsoft OAuth provider from your account'
-    schema/200: user()
+    schema/200: '#User'
     schema/400: Invalid or missing id_token, or cannot unlink only login method
     schema/401: Invalid OAuth token or not authenticated
   methods: [DELETE]
@@ -339,7 +352,7 @@ mantle2.users.oauth.facebook.unlink:
   options:
     tags: Users
     description: 'Unlink Facebook OAuth provider from your account'
-    schema/200: user()
+    schema/200: '#User'
     schema/400: Invalid or missing id_token, or cannot unlink only login method
     schema/401: Invalid OAuth token or not authenticated
   methods: [DELETE]
@@ -354,7 +367,7 @@ mantle2.users.oauth.google.unlink:
   options:
     tags: Users
     description: 'Unlink Google OAuth provider from your account'
-    schema/200: user()
+    schema/200: '#User'
     schema/400: Invalid or missing id_token, or cannot unlink only login method
     schema/401: Invalid OAuth token or not authenticated
   methods: [DELETE]
@@ -373,7 +386,7 @@ mantle2.users.id.get:
   options:
     tags: Users
     description: Retrieves user information by their identifier
-    schema/200: user()
+    schema/200: '#User'
     schema/404: User not found
     parameters:
       id:
@@ -391,7 +404,7 @@ mantle2.users.id.patch:
   options:
     tags: Users
     description: Updates user information by their identifier
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -432,7 +445,7 @@ mantle2.users.id.patch_field_privacy:
   options:
     tags: Users
     description: Updates user field privacy settings by their identifier
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -488,6 +501,60 @@ mantle2.users.id.set_profile_photo:
         type: string
   methods: [PUT]
 
+mantle2.users.id.profile_photo.cosmetic.get:
+  path: '/v2/users/{id}/profile_photo/cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserCosmetics'
+    _title: 'Get User Cosmetics by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users
+    description: Get unlocked cosmetics and currently selected cosmetic for user
+    schema/200: '#UserCosmetics'
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.id.profile_photo.cosmetic.set:
+  path: '/v2/users/{id}/profile_photo/cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::setUserCosmetic'
+    _title: 'Set User Cosmetic by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users
+    description: Set the currently selected profile photo cosmetic
+    schema/200: '#UserCosmetics'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [PUT]
+
+mantle2.users.id.profile_photo.purchase_cosmetic:
+  path: '/v2/users/{id}/profile_photo/purchase_cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::purchaseCosmetic'
+    _title: 'Purchase Cosmetic by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users
+    description: Purchase a profile photo cosmetic with impact points
+    schema/200: '#CosmeticPurchaseResponse'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      key:
+        type: string
+        description: The key of the cosmetic to purchase
+  methods: [POST]
+
 mantle2.users.id.set_account_type:
   path: '/v2/users/{id}/account_type'
   defaults:
@@ -499,7 +566,7 @@ mantle2.users.id.set_account_type:
   options:
     tags: Users
     description: Updates user account type by their identifier
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -525,7 +592,7 @@ mantle2.users.id.activities:
   options:
     tags: Users,Activities
     description: Retrieves user activities by their identifier
-    schema/200: activitiesList()
+    schema/200: '#ActivitiesList'
     schema/404: User not found
     parameters:
       id:
@@ -545,7 +612,7 @@ mantle2.users.id.activities.set:
     description: Updates user activities by their identifier
     body/description: List of activity IDs to set for the user
     body/schema: activitiesIdList()
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -565,7 +632,7 @@ mantle2.users.id.activities.add:
   options:
     tags: Users,Activities
     description: Updates user activities by their identifier
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -591,7 +658,7 @@ mantle2.users.id.activities.remove:
   options:
     tags: Users,Activities
     description: Removes a user activity by their identifier
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User or activity not found
@@ -615,7 +682,7 @@ mantle2.users.id.activities.recommend:
   options:
     tags: Users,Activities
     description: Recommends activities for the user by their identifier
-    schema/200: activitiesList()
+    schema/200: '#ActivitiesList'
     schema/404: User not found
     parameters:
       id:
@@ -633,7 +700,7 @@ mantle2.users.id.friends:
   options:
     tags: Users,Friends
     description: Retrieves user friends by their identifier
-    schema/200: users()
+    schema/200: '#Users'
     schema/400: Bad Request
     schema/404: User not found
     query:
@@ -672,7 +739,7 @@ mantle2.users.id.friends.add:
   options:
     tags: Users,Friends
     description: Adds a friend for the user by their identifier
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -698,7 +765,7 @@ mantle2.users.id.friends.remove:
   options:
     tags: Users,Friends
     description: Removes a friend for the user by their identifier
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -724,7 +791,7 @@ mantle2.users.id.circle:
   options:
     tags: Users,Friends
     description: Retrieves a user's circle (their close friends) by their identifier
-    schema/200: users()
+    schema/200: '#Users'
     schema/400: Bad Request
     schema/404: User not found
     query:
@@ -759,7 +826,7 @@ mantle2.users.id.circle.add:
   options:
     tags: Users,Friends
     description: Adds a user to their circle by their identifier
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -785,7 +852,7 @@ mantle2.users.id.circle.remove:
   options:
     tags: Users,Friends
     description: Removes a user from their circle by their identifier
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -811,7 +878,7 @@ mantle2.users.id.send_email_verification:
   options:
     tags: Users,Email Verification
     description: Sends an email verification code to the specified user's email address
-    schema/200: emailVerificationSent()
+    schema/200: '#EmailVerificationSent'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -833,7 +900,7 @@ mantle2.users.id.verify_email:
   options:
     tags: Users,Email Verification
     description: Verifies the specified user's email using an 8-digit verification code
-    schema/200: emailVerified()
+    schema/200: '#EmailVerified'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -861,7 +928,7 @@ mantle2.users.id.change_password:
   options:
     tags: Users,Password
     description: 'Changes password for a user using either a reset token or current password verification. OAuth-only users (without existing passwords) can set their first password without providing old_password or token.'
-    schema/200: passwordChangeResponse()
+    schema/200: '#PasswordChangeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -892,8 +959,8 @@ mantle2.users.id.subscribe:
   options:
     tags: Users,Subscription
     description: Subscribes a user to marketing emails. Returns 200 if already subscribed, 201 if newly subscribed.
-    schema/200: subscriptionResponse()
-    schema/201: subscriptionResponse()
+    schema/200: '#SubscriptionResponse'
+    schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -913,8 +980,8 @@ mantle2.users.id.unsubscribe:
   options:
     tags: Users,Subscription
     description: Unsubscribes a user from marketing emails. Returns 200 if already unsubscribed, 201 if newly unsubscribed.
-    schema/200: subscriptionResponse()
-    schema/201: subscriptionResponse()
+    schema/200: '#SubscriptionResponse'
+    schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -934,7 +1001,7 @@ mantle2.users.id.notifications:
   options:
     tags: Users,User Notifications
     description: Retrieves a list of notifications for a user by their ID
-    schema/200: notifications()
+    schema/200: '#Notifications'
     schema/404: User not found
     parameters:
       id:
@@ -953,7 +1020,7 @@ mantle2.users.id.notifications.get:
   options:
     tags: Users,User Notifications
     description: Retrieves a specific notification for a user by their ID
-    schema/200: notification()
+    schema/200: '#Notification'
     schema/404: User or notification not found
     parameters:
       id:
@@ -973,7 +1040,7 @@ mantle2.users.id.notifications.create:
   options:
     tags: Users,User Notifications
     description: Creates a new notification for a user by their ID (Admin Only)
-    schema/201: notification()
+    schema/201: '#Notification'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -1124,7 +1191,7 @@ mantle2.users.id.prompts:
   options:
     tags: Users,Prompts
     description: Retrieves a list of prompts created by the user
-    schema/200: prompts()
+    schema/200: '#Prompts'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -1164,7 +1231,7 @@ mantle2.users.id.articles:
   options:
     tags: Users,Articles
     description: Retrieves a list of articles created by the user
-    schema/200: articles()
+    schema/200: '#Articles'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -1204,7 +1271,7 @@ mantle2.users.id.events:
   options:
     tags: Users,Events
     description: Retrieves a list of events hosted by the user
-    schema/200: events()
+    schema/200: '#Events'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -1244,7 +1311,7 @@ mantle2.users.id.events.attending:
   options:
     tags: Users,Events
     description: 'Retrieves events the user is hosting or attending, filtered by event visibility'
-    schema/200: events()
+    schema/200: '#Events'
     schema/400: Invalid Pagination Parameters
     schema/404: User not found
     parameters:
@@ -1284,7 +1351,7 @@ mantle2.users.id.events.images:
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for events the user is hosting or attending
-    schema/200: eventImageSubmissions()
+    schema/200: '#EventImageSubmissions'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -1345,7 +1412,7 @@ mantle2.users.id.events.images.get:
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for a specific event the user is hosting or attending
-    schema/200: eventImageSubmissions()
+    schema/200: '#EventImageSubmissions'
     schema/401: Unauthorized
     schema/404: User or event not found
     parameters:
@@ -1410,7 +1477,7 @@ mantle2.users.id.badges:
   options:
     tags: Users,Badges
     description: Retrieves a list of badges earned by the user
-    schema/200: userBadges()
+    schema/200: '#UserBadges'
     schema/404: User not found
     parameters:
       id:
@@ -1429,7 +1496,7 @@ mantle2.users.id.badges.get:
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
-    schema/200: userBadge()
+    schema/200: '#UserBadge'
     schema/404: User or badge not found
     parameters:
       id:
@@ -1449,7 +1516,7 @@ mantle2.users.id.impact_points:
   options:
     tags: Users,Impact Points
     description: Retrieves the total impact points accumulated by the user
-    schema/200: impactPoints()
+    schema/200: '#ImpactPoints'
     schema/404: User not found
     parameters:
       id:
@@ -1469,7 +1536,7 @@ mantle2.users.username.get:
   options:
     tags: Users
     description: Retrieves user information by their username
-    schema/200: user()
+    schema/200: '#User'
     schema/404: User not found
     parameters:
       username:
@@ -1487,7 +1554,7 @@ mantle2.users.username.patch:
   options:
     tags: Users
     description: Updates user information by their username
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -1528,7 +1595,7 @@ mantle2.users.username.patch_field_privacy:
   options:
     tags: Users
     description: Updates user field privacy settings by their username
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -1584,6 +1651,60 @@ mantle2.users.username.set_profile_photo:
         type: string
   methods: [PUT]
 
+mantle2.users.username.profile_photo.cosmetic.get:
+  path: '/v2/users/{username}/profile_photo/cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserCosmetics'
+    _title: 'Get User Cosmetics by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users
+    description: Get unlocked cosmetics and currently selected cosmetic for user
+    schema/200: '#UserCosmetics'
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.username.profile_photo.cosmetic.set:
+  path: '/v2/users/{username}/profile_photo/cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::setUserCosmetic'
+    _title: 'Set User Cosmetic by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users
+    description: Set the currently selected profile photo cosmetic
+    schema/200: '#UserCosmetics'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [PUT]
+
+mantle2.users.username.profile_photo.purchase_cosmetic:
+  path: '/v2/users/{username}/profile_photo/purchase_cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::purchaseCosmetic'
+    _title: 'Purchase Cosmetic by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users
+    description: Purchase a profile photo cosmetic with impact points
+    schema/200: '#CosmeticPurchaseResponse'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      key:
+        type: string
+        description: The key of the cosmetic to purchase
+  methods: [POST]
+
 mantle2.users.username.set_account_type:
   path: '/v2/users/{username}/account_type'
   defaults:
@@ -1595,7 +1716,7 @@ mantle2.users.username.set_account_type:
   options:
     tags: Users
     description: Updates user account type by their username
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -1621,7 +1742,7 @@ mantle2.users.username.activities:
   options:
     tags: Users,Activities
     description: Retrieves user activities by their username
-    schema/200: activitiesList()
+    schema/200: '#ActivitiesList'
     schema/404: User not found
     parameters:
       username:
@@ -1641,7 +1762,7 @@ mantle2.users.username.activities.set:
     description: Updates user activities by their username
     body/description: List of activity IDs to set for the user
     body/schema: activitiesIdList()
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -1661,7 +1782,7 @@ mantle2.users.username.activities.add:
   options:
     tags: Users,Activities
     description: Updates user activities by their username
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -1687,7 +1808,7 @@ mantle2.users.username.activities.remove:
   options:
     tags: Users,Activities
     description: Removes a user activity by their identifier
-    schema/200: user()
+    schema/200: '#User'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1712,7 +1833,7 @@ mantle2.users.username.activities.recommend:
   options:
     tags: Users,Activities
     description: Recommends activities for the user by their username
-    schema/200: activitiesList()
+    schema/200: '#ActivitiesList'
     schema/404: User not found
     parameters:
       username:
@@ -1730,7 +1851,7 @@ mantle2.users.username.friends:
   options:
     tags: Users,Friends
     description: Retrieves user friends by their username
-    schema/200: users()
+    schema/200: '#Users'
     schema/400: Bad Request
     schema/404: User not found
     query:
@@ -1769,7 +1890,7 @@ mantle2.users.username.friends.add:
   options:
     tags: Users,Friends
     description: Adds a friend for the user by their username
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1795,7 +1916,7 @@ mantle2.users.username.friends.remove:
   options:
     tags: Users,Friends
     description: Removes a friend for the user by their username
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User or friend not found
@@ -1820,7 +1941,7 @@ mantle2.users.username.circle:
   options:
     tags: Users,Friends
     description: Retrieves a user's circle (their close friends) by their username
-    schema/200: users()
+    schema/200: '#Users'
     schema/400: Bad Request
     schema/404: User not found
     query:
@@ -1855,7 +1976,7 @@ mantle2.users.username.circle.add:
   options:
     tags: Users,Friends
     description: Adds a user to their circle by their username
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1881,7 +2002,7 @@ mantle2.users.username.circle.remove:
   options:
     tags: Users,Friends
     description: Removes a user from their circle by their username
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User or friend not found
@@ -1906,7 +2027,7 @@ mantle2.users.username.send_email_verification:
   options:
     tags: Users,Email Verification
     description: Sends an email verification code to the specified user's email address
-    schema/200: emailVerificationSent()
+    schema/200: '#EmailVerificationSent'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1928,7 +2049,7 @@ mantle2.users.username.verify_email:
   options:
     tags: Users,Email Verification
     description: Verifies the specified user's email using an 8-digit verification code
-    schema/200: emailVerified()
+    schema/200: '#EmailVerified'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1956,7 +2077,7 @@ mantle2.users.username.change_password:
   options:
     tags: Users,Password
     description: 'Changes password for a user using either a reset token or current password verification. OAuth-only users (without existing passwords) can set their first password without providing old_password or token.'
-    schema/200: passwordChangeResponse()
+    schema/200: '#PasswordChangeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -1987,8 +2108,8 @@ mantle2.users.username.subscribe:
   options:
     tags: Users,Subscription
     description: Subscribes a user to marketing emails. Returns 200 if already subscribed, 201 if newly subscribed.
-    schema/200: subscriptionResponse()
-    schema/201: subscriptionResponse()
+    schema/200: '#SubscriptionResponse'
+    schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -2008,8 +2129,8 @@ mantle2.users.username.unsubscribe:
   options:
     tags: Users,Subscription
     description: Unsubscribes a user from marketing emails. Returns 200 if already unsubscribed, 201 if newly unsubscribed.
-    schema/200: subscriptionResponse()
-    schema/201: subscriptionResponse()
+    schema/200: '#SubscriptionResponse'
+    schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -2029,7 +2150,7 @@ mantle2.users.username.notifications:
   options:
     tags: Users,User Notifications
     description: Retrieves a list of notifications for a user by their username
-    schema/200: notifications()
+    schema/200: '#Notifications'
     schema/404: User not found
     parameters:
       username:
@@ -2047,7 +2168,7 @@ mantle2.users.username.notifications.create:
   options:
     tags: Users,User Notifications
     description: Creates a new notification for a user by their username
-    schema/201: notification()
+    schema/201: '#Notification'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -2071,7 +2192,7 @@ mantle2.users.username.notifications.get:
   options:
     tags: Users,User Notifications
     description: Retrieves a specific notification for a user by their ID
-    schema/200: notification()
+    schema/200: '#Notification'
     schema/404: User or notification not found
     parameters:
       username:
@@ -2220,7 +2341,7 @@ mantle2.users.username.prompts:
   options:
     tags: Users,Prompts
     description: Retrieves a list of prompts created by the user
-    schema/200: prompts()
+    schema/200: '#Prompts'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -2260,7 +2381,7 @@ mantle2.users.username.articles:
   options:
     tags: Users,Articles
     description: Retrieves a list of articles created by the user
-    schema/200: articles()
+    schema/200: '#Articles'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -2300,7 +2421,7 @@ mantle2.users.username.events:
   options:
     tags: Users,Events
     description: Retrieves a list of events hosted by the user
-    schema/200: events()
+    schema/200: '#Events'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -2340,7 +2461,7 @@ mantle2.users.username.events.attending:
   options:
     tags: Users,Events
     description: Retrieves a list of events the user is hosting or attending
-    schema/200: events()
+    schema/200: '#Events'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -2380,7 +2501,7 @@ mantle2.users.username.events.images:
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for events the user is hosting or attending
-    schema/200: eventImageSubmissions()
+    schema/200: '#EventImageSubmissions'
     schema/401: Unauthorized
     schema/404: User not found
     parameters:
@@ -2441,7 +2562,7 @@ mantle2.users.username.events.images.get:
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for a specific event the user is hosting or attending
-    schema/200: eventImageSubmissions()
+    schema/200: '#EventImageSubmissions'
     schema/401: Unauthorized
     schema/404: User or event not found
     parameters:
@@ -2506,7 +2627,7 @@ mantle2.users.username.badges:
   options:
     tags: Users,Badges
     description: Retrieves a list of badges earned by the user
-    schema/200: userBadges()
+    schema/200: '#UserBadges'
     schema/404: User not found
     parameters:
       username:
@@ -2525,7 +2646,7 @@ mantle2.users.username.badges.get:
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
-    schema/200: userBadge()
+    schema/200: '#UserBadge'
     schema/404: User or badge not found
     parameters:
       username:
@@ -2545,7 +2666,7 @@ mantle2.users.username.impact_points:
   options:
     tags: Users,Impact Points
     description: Retrieves the total impact points accumulated by the user
-    schema/200: impactPoints()
+    schema/200: '#ImpactPoints'
     schema/404: User not found
     parameters:
       username:
@@ -2564,7 +2685,7 @@ mantle2.users.current.get:
   options:
     tags: Users
     description: Retrieves the current user according to the session ID
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/404: User not found
   methods: [GET]
@@ -2579,7 +2700,7 @@ mantle2.users.current.patch:
   options:
     tags: Users
     description: Updates the current user according to the session ID
-    schema/200: user()
+    schema/200: '#User'
     schema/400: Bad Request
     schema/404: User not found
     body/description: User data to update
@@ -2610,7 +2731,7 @@ mantle2.users.current.patch_field_privacy:
   options:
     tags: Users
     description: Updates user field privacy settings according to the session ID
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/404: User not found
     body/description: User privacy field options
@@ -2653,6 +2774,58 @@ mantle2.users.current.set_profile_photo:
     schema/404: User not found
   methods: [PUT]
 
+mantle2.users.current.profile_photo.cosmetic.get:
+  path: '/v2/users/current/profile_photo/cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserCosmetics'
+    _title: 'Get Current User Cosmetics'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Get unlocked cosmetics and currently selected cosmetic for current user
+    schema/200: '#UserCosmetics'
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.current.profile_photo.cosmetic.set:
+  path: '/v2/users/current/profile_photo/cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::setUserCosmetic'
+    _title: 'Set Current User Cosmetic'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Set the currently selected profile photo cosmetic
+    schema/200: '#UserCosmetics'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [PUT]
+
+mantle2.users.current.profile_photo.purchase_cosmetic:
+  path: '/v2/users/current/profile_photo/purchase_cosmetic'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::purchaseCosmetic'
+    _title: 'Purchase Cosmetic for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Purchase a profile photo cosmetic with impact points
+    schema/200: '#CosmeticPurchaseResponse'
+    schema/400: Bad request or insufficient points
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      key:
+        type: string
+        description: The key of the cosmetic to purchase
+        required: true
+  methods: [POST]
+
 mantle2.users.current.set_account_type:
   path: '/v2/users/current/account_type'
   defaults:
@@ -2663,7 +2836,7 @@ mantle2.users.current.set_account_type:
   options:
     tags: Users
     description: Updates user account type according to the session ID
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -2685,7 +2858,7 @@ mantle2.users.current.activities:
   options:
     tags: Users,Activities
     description: Retrieves user activities according to the session ID
-    schema/200: activitiesList()
+    schema/200: '#ActivitiesList'
     schema/401: Unauthorized
     schema/404: User not found
   methods: [GET]
@@ -2702,7 +2875,7 @@ mantle2.users.current.activities.set:
     description: Updates user activities according to the session ID
     body/description: List of activity IDs to set for the user
     body/schema: activitiesIdList()
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -2718,7 +2891,7 @@ mantle2.users.current.activities.add:
   options:
     tags: Users,Activities
     description: Updates user activities according to the session ID
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User not found
@@ -2740,7 +2913,7 @@ mantle2.users.current.activities.remove:
   options:
     tags: Users,Activities
     description: Removes a user activity by their identifier
-    schema/200: user()
+    schema/200: '#User'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: User or activity not found
@@ -2760,7 +2933,7 @@ mantle2.users.current.activities.recommend:
   options:
     tags: Users,Activities
     description: Recommends activities for the user according to the session ID
-    schema/200: activitiesList()
+    schema/200: '#ActivitiesList'
     schema/404: User not found
     query:
       poolLimit:
@@ -2781,7 +2954,7 @@ mantle2.users.current.friends:
   options:
     tags: Users,Friends
     description: Retrieves user friends according to the session ID
-    schema/200: users()
+    schema/200: '#Users'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/404: User not found
@@ -2817,7 +2990,7 @@ mantle2.users.current.friends.add:
   options:
     tags: Users,Friends
     description: Adds a friend for the user based on the session ID
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -2839,7 +3012,7 @@ mantle2.users.current.friends.remove:
   options:
     tags: Users,Friends
     description: Removes a friend for the user based on the session ID
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -2860,7 +3033,7 @@ mantle2.users.current.circle:
   options:
     tags: Users,Friends
     description: Retrieves a user's circle (their close friends) according to the session ID
-    schema/200: users()
+    schema/200: '#Users'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/404: User not found
@@ -2892,7 +3065,7 @@ mantle2.users.current.circle.add:
   options:
     tags: Users,Friends
     description: Adds a user to the current user's circle based on the session ID
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -2914,7 +3087,7 @@ mantle2.users.current.circle.remove:
   options:
     tags: Users,Friends
     description: Removes a user from the current user's circle based on the session ID
-    schema/200: friendResponse()
+    schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -2935,7 +3108,7 @@ mantle2.users.current.send_email_verification:
   options:
     tags: Users,Email Verification
     description: Sends an email verification code to the current user's email address
-    schema/200: emailVerificationSent()
+    schema/200: '#EmailVerificationSent'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/409: Email already verified
@@ -2951,7 +3124,7 @@ mantle2.users.current.verify_email:
   options:
     tags: Users,Email Verification
     description: Verifies the current user's email using an 8-digit verification code
-    schema/200: emailVerified()
+    schema/200: '#EmailVerified'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/409: Email already verified
@@ -2973,7 +3146,7 @@ mantle2.users.current.change_password:
   options:
     tags: Users,Password
     description: 'Changes password for the current user using either a reset token or current password verification. OAuth-only users (without existing passwords) can set their first password without providing old_password or token.'
-    schema/200: passwordChangeResponse()
+    schema/200: '#PasswordChangeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/409: Email already verified
@@ -2999,8 +3172,8 @@ mantle2.users.current.subscribe:
   options:
     tags: Users,Subscription
     description: Subscribes the current user to marketing emails. Returns 200 if already subscribed, 201 if newly subscribed.
-    schema/200: subscriptionResponse()
-    schema/201: subscriptionResponse()
+    schema/200: '#SubscriptionResponse'
+    schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
   methods: [POST]
 
@@ -3014,8 +3187,8 @@ mantle2.users.current.unsubscribe:
   options:
     tags: Users,Subscription
     description: Unsubscribes the current user from marketing emails. Returns 200 if already unsubscribed, 201 if newly unsubscribed.
-    schema/200: subscriptionResponse()
-    schema/201: subscriptionResponse()
+    schema/200: '#SubscriptionResponse'
+    schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
   methods: [POST]
 
@@ -3029,7 +3202,7 @@ mantle2.users.current.notifications:
   options:
     tags: Users,User Notifications
     description: Retrieves a list of notifications for the current user
-    schema/200: notifications()
+    schema/200: '#Notifications'
     schema/404: User not found
   methods: [GET]
 
@@ -3044,7 +3217,7 @@ mantle2.users.current.notifications.get:
   options:
     tags: Users,User Notifications
     description: Retrieves a specific notification for the current user by their ID
-    schema/200: notification()
+    schema/200: '#Notification'
     schema/404: User or notification not found
     parameters:
       notificationId:
@@ -3172,7 +3345,7 @@ mantle2.users.current.prompts:
   options:
     tags: Users,Prompts
     description: Retrieves a list of prompts created by the current user
-    schema/200: prompts()
+    schema/200: '#Prompts'
     schema/401: Unauthorized
     schema/404: User not found
     query:
@@ -3208,7 +3381,7 @@ mantle2.users.current.articles:
   options:
     tags: Users,Articles
     description: Retrieves a list of articles created by the current user
-    schema/200: articles()
+    schema/200: '#Articles'
     schema/401: Unauthorized
     schema/404: User not found
     query:
@@ -3244,7 +3417,7 @@ mantle2.users.current.events:
   options:
     tags: Users,Events
     description: Retrieves a list of events hosted by the current user
-    schema/200: events()
+    schema/200: '#Events'
     schema/401: Unauthorized
     schema/404: User not found
     query:
@@ -3280,7 +3453,7 @@ mantle2.users.current.events.attending:
   options:
     tags: Users,Events
     description: 'Retrieves events the current user is hosting or attending'
-    schema/200: events()
+    schema/200: '#Events'
     schema/400: Invalid Pagination Parameters
     schema/401: Unauthorized
     query:
@@ -3316,7 +3489,7 @@ mantle2.users.current.events.images:
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for events the user is hosting or attending
-    schema/200: eventImageSubmissions()
+    schema/200: '#EventImageSubmissions'
     schema/401: Unauthorized
     schema/404: User not found
     query:
@@ -3369,7 +3542,7 @@ mantle2.users.current.events.images.get:
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for a specific event the user is hosting or attending
-    schema/200: eventImageSubmissions()
+    schema/200: '#EventImageSubmissions'
     schema/401: Unauthorized
     schema/404: User or event not found
     parameters:
@@ -3428,7 +3601,7 @@ mantle2.users.current.badges:
   options:
     tags: Users,Badges
     description: Retrieves a list of badges earned by the user
-    schema/200: userBadges()
+    schema/200: '#UserBadges'
     schema/404: User not found
   methods: [GET]
 
@@ -3443,7 +3616,7 @@ mantle2.users.current.badges.get:
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
-    schema/200: userBadge()
+    schema/200: '#UserBadge'
     schema/404: User or badge not found
     parameters:
       badgeId:
@@ -3460,7 +3633,7 @@ mantle2.users.current.impact_points:
   options:
     tags: Users,Impact Points
     description: Retrieves the total impact points accumulated by the user
-    schema/200: impactPoints()
+    schema/200: '#ImpactPoints'
     schema/404: User not found
   methods: [GET]
 
@@ -3477,7 +3650,7 @@ mantle2.activities:
   options:
     tags: Activities
     description: Retrieves a list of activities
-    schema/200: activities()
+    schema/200: '#Activities'
     schema/401: Unauthorized
     query:
       limit:
@@ -3512,7 +3685,7 @@ mantle2.activities.random:
   options:
     tags: Activities
     description: Retrieves random activities
-    schema/200: activitiesList()
+    schema/200: '#ActivitiesList'
     schema/404: Activity not found
     query:
       count:
@@ -3534,7 +3707,7 @@ mantle2.activities.get:
   options:
     tags: Activities
     description: Retrieves a specific activity by ID
-    schema/200: activity()
+    schema/200: '#Activity'
     schema/404: Activity not found
     parameters:
       activityId:
@@ -3558,7 +3731,7 @@ mantle2.activities.update:
   options:
     tags: Activities
     description: Updates an existing activity
-    schema/200: activity()
+    schema/200: '#Activity'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -3603,7 +3776,7 @@ mantle2.activities.create:
   options:
     tags: Activities
     description: Creates a new activity
-    schema/201: activity()
+    schema/201: '#Activity'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -3622,7 +3795,7 @@ mantle2.activities.list:
   options:
     tags: Activities
     description: Retrieves a list of activities as an array of IDs
-    schema/200: activitiesIds()
+    schema/200: '#ActivitiesIds'
     schema/404: Activities not found
   methods: [GET]
 
@@ -3638,7 +3811,7 @@ mantle2.events:
   options:
     tags: Events
     description: Retrieves a list of events
-    schema/200: events()
+    schema/200: '#Events'
     schema/400: Invalid Pagination Parameters
     schema/401: Unauthorized
     query:
@@ -3674,7 +3847,7 @@ mantle2.events.random:
   options:
     tags: Events
     description: Retrieves random events
-    schema/200: eventsList()
+    schema/200: '#EventsList'
     schema/404: No events found
     query:
       count:
@@ -3695,7 +3868,7 @@ mantle2.events.create:
   options:
     tags: Events
     description: Creates a new event
-    schema/201: event()
+    schema/201: '#Event'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/402: Account Upgrade Required
@@ -3715,7 +3888,7 @@ mantle2.events.get:
   options:
     tags: Events
     description: Retrieves a specific event by ID
-    schema/200: event()
+    schema/200: '#Event'
     schema/404: Event not found
     parameters:
       eventId:
@@ -3734,7 +3907,7 @@ mantle2.events.update:
   options:
     tags: Events
     description: Updates an existing event
-    schema/200: event()
+    schema/200: '#Event'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/402: Account Upgrade Required
@@ -3781,7 +3954,7 @@ mantle2.events.get.attendees:
   options:
     tags: Events
     description: Retrieves a list of attendees for a specific event
-    schema/200: users()
+    schema/200: '#Users'
     schema/404: Event not found
     parameters:
       eventId:
@@ -3816,7 +3989,7 @@ mantle2.events.signup:
   options:
     tags: Events
     description: Signs up the logged in user for a specific event
-    schema/200: attendeeResponse()
+    schema/200: '#AttendeeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -3838,7 +4011,7 @@ mantle2.events.leave:
   options:
     tags: Events
     description: Cancels the logged in user's signup for a specific event
-    schema/200: attendeeResponse()
+    schema/200: '#AttendeeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -3860,7 +4033,7 @@ mantle2.events.cancel:
   options:
     tags: Events
     description: Cancels an event (only accessible by the host or admin)
-    schema/200: event()
+    schema/200: '#Event'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: Event not found
@@ -3881,7 +4054,7 @@ mantle2.events.uncancel:
   options:
     tags: Events
     description: Reinstates a cancelled event (only accessible by the host or admin)
-    schema/200: event()
+    schema/200: '#Event'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: Event not found
@@ -3901,7 +4074,7 @@ mantle2.events.current:
   options:
     tags: Events,Users
     description: Retrieves events the current user is hosting or attending
-    schema/200: events()
+    schema/200: '#Events'
     schema/400: Invalid Pagination Parameters
     schema/401: Unauthorized
     query:
@@ -3937,7 +4110,7 @@ mantle2.events.current.images:
   options:
     tags: Events,Event Images,Users
     description: Retrieves image submissions for events the current user is hosting or attending
-    schema/200: eventImageSubmissions()
+    schema/200: '#EventImageSubmissions'
     schema/400: Invalid Pagination Parameters
     schema/401: Unauthorized
     query:
@@ -3990,7 +4163,7 @@ mantle2.events.current.images.get:
   options:
     tags: Events,Event Images,Users
     description: Retrieves a specific image submission for events the current user is hosting or attending by image ID
-    schema/200: eventImageSubmission()
+    schema/200: '#EventImageSubmission'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: Event or Image not found
@@ -4049,7 +4222,7 @@ mantle2.events.images:
   options:
     tags: Events,Event Images
     description: Retrieves image submissions for a specific event
-    schema/200: eventImageSubmissions()
+    schema/200: '#EventImageSubmissions'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: Event not found
@@ -4092,7 +4265,7 @@ mantle2.events.images.get:
   options:
     tags: Events,Event Images
     description: Retrieves a specific image submission for a specific event by image ID
-    schema/200: eventImageSubmission()
+    schema/200: '#EventImageSubmission'
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/404: Event or Image not found
@@ -4116,7 +4289,7 @@ mantle2.events.images.post:
   options:
     tags: Events,Event Images
     description: Submits an image for a specific event
-    schema/201: eventImageSubmissionResponse()
+    schema/201: '#EventImageSubmissionResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -4165,7 +4338,7 @@ mantle2.prompts:
   options:
     tags: Prompts
     description: Retrieves a list of prompts
-    schema/200: prompts()
+    schema/200: '#Prompts'
     schema/401: Unauthorized
   methods: [GET]
 
@@ -4179,7 +4352,7 @@ mantle2.prompts.create:
   options:
     tags: Prompts
     description: Creates a new prompt
-    schema/201: prompt()
+    schema/201: '#Prompt'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/402: Account Upgrade Required
@@ -4198,7 +4371,7 @@ mantle2.prompts.random:
   options:
     tags: Prompts
     description: Retrieves random prompts
-    schema/200: promptsList()
+    schema/200: '#PromptsList'
     schema/404: Not Found
     query:
       count:
@@ -4220,7 +4393,7 @@ mantle2.prompts.get:
   options:
     tags: Prompts
     description: Retrieves a specific prompt
-    schema/200: prompt()
+    schema/200: '#Prompt'
     schema/404: Not Found
     parameters:
       prompt:
@@ -4238,7 +4411,7 @@ mantle2.prompts.update:
   options:
     tags: Prompts
     description: Updates a specific prompt
-    schema/200: prompt()
+    schema/200: '#Prompt'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -4282,7 +4455,7 @@ mantle2.prompts.responses:
   options:
     tags: Prompts
     description: Retrieves responses for a specific prompt
-    schema/200: promptResponses()
+    schema/200: '#PromptResponses'
     schema/404: Not Found
     parameters:
       prompt:
@@ -4300,7 +4473,7 @@ mantle2.prompts.responses.create:
   options:
     tags: Prompts
     description: Creates a new response for a specific prompt
-    schema/201: promptResponse()
+    schema/201: '#PromptResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -4324,7 +4497,7 @@ mantle2.prompts.responses.get:
   options:
     tags: Prompts
     description: Retrieves a specific response for a prompt
-    schema/200: promptResponse()
+    schema/200: '#PromptResponse'
     schema/404: Not Found
     parameters:
       prompt:
@@ -4345,7 +4518,7 @@ mantle2.prompts.responses.update:
   options:
     tags: Prompts
     description: Updates a specific response for a prompt
-    schema/200: promptResponse()
+    schema/200: '#PromptResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -4411,7 +4584,7 @@ mantle2.articles:
   options:
     tags: Articles
     description: Lists all articles
-    schema/200: articles()
+    schema/200: '#Articles'
     schema/404: Not Found
     query:
       limit:
@@ -4446,7 +4619,7 @@ mantle2.articles.random:
   options:
     tags: Articles
     description: Retrieves random articles
-    schema/200: articlesList()
+    schema/200: '#ArticlesList'
     schema/404: Not Found
     query:
       count:
@@ -4467,7 +4640,7 @@ mantle2.articles.create:
   options:
     tags: Articles
     description: Creates a new article
-    schema/201: article()
+    schema/201: '#Article'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden
@@ -4486,7 +4659,7 @@ mantle2.articles.get:
   options:
     tags: Articles
     description: Retrieves a specific article
-    schema/200: article()
+    schema/200: '#Article'
     schema/404: Not Found
     parameters:
       articleId:
@@ -4504,7 +4677,7 @@ mantle2.articles.get.quiz:
   options:
     tags: Articles
     description: Retrieves the quiz associated with a specific article
-    schema/200: articleQuiz()
+    schema/200: '#ArticleQuiz'
     schema/404: Not Found
     parameters:
       articleId:
@@ -4522,7 +4695,7 @@ mantle2.articles.update:
   options:
     tags: Articles
     description: Updates a specific article
-    schema/200: article()
+    schema/200: '#Article'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: Forbidden

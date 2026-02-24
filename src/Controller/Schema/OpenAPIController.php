@@ -287,6 +287,11 @@ class OpenAPIController extends ControllerBase
 
 	private function getSchemaNameFromSpec(string $spec): ?string
 	{
+		// Hash reference: "#SchemaName"
+		if ($spec[0] === '#') {
+			return substr($spec, 1);
+		}
+
 		// Property reference: "$propName"
 		if ($spec[0] === '$') {
 			$prop = substr($spec, 1);

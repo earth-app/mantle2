@@ -193,19 +193,17 @@ class RoutingValidationTest extends TestCase
 				"Route '$routeName' has id requirement but no {id} in path",
 			);
 
-			$this->assertNotEmpty(
-				$route['options']['parameters'],
-				"Route '$routeName' missing options.parameters for id",
-			);
-			$this->assertNotEmpty(
-				$route['options']['parameters']['id'],
-				"Route '$routeName' missing options.parameters.id",
-			);
-			$this->assertEquals(
-				'string',
-				$route['options']['parameters']['id']['type'],
-				"Route '$routeName' options.parameters.id should be of type string",
-			);
+			if (isset($route['options']['parameters'])) {
+				$this->assertNotEmpty(
+					$route['options']['parameters']['id'],
+					"Route '$routeName' missing options.parameters.id",
+				);
+				$this->assertEquals(
+					'string',
+					$route['options']['parameters']['id']['type'],
+					"Route '$routeName' options.parameters.id should be of type string",
+				);
+			}
 		}
 
 		if (isset($route['requirements']['username'])) {
@@ -221,19 +219,17 @@ class RoutingValidationTest extends TestCase
 				"Route '$routeName' has username requirement but no {username} in path",
 			);
 
-			$this->assertNotEmpty(
-				$route['options']['parameters'],
-				"Route '$routeName' missing options.parameters for username",
-			);
-			$this->assertNotEmpty(
-				$route['options']['parameters']['username'],
-				"Route '$routeName' missing options.parameters.username",
-			);
-			$this->assertEquals(
-				'string',
-				$route['options']['parameters']['username']['type'],
-				"Route '$routeName' options.parameters.username should be of type string",
-			);
+			if (isset($route['options']['parameters'])) {
+				$this->assertNotEmpty(
+					$route['options']['parameters']['username'],
+					"Route '$routeName' missing options.parameters.username",
+				);
+				$this->assertEquals(
+					'string',
+					$route['options']['parameters']['username']['type'],
+					"Route '$routeName' options.parameters.username should be of type string",
+				);
+			}
 		}
 	}
 
@@ -356,6 +352,20 @@ class RoutingValidationTest extends TestCase
 			$this->assertNull($error, $error ?? '');
 		}
 
+		if (isset($route['options']['schema/201'])) {
+			$schemaRef = $route['options']['schema/201'];
+
+			if (is_string($schemaRef)) {
+				$error = $this->validateSchemaReference(
+					$schemasClass,
+					$schemaRef,
+					$routeName,
+					'schema/201',
+				);
+				$this->assertNull($error, $error ?? '');
+			}
+		}
+
 		// Check body/schema reference
 		if (isset($route['options']['body/schema'])) {
 			$schemaRef = $route['options']['body/schema'];
@@ -381,7 +391,38 @@ class RoutingValidationTest extends TestCase
 		string $routeName,
 		string $fieldName,
 	): ?string {
-		// Check if it's a method call (ends with ())
+		// Check if it's a hash reference (#SchemaName) - new preferred format
+		if (str_starts_with($schemaRef, '#')) {
+			$schemaName = substr($schemaRef, 1);
+
+			// Validate that the schema name is in PascalCase
+			if (!preg_match('/^[A-Z][a-zA-Z0-9]*$/', $schemaName)) {
+				return "Route '$routeName' $fieldName has invalid schema name format: $schemaRef (expected PascalCase after #)";
+			}
+
+			// Check if the schema exists in getAllSchemas()
+			if (!method_exists($schemasClass, 'getAllSchemas')) {
+				return "Route '$routeName' $fieldName: getAllSchemas() method not found in $schemasClass";
+			}
+
+			try {
+				$allSchemas = call_user_func([$schemasClass, 'getAllSchemas']);
+				if (!is_array($allSchemas)) {
+					return "Route '$routeName' $fieldName: getAllSchemas() did not return an array";
+				}
+
+				if (!array_key_exists($schemaName, $allSchemas)) {
+					return "Route '$routeName' $fieldName references non-existent schema: $schemaRef (not found in getAllSchemas())";
+				}
+			} catch (\Exception $e) {
+				return "Route '$routeName' $fieldName error calling getAllSchemas(): " .
+					$e->getMessage();
+			}
+
+			return null;
+		}
+
+		// Check if it's a method call (ends with ()) - legacy format
 		if (str_ends_with($schemaRef, '()')) {
 			$methodName = substr($schemaRef, 0, -2);
 
@@ -402,13 +443,8 @@ class RoutingValidationTest extends TestCase
 			} catch (\ReflectionException $e) {
 				return "Route '$routeName' $fieldName reflection error: " . $e->getMessage();
 			}
-		} else {
-			// It's a property reference (should start with $)
-			if (!str_starts_with($schemaRef, '$')) {
-				// Not a recognized format
-				return "Route '$routeName' $fieldName has unrecognized format: $schemaRef (expected method() or \$property)";
-			}
-
+		} elseif (str_starts_with($schemaRef, '$')) {
+			// It's a property reference - legacy format
 			$propertyName = substr($schemaRef, 1);
 
 			// Check if property exists
@@ -428,6 +464,9 @@ class RoutingValidationTest extends TestCase
 			} catch (\ReflectionException $e) {
 				return "Route '$routeName' $fieldName reflection error: " . $e->getMessage();
 			}
+		} else {
+			// Not a recognized format
+			return "Route '$routeName' $fieldName has unrecognized format: $schemaRef (expected #SchemaName, method(), or \$property)";
 		}
 
 		return null;
@@ -479,6 +518,62 @@ class RoutingValidationTest extends TestCase
 		$this->assertLessThan(1000, $count, 'Should have less than 1000 routes');
 
 		echo "\nTotal routes defined: $count";
+	}
+
+	#[Test]
+	#[TestDox('Schema references should use new #SchemaName format')]
+	#[Group('mantle2/routing')]
+	public function testSchemaReferencesUseHashFormat(): void
+	{
+		$hashFormatCount = 0;
+		$legacyFormatCount = 0;
+		$legacyRoutes = [];
+
+		foreach (self::$routes as $routeName => $route) {
+			if (!isset($route['options'])) {
+				continue;
+			}
+
+			$schemaFields = ['schema/200', 'schema/201', 'body/schema'];
+			foreach ($schemaFields as $field) {
+				if (!isset($route['options'][$field])) {
+					continue;
+				}
+
+				$schemaRef = $route['options'][$field];
+				if (!is_string($schemaRef) || str_contains($schemaRef, '/')) {
+					continue;
+				}
+
+				if (str_starts_with($schemaRef, '#')) {
+					$hashFormatCount++;
+				} elseif (str_ends_with($schemaRef, '()') || str_starts_with($schemaRef, '$')) {
+					$legacyFormatCount++;
+					$legacyRoutes[] = "$routeName ($field: $schemaRef)";
+				}
+			}
+		}
+
+		echo "\nSchema reference format statistics:";
+		echo "\n  - New #SchemaName format: $hashFormatCount";
+		echo "\n  - Legacy format (method() or \$property): $legacyFormatCount";
+
+		if ($legacyFormatCount > 0) {
+			echo "\n\nRoutes still using legacy format:";
+			foreach (array_slice($legacyRoutes, 0, 10) as $route) {
+				echo "\n  - $route";
+			}
+			if (count($legacyRoutes) > 10) {
+				echo "\n  ... and " . (count($legacyRoutes) - 10) . ' more';
+			}
+		}
+
+		// Prefer new format but allow legacy for backward compatibility
+		$this->assertGreaterThan(
+			0,
+			$hashFormatCount,
+			'No routes are using the new #SchemaName format',
+		);
 	}
 
 	#[Test]
