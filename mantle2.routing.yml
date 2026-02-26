@@ -221,6 +221,29 @@ mantle2.users.cosmetics:
     schema/200: '#CosmeticsCatalog'
   methods: [GET]
 
+mantle2.users.cosmetics.preview:
+  path: '/v2/users/cosmetics/preview'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::previewCosmetic'
+    _title: 'Preview Cosmetic'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Preview a cosmetic filter applied to the cloud user profile photo
+    schema/200/type: image/png
+    schema/parameters:
+      cosmetic:
+        type: string
+        required: true
+        description: The cosmetic key to preview
+      size:
+        type: integer
+        enum: [32, 128, 1024]
+        default: 1024
+        description: The size of the preview image. Must be one of 32, 128, or 1024.
+  methods: [GET]
+
 #region OAuth Routes
 mantle2.users.oauth.discord:
   path: '/v2/users/oauth/discord'
@@ -475,10 +498,9 @@ mantle2.users.id.get_profile_photo:
     query:
       size:
         type: integer
-        minimum: 32
-        maximum: 1024
+        enum: [32, 128, 1024]
         default: 1024
-        description: The size of the profile photo to retrieve (between 32 and 1024). Sizes that are not 32, 128, or 1024 will default to the 1024 size.
+        description: The size of the profile photo to retrieve. Must be one of 32, 128, or 1024.
   methods: [GET]
 
 mantle2.users.id.set_profile_photo:
@@ -1625,10 +1647,9 @@ mantle2.users.username.get_profile_photo:
     query:
       size:
         type: integer
-        minimum: 32
-        maximum: 1024
+        enum: [32, 128, 1024]
         default: 1024
-        description: The size of the profile photo to retrieve (between 32 and 1024). Sizes that are not 32, 128, or 1024 will default to the 1024 size.
+        description: The size of the profile photo to retrieve. Must be one of 32, 128, or 1024.
   methods: [GET]
 
 mantle2.users.username.set_profile_photo:
@@ -2753,10 +2774,9 @@ mantle2.users.current.get_profile_photo:
     query:
       size:
         type: integer
-        minimum: 32
-        maximum: 1024
+        enum: [32, 128, 1024]
         default: 1024
-        description: The size of the profile photo to retrieve (between 32 and 1024). Sizes that are not 32, 128, or 1024 will default to the 1024 size.
+        description: The size of the profile photo to retrieve. Must be one of 32, 128, or 1024.
   methods: [GET]
 
 mantle2.users.current.set_profile_photo:

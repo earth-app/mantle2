@@ -130,6 +130,16 @@ cache:
       key_template: 'badges:list'
       ttl: 3600
 
+    - route: '^/v2/users/cosmetics$'
+      methods: [GET]
+      key_template: 'cosmetics:list'
+      ttl: 3600
+
+    - route: '^/v2/users/cosmetics/preview$'
+      methods: [GET]
+      key_template: 'cosmetics:preview:c:{cosmetic}:size:{size}'
+      ttl: 3600
+
   updates:
     - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)$'
       methods: [PATCH]

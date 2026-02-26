@@ -495,8 +495,8 @@ class UsersController extends ControllerBase
 		$size = $request->query->getInt('size', 1024);
 		$cosmeticKey = $request->query->get('cosmetic');
 
-		if ($size < 32 || $size > 1024) {
-			return GeneralHelper::badRequest('Size must be between 32 and 1024');
+		if (!in_array($size, [32, 128, 1024], true)) {
+			return GeneralHelper::badRequest('Size must be one of: 32, 128, or 1024');
 		}
 
 		if ($resolved instanceof JsonResponse) {
@@ -1300,6 +1300,34 @@ class UsersController extends ControllerBase
 		return new JsonResponse(['cosmetics' => $catalog], Response::HTTP_OK);
 	}
 
+	// GET /v2/users/cosmetics/preview
+	public function previewCosmetic(Request $request): Response
+	{
+		$cosmeticKey = $request->query->get('cosmetic');
+		if (!$cosmeticKey || !is_string($cosmeticKey)) {
+			return GeneralHelper::badRequest('Missing or invalid cosmetic parameter');
+		}
+
+		$cosmetics = PointsHelper::cosmetics();
+		if (!isset($cosmetics[$cosmeticKey])) {
+			return GeneralHelper::badRequest('Invalid cosmetic key');
+		}
+
+		$size = $request->query->getInt('size', 1024);
+		if (!in_array($size, [32, 128, 1024], true)) {
+			return GeneralHelper::badRequest('Size must be one of: 32, 128, or 1024');
+		}
+
+		$cloudUser = UsersHelper::cloud();
+		$dataUrl = PointsHelper::getAvatar($cloudUser, $cosmeticKey, $size);
+
+		if (!$dataUrl) {
+			return GeneralHelper::internalError('Failed to generate cosmetic preview');
+		}
+
+		return GeneralHelper::fromDataURL($dataUrl);
+	}
+
 	// GET /v2/users/current/profile_photo/cosmetic
 	// GET /v2/users/{id}/profile_photo/cosmetic
 	// GET /v2/users/{username}/profile_photo/cosmetic
@@ -1330,6 +1358,7 @@ class UsersController extends ControllerBase
 		?string $id = null,
 		?string $username = null,
 	): JsonResponse {
+		$requester = UsersHelper::getOwnerOfRequest($request);
 		$user = $this->resolveAuthorizedUser($request, $id, $username);
 		if ($user instanceof JsonResponse) {
 			return $user;
@@ -1342,7 +1371,7 @@ class UsersController extends ControllerBase
 
 		$cosmeticKey = $body['current'];
 
-		if ($cosmeticKey !== null) {
+		if ($cosmeticKey !== null && !UsersHelper::isAdmin($requester)) {
 			$availableCosmetics = PointsHelper::getAvailableCosmetics($user);
 			if (!in_array($cosmeticKey, $availableCosmetics, true)) {
 				return GeneralHelper::badRequest(
