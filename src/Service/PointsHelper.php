@@ -449,6 +449,35 @@ class PointsHelper
 		self::removePoints($user, $price, 'Purchased cosmetic: ' . $cosmeticKey);
 		self::invalidateUserCache($user);
 
+		// users are likely to view/use the cosmetic they just purchased
+		try {
+			$userId = GeneralHelper::formatId($user->id());
+			$baseDataUrl = UsersHelper::getProfilePhoto($user, 1024);
+			if ($baseDataUrl) {
+				foreach ([32, 128, 1024] as $size) {
+					$cacheKey = 'cloud:user:photo:' . $userId . ':' . $size . ':' . $cosmeticKey;
+					// only generate if not already cached
+					if (RedisHelper::get($cacheKey) === null) {
+						$sizedDataUrl = UsersHelper::getProfilePhoto($user, $size);
+						if ($sizedDataUrl) {
+							$cosmeticDataUrl = self::applyCosmetic($sizedDataUrl, $cosmeticKey);
+							if ($cosmeticDataUrl) {
+								RedisHelper::set($cacheKey, ['dataUrl' => $cosmeticDataUrl], 900);
+							}
+						}
+					}
+				}
+			}
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to pre-cache cosmetic previews for user %uid: %message',
+				[
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+
 		return null;
 	}
 
