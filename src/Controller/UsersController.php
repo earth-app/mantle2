@@ -1413,10 +1413,8 @@ class UsersController extends ControllerBase
 		}
 
 		$success = PointsHelper::purchaseCosmetic($user, $cosmeticKey);
-		if (!$success) {
-			return GeneralHelper::badRequest(
-				'Unable to purchase cosmetic. Check if it exists, you have enough points, and you don\'t already own it.',
-			);
+		if ($success instanceof JsonResponse) {
+			return $success;
 		}
 
 		$user = User::load($user->id());

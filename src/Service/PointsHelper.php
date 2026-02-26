@@ -6,6 +6,7 @@ use Drupal;
 use Drupal\user\UserInterface;
 use Exception;
 use GdImage;
+use Symfony\Component\HttpFoundation\JsonResponse;
 
 class PointsHelper
 {
@@ -412,22 +413,22 @@ class PointsHelper
 		return is_array($decoded) ? $decoded : [];
 	}
 
-	public static function purchaseCosmetic(UserInterface $user, string $cosmeticKey): bool
+	public static function purchaseCosmetic(UserInterface $user, string $cosmeticKey): ?JsonResponse
 	{
 		$cosmetics = self::cosmetics();
 		if (!isset($cosmetics[$cosmeticKey])) {
-			return false;
+			return GeneralHelper::badRequest('Invalid cosmetic key');
 		}
 
 		$availableCosmetics = self::getAvailableCosmetics($user);
 		if (in_array($cosmeticKey, $availableCosmetics, true)) {
-			return false;
+			return GeneralHelper::conflict('Cosmetic already purchased');
 		}
 
 		$price = $cosmetics[$cosmeticKey]['price'];
 		$currentPoints = self::getPoints($user)[0];
-		if ($currentPoints < $price) {
-			return false;
+		if ($currentPoints < $price && !UsersHelper::isAdmin($user)) {
+			return GeneralHelper::badRequest('Not enough points to purchase this cosmetic');
 		}
 
 		$availableCosmetics[] = $cosmeticKey;
@@ -442,13 +443,13 @@ class PointsHelper
 					'%message' => $e->getMessage(),
 				],
 			);
-			return false;
+			return GeneralHelper::internalError('Failed to save user cosmetics');
 		}
 
 		self::removePoints($user, $price, 'Purchased cosmetic: ' . $cosmeticKey);
 		self::invalidateUserCache($user);
 
-		return true;
+		return null;
 	}
 
 	public static function getCosmeticsCatalog(): array
