@@ -1930,6 +1930,33 @@ class Mantle2Schemas
 	}
 
 	/**
+	 * Schema for setting user's selected cosmetic.
+	 */
+	public static function setCosmeticBody(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'current' => [
+					'type' => ['string', 'null'],
+					'description' =>
+						'The cosmetic key to apply, or null to remove the current cosmetic',
+					'example' => 'grayscale',
+				],
+			],
+			'required' => ['current'],
+		];
+	}
+
+	public static function setCosmeticBodyJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			...self::setCosmeticBody(),
+		];
+	}
+
+	/**
 	 * Get all schemas for OpenAPI components/schemas section.
 	 * This method returns all reusable schema definitions that can be
 	 * referenced via $ref in the OpenAPI spec.
@@ -2047,6 +2074,8 @@ class Mantle2Schemas
 			'CosmeticsCatalog' => self::cosmeticsCatalog(),
 			'UserCosmetics' => self::userCosmetics(),
 			'CosmeticPurchaseResponse' => self::cosmeticPurchaseResponse(),
+			'SetCosmeticBody' => self::setCosmeticBody(),
+			'SetCosmeticBodyJson' => self::setCosmeticBodyJson(),
 		];
 	}
 }

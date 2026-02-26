@@ -550,6 +550,8 @@ mantle2.users.id.profile_photo.cosmetic.set:
   options:
     tags: Users
     description: Set the currently selected profile photo cosmetic
+    body/description: Cosmetic selection data
+    body/schema: setCosmeticBodyJson()
     schema/200: '#UserCosmetics'
     schema/400: Bad request
     schema/401: Unauthorized
@@ -1699,6 +1701,8 @@ mantle2.users.username.profile_photo.cosmetic.set:
   options:
     tags: Users
     description: Set the currently selected profile photo cosmetic
+    body/description: Cosmetic selection data
+    body/schema: setCosmeticBodyJson()
     schema/200: '#UserCosmetics'
     schema/400: Bad request
     schema/401: Unauthorized
@@ -2819,6 +2823,8 @@ mantle2.users.current.profile_photo.cosmetic.set:
   options:
     tags: Users
     description: Set the currently selected profile photo cosmetic
+    body/description: Cosmetic selection data
+    body/schema: setCosmeticBodyJson()
     schema/200: '#UserCosmetics'
     schema/400: Bad request
     schema/401: Unauthorized
