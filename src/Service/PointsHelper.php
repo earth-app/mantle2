@@ -150,6 +150,115 @@ class PointsHelper
 		}
 	}
 
+	// Drawing Utilities
+
+	private static function ring(GDImage $image, int $color)
+	{
+		imagesavealpha($image, true);
+		imagealphablending($image, true);
+
+		$width = imagesx($image);
+		$height = imagesy($image);
+
+		$centerX = $width / 2;
+		$centerY = $height / 2;
+		$diameter = min($width, $height);
+
+		$ringThickness = max(10, (int) ($diameter * 0.04));
+
+		$red = ($color >> 16) & 0xff;
+		$green = ($color >> 8) & 0xff;
+		$blue = $color & 0xff;
+
+		$outerRadius = $diameter / 2 - 2;
+		$innerRadius = $outerRadius - $ringThickness;
+
+		// Anti-aliasing threshold
+		$aaThreshold = 1.5;
+
+		// Draw single ring pixel by pixel with anti-aliasing
+		for ($x = 0; $x < $width; $x++) {
+			for ($y = 0; $y < $height; $y++) {
+				$dx = $x - $centerX;
+				$dy = $y - $centerY;
+				$distance = sqrt($dx * $dx + $dy * $dy);
+
+				// Calculate alpha based on distance from ring edges
+				$alpha = 0;
+
+				if (
+					$distance >= $innerRadius - $aaThreshold &&
+					$distance <= $outerRadius + $aaThreshold
+				) {
+					if ($distance >= $innerRadius && $distance <= $outerRadius) {
+						// Fully inside the ring
+						$alpha = 127;
+					} elseif ($distance < $innerRadius) {
+						// Near inner edge - fade in
+						$alpha = (int) (127 * (1 - ($innerRadius - $distance) / $aaThreshold));
+					} else {
+						// Near outer edge - fade out
+						$alpha = (int) (127 * (1 - ($distance - $outerRadius) / $aaThreshold));
+					}
+
+					if ($alpha > 0) {
+						$colorWithAlpha = imagecolorallocatealpha(
+							$image,
+							$red,
+							$green,
+							$blue,
+							127 - $alpha,
+						);
+						imagesetpixel($image, $x, $y, $colorWithAlpha);
+					}
+				}
+			}
+		}
+
+		return $image;
+	}
+
+	private static function overlay(GdImage $image, int $hexColor, float $strength)
+	{
+		imagesavealpha($image, true);
+		imagealphablending($image, false);
+
+		$width = imagesx($image);
+		$height = imagesy($image);
+
+		// Extract RGB from hex color
+		$targetRed = ($hexColor >> 16) & 0xff;
+		$targetGreen = ($hexColor >> 8) & 0xff;
+		$targetBlue = $hexColor & 0xff;
+
+		for ($x = 0; $x < $width; $x++) {
+			for ($y = 0; $y < $height; $y++) {
+				$colorIndex = imagecolorat($image, $x, $y);
+				$color = imagecolorsforindex($image, $colorIndex);
+
+				// Skip transparent pixels
+				if ($color['alpha'] >= 127) {
+					continue;
+				}
+
+				// Apply overlay to non-transparent pixels
+				// Mix: original * (1 - strength) + targetColor * strength
+				$r = (int) ($color['red'] * (1 - $strength) + $targetRed * $strength);
+				$g = (int) ($color['green'] * (1 - $strength) + $targetGreen * $strength);
+				$b = (int) ($color['blue'] * (1 - $strength) + $targetBlue * $strength);
+				$a = $color['alpha'];
+
+				$newColor = imagecolorallocatealpha($image, $r, $g, $b, $a);
+				imagesetpixel($image, $x, $y, $newColor);
+			}
+		}
+
+		imagealphablending($image, true);
+		return $image;
+	}
+
+	// Cosmetics List
+
 	public static function cosmetics(): array
 	{
 		return [
@@ -179,6 +288,17 @@ class PointsHelper
 					return $image;
 				},
 			],
+			'blur' => [
+				'price' => 75,
+				'rarity' => 'rare',
+				'apply' => function (GdImage $image) {
+					for ($i = 0; $i < 30; $i++) {
+						imagefilter($image, IMG_FILTER_GAUSSIAN_BLUR, 999);
+					}
+					imagefilter($image, IMG_FILTER_SMOOTH, 99);
+					return $image;
+				},
+			],
 			// amazing cosmetics
 			'pixelate' => [
 				'price' => 100,
@@ -188,18 +308,47 @@ class PointsHelper
 					return $image;
 				},
 			],
+			'gold_ring' => [
+				'price' => 125,
+				'rarity' => 'amazing',
+				'apply' => function (GdImage $image) {
+					return self::ring($image, 0xffd700);
+				},
+			],
+			'orange_ring' => [
+				'price' => 125,
+				'rarity' => 'amazing',
+				'apply' => function (GdImage $image) {
+					return self::ring($image, 0xffa500);
+				},
+			],
+			'red_overlay' => [
+				'price' => 150,
+				'rarity' => 'amazing',
+				'apply' => function (GdImage $image) {
+					return self::overlay($image, 0xff0000, 0.5);
+				},
+			],
+			'blue_overlay' => [
+				'price' => 150,
+				'rarity' => 'amazing',
+				'apply' => function (GdImage $image) {
+					return self::overlay($image, 0x0000ff, 0.5);
+				},
+			],
 			// green cosmetics
 			'green_overlay' => [
-				'price' => 150,
+				'price' => 200,
 				'rarity' => 'green',
 				'apply' => function (GdImage $image) {
-					$width = imagesx($image);
-					$height = imagesy($image);
-					$overlay = imagecreatetruecolor($width, $height);
-					$green = imagecolorallocate($overlay, 0, 255, 0);
-					imagefill($overlay, 0, 0, $green);
-					imagecopymerge($image, $overlay, 0, 0, 0, 0, $width, $height, 50);
-					return $image;
+					return self::overlay($image, 0x00ff00, 0.5);
+				},
+			],
+			'pink_ring' => [
+				'price' => 175,
+				'rarity' => 'green',
+				'apply' => function (GdImage $image) {
+					return self::ring($image, 0xff69b4);
 				},
 			],
 		];
