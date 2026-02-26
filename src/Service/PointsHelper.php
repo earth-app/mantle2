@@ -389,6 +389,7 @@ class PointsHelper
 		}
 
 		try {
+			// null value will reset to default
 			$user->set('field_selected_cosmetic', $cosmeticKey);
 			$user->save();
 			self::invalidateUserCache($user);

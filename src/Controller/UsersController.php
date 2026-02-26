@@ -1365,12 +1365,12 @@ class UsersController extends ControllerBase
 		}
 
 		$body = json_decode((string) $request->getContent(), true);
-		if (!is_array($body) || !isset($body['current'])) {
-			return GeneralHelper::badRequest('Missing current field');
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON body');
 		}
 
-		$cosmeticKey = $body['current'];
-
+		// null = reset, handled automatically
+		$cosmeticKey = $body['current'] ?? null;
 		if ($cosmeticKey !== null && !UsersHelper::isAdmin($requester)) {
 			$availableCosmetics = PointsHelper::getAvailableCosmetics($user);
 			if (!in_array($cosmeticKey, $availableCosmetics, true)) {
