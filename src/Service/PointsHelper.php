@@ -220,6 +220,8 @@ class PointsHelper
 
 	private static function overlay(GdImage $image, int $hexColor, float $strength)
 	{
+		$strength = max(0.0, min(1.0, $strength));
+
 		imagesavealpha($image, true);
 		imagealphablending($image, false);
 
@@ -243,13 +245,24 @@ class PointsHelper
 
 				// Apply overlay to non-transparent pixels
 				// Mix: original * (1 - strength) + targetColor * strength
-				$r = (int) ($color['red'] * (1 - $strength) + $targetRed * $strength);
-				$g = (int) ($color['green'] * (1 - $strength) + $targetGreen * $strength);
-				$b = (int) ($color['blue'] * (1 - $strength) + $targetBlue * $strength);
+				$r = max(
+					0,
+					min(255, (int) ($color['red'] * (1 - $strength) + $targetRed * $strength)),
+				);
+				$g = max(
+					0,
+					min(255, (int) ($color['green'] * (1 - $strength) + $targetGreen * $strength)),
+				);
+				$b = max(
+					0,
+					min(255, (int) ($color['blue'] * (1 - $strength) + $targetBlue * $strength)),
+				);
 				$a = $color['alpha'];
 
 				$newColor = imagecolorallocatealpha($image, $r, $g, $b, $a);
-				imagesetpixel($image, $x, $y, $newColor);
+				if ($newColor !== false) {
+					imagesetpixel($image, $x, $y, $newColor);
+				}
 			}
 		}
 
@@ -392,7 +405,11 @@ class PointsHelper
 	public static function getAvailableCosmetics(UserInterface $user): array
 	{
 		$availableCosmetics = $user->get('field_available_cosmetics')->value ?? '[]';
-		return $availableCosmetics ? json_decode($availableCosmetics, true) : [];
+		if (!$availableCosmetics) {
+			return [];
+		}
+		$decoded = json_decode($availableCosmetics, true);
+		return is_array($decoded) ? $decoded : [];
 	}
 
 	public static function purchaseCosmetic(UserInterface $user, string $cosmeticKey): bool
@@ -403,7 +420,7 @@ class PointsHelper
 		}
 
 		$availableCosmetics = self::getAvailableCosmetics($user);
-		if (in_array($cosmeticKey, $availableCosmetics)) {
+		if (in_array($cosmeticKey, $availableCosmetics, true)) {
 			return false;
 		}
 
@@ -413,11 +430,22 @@ class PointsHelper
 			return false;
 		}
 
-		self::removePoints($user, $price, 'Purchased cosmetic: ' . $cosmeticKey);
-
 		$availableCosmetics[] = $cosmeticKey;
 		$user->set('field_available_cosmetics', json_encode($availableCosmetics));
-		$user->save();
+		try {
+			$user->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to save user cosmetics for user %uid: %message',
+				[
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+			return false;
+		}
+
+		self::removePoints($user, $price, 'Purchased cosmetic: ' . $cosmeticKey);
 		self::invalidateUserCache($user);
 
 		return true;
@@ -441,65 +469,87 @@ class PointsHelper
 	{
 		$cosmetics = self::cosmetics();
 		if (!isset($cosmetics[$cosmeticKey])) {
-			return $dataUrl;
+			return null;
 		}
 
 		$applyCosmetic = $cosmetics[$cosmeticKey]['apply'];
 
-		$imageData = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $dataUrl));
-		if (!$imageData) {
+		$imageData = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $dataUrl), true);
+		if ($imageData === false || strlen($imageData) === 0) {
+			return null;
+		}
+
+		// image size safety check (max 10MB)
+		if (strlen($imageData) > 10 * 1024 * 1024) {
+			Drupal::logger('mantle2')->warning('Image too large for cosmetic processing');
 			return null;
 		}
 
 		$image = imagecreatefromstring($imageData);
-		if (!$image) {
+		if ($image === false) {
 			return null;
 		}
 
-		$modifiedImage = $applyCosmetic($image);
-		ob_start();
-		imagepng($modifiedImage);
-		$modifiedData = ob_get_clean();
+		// Additional safety: check image dimensions
+		$width = imagesx($image);
+		$height = imagesy($image);
+		if ($width === false || $height === false || $width > 4096 || $height > 4096) {
+			return null;
+		}
 
-		return 'data:image/png;base64,' . base64_encode($modifiedData);
+		try {
+			$modifiedImage = $applyCosmetic($image);
+			if (!$modifiedImage) {
+				return null;
+			}
+			ob_start();
+			imagepng($modifiedImage);
+			$modifiedData = ob_get_clean();
+
+			if ($modifiedData === false || strlen($modifiedData) === 0) {
+				return null;
+			}
+
+			return 'data:image/png;base64,' . base64_encode($modifiedData);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to apply cosmetic: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return null;
+		}
 	}
 
 	public static function getAvatar(
 		UserInterface $user,
 		?string $cosmeticKey = null,
 		int $size = 1024,
-	) {
+	): ?string {
+		$userId = GeneralHelper::formatId($user->id());
+
+		// if no key provided, return base photo
+		if (!$cosmeticKey) {
+			return UsersHelper::getProfilePhoto($user, $size);
+		}
+
+		// check cache for cosmetic-applied image
+		$cacheKey = 'cloud:user:photo:' . $userId . ':' . $size . ':' . $cosmeticKey;
+		$cached = RedisHelper::get($cacheKey);
+		if ($cached !== null && isset($cached['dataUrl'])) {
+			return $cached['dataUrl'];
+		}
+
 		$dataUrl = UsersHelper::getProfilePhoto($user, $size);
 		if (!$dataUrl) {
 			return null;
 		}
 
-		// if no key provided, return base photo
-		if (!$cosmeticKey) {
-			return $dataUrl;
-		}
+		// Apply cosmetic using centralized method
+		$result = self::applyCosmetic($dataUrl, $cosmeticKey);
 
-		$cosmetics = self::cosmetics();
-		if (!isset($cosmetics[$cosmeticKey])) {
-			return $dataUrl;
-		}
+		// Cache the result (or the original if cosmetic failed)
+		$finalResult = $result ?? $dataUrl;
+		RedisHelper::set($cacheKey, ['dataUrl' => $finalResult], 3600); // Cache for 1 hour
 
-		$applyCosmetic = $cosmetics[$cosmeticKey]['apply'];
-		$imageData = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $dataUrl));
-		if (!$imageData) {
-			return null;
-		}
-
-		$image = imagecreatefromstring($imageData);
-		if (!$image) {
-			return null;
-		}
-
-		$modifiedImage = $applyCosmetic($image);
-		ob_start();
-		imagepng($modifiedImage);
-		$modifiedData = ob_get_clean();
-
-		return 'data:image/png;base64,' . base64_encode($modifiedData);
+		return $finalResult;
 	}
 }

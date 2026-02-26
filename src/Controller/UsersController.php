@@ -1335,15 +1335,28 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		$body = json_decode((string) $request->getContent(), true) ?: [];
-		if (!isset($body['current'])) {
+		$body = json_decode((string) $request->getContent(), true);
+		if (!is_array($body) || !isset($body['current'])) {
 			return GeneralHelper::badRequest('Missing current field');
 		}
 
 		$cosmeticKey = $body['current'];
+
+		if ($cosmeticKey !== null) {
+			$availableCosmetics = PointsHelper::getAvailableCosmetics($user);
+			if (!in_array($cosmeticKey, $availableCosmetics, true)) {
+				return GeneralHelper::badRequest(
+					'You do not own this cosmetic. Please purchase it first.',
+				);
+			}
+		}
+
 		PointsHelper::setAvatarCosmetic($user, $cosmeticKey);
 
-		$unlocked = PointsHelper::getAvailableCosmetics($user);
+		$unlocked =
+			$cosmeticKey !== null
+				? $availableCosmetics
+				: PointsHelper::getAvailableCosmetics($user);
 		$current = PointsHelper::getAvatarCosmetic($user);
 
 		return new JsonResponse(
@@ -1366,8 +1379,8 @@ class UsersController extends ControllerBase
 		}
 
 		$cosmeticKey = $request->query->get('key');
-		if (!$cosmeticKey) {
-			return GeneralHelper::badRequest('Missing key parameter');
+		if (!$cosmeticKey || !is_string($cosmeticKey)) {
+			return GeneralHelper::badRequest('Missing or invalid key parameter');
 		}
 
 		$success = PointsHelper::purchaseCosmetic($user, $cosmeticKey);
@@ -1377,6 +1390,7 @@ class UsersController extends ControllerBase
 			);
 		}
 
+		$user = User::load($user->id());
 		[$points, $history] = PointsHelper::getPoints($user);
 		$unlocked = PointsHelper::getAvailableCosmetics($user);
 
