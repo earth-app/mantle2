@@ -91,7 +91,8 @@ mantle2/
 ├── mantle2.info.yml         # Module metadata
 ├── mantle2.module           # Hook implementations
 ├── mantle2.install          # Installation & schema
-├── mantle2.routing.yml      # API route definitions (100+ endpoints)
+├── mantle2.routing.yml      # API route definitions (200+ endpoints)
+├── mantle2.caching.yml      # Custom server-side caching definitions
 ├── mantle2.services.yml     # Service container definitions
 ├── composer.json            # PHP dependencies
 ├── package.json             # Dev tooling
