@@ -153,7 +153,7 @@ class PointsHelper
 
 	// Drawing Utilities
 
-	private static function ring(GDImage $image, int $color)
+	private static function ring(GDImage $image, int $color): GDImage
 	{
 		imagesavealpha($image, true);
 		imagealphablending($image, true);
@@ -176,42 +176,58 @@ class PointsHelper
 
 		// Anti-aliasing threshold
 		$aaThreshold = 1.5;
+		$outerRadiusSq = $outerRadius * $outerRadius;
+		$innerRadiusSq = $innerRadius * $innerRadius;
+		$aaThresholdSq = $aaThreshold * $aaThreshold;
+		$searchRadiusSq = ($outerRadius + $aaThreshold) * ($outerRadius + $aaThreshold);
 
-		// Draw single ring pixel by pixel with anti-aliasing
-		for ($x = 0; $x < $width; $x++) {
-			for ($y = 0; $y < $height; $y++) {
-				$dx = $x - $centerX;
+		// Only scan the annulus region to avoid checking entire image
+		$minX = max(0, (int) floor($centerX - $outerRadius - $aaThreshold));
+		$maxX = min($width - 1, (int) ceil($centerX + $outerRadius + $aaThreshold));
+		$minY = max(0, (int) floor($centerY - $outerRadius - $aaThreshold));
+		$maxY = min($height - 1, (int) ceil($centerY + $outerRadius + $aaThreshold));
+
+		for ($x = $minX; $x <= $maxX; $x++) {
+			$dx = $x - $centerX;
+			$dxSq = $dx * $dx;
+
+			for ($y = $minY; $y <= $maxY; $y++) {
 				$dy = $y - $centerY;
-				$distance = sqrt($dx * $dx + $dy * $dy);
+				$distSq = $dxSq + $dy * $dy;
+
+				// Early exit for pixels far outside threshold
+				if (
+					$distSq > $searchRadiusSq ||
+					$distSq < ($innerRadius - $aaThreshold) * ($innerRadius - $aaThreshold)
+				) {
+					continue;
+				}
+
+				$distance = sqrt($distSq);
 
 				// Calculate alpha based on distance from ring edges
 				$alpha = 0;
 
-				if (
-					$distance >= $innerRadius - $aaThreshold &&
-					$distance <= $outerRadius + $aaThreshold
-				) {
-					if ($distance >= $innerRadius && $distance <= $outerRadius) {
-						// Fully inside the ring
-						$alpha = 127;
-					} elseif ($distance < $innerRadius) {
-						// Near inner edge - fade in
-						$alpha = (int) (127 * (1 - ($innerRadius - $distance) / $aaThreshold));
-					} else {
-						// Near outer edge - fade out
-						$alpha = (int) (127 * (1 - ($distance - $outerRadius) / $aaThreshold));
-					}
+				if ($distance >= $innerRadius && $distance <= $outerRadius) {
+					// Fully inside the ring
+					$alpha = 127;
+				} elseif ($distance < $innerRadius) {
+					// Near inner edge - fade in
+					$alpha = (int) (127 * (1 - ($innerRadius - $distance) / $aaThreshold));
+				} elseif ($distance <= $outerRadius + $aaThreshold) {
+					// Near outer edge - fade out
+					$alpha = (int) (127 * (1 - ($distance - $outerRadius) / $aaThreshold));
+				}
 
-					if ($alpha > 0) {
-						$colorWithAlpha = imagecolorallocatealpha(
-							$image,
-							$red,
-							$green,
-							$blue,
-							127 - $alpha,
-						);
-						imagesetpixel($image, $x, $y, $colorWithAlpha);
-					}
+				if ($alpha > 0) {
+					$colorWithAlpha = imagecolorallocatealpha(
+						$image,
+						$red,
+						$green,
+						$blue,
+						127 - $alpha,
+					);
+					imagesetpixel($image, $x, $y, $colorWithAlpha);
 				}
 			}
 		}
@@ -271,6 +287,170 @@ class PointsHelper
 		return $image;
 	}
 
+	private static function stripes(GdImage $image, int $color, int $spacing = 20): GdImage
+	{
+		imagesavealpha($image, true);
+		imagealphablending($image, true);
+
+		$width = imagesx($image);
+		$height = imagesy($image);
+
+		$red = ($color >> 16) & 0xff;
+		$green = ($color >> 8) & 0xff;
+		$blue = $color & 0xff;
+
+		// Anti-aliasing threshold for stripe edges
+		$aaThreshold = 1.5;
+		$spacingDouble = $spacing * 2;
+
+		for ($x = 0; $x < $width; $x++) {
+			// Calculate position within stripe period
+			$posInPeriod = fmod($x, $spacingDouble);
+			$inStripe = $posInPeriod < $spacing;
+
+			// Calculate distance from stripe edge for anti-aliasing
+			if ($inStripe) {
+				$distFromEdge = min($posInPeriod, $spacing - $posInPeriod);
+			} else {
+				$distFromEdge = min($posInPeriod - $spacing, $spacingDouble - $posInPeriod);
+			}
+
+			// Skip columns far from edges
+			if (!$inStripe && $distFromEdge >= $aaThreshold) {
+				continue;
+			}
+
+			for ($y = 0; $y < $height; $y++) {
+				$colorIndex = imagecolorat($image, $x, $y);
+				$pixelColor = imagecolorsforindex($image, $colorIndex);
+
+				if ($pixelColor['alpha'] < 127) {
+					// Calculate alpha based on distance from stripe edge
+					if ($inStripe) {
+						$alpha = 127; // Full stripe
+					} else {
+						$alpha = (int) (127 * (1 - $distFromEdge / $aaThreshold));
+					}
+
+					if ($alpha > 0) {
+						$newColor = imagecolorallocatealpha(
+							$image,
+							min(255, (int) ($pixelColor['red'] + $red * 0.5)),
+							min(255, (int) ($pixelColor['green'] + $green * 0.5)),
+							min(255, (int) ($pixelColor['blue'] + $blue * 0.5)),
+							max(0, $pixelColor['alpha'] - (int) ($alpha * 0.5)),
+						);
+						if ($newColor !== false) {
+							imagesetpixel($image, $x, $y, $newColor);
+						}
+					}
+				}
+			}
+		}
+
+		return $image;
+	}
+
+	private static function spiral(
+		GdImage $image,
+		int $color,
+		float $turns = 3,
+		int $thickness = 10,
+	): GdImage {
+		imagesavealpha($image, true);
+		imagealphablending($image, true);
+
+		$width = imagesx($image);
+		$height = imagesy($image);
+
+		$centerX = $width / 2;
+		$centerY = $height / 2;
+		$maxRadius = min($centerX, $centerY);
+
+		$red = ($color >> 16) & 0xff;
+		$green = ($color >> 8) & 0xff;
+		$blue = $color & 0xff;
+
+		$points = [];
+		$totalPoints = (int) ($turns * 360);
+
+		for ($i = 0; $i < $totalPoints; $i++) {
+			$angle = deg2rad($i);
+			$radius = ($i / $totalPoints) * $maxRadius;
+			$x = $centerX + cos($angle) * $radius;
+			$y = $centerY + sin($angle) * $radius;
+			$points[] = ['x' => $x, 'y' => $y];
+		}
+
+		$aaThreshold = 1.5;
+		$searchRadius = $thickness + $aaThreshold;
+		$searchRadiusSq = $searchRadius * $searchRadius;
+		$thicknessSq = $thickness * $thickness;
+
+		// Draw spiral with squared distance checks for performance
+		$processed = [];
+		foreach ($points as $point) {
+			$px0 = (int) round($point['x']);
+			$py0 = (int) round($point['y']);
+
+			// Skip if we've already processed this pixel location
+			$key = "$px0,$py0";
+			if (isset($processed[$key])) {
+				continue;
+			}
+			$processed[$key] = true;
+
+			// Only process pixels within bounding box
+			$minX = max(0, (int) floor($point['x'] - $searchRadius));
+			$maxX = min($width - 1, (int) ceil($point['x'] + $searchRadius));
+			$minY = max(0, (int) floor($point['y'] - $searchRadius));
+			$maxY = min($height - 1, (int) ceil($point['y'] + $searchRadius));
+
+			for ($px = $minX; $px <= $maxX; $px++) {
+				for ($py = $minY; $py <= $maxY; $py++) {
+					$colorIndex = imagecolorat($image, $px, $py);
+					$pixelColor = imagecolorsforindex($image, $colorIndex);
+
+					if ($pixelColor['alpha'] < 127) {
+						// Use squared distances to avoid sqrt in inner loop
+						$distX = $px - $point['x'];
+						$distY = $py - $point['y'];
+						$distSq = $distX * $distX + $distY * $distY;
+
+						if ($distSq > $searchRadiusSq) {
+							continue; // Outside threshold
+						}
+
+						$distance = sqrt($distSq);
+
+						// Calculate alpha with smooth falloff
+						if ($distance <= $thickness) {
+							$alpha = 127;
+						} else {
+							$falloff = ($distance - $thickness) / $aaThreshold;
+							$alpha = (int) (127 * max(0, 1 - $falloff * $falloff));
+						}
+
+						if ($alpha > 0) {
+							$newColor = imagecolorallocatealpha(
+								$image,
+								min(255, (int) ($pixelColor['red'] + $red * 0.5)),
+								min(255, (int) ($pixelColor['green'] + $green * 0.5)),
+								min(255, (int) ($pixelColor['blue'] + $blue * 0.5)),
+								max(0, $pixelColor['alpha'] - (int) ($alpha * 0.5)),
+							);
+							if ($newColor !== false) {
+								imagesetpixel($image, $px, $py, $newColor);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return $image;
+	}
+
 	// Cosmetics List
 
 	public static function cosmetics(): array
@@ -292,6 +472,13 @@ class PointsHelper
 					return $image;
 				},
 			],
+			'red_stripes' => [
+				'price' => 40,
+				'rarity' => 'normal',
+				'apply' => function (GdImage $image) {
+					return self::stripes($image, 0xff0000, 50);
+				},
+			],
 			// rare cosmetics
 			'sepia' => [
 				'price' => 50,
@@ -311,6 +498,20 @@ class PointsHelper
 					}
 					imagefilter($image, IMG_FILTER_SMOOTH, 99);
 					return $image;
+				},
+			],
+			'dark_green_ring' => [
+				'price' => 60,
+				'rarity' => 'rare',
+				'apply' => function (GdImage $image) {
+					return self::ring($image, 0x006400);
+				},
+			],
+			'purple_stripes' => [
+				'price' => 65,
+				'rarity' => 'rare',
+				'apply' => function (GdImage $image) {
+					return self::stripes($image, 0x800080);
 				},
 			],
 			// amazing cosmetics
@@ -350,6 +551,13 @@ class PointsHelper
 					return self::overlay($image, 0x0000ff, 0.5);
 				},
 			],
+			'yellow_spiral' => [
+				'price' => 175,
+				'rarity' => 'amazing',
+				'apply' => function (GdImage $image) {
+					return self::spiral($image, 0xffff00);
+				},
+			],
 			// green cosmetics
 			'green_overlay' => [
 				'price' => 200,
@@ -363,6 +571,32 @@ class PointsHelper
 				'rarity' => 'green',
 				'apply' => function (GdImage $image) {
 					return self::ring($image, 0xff69b4);
+				},
+			],
+			'green_stripes' => [
+				'price' => 180,
+				'rarity' => 'green',
+				'apply' => function (GdImage $image) {
+					return self::stripes($image, 0x00ff00);
+				},
+			],
+			'green_spiral' => [
+				'price' => 225,
+				'rarity' => 'green',
+				'apply' => function (GdImage $image) {
+					return self::spiral($image, 0x00ff00, 5, 15);
+				},
+			],
+			'fog' => [
+				'price' => 250,
+				'rarity' => 'green',
+				'apply' => function (GdImage $image) {
+					for ($i = 0; $i < 20; $i++) {
+						imagefilter($image, IMG_FILTER_GAUSSIAN_BLUR, 999);
+					}
+					imagefilter($image, IMG_FILTER_SMOOTH, 99);
+
+					return self::overlay($image, 0xcccccc, 0.3);
 				},
 			],
 		];

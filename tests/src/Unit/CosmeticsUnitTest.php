@@ -12,6 +12,24 @@ use PHPUnit\Framework\TestCase;
 class CosmeticsUnitTest extends TestCase
 {
 	private static string $outputDir = __DIR__ . '/../../out/cosmetics';
+	private static array $cachedImages = [];
+
+	public static function setUpBeforeClass(): void
+	{
+		// Pre-load all images once to avoid re-parsing PNGs 14 times per image
+		$resourcesDir = __DIR__ . '/../../resources';
+		$imageFiles = glob($resourcesDir . '/*.png');
+
+		foreach ($imageFiles as $imagePath) {
+			$filename = basename($imagePath, '.png');
+			self::$cachedImages[$filename] = imagecreatefrompng($imagePath);
+		}
+	}
+
+	public static function tearDownAfterClass(): void
+	{
+		self::$cachedImages = [];
+	}
 
 	private static function getTestImagePaths(): array
 	{
@@ -120,18 +138,23 @@ class CosmeticsUnitTest extends TestCase
 			mkdir($cosmeticDir, 0755, true);
 		}
 
-		// Load fresh image
-		$originalImage = imagecreatefrompng($imagePath);
-		$this->assertNotFalse($originalImage, "Failed to load image: $imagePath");
+		// Use cached image instead of re-parsing PNG file
+		$this->assertArrayHasKey(
+			$imageName,
+			self::$cachedImages,
+			"Cached image not found: $imageName",
+		);
+		$cachedImage = self::$cachedImages[$imageName];
+		$this->assertNotFalse($cachedImage, "Failed to load cached image: $imageName");
 
-		$originalWidth = imagesx($originalImage);
-		$originalHeight = imagesy($originalImage);
+		$originalWidth = imagesx($cachedImage);
+		$originalHeight = imagesy($cachedImage);
 
 		// Create working copy with alpha support
 		$testImage = imagecreatetruecolor($originalWidth, $originalHeight);
 		imagesavealpha($testImage, true);
 		imagealphablending($testImage, false);
-		imagecopy($testImage, $originalImage, 0, 0, 0, 0, $originalWidth, $originalHeight);
+		imagecopy($testImage, $cachedImage, 0, 0, 0, 0, $originalWidth, $originalHeight);
 		imagealphablending($testImage, true);
 
 		// Apply cosmetic
@@ -153,7 +176,6 @@ class CosmeticsUnitTest extends TestCase
 		$this->assertGreaterThan(0, filesize($outputPath));
 
 		// Cleanup
-		imagedestroy($originalImage);
 		imagedestroy($testImage);
 	}
 

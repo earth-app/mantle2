@@ -5,6 +5,8 @@
 	failOnRisky="true"
 	failOnWarning="true"
 	cacheDirectory=".phpunit.cache"
+	displayDetailsOnTestsThatTriggerDeprecations="true"
+	displayDetailsOnPhpunitDeprecations="true"
 	testdox="true"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/schema/11.4.xsd"
@@ -12,7 +14,7 @@
 	<php>
 		<ini
 			name="memory_limit"
-			value="1G"
+			value="2G"
 		/>
 		<ini
 			name="max_execution_time"
