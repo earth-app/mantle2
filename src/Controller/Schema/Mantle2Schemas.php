@@ -1956,6 +1956,374 @@ class Mantle2Schemas
 		];
 	}
 
+	// Quest Schemas
+
+	/**
+	 * Schema for a quest step definition.
+	 */
+	public static function questStep(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'type' => [
+					'type' => 'string',
+					'enum' => [
+						'take_photo_location',
+						'take_photo_classification',
+						'take_photo_caption',
+						'draw_picture',
+						'take_photo_objects',
+						'attend_event',
+						'transcribe_audio',
+						'article_quiz',
+						'match_terms',
+						'order_items',
+					],
+					'description' => 'The type of quest step',
+					'example' => 'take_photo_location',
+				],
+				'description' => [
+					'type' => 'string',
+					'description' => 'Instructions for the user to complete this step',
+					'example' => 'Take a photo of a natural landscape',
+				],
+				'parameters' => [
+					'type' => 'array',
+					'description' => 'Additional parameters specific to step type',
+					'items' => [
+						'type' => 'any',
+						'description' =>
+							'Parameters can include things like required classification labels, quiz questions, event IDs, etc. depending on the step type.',
+					],
+					'examples' => [['cat', 0.7], ['tree', 0.5], ['mountain', 0.6]],
+				],
+				'reward' => [
+					'type' => 'integer',
+					'description' => 'Impact points awarded for completing this step',
+					'example' => 10,
+				],
+				'delay' => [
+					'type' => 'integer',
+					'description' => 'Optional delay in milliseconds before step becomes available',
+					'example' => 0,
+				],
+			],
+			'required' => ['type', 'description'],
+		];
+	}
+
+	/**
+	 * Schema for a complete quest definition.
+	 */
+	public static function quest(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => [
+					'type' => 'string',
+					'description' => 'Unique quest identifier',
+					'example' => 'forest_explorer',
+				],
+				'title' => [
+					'type' => 'string',
+					'description' => 'Quest title',
+					'example' => 'Forest Explorer',
+				],
+				'description' => [
+					'type' => 'string',
+					'description' => 'Detailed quest description',
+					'example' => 'Explore the forest and capture its beauty',
+				],
+				'icon' => [
+					'type' => 'string',
+					'description' => 'Icon identifier for display',
+					'example' => 'mdi:tree',
+				],
+				'rarity' => [
+					'type' => 'string',
+					'enum' => ['normal', 'rare', 'amazing', 'green'],
+					'description' => 'Rarity level of the quest',
+					'example' => 'rare',
+				],
+				'mobile_only' => [
+					'type' => 'boolean',
+					'description' => 'Whether the quest is only available on mobile devices',
+					'example' => true,
+				],
+				'steps' => [
+					'type' => 'array',
+					'items' => [
+						'oneOf' => [
+							['$ref' => '#/components/schemas/QuestStep'],
+							[
+								'type' => 'array',
+								'items' => ['$ref' => '#/components/schemas/QuestStep'],
+								'description' =>
+									'For OR conditions, an array of alternative steps where completing any one of them counts as completing this step',
+								'minItems' => 2,
+							],
+						],
+					],
+					'description' => 'Ordered list of steps to complete the quest',
+				],
+				'reward' => [
+					'type' => 'integer',
+					'description' => 'Total impact points awarded for completing the entire quest',
+					'example' => 100,
+				],
+				'permissions' => [
+					'type' => 'array',
+					'items' => ['type' => 'string'],
+					'description' => 'Required permissions to start this quest',
+					'example' => [],
+				],
+			],
+			'required' => ['id', 'title', 'description', 'icon', 'rarity', 'steps'],
+		];
+	}
+
+	/**
+	 * Schema for quest list response.
+	 */
+	public static function questsList(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'total' => [
+					'type' => 'integer',
+					'description' => 'Total number of quests',
+					'example' => 5,
+				],
+				'quests' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/Quest'],
+					'description' => 'List of available quests',
+				],
+			],
+			'required' => ['total', 'quests'],
+		];
+	}
+
+	/**
+	 * Schema for a single quest progress entry (a completed step).
+	 */
+	public static function questProgressEntry(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'type' => [
+					'type' => 'string',
+					'description' => 'The type of step that was completed',
+					'examples' => ['take_photo_location', 'attend_event', 'complete_quiz'],
+				],
+				'index' => [
+					'type' => 'integer',
+					'description' => 'The index of this step in the quest',
+					'examples' => [0, 1, 2],
+				],
+				'altIndex' => [
+					'type' => 'integer',
+					'description' => 'For OR conditions, which alternative was completed',
+					'examples' => [0, 1, 2],
+				],
+				'submittedAt' => [
+					'type' => 'integer',
+					'description' => 'Unix millisecond timestamp when step was submitted',
+					'examples' => [1677000000000, 1677001234567, 1677009999999],
+				],
+				'r2Key' => [
+					'type' => 'string',
+					'description' => 'R2 storage key for photo/image submissions (for photo types)',
+					'examples' => [
+						'users/123/quests/quest1/step_0_0.bin',
+						'users/456/quests/quest2/step_1_1.bin',
+					],
+				],
+				'lat' => [
+					'type' => 'number',
+					'description' => 'Latitude coordinate for location-based steps',
+					'examples' => [40.7128, 34.0522, 41.8781],
+				],
+				'lng' => [
+					'type' => 'number',
+					'description' => 'Longitude coordinate for location-based steps',
+					'examples' => [-74.006, -118.2437, -87.6298],
+				],
+				'eventId' => [
+					'type' => 'string',
+					'description' => 'Event ID for attendance verification steps',
+					'examples' => ['event_123', 'event_456', 'event_789'],
+				],
+				'timestamp' => [
+					'type' => 'integer',
+					'description' => 'Unix timestamp for event attendance',
+					'examples' => [1677000000, 1677001234, 1677009999],
+				],
+				'scoreKey' => [
+					'type' => 'string',
+					'description' => 'Key to look up article quiz scores',
+					'examples' => ['quiz_score_article_456', 'quiz_score_article_789'],
+				],
+				'score' => [
+					'type' => 'integer',
+					'description' => 'Quiz score (0-100) for article_quiz steps',
+					'examples' => [85, 90, 75],
+				],
+			],
+			'required' => ['type', 'index', 'submittedAt'],
+		];
+	}
+
+	/**
+	 * Schema for current user quest progress.
+	 */
+	public static function questData(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'quest' => [
+					'oneOf' => [['$ref' => '#/components/schemas/Quest'], ['type' => 'null']],
+					'description' => 'The current quest details, or null if no quest in progress',
+				],
+				'questId' => [
+					'type' => ['string', 'null'],
+					'description' => 'ID of the current quest, or null if none',
+					'example' => 'forest_explorer',
+				],
+				'currentStep' => [
+					'oneOf' => [
+						['$ref' => '#/components/schemas/QuestStep'],
+						[
+							'type' => 'array',
+							'items' => ['$ref' => '#/components/schemas/QuestStep'],
+							'description' =>
+								'For OR conditions, an array of alternative steps where completing any one of them counts as completing this step',
+							'minItems' => 2,
+						],
+						['type' => 'null'],
+					],
+					'description' =>
+						'The current step the user is on, or null if quest not started',
+				],
+				'currentStepIndex' => [
+					'type' => 'integer',
+					'description' => 'Zero-based index of the current step',
+					'example' => 2,
+				],
+				'completed' => [
+					'type' => 'boolean',
+					'description' => 'Whether the quest is fully completed',
+					'example' => false,
+				],
+				'progress' => [
+					'type' => 'array',
+					'items' => [
+						'oneOf' => [
+							['$ref' => '#/components/schemas/QuestProgressEntry'],
+							[
+								'type' => 'array',
+								'items' => ['$ref' => '#/components/schemas/QuestProgressEntry'],
+								'description' =>
+									'For OR conditions, an array of alternative progress entries where completing any one of them counts as completing this step',
+								'minItems' => 2,
+							],
+						],
+					],
+					'description' => 'Array of completed steps',
+				],
+			],
+			'required' => [
+				'quest',
+				'questId',
+				'currentStep',
+				'currentStepIndex',
+				'completed',
+				'progress',
+			],
+		];
+	}
+
+	/**
+	 * Schema for quest history response (completed quests).
+	 */
+	public static function questHistoryResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'total' => [
+					'type' => 'integer',
+					'description' => 'Total number of completed quests',
+					'example' => 3,
+				],
+				'history' => [
+					'type' => 'object',
+					'description' => 'Map of quest ID to array of quest step responses',
+					'additionalProperties' => [
+						'type' => 'object',
+						'properties' => [
+							'quest' => [
+								'oneOf' => [
+									['$ref' => '#/components/schemas/Quest'],
+									['type' => 'null'],
+								],
+							],
+							'questId' => ['type' => 'string', 'example' => 'forest_explorer'],
+							'completedAt' => [
+								'type' => 'integer',
+								'description' =>
+									'Unix millisecond timestamp when quest was completed',
+								'examples' => [1677000000000, 1677001234567, 1677009999999],
+							],
+							'progress' => [
+								'type' => 'array',
+								'items' => [
+									'oneOf' => [
+										['$ref' => '#/components/schemas/QuestProgressEntry'],
+										[
+											'type' => 'array',
+											'items' => [
+												'$ref' => '#/components/schemas/QuestProgressEntry',
+											],
+											'minItems' => 2,
+											'description' =>
+												'For quests with OR conditions, an array of alternative progress entries where completing any one of them counts as completing this step',
+										],
+									],
+								],
+								'description' => 'Array of completed steps for this quest',
+							],
+						],
+					],
+				],
+			],
+			'required' => ['total', 'history'],
+		];
+	}
+
+	/**
+	 * Schema for simple message responses.
+	 */
+	public static function messageResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'message' => [
+					'type' => 'string',
+					'description' => 'Success message',
+					'example' => 'Operation completed successfully',
+				],
+			],
+			'required' => ['message'],
+		];
+	}
+
 	/**
 	 * Get all schemas for OpenAPI components/schemas section.
 	 * This method returns all reusable schema definitions that can be
@@ -2021,6 +2389,7 @@ class Mantle2Schemas
 			'UserActivitiesSet' => self::$userActivitiesSet,
 
 			// Response objects
+			'MessageResponse' => self::messageResponse(),
 			'User' => self::user(),
 			'SignupResponse' => self::signupResponse(),
 			'LoginResponse' => self::loginResponse(),
@@ -2076,6 +2445,12 @@ class Mantle2Schemas
 			'CosmeticPurchaseResponse' => self::cosmeticPurchaseResponse(),
 			'SetCosmeticBody' => self::setCosmeticBody(),
 			'SetCosmeticBodyJson' => self::setCosmeticBodyJson(),
+			'QuestStep' => self::questStep(),
+			'Quest' => self::quest(),
+			'QuestsList' => self::questsList(),
+			'QuestProgressEntry' => self::questProgressEntry(),
+			'QuestData' => self::questData(),
+			'QuestHistoryResponse' => self::questHistoryResponse(),
 		];
 	}
 }

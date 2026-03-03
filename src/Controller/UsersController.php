@@ -1183,6 +1183,10 @@ class UsersController extends ControllerBase
 		return new JsonResponse(['message' => 'Password changed successfully'], Response::HTTP_OK);
 	}
 
+	#endregion
+
+	#region Engagement Routes
+
 	// GET /v2/users/badges
 	public function allBadges(): JsonResponse
 	{
@@ -1427,7 +1431,161 @@ class UsersController extends ControllerBase
 		);
 	}
 
-	#endregion
+	// GET /v2/users/quests
+	public function quests(Request $request): JsonResponse
+	{
+		$id = $request->query->get('id', '');
+
+		if ($id) {
+			$quest = PointsHelper::getQuest($id);
+			if (!$quest) {
+				return GeneralHelper::notFound('Quest not found');
+			}
+
+			return new JsonResponse($quest, Response::HTTP_OK);
+		}
+
+		$quests = PointsHelper::getAllQuests();
+		return new JsonResponse(
+			[
+				'total' => count($quests),
+				'quests' => $quests,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// GET /v2/users/current/quest
+	// GET /v2/users/{id}/quest
+	// GET /v2/users/{username}/quest
+	public function userQuests(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$quests = PointsHelper::getCurrentQuest($user);
+
+		return new JsonResponse($quests, Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/quest/step/{step}
+	// GET /v2/users/{id}/quest/step/{step}
+	// GET /v2/users/{username}/quest/step/{step}
+	public function userQuestStep(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+		?string $step = null,
+	): JsonResponse {
+		if (!$step) {
+			return GeneralHelper::badRequest('Missing step parameter');
+		}
+
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$questStep = PointsHelper::getCurrentQuestStepProgress($user, $step);
+		return new JsonResponse($questStep, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/quest
+	// POST /v2/users/{id}/quest
+	// POST /v2/users/{username}/quest
+	public function startQuest(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$questId = $request->query->get('quest_id');
+		$override = $request->query->getBoolean('override', false);
+		if (!$questId) {
+			return GeneralHelper::badRequest('Missing quest_id parameter');
+		}
+
+		$hasOngoing = PointsHelper::hasOngoingQuest($user);
+		if ($hasOngoing && !$override) {
+			return GeneralHelper::conflict(
+				'You already have an ongoing quest. Complete it before starting a new one or set override=true to discard the current quest and start a new one.',
+			);
+		}
+
+		$result = PointsHelper::startQuest($user, $questId);
+		if (!$result) {
+			return GeneralHelper::badRequest(
+				'Failed to start quest. Please check if the quest_id is valid and you meet the requirements.',
+			);
+		}
+
+		return new JsonResponse(['message' => 'Quest started successfully'], Response::HTTP_OK);
+	}
+
+	// <updating quests is handled on the frontend server endpoints for more security>
+
+	// DELETE /v2/users/current/quest
+	// DELETE /v2/users/{id}/quest
+	// DELETE /v2/users/{username}/quest
+	public function cancelQuest(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$hasOngoing = PointsHelper::hasOngoingQuest($user);
+		if (!$hasOngoing) {
+			return GeneralHelper::conflict('You do not have an ongoing quest to cancel.');
+		}
+
+		$result = PointsHelper::resetQuest($user);
+		if (!$result) {
+			return GeneralHelper::internalError('Failed to cancel quest. Please try again later.');
+		}
+
+		return new JsonResponse(['message' => 'Quest cancelled successfully'], Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/quest/history
+	// GET /v2/users/{id}/quest/history
+	// GET /v2/users/{username}/quest/history
+	public function questHistory(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$quests = PointsHelper::getCompletedQuests($user);
+		$responses = [];
+		foreach ($quests as $quest) {
+			$responses[$quest->id] = PointsHelper::getCompletedQuestResponses($user, $quest->id);
+		}
+
+		return new JsonResponse(
+			[
+				'total' => count($quests),
+				'history' => $responses,
+			],
+			Response::HTTP_OK,
+		);
+	}
 
 	#region Email Verification
 

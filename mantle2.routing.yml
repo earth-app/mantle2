@@ -244,6 +244,26 @@ mantle2.users.cosmetics.preview:
         description: The size of the preview image. Must be one of 32, 128, or 1024.
   methods: [GET]
 
+# Quests
+
+mantle2.users.quests:
+  path: '/v2/users/quests'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::quests'
+    _title: 'Get All Quests'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Retrieves a list of all available quests, or a specific quest if id parameter is provided
+    schema/200: '#QuestsList'
+    schema/404: Quest not found (only when id parameter is provided)
+    query:
+      id:
+        type: string
+        description: Optional quest ID to retrieve a specific quest
+  methods: [GET]
+
 #region OAuth Routes
 mantle2.users.oauth.discord:
   path: '/v2/users/oauth/discord'
@@ -1546,6 +1566,118 @@ mantle2.users.id.impact_points:
       id:
         type: string
   methods: [GET]
+
+mantle2.users.id.quest:
+  path: '/v2/users/{id}/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userQuests'
+    _title: 'Get User Quest by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the current quest progress for the user
+    schema/200: '#QuestData'
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.quest.step:
+  path: '/v2/users/{id}/quest/step/{step}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userQuestStep'
+    _title: 'Get User Quest Step by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    step: '\d+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the progress details for a specific quest step
+    schema/200: '#QuestProgressEntry'
+    schema/400: Missing step parameter
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+      step:
+        type: integer
+  methods: [GET]
+
+mantle2.users.id.quest.start:
+  path: '/v2/users/{id}/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::startQuest'
+    _title: 'Start Quest by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Quests
+    description: Start a new quest for the user. Use override=true to discard any ongoing quest
+    schema/200: '#MessageResponse'
+    schema/400: Bad request or quest already in progress
+    schema/401: Unauthorized
+    schema/409: Quest already in progress
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      quest_id:
+        type: string
+        required: true
+        description: The ID of the quest to start
+      override:
+        type: boolean
+        default: false
+        description: If true, discard any ongoing quest and start this one instead
+  methods: [POST]
+
+mantle2.users.id.quest.cancel:
+  path: '/v2/users/{id}/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::cancelQuest'
+    _title: 'Cancel Quest by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Quests
+    description: Cancel the current quest for the user
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/409: No ongoing quest to cancel
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [DELETE]
+
+mantle2.users.id.quest.history:
+  path: '/v2/users/{id}/quest/history'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::questHistory'
+    _title: 'Get User Quest History by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the list of completed quests and their responses for the user
+    schema/200: '#QuestHistoryResponse'
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
 #endregion
 #region User - By Username
 
@@ -2697,6 +2829,118 @@ mantle2.users.username.impact_points:
       username:
         type: string
   methods: [GET]
+
+mantle2.users.username.quest:
+  path: '/v2/users/{username}/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userQuests'
+    _title: 'Get User Quest by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the current quest progress for the user
+    schema/200: '#QuestData'
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.quest.step:
+  path: '/v2/users/{username}/quest/step/{step}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userQuestStep'
+    _title: 'Get User Quest Step by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    step: '\d+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the progress details for a specific quest step
+    schema/200: '#QuestProgressEntry'
+    schema/400: Missing step parameter
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+      step:
+        type: integer
+  methods: [GET]
+
+mantle2.users.username.quest.start:
+  path: '/v2/users/{username}/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::startQuest'
+    _title: 'Start Quest by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Quests
+    description: Start a new quest for the user. Use override=true to discard any ongoing quest
+    schema/200: '#MessageResponse'
+    schema/400: Bad request or quest already in progress
+    schema/401: Unauthorized
+    schema/409: Quest already in progress
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      quest_id:
+        type: string
+        required: true
+        description: The ID of the quest to start
+      override:
+        type: boolean
+        default: false
+        description: If true, discard any ongoing quest and start this one instead
+  methods: [POST]
+
+mantle2.users.username.quest.cancel:
+  path: '/v2/users/{username}/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::cancelQuest'
+    _title: 'Cancel Quest by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Quests
+    description: Cancel the current quest for the user
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/409: No ongoing quest to cancel
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [DELETE]
+
+mantle2.users.username.quest.history:
+  path: '/v2/users/{username}/quest/history'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::questHistory'
+    _title: 'Get User Quest History by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the list of completed quests and their responses for the user
+    schema/200: '#QuestHistoryResponse'
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
 #endregion
 #region User - Current User
 
@@ -3660,6 +3904,98 @@ mantle2.users.current.impact_points:
     tags: Users,Impact Points
     description: Retrieves the total impact points accumulated by the user
     schema/200: '#ImpactPoints'
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.current.quest:
+  path: '/v2/users/current/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userQuests'
+    _title: 'Get User Quest by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Retrieves the current quest progress for the user
+    schema/200: '#QuestData'
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.current.quest.step:
+  path: '/v2/users/current/quest/step/{step}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userQuestStep'
+    _title: 'Get User Quest Step by Current User'
+  requirements:
+    _access: 'TRUE'
+    step: '\d+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the progress details for a specific quest step
+    schema/200: '#QuestProgressEntry'
+    schema/400: Missing step parameter
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      step:
+        type: integer
+  methods: [GET]
+
+mantle2.users.current.quest.start:
+  path: '/v2/users/current/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::startQuest'
+    _title: 'Start Quest by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Start a new quest for the user. Use override=true to discard any ongoing quest
+    schema/200: '#MessageResponse'
+    schema/400: Bad request or quest already in progress
+    schema/401: Unauthorized
+    schema/409: Quest already in progress
+    schema/404: User not found
+    query:
+      quest_id:
+        type: string
+        required: true
+        description: The ID of the quest to start
+      override:
+        type: boolean
+        default: false
+        description: If true, discard any ongoing quest and start this one instead
+  methods: [POST]
+
+mantle2.users.current.quest.cancel:
+  path: '/v2/users/current/quest'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::cancelQuest'
+    _title: 'Cancel Quest by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Cancel the current quest for the user
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/409: No ongoing quest to cancel
+    schema/404: User not found
+  methods: [DELETE]
+
+mantle2.users.current.quest.history:
+  path: '/v2/users/current/quest/history'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::questHistory'
+    _title: 'Get User Quest History by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Retrieves the list of completed quests and their responses for the user
+    schema/200: '#QuestHistoryResponse'
+    schema/401: Unauthorized
     schema/404: User not found
   methods: [GET]
 

@@ -2,11 +2,15 @@
 
 namespace Drupal\mantle2\Service;
 
+use Detection\MobileDetect;
 use Drupal;
+use Drupal\mantle2\Custom\Quest;
+use Drupal\mantle2\Custom\QuestData;
 use Drupal\user\UserInterface;
 use Exception;
 use GdImage;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 
 class PointsHelper
 {
@@ -816,5 +820,165 @@ class PointsHelper
 		RedisHelper::set($cacheKey, ['dataUrl' => $finalResult], 3600); // Cache for 1 hour
 
 		return $finalResult;
+	}
+
+	// Quests
+
+	/** @return Quest[] */
+	public static function getAllQuests(): array
+	{
+		$cacheKey = 'cloud:quests:all';
+		return array_map(
+			fn($questData) => Quest::fromArray($questData),
+			RedisHelper::cache(
+				$cacheKey,
+				function () {
+					$data = CloudHelper::sendRequest('/v1/users/quests');
+					return is_array($data) ? $data : [];
+				},
+				14400,
+			),
+		);
+	}
+
+	public static function getQuest(string $questId): ?Quest
+	{
+		$allQuests = self::getAllQuests();
+		foreach ($allQuests as $quest) {
+			if ($quest->id === $questId) {
+				return $quest;
+			}
+		}
+		return null;
+	}
+
+	public static function getCurrentQuest(UserInterface $user): QuestData
+	{
+		$cacheKey = 'cloud:quest:' . GeneralHelper::formatId($user->id()) . ':current';
+
+		return QuestData::fromArray(
+			RedisHelper::cache(
+				$cacheKey,
+				function () use ($user) {
+					$data = CloudHelper::sendRequest(
+						'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
+					);
+
+					return is_array($data) ? $data : [];
+				},
+				300,
+			),
+		);
+	}
+
+	public static function getCurrentQuestStepProgress(UserInterface $user, int $index): array
+	{
+		$cacheKey = 'cloud:quest:' . GeneralHelper::formatId($user->id()) . ':step:' . $index;
+		return RedisHelper::cache(
+			$cacheKey,
+			function () use ($user, $index) {
+				$data = CloudHelper::sendRequest(
+					'/v1/users/quests/progress/' .
+						GeneralHelper::formatId($user->id()) .
+						'/step/' .
+						$index,
+				);
+
+				return is_array($data) ? $data : [];
+			},
+			300,
+		);
+	}
+
+	public static function hasOngoingQuest(UserInterface $user): bool
+	{
+		$currentQuest = self::getCurrentQuest($user);
+		return $currentQuest->questId !== null;
+	}
+
+	public static function startQuest(UserInterface $user, string $questId): bool
+	{
+		try {
+			CloudHelper::sendRequest(
+				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
+				'POST',
+				[
+					'quest_id' => $questId,
+				],
+			);
+
+			// Invalidate quest-related caches
+			RedisHelper::delete('cloud:quest:' . GeneralHelper::formatId($user->id()) . ':current');
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to start quest %questId for user %uid: %message',
+				[
+					'%questId' => $questId,
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+			return false;
+		}
+	}
+
+	public static function resetQuest(UserInterface $user): bool
+	{
+		try {
+			CloudHelper::sendRequest(
+				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
+				'DELETE',
+			);
+
+			// Invalidate quest-related caches
+			RedisHelper::delete('cloud:quest:' . GeneralHelper::formatId($user->id()) . ':current');
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to reset quest for user %uid: %message', [
+				'%uid' => $user->id(),
+				'%message' => $e->getMessage(),
+			]);
+			return false;
+		}
+	}
+
+	/**
+	 * @return Quest[]
+	 */
+	public static function getCompletedQuests(UserInterface $user): array
+	{
+		$cacheKey = 'cloud:quest:' . GeneralHelper::formatId($user->id()) . ':completed';
+		return array_map(
+			fn($questData) => Quest::fromArray($questData['quest'] ?? []),
+			RedisHelper::cache(
+				$cacheKey,
+				function () use ($user) {
+					$data = CloudHelper::sendRequest(
+						'/v1/users/quests/history/' . GeneralHelper::formatId($user->id()),
+					);
+					return is_array($data) ? $data : [];
+				},
+				1800,
+			),
+		);
+	}
+
+	public static function getCompletedQuestResponses(UserInterface $user, string $questId): array
+	{
+		$cacheKey = 'cloud:quest:' . GeneralHelper::formatId($user->id()) . ':history:' . $questId;
+		return RedisHelper::cache(
+			$cacheKey,
+			function () use ($user, $questId) {
+				$data = CloudHelper::sendRequest(
+					'/v1/users/quests/history/' .
+						GeneralHelper::formatId($user->id()) .
+						'/' .
+						$questId,
+				);
+				return is_array($data) ? $data : [];
+			},
+			1800,
+		);
 	}
 }
