@@ -15,7 +15,8 @@
 		"drupal/smtp": "^1.4",
 		"drupal/redis": "^1.10",
 		"sebastian/diff": "^6",
-		"drupal/openid_connect": "^3.0@alpha"
+		"drupal/openid_connect": "^3.0@alpha",
+		"mobiledetect/mobiledetectlib": "^4.8"
 	},
 	"autoload": {
 		"psr-4": {
