@@ -2077,7 +2077,7 @@ class Mantle2Schemas
 					'type' => 'array',
 					'items' => ['type' => 'string'],
 					'description' => 'Required permissions to start this quest',
-					'example' => [],
+					'examples' => [['camera', 'location'], ['record'], ['location', 'record']],
 				],
 			],
 			'required' => ['id', 'title', 'description', 'icon', 'rarity', 'steps'],
@@ -2113,68 +2113,157 @@ class Mantle2Schemas
 	public static function questProgressEntry(): array
 	{
 		return [
-			'type' => 'object',
-			'properties' => [
-				'type' => [
-					'type' => 'string',
-					'description' => 'The type of step that was completed',
-					'examples' => ['take_photo_location', 'attend_event', 'complete_quiz'],
-				],
-				'index' => [
-					'type' => 'integer',
-					'description' => 'The index of this step in the quest',
-					'examples' => [0, 1, 2],
-				],
-				'altIndex' => [
-					'type' => 'integer',
-					'description' => 'For OR conditions, which alternative was completed',
-					'examples' => [0, 1, 2],
-				],
-				'submittedAt' => [
-					'type' => 'integer',
-					'description' => 'Unix millisecond timestamp when step was submitted',
-					'examples' => [1677000000000, 1677001234567, 1677009999999],
-				],
-				'r2Key' => [
-					'type' => 'string',
-					'description' => 'R2 storage key for photo/image submissions (for photo types)',
-					'examples' => [
-						'users/123/quests/quest1/step_0_0.bin',
-						'users/456/quests/quest2/step_1_1.bin',
+			'oneOf' => [
+				[
+					'type' => 'object',
+					'properties' => [
+						'type' => [
+							'type' => 'string',
+							'description' => 'The type of step that was completed',
+							'enum' => [
+								'take_photo_location',
+								'take_photo_classification',
+								'take_photo_caption',
+								'draw_picture',
+								'take_photo_objects',
+								'transcribe_audio',
+							],
+						],
+						'index' => [
+							'type' => 'integer',
+							'description' => 'The index of this step in the quest',
+							'examples' => [0, 1, 2],
+						],
+						'altIndex' => [
+							'type' => 'integer',
+							'description' => 'For OR conditions, which alternative was completed',
+							'examples' => [0, 1, 2],
+						],
+						'submittedAt' => [
+							'type' => 'integer',
+							'description' => 'Unix millisecond timestamp when step was submitted',
+							'examples' => [1677000000000, 1677001234567, 1677009999999],
+						],
+						'r2Key' => [
+							'type' => 'string',
+							'description' => 'R2 storage key for photo/image and audio submissions',
+							'examples' => [
+								'users/123/quests/quest1/step_0_0.bin',
+								'users/456/quests/quest2/step_1_1.bin',
+							],
+						],
+						'lat' => [
+							'type' => 'number',
+							'description' => 'Latitude coordinate for location-based steps',
+							'examples' => [40.7128, 34.0522, 41.8781],
+						],
+						'lng' => [
+							'type' => 'number',
+							'description' => 'Longitude coordinate for location-based steps',
+							'examples' => [-74.006, -118.2437, -87.6298],
+						],
 					],
+					'description' =>
+						'Progress entry for photo submission or location-based steps. r2Key will be provided to retrieve the submitted image or audio. For location-related steps, lat and lng will be provided in addition.',
+					'required' => ['type', 'index', 'submittedAt', 'r2Key'],
 				],
-				'lat' => [
-					'type' => 'number',
-					'description' => 'Latitude coordinate for location-based steps',
-					'examples' => [40.7128, 34.0522, 41.8781],
+				[
+					'type' => 'object',
+					'properties' => [
+						'type' => [
+							'type' => 'string',
+							'enum' => ['attend_event'],
+						],
+						'index' => [
+							'type' => 'integer',
+							'description' => 'The index of this step in the quest',
+							'examples' => [0, 1, 2],
+						],
+						'altIndex' => [
+							'type' => 'integer',
+							'description' => 'For OR conditions, which alternative was completed',
+							'examples' => [0, 1, 2],
+						],
+						'submittedAt' => [
+							'type' => 'integer',
+							'description' => 'Unix millisecond timestamp when step was submitted',
+							'examples' => [1677000000000, 1677001234567, 1677009999999],
+						],
+						'eventId' => ['$ref' => '#/components/schemas/Id'],
+						'timestamp' => [
+							'type' => 'integer',
+							'description' => 'Unix timestamp for event attendance',
+							'examples' => [1677000000, 1677001234, 1677009999],
+						],
+					],
+					'description' =>
+						'Progress entry for attending an event. eventId can be used to look up event details. Timestamp indicates when the user attended the event.',
+					'required' => ['type', 'index', 'submittedAt', 'eventId', 'timestamp'],
 				],
-				'lng' => [
-					'type' => 'number',
-					'description' => 'Longitude coordinate for location-based steps',
-					'examples' => [-74.006, -118.2437, -87.6298],
+				[
+					'type' => 'object',
+					'properties' => [
+						'type' => [
+							'type' => 'string',
+							'enum' => ['article_quiz'],
+						],
+						'index' => [
+							'type' => 'integer',
+							'description' => 'The index of this step in the quest',
+							'examples' => [0, 1, 2],
+						],
+						'altIndex' => [
+							'type' => 'integer',
+							'description' => 'For OR conditions, which alternative was completed',
+							'examples' => [0, 1, 2],
+						],
+						'submittedAt' => [
+							'type' => 'integer',
+							'description' => 'Unix millisecond timestamp when step was submitted',
+							'examples' => [1677000000000, 1677001234567, 1677009999999],
+						],
+						'scoreKey' => [
+							'type' => 'string',
+							'description' =>
+								'Key to look up article quiz scores. It is in the format of "article:quiz_score:{userId}:{articleId}"',
+							'examples' => [
+								'article:quiz_score:123:456',
+								'article:quiz_score:789:012',
+							],
+						],
+						'score' => [
+							'type' => 'integer',
+							'description' => 'Quiz score (0-100) for article_quiz steps',
+							'examples' => [85, 90, 75],
+						],
+					],
+					'description' =>
+						'Progress entry for completing an article quiz step. scoreKey can be used to look up the article and user information for the quiz. Score indicates how well the user did on the quiz.',
+					'required' => ['type', 'index', 'submittedAt', 'scoreKey', 'score'],
 				],
-				'eventId' => [
-					'type' => 'string',
-					'description' => 'Event ID for attendance verification steps',
-					'examples' => ['event_123', 'event_456', 'event_789'],
-				],
-				'timestamp' => [
-					'type' => 'integer',
-					'description' => 'Unix timestamp for event attendance',
-					'examples' => [1677000000, 1677001234, 1677009999],
-				],
-				'scoreKey' => [
-					'type' => 'string',
-					'description' => 'Key to look up article quiz scores',
-					'examples' => ['quiz_score_article_456', 'quiz_score_article_789'],
-				],
-				'score' => [
-					'type' => 'integer',
-					'description' => 'Quiz score (0-100) for article_quiz steps',
-					'examples' => [85, 90, 75],
+				[
+					'type' => 'object',
+					'properties' => [
+						'type' => [
+							'type' => 'string',
+							'enum' => ['match_terms', 'order_items'],
+						],
+						'index' => [
+							'type' => 'integer',
+							'description' => 'The index of this step in the quest',
+							'examples' => [0, 1, 2],
+						],
+						'altIndex' => [
+							'type' => 'integer',
+							'description' => 'For OR conditions, which alternative was completed',
+							'examples' => [0, 1, 2],
+						],
+					],
+					'description' =>
+						'Fallback progress entry for steps that don\'t have specific data to record. This allows the system to at least track that the user completed the step even if we don\'t have detailed information about it.',
+					'required' => ['type', 'index'],
 				],
 			],
-			'required' => ['type', 'index', 'submittedAt'],
 		];
 	}
 
