@@ -239,6 +239,11 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		$path = $request->getPathInfo();
 		$status = $response->getStatusCode();
 
+		// never cache or invalidate on server errors
+		if ($status >= 500) {
+			return;
+		}
+
 		if (self::shouldExclude($path)) {
 			return;
 		}
