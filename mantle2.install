@@ -11,6 +11,7 @@ use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\NodeInterface;
 
@@ -1033,4 +1034,7 @@ function mantle2_install(): void
 
 	mantle2_ensure_form_display('user', 'user');
 	mantle2_ensure_form_display('comment', 'comment');
+
+	/// Clear Caches
+	RedisHelper::delete('cloud:*');
 }

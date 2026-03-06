@@ -2,7 +2,6 @@
 
 namespace Drupal\mantle2\Service;
 
-use Detection\MobileDetect;
 use Drupal;
 use Drupal\mantle2\Custom\Quest;
 use Drupal\mantle2\Custom\QuestData;
@@ -10,7 +9,6 @@ use Drupal\user\UserInterface;
 use Exception;
 use GdImage;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Request;
 
 class PointsHelper
 {

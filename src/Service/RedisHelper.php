@@ -88,18 +88,51 @@ class RedisHelper
 	}
 
 	/**
-	 * Delete key from Redis
+	 * Delete key(s) from Redis
+	 * Supports:
+	 *   - Single key: 'cloud:points:123'
+	 *   - Glob pattern: 'cloud:*'
+	 *   - Array of keys: ['key1', 'key2', 'cloud:*']
 	 */
-	public static function delete(string $key): bool
+	public static function delete(mixed $key): bool
 	{
 		try {
 			$redis = self::getRedisClient();
+			$keys_to_delete = is_array($key) ? $key : [$key];
+
 			if ($redis && !self::$use_cache_fallback) {
-				return $redis->del($key) > 0;
+				$all_keys = [];
+				foreach ($keys_to_delete as $k) {
+					if (strpos($k, '*') !== false) {
+						// Glob pattern - find all matching keys
+						$matching_keys = $redis->keys($k);
+						if (!empty($matching_keys)) {
+							$all_keys = array_merge($all_keys, $matching_keys);
+						}
+					} else {
+						// Regular key
+						$all_keys[] = $k;
+					}
+				}
+
+				// Delete all collected keys
+				if (!empty($all_keys)) {
+					return $redis->del(...$all_keys) > 0;
+				}
+				return true;
 			} else {
 				// Fallback to Drupal cache
 				$cache = Drupal::cache('mantle2');
-				$cache->delete($key);
+				foreach ($keys_to_delete as $k) {
+					if (strpos($k, '*') !== false) {
+						Drupal::logger('mantle2')->warning(
+							'Glob pattern %pattern not supported in cache fallback mode',
+							['%pattern' => $k],
+						);
+					} else {
+						$cache->delete($k);
+					}
+				}
 				return true;
 			}
 		} catch (Exception $e) {
