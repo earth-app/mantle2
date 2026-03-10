@@ -45,13 +45,31 @@ class QuestData implements JsonSerializable
 
 	public static function fromArray(array $data): self
 	{
+		// Process progress entries - can be either single entries or arrays of entries (for alt steps)
+		$progressEntries = [];
+		foreach ($data['progress'] ?? [] as $entry) {
+			if (is_array($entry)) {
+				// Check if this is an array of entries (alternative steps) or a single entry
+				if (!empty($entry) && is_array($entry[0] ?? null) && isset($entry[0]['type'])) {
+					// This is an array of entries (alternative steps)
+					$progressEntries[] = array_map(
+						fn($altEntry) => QuestProgressEntry::fromArray($altEntry),
+						$entry,
+					);
+				} elseif (isset($entry['type'])) {
+					// This is a single entry object
+					$progressEntries[] = QuestProgressEntry::fromArray($entry);
+				}
+			}
+		}
+
 		return new self(
 			isset($data['quest']) ? Quest::fromArray($data['quest']) : null,
 			$data['questId'] ?? null,
 			$data['currentStep'] ?? null,
 			$data['currentStepIndex'] ?? 0,
 			$data['completed'] ?? false,
-			array_map(fn($entry) => QuestProgressEntry::fromArray($entry), $data['progress'] ?? []),
+			$progressEntries,
 		);
 	}
 }

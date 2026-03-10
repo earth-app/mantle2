@@ -1528,7 +1528,10 @@ class UsersController extends ControllerBase
 			);
 		}
 
-		return new JsonResponse(['message' => 'Quest started successfully'], Response::HTTP_OK);
+		return new JsonResponse(
+			['message' => 'Quest started successfully'],
+			Response::HTTP_CREATED,
+		);
 	}
 
 	// <updating quests is handled on the frontend server endpoints for more security>
