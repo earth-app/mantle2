@@ -879,7 +879,7 @@ class PointsHelper
 
 				return is_array($data) ? $data : [];
 			},
-			10,
+			60,
 		);
 	}
 
@@ -952,7 +952,7 @@ class PointsHelper
 					);
 					return is_array($data) ? $data : [];
 				},
-				15,
+				120,
 			),
 		);
 	}
@@ -971,7 +971,7 @@ class PointsHelper
 				);
 				return is_array($data) ? $data : [];
 			},
-			1800,
+			3600,
 		);
 	}
 }
