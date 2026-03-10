@@ -40,6 +40,7 @@ class PointsHelper
 			'POST',
 			[
 				'points' => $points,
+				'reason' => $reason,
 			],
 		);
 
@@ -75,6 +76,7 @@ class PointsHelper
 			'POST',
 			[
 				'points' => $points,
+				'reason' => $reason,
 			],
 		);
 
@@ -108,6 +110,7 @@ class PointsHelper
 			'POST',
 			[
 				'points' => $points,
+				'reason' => $reason,
 			],
 		);
 
