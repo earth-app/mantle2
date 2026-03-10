@@ -837,7 +837,7 @@ class PointsHelper
 					$data = CloudHelper::sendRequest('/v1/users/quests');
 					return is_array($data) ? $data : [];
 				},
-				14400,
+				3600,
 			),
 		);
 	}
@@ -855,21 +855,13 @@ class PointsHelper
 
 	public static function getCurrentQuest(UserInterface $user): QuestData
 	{
-		$cacheKey = 'cloud:quest:' . GeneralHelper::formatId($user->id()) . ':current';
+		$data =
+			CloudHelper::sendRequest(
+				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
+			) ?? [];
 
-		return QuestData::fromArray(
-			RedisHelper::cache(
-				$cacheKey,
-				function () use ($user) {
-					$data = CloudHelper::sendRequest(
-						'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
-					);
-
-					return is_array($data) ? $data : [];
-				},
-				300,
-			),
-		);
+		// avoid caching since updating is not handled over mantle2
+		return QuestData::fromArray($data);
 	}
 
 	public static function getCurrentQuestStepProgress(UserInterface $user, int $index): array
@@ -887,7 +879,7 @@ class PointsHelper
 
 				return is_array($data) ? $data : [];
 			},
-			300,
+			10,
 		);
 	}
 
@@ -960,7 +952,7 @@ class PointsHelper
 					);
 					return is_array($data) ? $data : [];
 				},
-				1800,
+				15,
 			),
 		);
 	}
