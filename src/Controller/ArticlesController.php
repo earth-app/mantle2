@@ -40,6 +40,24 @@ class ArticlesController extends ControllerBase
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
+		$filter_tags = $request->query->get('tags');
+		if ($filter_tags) {
+			$filter_tags = explode(',', $filter_tags);
+			$filter_tags = array_map('trim', $filter_tags);
+			$filter_tags = array_filter($filter_tags, fn($tag) => !empty($tag));
+		}
+
+		$filter_author = $request->query->getInt('author');
+		if ($filter_author) {
+			if ($filter_author <= 0) {
+				return GeneralHelper::badRequest('Invalid author ID');
+			}
+
+			if (!User::load($filter_author)) {
+				return GeneralHelper::badRequest('Author not found');
+			}
+		}
+
 		try {
 			$storage = Drupal::entityTypeManager()->getStorage('node');
 
@@ -79,6 +97,11 @@ class ArticlesController extends ControllerBase
 							'LIKE',
 						)
 						->condition("$fc.field_article_content_value", "%$escapedSearch%", 'LIKE');
+					$query->condition($group);
+				}
+
+				if ($filter_author) {
+					$query->condition('n.field_author_id', $filter_author);
 				}
 
 				// Get total count for random
@@ -97,6 +120,14 @@ class ArticlesController extends ControllerBase
 					$group->condition('field_article_description', $search, 'CONTAINS');
 					$group->condition('field_article_content', $search, 'CONTAINS');
 					$query->condition($group);
+				}
+
+				if ($filter_tags) {
+					$query->condition('field_article_tags', $filter_tags, 'IN');
+				}
+
+				if ($filter_author) {
+					$query->condition('field_author_id', $filter_author);
 				}
 
 				$countQuery = clone $query;
@@ -126,6 +157,8 @@ class ArticlesController extends ControllerBase
 				'total' => $total,
 				'limit' => $limit,
 				'items' => $data,
+				'search' => $search,
+				'author' => $filter_author ? GeneralHelper::formatId($filter_author) : null,
 			]);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(

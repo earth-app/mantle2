@@ -13,6 +13,7 @@ use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\node\Entity\Node;
+use Drupal\user\Entity\User;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -38,6 +39,17 @@ class PromptsController extends ControllerBase
 		$page = $pagination['page'] - 1;
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
+
+		$filter_author = $request->query->getInt('author');
+		if ($filter_author) {
+			if ($filter_author <= 0) {
+				return GeneralHelper::badRequest('Invalid author ID');
+			}
+
+			if (!User::load($filter_author)) {
+				return GeneralHelper::badRequest('Author not found');
+			}
+		}
 
 		try {
 			// Handle random sorting separately using database query
@@ -97,6 +109,11 @@ class PromptsController extends ControllerBase
 					$query->condition("$fp.field_prompt_value", "%$escapedSearch%", 'LIKE');
 				}
 
+				if ($filter_author) {
+					$foa = $query->leftJoin('node__field_owner_id', 'foa', 'foa.entity_id = n.nid');
+					$query->condition("$foa.field_owner_id_value", $filter_author);
+				}
+
 				// Get total count for random
 				$countQuery = clone $query;
 				$total = (int) $countQuery->countQuery()->execute()->fetchField();
@@ -142,6 +159,10 @@ class PromptsController extends ControllerBase
 					$query->condition('field_prompt', $search, 'CONTAINS');
 				}
 
+				if ($filter_author) {
+					$query->condition('field_owner_id', $filter_author);
+				}
+
 				$countQuery = clone $query;
 				$total = (int) $countQuery->count()->execute();
 
@@ -171,6 +192,7 @@ class PromptsController extends ControllerBase
 				'items' => $data,
 				'sort' => $sort,
 				'search' => $search,
+				'author' => $filter_author ? GeneralHelper::formatId($filter_author) : null,
 			]);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(

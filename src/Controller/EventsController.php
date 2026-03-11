@@ -108,19 +108,13 @@ class EventsController extends ControllerBase
 						'fd',
 						'fd.entity_id = n.nid',
 					);
-					$ff = $query->leftJoin(
-						'node__field_event_fields',
-						'ff',
-						'ff.entity_id = n.nid',
-					);
 
 					$searchGroup = $query
 						->orConditionGroup()
 						->condition("$fn.field_event_name_value", "%$escapedSearch%", 'LIKE')
-						->condition("$fd.field_event_description_value", "%$escapedSearch%", 'LIKE')
 						->condition(
-							"$ff.field_event_fields_value",
-							'%"moho_id"%:%"' . $escapedSearch . '"%',
+							"$fd.field_event_description_value",
+							"%$escapedSearch%",
 							'LIKE',
 						);
 					$query->condition($searchGroup);

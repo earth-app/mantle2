@@ -38,6 +38,13 @@ class ActivityController extends ControllerBase
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
+		$filter_type = $request->query->get('type');
+		if ($filter_type) {
+			if (!ActivityType::tryFrom($filter_type)) {
+				return GeneralHelper::badRequest('Invalid activity type filter');
+			}
+		}
+
 		try {
 			// Handle random sorting separately using database query
 			if ($sort === 'rand') {
@@ -61,11 +68,6 @@ class ActivityController extends ControllerBase
 						'fd',
 						'fd.entity_id = n.nid',
 					);
-					$fa = $query->leftJoin(
-						'node__field_activity_aliases',
-						'fa',
-						'fa.entity_id = n.nid',
-					);
 
 					$group = $query
 						->orConditionGroup()
@@ -75,9 +77,17 @@ class ActivityController extends ControllerBase
 							"$fd.field_activity_description_value",
 							"%$escapedSearch%",
 							'LIKE',
-						)
-						->condition("$fa.field_activity_aliases_value", "%$escapedSearch%", 'LIKE');
+						);
 					$query->condition($group);
+				}
+
+				if ($filter_type) {
+					$ft = $query->leftJoin(
+						'node__field_activity_types',
+						'ft',
+						'ft.entity_id = n.nid',
+					);
+					$query->condition("$ft.field_activity_types_value", $filter_type);
 				}
 
 				// Get total count for random
@@ -100,6 +110,10 @@ class ActivityController extends ControllerBase
 						->condition('field_activity_description', $search, 'CONTAINS')
 						->condition('field_activity_aliases', $search, 'CONTAINS');
 					$query->condition($group);
+				}
+
+				if ($filter_type) {
+					$query->condition('field_activity_types', $filter_type);
 				}
 
 				$countQuery = clone $query;
@@ -132,6 +146,7 @@ class ActivityController extends ControllerBase
 				'items' => $data,
 				'sort' => $sort,
 				'search' => $search,
+				'type' => $filter_type,
 			]);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(
