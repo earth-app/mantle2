@@ -45,6 +45,10 @@ class ArticlesController extends ControllerBase
 			$filter_tags = explode(',', $filter_tags);
 			$filter_tags = array_map('trim', $filter_tags);
 			$filter_tags = array_filter($filter_tags, fn($tag) => !empty($tag));
+			$filter_tags = array_map(
+				fn($tag) => strtolower(str_replace('_', ' ', $tag)),
+				$filter_tags,
+			);
 		}
 
 		$filter_author = $request->query->getInt('author');
@@ -122,10 +126,6 @@ class ArticlesController extends ControllerBase
 					$query->condition($group);
 				}
 
-				if ($filter_tags) {
-					$query->condition('field_article_tags', $filter_tags, 'IN');
-				}
-
 				if ($filter_author) {
 					$query->condition('field_author_id', $filter_author);
 				}
@@ -143,6 +143,19 @@ class ArticlesController extends ControllerBase
 
 			/** @var Node[] $nodes */
 			$nodes = $storage->loadMultiple($nids);
+
+			if ($filter_tags) {
+				$normalize_tag = fn($tag) => strtolower(str_replace('_', ' ', $tag));
+				$nodes = array_filter($nodes, function ($node) use ($filter_tags, $normalize_tag) {
+					$stored_tags = (array) json_decode(
+						$node->get('field_article_tags')->value ?? '[]',
+						true,
+					);
+					$normalized_stored = array_map($normalize_tag, $stored_tags);
+					return !empty(array_intersect($filter_tags, $normalized_stored));
+				});
+			}
+
 			$data = [];
 			foreach ($nodes as $node) {
 				$article = ArticlesHelper::nodeToArticle($node);
