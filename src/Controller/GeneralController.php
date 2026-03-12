@@ -36,12 +36,14 @@ class GeneralController extends ControllerBase
 		$motd = $data['motd'] ?? null;
 		$icon = $data['icon'] ?? 'mdi:earth';
 		$type = $data['type'] ?? 'info';
+		$link = $data['link'] ?? null;
 
 		$ttl = RedisHelper::ttl('motd');
 		return new JsonResponse([
 			'motd' => $motd,
 			'icon' => $icon,
 			'type' => $type,
+			'link' => $link,
 			'ttl' => $ttl,
 		]);
 	}
@@ -66,6 +68,7 @@ class GeneralController extends ControllerBase
 		$ttl = $data['ttl'] ?? 86400; // default to 24 hours
 		$icon = $data['icon'] ?? 'mdi:earth';
 		$type = $data['type'] ?? 'info';
+		$link = $data['link'] ?? null;
 
 		RedisHelper::set(
 			'motd',
@@ -73,6 +76,7 @@ class GeneralController extends ControllerBase
 				'motd' => $motd,
 				'icon' => $icon,
 				'type' => $type,
+				'link' => $link,
 			],
 			$ttl,
 		);

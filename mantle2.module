@@ -4,6 +4,7 @@ use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\mantle2\Service\EventsHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 
@@ -260,6 +261,9 @@ function mantle2_cron()
 
 	// Run badge checks
 	UsersHelper::checkBadges();
+
+	// Cycle MOTD
+	GeneralHelper::cycleMotd();
 
 	Drupal::logger('mantle2')->notice('[cron] mantle2 cron executed.');
 }

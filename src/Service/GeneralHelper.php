@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Service;
 
+use Drupal;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -631,5 +632,78 @@ class GeneralHelper
 		}
 
 		return implode('', $censored);
+	}
+
+	private static array $motdCycle = [
+		[
+			'motd' => 'Welcome to The Earth App!',
+			'icon' => 'mdi:earth',
+			'type' => 'primary',
+			'link' => null,
+		],
+		[
+			'motd' => 'View the latest updates or become a contributor on our GitHub page.',
+			'icon' => 'mdi:github',
+			'type' => 'info',
+			'link' => 'https://github.com/earth-app',
+		],
+		[
+			'motd' => 'Check @cloud to peak your intellectual curiosity with novel content!',
+			'icon' => 'mdi:cloud',
+			'type' => 'secondary',
+			'link' => '/profile/@cloud',
+		],
+		[
+			'motd' => 'Support @gmitch215 by becoming a patron!',
+			'icon' => 'mdi:heart',
+			'type' => 'error',
+			'link' => 'https://patreon.com/gmitch215',
+		],
+		[
+			'motd' => 'Make sure your privacy settings are up to date in your profile.',
+			'icon' => 'mdi:shield-account',
+			'type' => 'warning',
+			'link' => '/profile',
+		],
+		[
+			'motd' => 'We value your feedback! Let us know what features you want to see next.',
+			'icon' => 'mdi:message-text',
+			'type' => 'success',
+			'link' => null,
+		],
+	];
+
+	public static function cycleMotd()
+	{
+		// skip if motd is currently set and not expired
+		$currentMotd = RedisHelper::get('motd');
+		if (!empty($currentMotd) && $currentMotd != null) {
+			return;
+		}
+
+		$idxData = RedisHelper::get('motd_cycle_index');
+		$currentIndex = 0;
+		if (is_array($idxData) && isset($idxData['value'])) {
+			$currentIndex = (int) $idxData['value'];
+		}
+
+		$cycleCount = count(self::$motdCycle);
+		if ($cycleCount === 0) {
+			return;
+		}
+
+		$selectedIndex = $currentIndex % $cycleCount;
+		$motd = self::$motdCycle[$selectedIndex];
+
+		RedisHelper::set('motd', $motd, 3600); // set MOTD with 1 hour TTL (cron hourly)
+		$nextIndex = ($selectedIndex + 1) % $cycleCount;
+		RedisHelper::set('motd_cycle_index', [
+			'value' => $nextIndex,
+		]);
+
+		Drupal::logger('mantle2')->info('[cron] cycled motd to index @index: @motd', [
+			'@index' => $selectedIndex,
+			'@motd' => $motd['motd'],
+		]);
 	}
 }
