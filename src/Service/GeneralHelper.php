@@ -703,9 +703,13 @@ class GeneralHelper
 
 		RedisHelper::set('motd', $motd, 3600); // set MOTD with 1 hour TTL (cron hourly)
 		$nextIndex = ($selectedIndex + 1) % $cycleCount;
-		RedisHelper::set('motd_cycle_index', [
-			'value' => $nextIndex,
-		]);
+		RedisHelper::set(
+			'motd_cycle_index',
+			[
+				'value' => $nextIndex,
+			],
+			3600,
+		);
 
 		Drupal::logger('mantle2')->info('[cron] cycled motd to index @index: @motd', [
 			'@index' => $selectedIndex,
