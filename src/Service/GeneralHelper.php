@@ -675,8 +675,8 @@ class GeneralHelper
 
 	public static function cycleMotd()
 	{
-		// skip if motd is currently set and not expired
-		$currentMotd = RedisHelper::get('motd');
+		// skip if motd was set manually
+		$currentMotd = RedisHelper::get('motd_set_by');
 		if (!empty($currentMotd) && $currentMotd != null) {
 			return;
 		}

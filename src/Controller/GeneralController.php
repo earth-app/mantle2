@@ -81,6 +81,8 @@ class GeneralController extends ControllerBase
 			$ttl,
 		);
 
+		RedisHelper::set('motd_set_by', ['value' => $user->id()], $ttl);
+
 		return new JsonResponse(
 			['motd' => $motd, 'ttl' => $ttl, 'icon' => $icon, 'type' => $type],
 			Response::HTTP_CREATED,
