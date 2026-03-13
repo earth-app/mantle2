@@ -2854,9 +2854,16 @@ class UsersHelper
 
 	public static function getBadge(UserInterface $user, string $badgeId): ?array
 	{
-		return CloudHelper::sendRequest(
-			'/v1/users/badges/' . GeneralHelper::formatId($user->id()) . '/' . $badgeId,
-			'GET',
+		$cacheKey = 'cloud:badge:' . GeneralHelper::formatId($user->id()) . ':' . $badgeId;
+		return RedisHelper::cache(
+			$cacheKey,
+			function () use ($user, $badgeId) {
+				return CloudHelper::sendRequest(
+					'/v1/users/badges/' . GeneralHelper::formatId($user->id()) . '/' . $badgeId,
+					'GET',
+				);
+			},
+			3600,
 		);
 	}
 
@@ -2879,6 +2886,12 @@ class UsersHelper
 				$badgeId .
 				'/grant';
 			CloudHelper::sendRequest($grantPath, 'POST');
+
+			// invalidate caches
+			RedisHelper::delete('cloud:badges:' . GeneralHelper::formatId($user->id()));
+			RedisHelper::delete(
+				'cloud:badge:' . GeneralHelper::formatId($user->id()) . ':' . $badgeId,
+			);
 		} catch (Exception $e) {
 			// silently ignore already granted (409)
 			if ($e->getCode() !== 409) {
@@ -2904,7 +2917,16 @@ class UsersHelper
 
 			// grant 'verified' badge if email is verified
 			if ($user->get('field_email_verified')->value) {
-				self::grantBadge($user, 'verified');
+				$lastCheckKey = 'badge_check_verified_' . GeneralHelper::formatId($user->id());
+
+				$lastCheck = RedisHelper::get($lastCheckKey);
+				if (!$lastCheck) {
+					if (!self::getBadge($user, 'verified')) {
+						self::grantBadge($user, 'verified');
+					}
+
+					RedisHelper::set($lastCheckKey, ['value' => true], 3600);
+				}
 			}
 		}
 	}

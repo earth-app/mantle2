@@ -676,8 +676,14 @@ class GeneralHelper
 	public static function cycleMotd()
 	{
 		// skip if motd was set manually
-		$currentMotd = RedisHelper::get('motd_set_by');
-		if (!empty($currentMotd) && $currentMotd != null) {
+		$setBy = RedisHelper::get('motd_set_by');
+		if ($setBy && isset($setBy['value'])) {
+			Drupal::logger('mantle2')->info(
+				'[cron] skipping motd cycle because it was set manually by user ID @uid',
+				[
+					'@uid' => $setBy['value'] ?? 'unknown',
+				],
+			);
 			return;
 		}
 

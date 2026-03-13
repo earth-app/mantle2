@@ -243,6 +243,7 @@ function mantle2_mail_alter(&$message)
 	}
 }
 
+// hourly implementation
 function mantle2_cron()
 {
 	// Delete expired prompts, articles, and events
