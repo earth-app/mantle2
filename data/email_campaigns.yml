@@ -65,32 +65,6 @@
     Here's your daily article from The Earth App:
 
     {article.random}
-- id: weekly_digest
-  title: Your Weekly Earth App Digest
-  filter: verifiedFilter
-  interval: 604800 # 7 days
-  body: |-
-    {user.identifier},
-
-    Here's your weekly digest from The Earth App:
-
-    ## This Week's Activities
-
-    {activity.weekly}
-
-    ## This Week's Articles
-
-    {article.weekly}
-
-    ## This Week's Prompts
-
-    {prompt.weekly}
-
-    ## This Week's Events
-
-    {event.upcoming}
-
-    Stay engaged and keep exploring!
 - id: new_activities
   title: Added Activities to Explore!
   global_filter: newActivitiesFilter
