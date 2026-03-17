@@ -24,6 +24,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class UsersHelper
 {
+	#region User Retrieval
+
 	public static function cloud(): UserInterface
 	{
 		// Load the administrator user
@@ -104,6 +106,10 @@ class UsersHelper
 
 		return null;
 	}
+
+	#endregion
+
+	#region User Endpoint Validation
 
 	public static function getVisibility(UserInterface $user): Visibility
 	{
@@ -238,6 +244,10 @@ class UsersHelper
 		return $user;
 	}
 
+	#endregion
+
+	#region User Privacy Settings
+
 	public static function isVisible(
 		UserInterface $user,
 		?UserInterface $user2,
@@ -321,7 +331,256 @@ class UsersHelper
 		$user->set('field_privacy', json_encode($privacy));
 	}
 
-	// User Fields
+	#endregion
+
+	#region User Account Tiers
+
+	public static function getAccountType(UserInterface $user): AccountType
+	{
+		$accountType = $user->get('field_account_type')->value ?? '0';
+		$type = AccountType::cases()[(int) $accountType] ?? AccountType::FREE;
+		return $type;
+	}
+
+	public static function isPro(UserInterface $user): bool
+	{
+		$accountType = self::getAccountType($user);
+		return $accountType !== AccountType::FREE;
+	}
+
+	public static function isWriter(UserInterface $user): bool
+	{
+		$accountType = self::getAccountType($user);
+		return in_array(
+			$accountType,
+			[AccountType::WRITER, AccountType::ORGANIZER, AccountType::ADMINISTRATOR],
+			true,
+		);
+	}
+
+	public static function isOrganizer(UserInterface $user): bool
+	{
+		$accountType = self::getAccountType($user);
+		return in_array($accountType, [AccountType::ORGANIZER, AccountType::ADMINISTRATOR], true);
+	}
+
+	public static function isAdmin(?UserInterface $user): bool
+	{
+		if (!$user) {
+			return false;
+		}
+
+		$accountType = self::getAccountType($user);
+
+		return $user->hasRole('administrator') ||
+			$user->hasPermission('administer users') ||
+			$accountType === AccountType::ADMINISTRATOR;
+	}
+
+	public static function createTierTrial(
+		UserInterface $user,
+		AccountType $newType,
+		int $days,
+		string $reason = '',
+	): void {
+		if ($days <= 0 || $days > 90) {
+			$days = 7; // default to 7 days if invalid
+			Drupal::logger('mantle2')->warning(
+				'Invalid trial duration %days for user %uid, defaulting to 7 days',
+				[
+					'%days' => $days,
+					'%uid' => $user->id(),
+				],
+			);
+		}
+
+		if (self::isAdmin($user)) {
+			Drupal::logger('mantle2')->warning(
+				'Attempted to create trial for administrator user %uid',
+				['%uid' => $user->id()],
+			);
+			return;
+		}
+
+		if ($newType === AccountType::ADMINISTRATOR) {
+			Drupal::logger('mantle2')->error(
+				'Attempted to create trial for administrator account (user %uid)',
+				['%uid' => $user->id()],
+			);
+			return;
+		}
+
+		// ensure not downgrading or giving trial of same type
+		$oldType = self::getAccountType($user);
+		$oldOrdinal = GeneralHelper::findOrdinal(AccountType::cases(), $oldType);
+		$newOrdinal = GeneralHelper::findOrdinal(AccountType::cases(), $newType);
+		if ($newOrdinal <= $oldOrdinal) {
+			Drupal::logger('mantle2')->warning(
+				'Attempted to create trial for user %uid with invalid type change from %old to %new',
+				[
+					'%uid' => $user->id(),
+					'%old' => $oldType->name,
+					'%new' => $newType->name,
+				],
+			);
+			return;
+		}
+
+		$trialKey = 'user:account_trial:' . $user->id();
+		$trialData = [
+			'old_type' => $oldType->name,
+			'old_type_ordinal' => $oldOrdinal,
+			'new_type' => $newType->name,
+			'new_type_ordinal' => $newOrdinal,
+		];
+
+		// keys are kept a week longer than trial duration to allow for expiration checks and notifications
+		try {
+			RedisHelper::set($trialKey, $trialData, ($days + 7) * 86400);
+			$user->set('field_account_type', $newOrdinal);
+			$user->save();
+		} catch (EntityStorageException $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to save user %uid during trial creation: %message',
+				[
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+			return;
+		}
+
+		// send notifications
+		self::addNotification(
+			$user,
+			'Account Trial Activated',
+			"Your account trial for $newType->name has been activated and will expire in $days days." .
+				($reason ? " Reason: $reason" : ''),
+			'info',
+		);
+
+		self::sendEmail(
+			$user,
+			'plan_trial',
+			[
+				'type' => ucfirst(strtolower($newType->name)),
+				'days' => $days,
+			],
+			false,
+		);
+
+		Drupal::logger('mantle2')->notice(
+			'Created account trial for user %uid: %old to %new for %days days',
+			[
+				'%uid' => $user->id(),
+				'%old' => $oldType->name,
+				'%new' => $newType->name,
+				'%days' => $days,
+			],
+		);
+	}
+
+	public static function checkAccountTrials()
+	{
+		$pattern = 'user:account_trial:*';
+		$keys = RedisHelper::list($pattern);
+
+		foreach ($keys as $trialKey) {
+			$ttl = RedisHelper::ttl($trialKey);
+			if ($ttl < 0) {
+				continue;
+			}
+
+			$trialSecondsRemaining = $ttl - 7 * 86400;
+			$trialData = RedisHelper::get($trialKey);
+			if (!$trialData) {
+				continue;
+			}
+
+			$userId = str_replace('user:account_trial:', '', $trialKey);
+			$user = User::load($userId);
+			if (!$user) {
+				continue;
+			}
+
+			$newTypeName = ucfirst(strtolower($trialData['new_type'] ?? 'PRO'));
+			$oldTypeName = ucfirst(strtolower($trialData['old_type'] ?? 'FREE'));
+			$oldTypeOrdinal = $trialData['old_type_ordinal'] ?? 0;
+
+			if ($trialSecondsRemaining > 0 && $trialSecondsRemaining <= 86400) {
+				$warningKey =
+					'user:account_trial_warning:' .
+					$user->id() .
+					':' .
+					strtolower((string) ($trialData['new_type'] ?? 'pro'));
+				if (!RedisHelper::exists($warningKey)) {
+					self::addNotification(
+						$user,
+						'Account Trial Ending Soon',
+						"Your account trial for $newTypeName will expire in 1 day.",
+						'warning',
+					);
+
+					self::sendEmail(
+						$user,
+						'plan_trial_warning',
+						[
+							'type' => $newTypeName,
+							'days' => 1,
+						],
+						false,
+					);
+
+					RedisHelper::set(
+						$warningKey,
+						['sent_at' => time(), 'trial_key' => $trialKey],
+						max(3600, $trialSecondsRemaining + 86400),
+					);
+				}
+			}
+
+			if ($trialSecondsRemaining > 0) {
+				continue;
+			}
+
+			// downgrade account back to old type and delete key
+			try {
+				$user->set('field_account_type', $oldTypeOrdinal);
+				$user->save();
+				RedisHelper::delete($trialKey);
+			} catch (EntityStorageException $e) {
+				Drupal::logger('mantle2')->error(
+					'Failed to save user %uid during trial expiration: %message',
+					[
+						'%uid' => $user->id(),
+						'%message' => $e->getMessage(),
+					],
+				);
+				continue;
+			}
+
+			self::addNotification(
+				$user,
+				'Account Trial Expired',
+				"Your account trial for $newTypeName has expired and your account has been downgraded to $oldTypeName.",
+				'warning',
+			);
+
+			self::sendEmail(
+				$user,
+				'plan_trial_expired',
+				[
+					'type' => $newTypeName,
+					'old_type' => $oldTypeName,
+				],
+				false,
+			);
+		}
+	}
+
+	#endregion
+
+	#region User Fields
 
 	public static function getFirstName(
 		UserInterface $user,
@@ -402,48 +661,6 @@ class UsersHelper
 		return self::tryVisible($country, $user, $requester, $privacy['country'] ?? 'PUBLIC');
 	}
 
-	public static function getAccountType(UserInterface $user): AccountType
-	{
-		$accountType = $user->get('field_account_type')->value ?? '0';
-		$type = AccountType::cases()[(int) $accountType] ?? AccountType::FREE;
-		return $type;
-	}
-
-	public static function isPro(UserInterface $user): bool
-	{
-		$accountType = self::getAccountType($user);
-		return $accountType !== AccountType::FREE;
-	}
-
-	public static function isWriter(UserInterface $user): bool
-	{
-		$accountType = self::getAccountType($user);
-		return in_array(
-			$accountType,
-			[AccountType::WRITER, AccountType::ORGANIZER, AccountType::ADMINISTRATOR],
-			true,
-		);
-	}
-
-	public static function isOrganizer(UserInterface $user): bool
-	{
-		$accountType = self::getAccountType($user);
-		return in_array($accountType, [AccountType::ORGANIZER, AccountType::ADMINISTRATOR], true);
-	}
-
-	public static function isAdmin(?UserInterface $user): bool
-	{
-		if (!$user) {
-			return false;
-		}
-
-		$accountType = self::getAccountType($user);
-
-		return $user->hasRole('administrator') ||
-			$user->hasPermission('administer users') ||
-			$accountType === AccountType::ADMINISTRATOR;
-	}
-
 	public static function isEmailVerified(UserInterface $user): bool
 	{
 		return (bool) $user->get('field_email_verified')->value;
@@ -458,6 +675,10 @@ class UsersHelper
 	{
 		$user->set('field_subscribed', $subscribed);
 	}
+
+	#endregion
+
+	#region User CRUD Operations
 
 	public static function serializeUser(
 		UserInterface $user,
@@ -832,6 +1053,10 @@ class UsersHelper
 		return new JsonResponse(self::serializeUser($user, $requester), Response::HTTP_OK);
 	}
 
+	#endregion
+
+	#region User Profile Photos
+
 	public static function getProfilePhoto(UserInterface $user, int $size = 1024): string
 	{
 		$selectedCosmetic = PointsHelper::getAvatarCosmetic($user);
@@ -891,7 +1116,9 @@ class UsersHelper
 		return '';
 	}
 
-	// Field Utilities
+	#endregion
+
+	#region User Friends
 
 	/**
 	 * @return UserInterface[]
@@ -1321,6 +1548,10 @@ class UsersHelper
 		}
 	}
 
+	#endregion
+
+	#region User Circles
+
 	/**
 	 * @return UserInterface[]
 	 */
@@ -1512,6 +1743,10 @@ class UsersHelper
 		}
 	}
 
+	#endregion
+
+	#region User Activities
+
 	public const MAX_ACTIVITIES = 10;
 
 	/**
@@ -1651,7 +1886,10 @@ class UsersHelper
 		return [];
 	}
 
-	// Token-based authentication helpers
+	#endregion
+
+	#region User Token Authentication
+
 	/**
 	 * Lifetime for API bearer tokens (seconds).
 	 */
@@ -1809,7 +2047,9 @@ class UsersHelper
 		$indexStore->set((string) $uid, array_values($toKeep));
 	}
 
-	// Notification System Utilities
+	#endregion
+
+	#region User Notifications
 
 	private const MAX_NOTIFICATIONS = 50;
 
@@ -2013,6 +2253,10 @@ class UsersHelper
 	{
 		self::setNotifications($user, []);
 	}
+
+	#endregion
+
+	#region User Emails
 
 	public static function sendEmailVerification(UserInterface $user): JsonResponse
 	{
@@ -2323,6 +2567,79 @@ class UsersHelper
 		);
 	}
 
+	public static function generateUnsubscribeToken(UserInterface $user): string
+	{
+		// Generate a cryptographically secure random token
+		$token = bin2hex(random_bytes(32));
+
+		$tokenKey = 'unsubscribe_token_' . $token;
+		$tokenData = [
+			'user_id' => $user->id(),
+			'email' => $user->getEmail(),
+			'timestamp' => time(),
+		];
+
+		// Store in Redis with 30 days TTL (2592000 seconds)
+		// This allows unsubscribe links to work for a reasonable period
+		RedisHelper::set($tokenKey, $tokenData, 2592000);
+
+		return $token;
+	}
+
+	public static function validateUnsubscribeToken(string $token): ?UserInterface
+	{
+		if (!$token || !ctype_xdigit($token) || strlen($token) !== 64) {
+			return null;
+		}
+
+		$tokenKey = 'unsubscribe_token_' . $token;
+		$tokenData = RedisHelper::get($tokenKey);
+
+		if (!$tokenData || !isset($tokenData['user_id'])) {
+			return null;
+		}
+
+		$user = User::load($tokenData['user_id']);
+		if (!$user) {
+			return null;
+		}
+
+		// Verify email hasn't changed (security check)
+		if ($user->getEmail() !== $tokenData['email']) {
+			return null;
+		}
+
+		return $user;
+	}
+
+	public static function revokeUnsubscribeToken(string $token): void
+	{
+		$tokenKey = 'unsubscribe_token_' . $token;
+		RedisHelper::delete($tokenKey);
+	}
+
+	public static function getUnsubscribeApiUrl(UserInterface $user): string
+	{
+		$token = self::generateUnsubscribeToken($user);
+		return 'https://api.earth-app.com/v2/users/unsubscribe?token=' . $token;
+	}
+
+	public static function getUnsubscribeUrl(): string
+	{
+		return 'https://app.earth-app.com/api/unsubscribe';
+	}
+
+	#endregion
+
+	#region User Passwords
+
+	public static function hasPassword(UserInterface $user): bool
+	{
+		// In Drupal, if a user has no password set, the password hash field is empty
+		$passField = $user->get('pass')->value;
+		return !empty($passField);
+	}
+
 	public static function changePassword(UserInterface $user, string $newPassword): bool
 	{
 		try {
@@ -2410,7 +2727,9 @@ class UsersHelper
 		return $auth->authenticate($user->getAccountName(), $password) === $user->id();
 	}
 
-	// Content Utilities
+	#endregion
+
+	#region User Content
 
 	public static function getUserPrompts(
 		UserInterface $user,
@@ -2754,77 +3073,9 @@ class UsersHelper
 		};
 	}
 
-	public static function generateUnsubscribeToken(UserInterface $user): string
-	{
-		// Generate a cryptographically secure random token
-		$token = bin2hex(random_bytes(32));
+	#endregion
 
-		$tokenKey = 'unsubscribe_token_' . $token;
-		$tokenData = [
-			'user_id' => $user->id(),
-			'email' => $user->getEmail(),
-			'timestamp' => time(),
-		];
-
-		// Store in Redis with 30 days TTL (2592000 seconds)
-		// This allows unsubscribe links to work for a reasonable period
-		RedisHelper::set($tokenKey, $tokenData, 2592000);
-
-		return $token;
-	}
-
-	public static function validateUnsubscribeToken(string $token): ?UserInterface
-	{
-		if (!$token || !ctype_xdigit($token) || strlen($token) !== 64) {
-			return null;
-		}
-
-		$tokenKey = 'unsubscribe_token_' . $token;
-		$tokenData = RedisHelper::get($tokenKey);
-
-		if (!$tokenData || !isset($tokenData['user_id'])) {
-			return null;
-		}
-
-		$user = User::load($tokenData['user_id']);
-		if (!$user) {
-			return null;
-		}
-
-		// Verify email hasn't changed (security check)
-		if ($user->getEmail() !== $tokenData['email']) {
-			return null;
-		}
-
-		return $user;
-	}
-
-	public static function revokeUnsubscribeToken(string $token): void
-	{
-		$tokenKey = 'unsubscribe_token_' . $token;
-		RedisHelper::delete($tokenKey);
-	}
-
-	public static function getUnsubscribeApiUrl(UserInterface $user): string
-	{
-		$token = self::generateUnsubscribeToken($user);
-		return 'https://api.earth-app.com/v2/users/unsubscribe?token=' . $token;
-	}
-
-	public static function getUnsubscribeUrl(): string
-	{
-		return 'https://app.earth-app.com/api/unsubscribe';
-	}
-
-	/**
-	 * Check if user has a password set (not OAuth-only account)
-	 */
-	public static function hasPassword(UserInterface $user): bool
-	{
-		// In Drupal, if a user has no password set, the password hash field is empty
-		$passField = $user->get('pass')->value;
-		return !empty($passField);
-	}
+	#region User Badges
 
 	public static function getAllBadges(): array
 	{
@@ -2930,4 +3181,6 @@ class UsersHelper
 			}
 		}
 	}
+
+	#endregion
 }

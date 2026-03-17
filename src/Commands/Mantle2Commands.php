@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Commands;
 
+use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drush\Commands\DrushCommands;
@@ -105,13 +106,13 @@ class Mantle2Commands extends DrushCommands
 	/**
 	 * Add a notification to a user.
 	 *
-	 * @command mantle2:add-notification
 	 * @param string $identifier The user identifier (ID, username with '@', or email).
 	 * @option title The title of the notification. Default: 'Test notification'.
 	 * @option type The type of the notification (info, warning, error). Default: 'info'.
 	 * @option message The message of the notification. Default: 'Test notification'.
 	 * @option link An optional link for the notification. Default: null.
 	 * @option source The source of the notification. Default: 'drush'.
+	 * @command mantle2:add-notification
 	 * @aliases m2:add-notification m2:notify
 	 * @usage drush m2:add-notification @username --title="Test" --message="This is a test notification."
 	 */
@@ -143,5 +144,47 @@ class Mantle2Commands extends DrushCommands
 			$options['source'],
 		);
 		$this->output()->writeln("Notification added to user '$identifier'.");
+	}
+
+	/**
+	 * Creates a trial of an account type plan for a user.
+	 * @param string $identifier The user identifier (ID or username with '@')
+	 * @param string $tierType The account type tier to trial (e.g. 'pro', 'premium')
+	 * @param int $days The number of days for the trial (default: 7)
+	 * @command mantle2:create-user-trial
+	 * @aliases m2:create-user-trial m2:user-trial m2:utrial
+	 * @usage drush m2:create-user-trial @username pro 14
+	 */
+	public function createUserTrial(string $identifier, string $tierType, int $days = 7)
+	{
+		$user = UsersHelper::findBy($identifier);
+		if (!$user) {
+			$this->stderr()->writeln(
+				"User '$identifier' not found. Hint: for usernames, try prefixing with '@'.",
+			);
+			return;
+		}
+
+		$type = AccountType::tryFrom(strtolower($tierType));
+		if (!$type) {
+			$this->stderr()->writeln(
+				"Invalid tier type '$tierType'. Valid types are: " .
+					implode(', ', array_map(fn($case) => $case->value, AccountType::cases())),
+			);
+			return;
+		}
+
+		$oldType = UsersHelper::getAccountType($user);
+		if ($type === $oldType) {
+			$this->stderr()->writeln(
+				"User '$identifier' is already on tier '$tierType'. No trial created.",
+			);
+			return;
+		}
+
+		UsersHelper::createTierTrial($user, $type, $days);
+		$this->output()->writeln(
+			"Created account trial for user '$identifier': $oldType->name to $type->name for $days days.",
+		);
 	}
 }

@@ -65,7 +65,7 @@ mantle2.motd.set:
   requirements:
     _access: 'TRUE'
   options:
-    tags: General
+    tags: General,Admin
     description: Set the Message of the Day (MOTD)
     schema/201: '#MotdResponse'
   methods: [POST]
@@ -603,12 +603,12 @@ mantle2.users.id.set_account_type:
   path: '/v2/users/{id}/account_type'
   defaults:
     _controller: '\Drupal\mantle2\Controller\UsersController::setAccountType'
-    _title: 'Set User Account Type by ID'
+    _title: 'Set User Account Type by ID [Admin Only]'
   requirements:
     _access: 'TRUE'
     id: '\d+'
   options:
-    tags: Users
+    tags: Users,Admin
     description: Updates user account type by their identifier
     schema/200: '#User'
     schema/401: Unauthorized
@@ -623,6 +623,36 @@ mantle2.users.id.set_account_type:
         required: true
         enum: [free, pro, writer, organizer, administrator]
         description: The account type to assign to the user
+  methods: [PUT]
+
+mantle2.users.id.create_account_type_trial:
+  path: '/v2/users/{id}/account_type/trial'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::createTypeTrial'
+    _title: 'Create User Account Type Trial by ID [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Admin
+    description: Creates a temporary account type trial by user identifier
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      type:
+        type: enum
+        required: true
+        enum: [free, pro, writer, organizer, administrator]
+        description: The account type to trial for the user
+      days:
+        type: integer
+        required: false
+        description: Trial duration in days (1-90). Default 7
   methods: [PUT]
 
 mantle2.users.id.activities:
@@ -1866,12 +1896,12 @@ mantle2.users.username.set_account_type:
   path: '/v2/users/{username}/account_type'
   defaults:
     _controller: '\Drupal\mantle2\Controller\UsersController::setAccountType'
-    _title: 'Set User Account Type by Username'
+    _title: 'Set User Account Type by Username [Admin Only]'
   requirements:
     _access: 'TRUE'
     username: '@[\w.]+'
   options:
-    tags: Users
+    tags: Users,Admin
     description: Updates user account type by their username
     schema/200: '#User'
     schema/401: Unauthorized
@@ -1886,6 +1916,36 @@ mantle2.users.username.set_account_type:
         required: true
         enum: [free, pro, writer, organizer, administrator]
         description: The account type to assign to the user
+  methods: [PUT]
+
+mantle2.users.username.create_account_type_trial:
+  path: '/v2/users/{username}/account_type/trial'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::createTypeTrial'
+    _title: 'Create User Account Type Trial by Username [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Admin
+    description: Creates a temporary account type trial by username
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      type:
+        type: enum
+        required: true
+        enum: [free, pro, writer, organizer, administrator]
+        description: The account type to trial for the user
+      days:
+        type: integer
+        required: false
+        description: Trial duration in days (1-90). Default 7
   methods: [PUT]
 
 mantle2.users.username.activities:
@@ -3100,11 +3160,11 @@ mantle2.users.current.set_account_type:
   path: '/v2/users/current/account_type'
   defaults:
     _controller: '\Drupal\mantle2\Controller\UsersController::setAccountType'
-    _title: 'Set Current User Account Type'
+    _title: 'Set Current User Account Type [Admin Only]'
   requirements:
     _access: 'TRUE'
   options:
-    tags: Users
+    tags: Users,Admin
     description: Updates user account type according to the session ID
     schema/200: '#User'
     schema/401: Unauthorized
@@ -3116,6 +3176,35 @@ mantle2.users.current.set_account_type:
         required: true
         enum: [free, pro, writer, organizer, administrator]
         description: The account type to assign to the user
+  methods: [PUT]
+
+mantle2.users.current.create_account_type_trial:
+  path: '/v2/users/current/account_type/trial'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::createTypeTrial'
+    _title: 'Create Current User Account Type Trial [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Admin
+    description: Creates a temporary account type trial according to the session ID
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    query:
+      type:
+        type: enum
+        required: true
+        enum: [free, pro, writer, organizer, administrator]
+        description: The account type to trial for the user
+      days:
+        type: integer
+        required: false
+        minimum: 1
+        maximum: 90
+        default: 7
+        description: Trial duration in days (1-90). Default 7
   methods: [PUT]
 
 mantle2.users.current.activities:
@@ -4091,7 +4180,7 @@ mantle2.activities.update:
     _access: 'TRUE'
     activityId: '[^/]+'
   options:
-    tags: Activities
+    tags: Activities,Admin
     description: Updates an existing activity
     schema/200: '#Activity'
     schema/400: Bad Request
@@ -4115,7 +4204,7 @@ mantle2.activities.delete:
     _access: 'TRUE'
     activityId: '[^/]+'
   options:
-    tags: Activities
+    tags: Activities,Admin
     description: Deletes an existing activity
     schema/204: No Content
     schema/400: Bad Request
@@ -4136,7 +4225,7 @@ mantle2.activities.create:
   requirements:
     _access: 'TRUE'
   options:
-    tags: Activities
+    tags: Activities,Admin
     description: Creates a new activity
     schema/201: '#Activity'
     schema/400: Bad Request
@@ -4926,7 +5015,7 @@ mantle2.prompts.check_expired:
   requirements:
     _access: 'TRUE'
   options:
-    tags: Prompts
+    tags: Prompts,Admin
     description: Checks for expired prompts
     schema/204: No Content
     schema/400: Bad Request
@@ -5098,7 +5187,7 @@ mantle2.articles.check_expired:
   requirements:
     _access: 'TRUE'
   options:
-    tags: Articles
+    tags: Articles,Admin
     description: Checks for expired articles
     schema/204: No Content
     schema/400: Bad Request

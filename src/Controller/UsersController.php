@@ -568,7 +568,7 @@ class UsersController extends ControllerBase
 
 		$type = AccountType::tryFrom(strtolower($account_type));
 		if (!$type) {
-			return GeneralHelper::badRequest("Invalid type: $type");
+			return GeneralHelper::badRequest("Invalid type: $account_type");
 		}
 
 		$ordinal = GeneralHelper::findOrdinal(AccountType::cases(), $type);
@@ -1181,6 +1181,57 @@ class UsersController extends ControllerBase
 
 		UsersHelper::changePassword($user, $newPassword);
 		return new JsonResponse(['message' => 'Password changed successfully'], Response::HTTP_OK);
+	}
+
+	// PUT /v2/users/current/account_type/trial
+	// PUT /v2/users/{id}/account_type/trial
+	// PUT /v2/users/{username}/account_type/trial
+	public function createTypeTrial(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		if (!$requester) {
+			return GeneralHelper::unauthorized();
+		}
+
+		if (!UsersHelper::isAdmin($requester)) {
+			return GeneralHelper::forbidden('You do not have permission to perform this action.');
+		}
+
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$account_type = $request->query->get('type');
+		if (!$account_type) {
+			return GeneralHelper::badRequest('Missing type');
+		}
+
+		$type = AccountType::tryFrom(strtolower($account_type));
+		if (!$type) {
+			return GeneralHelper::badRequest("Invalid type: $account_type");
+		}
+
+		$days = $request->query->getInt('days', 7);
+		if ($days <= 0 || $days > 90) {
+			return GeneralHelper::badRequest('Invalid days value. Must be between 1 and 90.');
+		}
+
+		UsersHelper::createTierTrial($user, $type, $days);
+		return new JsonResponse(
+			[
+				'message' =>
+					"Trial for account type '$account_type' created successfully for " .
+					$days .
+					' days.',
+				'expires_at' => time() + $days * 24 * 60 * 60,
+				'type' => $account_type,
+			],
+			Response::HTTP_OK,
+		);
 	}
 
 	#endregion

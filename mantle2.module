@@ -193,6 +193,38 @@ function mantle2_mail($key, &$message, $params)
 				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
 			}
 			break;
+		case 'plan_trial':
+			$type = $params['type'] ?? 'Pro';
+			$message['subject'] = "The Earth App - $type Trial Activated";
+
+			$days = $params['days'] ?? 7;
+			$markdown = "@$username, Your free trial for The Earth App $type has been activated.\n\n
+			**Trial Period:** {$days} days\n
+			**Time Remaining:** {$days} days\n\n
+			Enjoy exploring the features of The Earth App! If you have any questions or need assistance, feel free to contact our support team.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'plan_trial_warning':
+			$type = $params['type'] ?? 'Pro';
+			$message['subject'] = "The Earth App - $type Trial Ending Soon";
+
+			$days = $params['days'] ?? 1;
+			$markdown = "@$username, Your free trial for The Earth App $type is ending soon.\n\n
+			**Time Remaining:** {$days} day(s)\n\n
+			To keep your current features, please visit your account page to choose a plan before your trial ends.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'plan_trial_expired':
+			$type = $params['type'] ?? 'Pro';
+			$message['subject'] = "The Earth App - $type Trial Expired";
+
+			$markdown = "@$username, Your free trial for The Earth App $type has expired.\n\n
+			We hope you enjoyed trying out the features! If you have any questions or would like to continue using The Earth App, please consider subscribing to one of our plans. Visit your account page for more details.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 	}
 }
 
@@ -208,6 +240,9 @@ function mantle2_mail_alter(&$message)
 		'mantle2_email_change_confirmed',
 		'mantle2_oauth_provider_linked',
 		'mantle2_oauth_provider_unlinked',
+		'mantle2_plan_trial',
+		'mantle2_plan_trial_warning',
+		'mantle2_plan_trial_expired',
 	];
 
 	if (
@@ -260,8 +295,9 @@ function mantle2_cron()
 	// Fix malformed event dates (dates stored in seconds instead of milliseconds)
 	mantle2_fix_event_dates();
 
-	// Run badge checks
+	// Run User checks
 	UsersHelper::checkBadges();
+	UsersHelper::checkAccountTrials();
 
 	// Cycle MOTD
 	GeneralHelper::cycleMotd();
