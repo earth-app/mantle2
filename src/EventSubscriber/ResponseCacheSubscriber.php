@@ -5,6 +5,8 @@ namespace Drupal\mantle2\EventSubscriber;
 use Drupal;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
+use Drupal\redis\ClientFactory;
+use Exception;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -164,14 +166,14 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 	private static function deleteByPrefix(string $prefix): void
 	{
 		try {
-			$redis = \Drupal\redis\ClientFactory::getClient();
+			$redis = ClientFactory::getClient();
 			if ($redis) {
 				$keys = $redis->keys($prefix . '*');
 				if (!empty($keys)) {
 					$redis->del($keys);
 				}
 			}
-		} catch (\Exception $e) {
+		} catch (Exception $e) {
 			Drupal::logger('mantle2')->warning('Cache prefix deletion failed: @message', [
 				'@message' => $e->getMessage(),
 			]);
