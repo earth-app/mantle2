@@ -174,9 +174,6 @@ class CosmeticsUnitTest extends TestCase
 		// Verify saved file exists and has correct size
 		$this->assertFileExists($outputPath);
 		$this->assertGreaterThan(0, filesize($outputPath));
-
-		// Cleanup
-		imagedestroy($testImage);
 	}
 
 	#[Test]
