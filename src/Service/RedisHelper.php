@@ -167,7 +167,7 @@ class RedisHelper
 	}
 
 	/**
-	 * Get TTL for a key
+	 * Get TTL for a key in seconds
 	 */
 	public static function ttl(string $key): int
 	{
@@ -189,6 +189,32 @@ class RedisHelper
 				'%message' => $e->getMessage(),
 			]);
 			return -1;
+		}
+	}
+
+	/**
+	 * List keys by pattern (glob)
+	 * Returns an array of keys matching the pattern, or empty array if none found or on error
+	 */
+	public static function list(string $pattern): array
+	{
+		try {
+			$redis = self::getRedisClient();
+			if ($redis && !self::$use_cache_fallback) {
+				return $redis->keys($pattern);
+			} else {
+				// Fallback to Drupal cache - not supported
+				Drupal::logger('mantle2')->warning(
+					'Glob pattern %pattern not supported in cache fallback mode',
+					['%pattern' => $pattern],
+				);
+				return [];
+			}
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Redis LIST failed: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return [];
 		}
 	}
 
