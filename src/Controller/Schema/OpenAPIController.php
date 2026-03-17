@@ -130,10 +130,25 @@ class OpenAPIController extends ControllerBase
 						$type = 'integer';
 					}
 
-					$schema = ['type' => $type];
+					$schema = [
+						'type' => $type,
+						'description' => $paramSettings['description'] ?? '',
+					];
 
 					if (isset($paramSettings['enum'])) {
 						$schema['enum'] = $paramSettings['enum'];
+					}
+
+					if (isset($paramSettings['minimum'])) {
+						$schema['minimum'] = $paramSettings['minimum'];
+					}
+
+					if (isset($paramSettings['maximum'])) {
+						$schema['maximum'] = $paramSettings['maximum'];
+					}
+
+					if (isset($paramSettings['default'])) {
+						$schema['default'] = $paramSettings['default'];
 					}
 
 					$parameters[] = [
@@ -146,7 +161,10 @@ class OpenAPIController extends ControllerBase
 
 				if (array_key_exists('query', $options) && is_array($options['query'])) {
 					foreach ($options['query'] as $queryParam => $paramConfig) {
-						$schema = ['type' => $paramConfig['type'] ?? 'string'];
+						$schema = [
+							'type' => $paramConfig['type'] ?? 'string',
+							'description' => $paramConfig['description'] ?? '',
+						];
 						if (isset($paramConfig['enum'])) {
 							$schema['enum'] = $paramConfig['enum'];
 						}
