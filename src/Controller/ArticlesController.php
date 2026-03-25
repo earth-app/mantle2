@@ -332,6 +332,9 @@ class ArticlesController extends ControllerBase
 		$ocean = $body['ocean'] ?? null;
 		if ($ocean !== null) {
 			$ocean = ArticlesHelper::validateOcean($ocean, $user);
+			if ($ocean instanceof JsonResponse) {
+				return $ocean;
+			}
 		}
 
 		// Create the article node
