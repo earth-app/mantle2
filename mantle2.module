@@ -49,9 +49,10 @@ function mantle2_mail($key, &$message, $params)
 		if ($campaign) {
 			if (isset($params['processed_campaign'])) {
 				$campaign = $params['processed_campaign'];
-			} else {
-				$campaign = CampaignHelper::processCampaign($campaign, $user);
 			}
+
+			// Ensure subject/body placeholders are always resolved at send time.
+			$campaign = CampaignHelper::processCampaign($campaign, $user);
 
 			$message['subject'] = $campaign['title'];
 			$markdown = $campaign['body'];

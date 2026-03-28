@@ -14,6 +14,183 @@ class EmailCampaignsValidationTest extends TestCase
 {
 	private static array $campaigns;
 	private static string $campaignsFilePath;
+	private static array $mockStaticPlaceholderValues = [
+		'{user.id}' => '42',
+		'{user.identifier}' => '@test.user',
+		'{user.first_name}' => 'Testy',
+		'{user.last_name}' => 'McTest',
+		'{user.username}' => 'test.user',
+		'{user.email}' => 'test@example.com',
+		'{activity.recommended}' => 'Recommended activity',
+		'{activity.recommended.title}' => 'Recommended activity title',
+		'{activity.weekly}' => 'Weekly activities',
+		'{activity.last_added}' => 'Last added activities',
+		'{prompt.weekly}' => 'Weekly prompts',
+		'{article.weekly}' => 'Weekly articles',
+	];
+	private static array $mockRandomPools = [
+		'activity' => ['1', '2', '3', '4', '5'],
+		'prompt' => ['1', '2', '3', '4', '5'],
+		'article' => ['1', '2', '3', '4', '5'],
+		'event' => ['1', '2', '3', '4', '5'],
+	];
+	private static array $randomPlaceholderFamilies = [
+		'{activity.random}' => 'activity',
+		'{activity.random.title}' => 'activity',
+		'{prompt.random}' => 'prompt',
+		'{prompt.random.title}' => 'prompt',
+		'{article.random}' => 'article',
+		'{article.random.title}' => 'article',
+		'{event.upcoming}' => 'event',
+		'{event.upcoming.title}' => 'event',
+	];
+
+	private static function normalizeRepeatValue(mixed $repeatValue): bool
+	{
+		if (is_string($repeatValue)) {
+			$lower = strtolower(trim($repeatValue));
+			return !in_array($lower, ['false', '0', ''], true);
+		}
+
+		return (bool) $repeatValue;
+	}
+
+	private static function isTitlePlaceholder(string $placeholder): bool
+	{
+		return str_ends_with($placeholder, '.title}');
+	}
+
+	private static function nextMockRandomValue(
+		string $placeholder,
+		array &$randomIndices,
+		bool $repeat,
+		array &$cachedByFamily,
+	): string {
+		$family = self::$randomPlaceholderFamilies[$placeholder] ?? null;
+		if ($family === null) {
+			return '__UNRESOLVED_PLACEHOLDER__' . $placeholder;
+		}
+
+		if (!$repeat && isset($cachedByFamily[$family])) {
+			$selected = $cachedByFamily[$family];
+		} else {
+			$index = $randomIndices[$family] ?? 0;
+			$pool = self::$mockRandomPools[$family] ?? ['1'];
+			$selected = $pool[$index % count($pool)];
+			$randomIndices[$family] = $index + 1;
+
+			if (!$repeat) {
+				$cachedByFamily[$family] = $selected;
+			}
+		}
+
+		$familyLabel = ucfirst($family);
+		if (self::isTitlePlaceholder($placeholder)) {
+			return "Random {$familyLabel} title {$selected} [{$family}:{$selected}]";
+		}
+
+		return "Random {$familyLabel} {$selected} [{$family}:{$selected}]";
+	}
+
+	private static function replacePlaceholdersWithMockData(
+		string $text,
+		bool $repeat,
+		array &$randomIndices,
+		array &$cachedByFamily,
+	): string {
+		return (string) preg_replace_callback(
+			'/\{[^}]+\}/',
+			function (array $matches) use ($repeat, &$randomIndices, &$cachedByFamily): string {
+				$placeholder = $matches[0];
+				if (isset(self::$mockStaticPlaceholderValues[$placeholder])) {
+					return self::$mockStaticPlaceholderValues[$placeholder];
+				}
+
+				if (isset(self::$randomPlaceholderFamilies[$placeholder])) {
+					return self::nextMockRandomValue(
+						$placeholder,
+						$randomIndices,
+						$repeat,
+						$cachedByFamily,
+					);
+				}
+
+				// Keep an obvious marker so tests can fail with actionable output.
+				return '__UNRESOLVED_PLACEHOLDER__' . $placeholder;
+			},
+			$text,
+		);
+	}
+
+	private static function processCampaignWithMockData(array $campaign): array
+	{
+		$repeat = self::normalizeRepeatValue($campaign['repeat'] ?? true);
+		$randomIndices = [];
+		$cachedByFamily = [];
+
+		$processed = $campaign;
+		if (isset($campaign['title'])) {
+			$processed['title'] = self::replacePlaceholdersWithMockData(
+				(string) $campaign['title'],
+				$repeat,
+				$randomIndices,
+				$cachedByFamily,
+			);
+		}
+
+		if (isset($campaign['body'])) {
+			$processed['body'] = self::replacePlaceholdersWithMockData(
+				(string) $campaign['body'],
+				$repeat,
+				$randomIndices,
+				$cachedByFamily,
+			);
+		}
+
+		return $processed;
+	}
+
+	private static function extractFamilyTokens(string $text, string $family): array
+	{
+		preg_match_all('/\[' . preg_quote($family, '/') . ':(\d+)\]/', $text, $matches);
+		return $matches[1] ?? [];
+	}
+
+	private static function campaignUsesFamilyInText(string $text, string $family): bool
+	{
+		$familyPlaceholders = [
+			'activity' => ['{activity.random}', '{activity.random.title}'],
+			'prompt' => ['{prompt.random}', '{prompt.random.title}'],
+			'article' => ['{article.random}', '{article.random.title}'],
+			'event' => ['{event.upcoming}', '{event.upcoming.title}'],
+		];
+
+		$placeholders = $familyPlaceholders[$family] ?? [];
+		foreach ($placeholders as $placeholder) {
+			if (str_contains($text, $placeholder)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function countFamilyOccurrencesInText(string $text, string $family): int
+	{
+		$familyPlaceholders = [
+			'activity' => ['{activity.random}', '{activity.random.title}'],
+			'prompt' => ['{prompt.random}', '{prompt.random.title}'],
+			'article' => ['{article.random}', '{article.random.title}'],
+			'event' => ['{event.upcoming}', '{event.upcoming.title}'],
+		];
+
+		$count = 0;
+		foreach ($familyPlaceholders[$family] ?? [] as $placeholder) {
+			$count += substr_count($text, $placeholder);
+		}
+
+		return $count;
+	}
 
 	public static function setUpBeforeClass(): void
 	{
@@ -253,6 +430,76 @@ class EmailCampaignsValidationTest extends TestCase
 				$validPrefixes,
 				"Campaign '$campaignId' has invalid placeholder prefix: {$prefix} in {$placeholder}",
 			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('Campaign $campaignId placeholders should fully resolve with mock data')]
+	#[Group('mantle2/email-campaigns')]
+	#[DataProvider('campaignProvider')]
+	public function testCampaignPlaceholdersFullyResolveWithMockData(
+		string $campaignId,
+		array $campaign,
+	): void {
+		$title = (string) ($campaign['title'] ?? '');
+		$body = (string) ($campaign['body'] ?? '');
+		$repeat = self::normalizeRepeatValue($campaign['repeat'] ?? true);
+
+		$processed = self::processCampaignWithMockData($campaign);
+		$resolvedTitle = (string) ($processed['title'] ?? '');
+		$resolvedBody = (string) ($processed['body'] ?? '');
+
+		$this->assertStringNotContainsString(
+			'__UNRESOLVED_PLACEHOLDER__',
+			$resolvedTitle,
+			"Campaign '$campaignId' title has unresolved placeholders after mock replacement",
+		);
+		$this->assertStringNotContainsString(
+			'__UNRESOLVED_PLACEHOLDER__',
+			$resolvedBody,
+			"Campaign '$campaignId' body has unresolved placeholders after mock replacement",
+		);
+
+		$this->assertDoesNotMatchRegularExpression(
+			'/\{[^}]+\}/',
+			$resolvedTitle,
+			"Campaign '$campaignId' title still contains placeholder syntax after mock replacement",
+		);
+		$this->assertDoesNotMatchRegularExpression(
+			'/\{[^}]+\}/',
+			$resolvedBody,
+			"Campaign '$campaignId' body still contains placeholder syntax after mock replacement",
+		);
+
+		$families = ['activity', 'prompt', 'article', 'event'];
+		foreach ($families as $family) {
+			$titleUsesFamily = self::campaignUsesFamilyInText($title, $family);
+			$bodyUsesFamily = self::campaignUsesFamilyInText($body, $family);
+			$combinedTokens = array_unique(
+				array_merge(
+					self::extractFamilyTokens($resolvedTitle, $family),
+					self::extractFamilyTokens($resolvedBody, $family),
+				),
+			);
+
+			if (!$repeat && $titleUsesFamily && $bodyUsesFamily) {
+				$this->assertCount(
+					1,
+					$combinedTokens,
+					"Campaign '$campaignId' should reuse one {$family} token across title/body when repeat is false",
+				);
+			}
+
+			if ($repeat) {
+				$bodyOccurrences = self::countFamilyOccurrencesInText($body, $family);
+				if ($bodyOccurrences > 1) {
+					$this->assertGreaterThan(
+						1,
+						count($combinedTokens),
+						"Campaign '$campaignId' should vary {$family} tokens when repeat is true",
+					);
+				}
+			}
 		}
 	}
 

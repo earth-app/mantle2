@@ -2294,22 +2294,25 @@ class UsersHelper
 		);
 	}
 
-	public static function sendEmailCampaign(string $id, UserInterface $user): bool
-	{
+	public static function sendEmailCampaign(
+		string $id,
+		UserInterface $user,
+		array $params = [],
+	): bool {
 		$campaign = CampaignHelper::getCampaign($id);
 		if (!$campaign) {
 			Drupal::logger('mantle2')->error('Email campaign %id not found', ['%id' => $id]);
 			return false;
 		}
 
-		self::sendEmail(
-			$user,
-			'campaign:' . $id,
+		$payload = array_merge(
 			[
 				'user' => $user,
 			],
-			$campaign['unsubscribable'] ?? true,
+			$params,
 		);
+
+		self::sendEmail($user, 'campaign:' . $id, $payload, $campaign['unsubscribable'] ?? true);
 
 		return true;
 	}

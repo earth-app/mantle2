@@ -220,6 +220,11 @@ class CampaignHelper
 	public static function processCampaign(array $campaign, UserInterface $user): array
 	{
 		$repeat = $campaign['repeat'] ?? true;
+		if (is_string($repeat)) {
+			$repeat = $repeat !== 'false' && $repeat !== '0' && $repeat !== '';
+		} else {
+			$repeat = (bool) $repeat;
+		}
 
 		// fetch cached objects once if repeat is false
 		$cachedObjects = [];
