@@ -45,9 +45,11 @@
     {prompt.random}
     {prompt.random}
     {prompt.random}
+    {prompt.random}
 
     ## An Interesting Read
 
+    {article.random}
     {article.random}
     {article.random}
 
@@ -56,7 +58,8 @@
     {event.upcoming}
     {event.upcoming}
 - id: daily_article
-  title: Your Daily Earth App Article
+  title: '{article.random.title}'
+  repeat: false
   filter: verifiedFilter
   interval: 86400 # 1 day
   body: |-
@@ -65,6 +68,17 @@
     Here's your daily article from The Earth App:
 
     {article.random}
+- id: bidaily_prompt
+  title: '{prompt.random.title}'
+  repeat: false
+  filter: verifiedFilter
+  interval: 172800 # 2 days
+  body: |-
+    {user.first_name},
+
+    Here's your bi-daily prompt from The Earth App:
+
+    {prompt.random}
 - id: new_activities
   title: Added Activities to Explore!
   global_filter: newActivitiesFilter

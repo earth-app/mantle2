@@ -98,10 +98,11 @@ class CampaignHelper
 
 	// Placeholders
 
-	public static function runPlaceholders(string $text, UserInterface $user): string
-	{
-		// lazy loading placeholders for improved performance
-		$placeholders = [
+	private static function getPlaceholderCallbacks(
+		UserInterface $user,
+		array $cachedObjects = [],
+	): array {
+		return [
 			// User
 			'{user.id}' => fn() => $user->id(),
 			'{user.identifier}' => fn() => UsersHelper::getName($user, UsersHelper::cloud()) ??
@@ -120,9 +121,17 @@ class CampaignHelper
 					? self::formatActivity($activity)
 					: 'No recommended activity found';
 			},
-			'{activity.random}' => function () {
-				$activity = ActivityHelper::getRandomActivity();
+			'{activity.recommended.title}' => function () use ($user) {
+				$activity = self::getRecommendedActivity($user);
+				return $activity ? $activity->getName() : 'No recommended activity found';
+			},
+			'{activity.random}' => function () use ($cachedObjects) {
+				$activity = $cachedObjects['randomActivity'] ?? ActivityHelper::getRandomActivity();
 				return $activity ? self::formatActivity($activity) : 'No random activity found';
+			},
+			'{activity.random.title}' => function () use ($cachedObjects) {
+				$activity = $cachedObjects['randomActivity'] ?? ActivityHelper::getRandomActivity();
+				return $activity ? $activity->getName() : 'No random activity found';
 			},
 			'{activity.weekly}' => function () {
 				$activities = ActivityHelper::getRandomActivities(6);
@@ -144,9 +153,13 @@ class CampaignHelper
 				return implode("\n", array_map([self::class, 'formatActivity'], $acitvities));
 			},
 			// Prompts
-			'{prompt.random}' => function () {
-				$prompt = PromptsHelper::getRandomPrompt();
+			'{prompt.random}' => function () use ($cachedObjects) {
+				$prompt = $cachedObjects['randomPrompt'] ?? PromptsHelper::getRandomPrompt();
 				return $prompt ? self::formatPrompt($prompt) : 'No random prompt found';
+			},
+			'{prompt.random.title}' => function () use ($cachedObjects) {
+				$prompt = $cachedObjects['randomPrompt'] ?? PromptsHelper::getRandomPrompt();
+				return $prompt ? $prompt->getPrompt() : 'No random prompt found';
 			},
 			'{prompt.weekly}' => function () {
 				$prompts = PromptsHelper::getRandomPrompts();
@@ -157,9 +170,13 @@ class CampaignHelper
 				return implode("\n", array_map([self::class, 'formatPrompt'], $prompts));
 			},
 			// Articles
-			'{article.random}' => function () {
-				$article = ArticlesHelper::getRandomArticle();
+			'{article.random}' => function () use ($cachedObjects) {
+				$article = $cachedObjects['randomArticle'] ?? ArticlesHelper::getRandomArticle();
 				return $article ? self::formatArticle($article) : 'No random article found';
+			},
+			'{article.random.title}' => function () use ($cachedObjects) {
+				$article = $cachedObjects['randomArticle'] ?? ArticlesHelper::getRandomArticle();
+				return $article ? $article->getTitle() : 'No article found';
 			},
 			'{article.weekly}' => function () {
 				$articles = ArticlesHelper::getRandomArticles(3);
@@ -170,35 +187,106 @@ class CampaignHelper
 				return implode("\n", array_map([self::class, 'formatArticle'], $articles));
 			},
 			// Events
-			'{event.upcoming}' => function () use ($user) {
-				$event = EventsHelper::getRandomEvent(true);
+			'{event.upcoming}' => function () use ($cachedObjects) {
+				$event = $cachedObjects['randomEvent'] ?? EventsHelper::getRandomEvent(true);
 				return $event ? self::formatEvent($event) : 'No upcoming event found';
 			},
+			'{event.upcoming.title}' => function () use ($cachedObjects) {
+				$event = $cachedObjects['randomEvent'] ?? EventsHelper::getRandomEvent(true);
+				return $event ? $event->getName() : 'No upcoming event found';
+			},
 		];
+	}
 
-		$randomPlaceholders = [
-			'{activity.random}',
-			'{prompt.random}',
-			'{article.random}',
-			'{event.upcoming}',
-		];
+	private static array $randomPlaceholders = [
+		'{activity.random}',
+		'{activity.random.title}',
+		'{prompt.random}',
+		'{prompt.random.title}',
+		'{article.random}',
+		'{article.random.title}',
+		'{event.upcoming}',
+		'{event.upcoming.title}',
+	];
+
+	public static function runPlaceholders(
+		string $text,
+		UserInterface $user,
+		bool $repeat = true,
+	): string {
+		return self::replacePlaceholders($text, $user, $repeat);
+	}
+
+	public static function processCampaign(array $campaign, UserInterface $user): array
+	{
+		$repeat = $campaign['repeat'] ?? true;
+
+		// fetch cached objects once if repeat is false
+		$cachedObjects = [];
+		if (!$repeat) {
+			$cachedObjects = [
+				'randomPrompt' => PromptsHelper::getRandomPrompt(),
+				'randomArticle' => ArticlesHelper::getRandomArticle(),
+				'randomActivity' => ActivityHelper::getRandomActivity(),
+				'randomEvent' => EventsHelper::getRandomEvent(true),
+			];
+		}
+
+		$processed = $campaign;
+		if (isset($campaign['title'])) {
+			$processed['title'] = self::replacePlaceholders(
+				$campaign['title'],
+				$user,
+				$repeat,
+				$cachedObjects,
+			);
+		}
+		if (isset($campaign['body'])) {
+			$processed['body'] = self::replacePlaceholders(
+				$campaign['body'],
+				$user,
+				$repeat,
+				$cachedObjects,
+			);
+		}
+
+		return $processed;
+	}
+
+	private static function replacePlaceholders(
+		string $text,
+		UserInterface $user,
+		bool $repeat = true,
+		array $cachedObjects = [],
+	): string {
+		$placeholders = self::getPlaceholderCallbacks($user, $cachedObjects);
 
 		foreach ($placeholders as $placeholder => $callback) {
 			if (!str_contains($text, $placeholder)) {
 				continue;
 			}
 
-			// for random placeholders, replace one occurrence at a time
-			if (in_array($placeholder, $randomPlaceholders)) {
-				while (str_contains($text, $placeholder)) {
-					$pos = strpos($text, $placeholder);
-					if ($pos === false) {
-						break;
-					}
-					$text = substr_replace($text, $callback(), $pos, strlen($placeholder));
-				}
+			if (!$repeat) {
+				// Use cached values for all occurrences
+				$text = str_replace($placeholder, (string) $callback(), $text);
 			} else {
-				$text = str_replace($placeholder, $callback(), $text);
+				// For random placeholders, recompute each time
+				if (in_array($placeholder, self::$randomPlaceholders)) {
+					while (str_contains($text, $placeholder)) {
+						$pos = strpos($text, $placeholder);
+						if ($pos === false) {
+							break;
+						}
+						$text = substr_replace(
+							$text,
+							(string) $callback(),
+							$pos,
+							strlen($placeholder),
+						);
+					}
+				} else {
+					$text = str_replace($placeholder, (string) $callback(), $text);
+				}
 			}
 		}
 
@@ -409,6 +497,7 @@ class CampaignHelper
 				if ($shouldSend && $overdueAmount > $maxOverdueAmount) {
 					$maxOverdueAmount = $overdueAmount;
 					$mostOverdueCampaign = [
+						'campaign' => $campaign,
 						'id' => $campaignId,
 						'interval' => $interval,
 						'redis_key' => $redisKey,
@@ -418,7 +507,10 @@ class CampaignHelper
 
 			// send the most overdue campaign if found
 			if ($mostOverdueCampaign) {
-				$success = UsersHelper::sendEmailCampaign($mostOverdueCampaign['id'], $user);
+				$processedCampaign = self::processCampaign($mostOverdueCampaign['campaign'], $user);
+				$success = UsersHelper::sendEmailCampaign($mostOverdueCampaign['id'], $user, [
+					'processed_campaign' => $processedCampaign,
+				]);
 				if ($success) {
 					$ttl = $mostOverdueCampaign['interval'] + self::$variation * 2 + 86400; // Add extra day buffer
 					RedisHelper::set(
