@@ -379,7 +379,7 @@ class CampaignHelper
 		$date = date('F j, Y', $article->getCreatedAt());
 		$id = $article->getId();
 		$summary = trim($article->getContent());
-		$summary = strlen($summary) > 700 ? substr($summary, 0, 697) . '...' : $summary;
+		$summary = strlen($summary) > 1500 ? substr($summary, 0, 1497) . '...' : $summary;
 
 		return "[**$title** by @$author](https://app.earth-app.com/articles/$id)\n*$date*\n\n$summary\n";
 	}
@@ -389,7 +389,7 @@ class CampaignHelper
 		$name = $event->getName();
 		$description = trim($event->getDescription());
 		$description =
-			strlen($description) > 300 ? substr($description, 0, 297) . '...' : $description;
+			strlen($description) > 800 ? substr($description, 0, 797) . '...' : $description;
 		$id = $event->getId();
 		// Convert milliseconds to seconds for date formatting
 		$date = date('F j, Y', $event->getRawDate() / 1000);
@@ -399,7 +399,7 @@ class CampaignHelper
 
 	// Cron Job
 
-	public static $variation = 14400; // 4 hour variation
+	public static $variation = 21600; // 6 hour variation
 
 	// cron runs every hour according to drupal configuration
 	public static function runEmailCampaigns(): void
