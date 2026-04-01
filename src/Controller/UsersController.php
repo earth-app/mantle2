@@ -188,9 +188,40 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized();
 		}
 
-		// Log the user in for Drupal bookkeeping (last login, hooks) then issue API token.
+		// rate-limit successful token issuance to prevent token spam
+		$rateLimitKey = 'login_success_rate_limit_' . $account->id();
+		$lastSuccessData = RedisHelper::get($rateLimitKey);
+		if ($lastSuccessData && isset($lastSuccessData['timestamp'])) {
+			$timeSinceLastSuccess = time() - (int) $lastSuccessData['timestamp'];
+			if ($timeSinceLastSuccess < 30) {
+				$remainingTime = 30 - $timeSinceLastSuccess;
+				$response = new JsonResponse(
+					[
+						'error' => 'Login token rate limit exceeded',
+						'message' =>
+							'Login was successful, but a new session token was issued recently. Please wait ' .
+							$remainingTime .
+							' seconds before requesting another token.',
+						'retry_after' => $remainingTime,
+					],
+					Response::HTTP_CONFLICT,
+				);
+				$response->headers->set('Retry-After', (string) $remainingTime);
+				return $response;
+			}
+		}
+
+		// log the user in for bookkeeping then issue API token
 		$this->finalizeLogin($account, $request);
 		$token = UsersHelper::issueToken($account);
+		RedisHelper::set(
+			$rateLimitKey,
+			[
+				'timestamp' => time(),
+				'user_id' => $account->id(),
+			],
+			30,
+		);
 
 		$data = [
 			'id' => GeneralHelper::formatId($account->id()),
