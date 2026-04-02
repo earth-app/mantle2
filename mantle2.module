@@ -200,6 +200,28 @@ function mantle2_mail($key, &$message, $params)
 				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
 			}
 			break;
+		case 'account_disabled':
+			$message['subject'] = 'The Earth App - Account Disabled';
+
+			$actor = $params['actor'] ?? 'an administrator';
+			$time = $params['time'] ?? date(DATE_ATOM);
+			$markdown = "@$username, Your account has been disabled by {$actor}.\n\n
+			**Time:** {$time}\n\n
+			If you believe this is a mistake, please contact support to appeal this action.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'account_enabled':
+			$message['subject'] = 'The Earth App - Account Re-enabled';
+
+			$actor = $params['actor'] ?? 'an administrator';
+			$time = $params['time'] ?? date(DATE_ATOM);
+			$markdown = "@$username, Your account has been re-enabled by {$actor}.\n\n
+			**Time:** {$time}\n\n
+			You can now sign in again and continue using The Earth App.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 		case 'plan_trial':
 			$type = $params['type'] ?? 'Pro';
 			$message['subject'] = "The Earth App - $type Trial Activated";
@@ -247,6 +269,8 @@ function mantle2_mail_alter(&$message)
 		'mantle2_email_change_confirmed',
 		'mantle2_oauth_provider_linked',
 		'mantle2_oauth_provider_unlinked',
+		'mantle2_account_disabled',
+		'mantle2_account_enabled',
 		'mantle2_plan_trial',
 		'mantle2_plan_trial_warning',
 		'mantle2_plan_trial_expired',
@@ -305,6 +329,7 @@ function mantle2_cron()
 	// Run User checks
 	UsersHelper::checkBadges();
 	UsersHelper::checkAccountTrials();
+	UsersHelper::enforceDisabledAccountRestrictions();
 
 	// Cycle MOTD
 	GeneralHelper::cycleMotd();

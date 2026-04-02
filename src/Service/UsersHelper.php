@@ -114,7 +114,14 @@ class UsersHelper
 	public static function getVisibility(UserInterface $user): Visibility
 	{
 		$visibility = $user->get('field_visibility')->value ?? 1;
-		return Visibility::cases()[$visibility] ?? Visibility::UNLISTED;
+		$resolved = Visibility::cases()[(int) $visibility] ?? Visibility::UNLISTED;
+
+		// disabled accounts are never public unless they were explicitly private
+		if (self::isDisabled($user) && $resolved !== Visibility::PRIVATE) {
+			return Visibility::UNLISTED;
+		}
+
+		return $resolved;
 	}
 
 	public static function checkVisibility(
@@ -216,6 +223,10 @@ class UsersHelper
 			// First, try persistent API token lookup.
 			$user = self::getUserByToken($sessionId);
 			if ($user instanceof UserInterface) {
+				if (self::isDisabled($user)) {
+					return GeneralHelper::forbidden('Account disabled by administrator');
+				}
+
 				return $user;
 			}
 
@@ -225,6 +236,10 @@ class UsersHelper
 				return $uid ? User::load($uid) : null;
 			});
 			if ($user instanceof UserInterface) {
+				if (self::isDisabled($user)) {
+					return GeneralHelper::forbidden('Account disabled by administrator');
+				}
+
 				return $user;
 			}
 
@@ -320,6 +335,13 @@ class UsersHelper
 		foreach (self::$defaultPrivacy as $key => $value) {
 			if (!isset($privacy0[$key])) {
 				$privacy0[$key] = $value;
+			}
+		}
+
+		// disabled accounts expose only private field visibility regardless of saved preferences
+		if (self::isDisabled($user)) {
+			foreach ($privacy0 as $key => $value) {
+				$privacy0[$key] = 'PRIVATE';
 			}
 		}
 
@@ -578,6 +600,72 @@ class UsersHelper
 		}
 	}
 
+	public static function enforceDisabledAccountRestrictions(): void
+	{
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('user');
+			$uids = $storage
+				->getQuery()
+				->accessCheck(false)
+				->condition('uid', 0, '>')
+				->condition('status', 0)
+				->execute();
+
+			if (empty($uids)) {
+				return;
+			}
+
+			$users = $storage->loadMultiple($uids);
+			$processedUsers = 0;
+			$revokedTokens = 0;
+
+			foreach ($users as $user) {
+				if (!$user instanceof UserInterface) {
+					continue;
+				}
+
+				// Hard guard: root/admin accounts must never remain disabled.
+				if ($user->id() === 1 || self::isAdmin($user)) {
+					if ($user->isBlocked()) {
+						$user->activate();
+						try {
+							$user->save();
+						} catch (EntityStorageException $e) {
+							Drupal::logger('mantle2')->error(
+								'Failed to re-enable protected account %uid during cron: %message',
+								[
+									'%uid' => $user->id(),
+									'%message' => $e->getMessage(),
+								],
+							);
+						}
+					}
+
+					continue;
+				}
+
+				$processedUsers++;
+				$revokedTokens += self::revokeAllTokensForUser($user);
+				self::clearCachedUserResponses((int) $user->id());
+			}
+
+			if ($processedUsers > 0 || $revokedTokens > 0) {
+				Drupal::logger('mantle2')->notice(
+					'[cron] Enforced disabled-account restrictions for %users user(s), revoked %tokens token(s).',
+					[
+						'%users' => $processedUsers,
+						'%tokens' => $revokedTokens,
+					],
+				);
+			}
+		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
+			Drupal::logger('mantle2')->error(
+				'Failed to enforce disabled-account restrictions: %message',
+				['%message' => $e->getMessage()],
+			);
+		}
+	}
+
 	#endregion
 
 	#region User Fields
@@ -674,6 +762,38 @@ class UsersHelper
 	public static function setSubscribed(UserInterface $user, bool $subscribed): void
 	{
 		$user->set('field_subscribed', $subscribed);
+	}
+
+	public static function isDisabled(UserInterface $user): bool
+	{
+		// root user and admins cannot be disabled
+		if ($user->id() === 1 || self::isAdmin($user)) {
+			return false;
+		}
+
+		return $user->isBlocked();
+	}
+
+	public static function setDisabled(UserInterface $user, bool $disabled): void
+	{
+		if ($user->id() === 1 || self::isAdmin($user)) {
+			Drupal::logger('mantle2')->warning(
+				'Attempted to disable root user or admin account, which is not allowed: user %uid',
+				['%uid' => $user->id()],
+			);
+
+			if ($user->isBlocked()) {
+				$user->activate();
+			}
+
+			return;
+		}
+
+		if ($disabled) {
+			$user->block();
+		} else {
+			$user->activate();
+		}
 	}
 
 	#endregion
@@ -827,6 +947,7 @@ class UsersHelper
 						$requester,
 						'PRIVATE',
 					),
+					'disabled' => self::isDisabled($user), // disabled state is public
 				];
 			},
 			90, // short TTL
@@ -840,6 +961,41 @@ class UsersHelper
 	): JsonResponse {
 		if (!$data) {
 			return GeneralHelper::badRequest('Invalid user or data');
+		}
+
+		$previouslyDisabled = self::isDisabled($user);
+		$newDisabled = $previouslyDisabled;
+		$disabledChanged = false;
+
+		if (array_key_exists('disabled', $data)) {
+			if (!$requester || !self::isAdmin($requester)) {
+				return GeneralHelper::forbidden(
+					'Only administrators can update the disabled state of an account.',
+				);
+			}
+
+			if (!is_bool($data['disabled'])) {
+				return GeneralHelper::badRequest('Field disabled must be a boolean');
+			}
+
+			$newDisabled = $data['disabled'];
+
+			if ($newDisabled && ($user->id() === 1 || self::isAdmin($user))) {
+				Drupal::logger('mantle2')->warning(
+					'User %actor attempted to disable protected account %target, which is not allowed.',
+					[
+						'%actor' => $requester->id(),
+						'%target' => $user->id(),
+					],
+				);
+
+				return GeneralHelper::forbidden(
+					'Root and administrator accounts cannot be disabled.',
+				);
+			}
+
+			self::setDisabled($user, $newDisabled);
+			$disabledChanged = $previouslyDisabled !== $newDisabled;
 		}
 
 		if (isset($data['username'])) {
@@ -973,7 +1129,7 @@ class UsersHelper
 			$user->set('field_country', $country);
 		}
 
-		if (isset($data['phone_number'])) {
+		if (isset($data['visibility'])) {
 			$visibility = trim((string) $data['visibility']);
 			$visibility0 = Visibility::tryFrom($visibility);
 			if ($visibility0 === null) {
@@ -1001,6 +1157,57 @@ class UsersHelper
 		}
 
 		$responseData = self::serializeUser($user, $requester);
+
+		if ($disabledChanged) {
+			self::clearCachedUserResponses((int) $user->id());
+
+			$actorName = $requester ? $requester->getAccountName() : 'system';
+			$action = $newDisabled ? 'disabled' : 're-enabled';
+			$timestamp = date(DATE_ATOM);
+
+			Drupal::logger('mantle2')->notice('User %uid was %action by %actor at %time.', [
+				'%uid' => $user->id(),
+				'%action' => $action,
+				'%actor' => $actorName,
+				'%time' => $timestamp,
+			]);
+
+			if ($newDisabled) {
+				self::addNotification(
+					$user,
+					'Account Disabled',
+					'Your account was disabled by an administrator. Please contact support if you believe this is an error.',
+					'warning',
+				);
+
+				self::sendEmail(
+					$user,
+					'account_disabled',
+					[
+						'time' => $timestamp,
+						'actor' => $actorName,
+					],
+					false,
+				);
+			} else {
+				self::addNotification(
+					$user,
+					'Account Re-enabled',
+					'Your account was re-enabled by an administrator. You can now sign back in.',
+					'info',
+				);
+
+				self::sendEmail(
+					$user,
+					'account_enabled',
+					[
+						'time' => $timestamp,
+						'actor' => $actorName,
+					],
+					false,
+				);
+			}
+		}
 
 		// Add email change information to response if email change was initiated
 		if ($emailChangeInitiated) {
@@ -1997,6 +2204,73 @@ class UsersHelper
 			$tokens = array_values(array_filter($tokens, fn($t) => $t !== $token));
 			$indexStore->set((string) $uid, $tokens);
 		}
+	}
+
+	/**
+	 * Revoke all API bearer tokens for a user.
+	 */
+	public static function revokeAllTokensForUser(UserInterface|int $user): int
+	{
+		$uid = $user instanceof UserInterface ? (int) $user->id() : (int) $user;
+		if ($uid <= 0) {
+			return 0;
+		}
+
+		$tokenStore = Drupal::service('keyvalue')->get('mantle2_tokens');
+		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
+		$tokens = $indexStore->get((string) $uid) ?? [];
+		if (!is_array($tokens)) {
+			$tokens = [];
+		}
+
+		$revoked = 0;
+		foreach ($tokens as $token) {
+			if (!is_string($token) || $token === '') {
+				continue;
+			}
+
+			$tokenStore->delete($token);
+			$revoked++;
+		}
+
+		$indexStore->set((string) $uid, []);
+
+		return $revoked;
+	}
+
+	/**
+	 * Clear cache entries impacted by user authentication/visibility state.
+	 */
+	public static function clearCachedUserResponses(int $uid): void
+	{
+		if ($uid <= 0) {
+			return;
+		}
+
+		RedisHelper::delete([
+			'user:profile:' . $uid . ':*',
+			'user:photo:' . $uid . ':*',
+			'user:activities:' . $uid . '*',
+			'user:friends:' . $uid . ':*',
+			'user:circle:' . $uid . ':*',
+			'user:notifications:' . $uid . ':*',
+			'user:prompts:' . $uid . ':*',
+			'user:articles:' . $uid . ':*',
+			'user:events:' . $uid . ':*',
+			'user:events_attending:' . $uid . ':*',
+			'user:event_images:' . $uid . ':*',
+			'user:badges:' . $uid . '*',
+			'user:points:' . $uid . '*',
+			'user:*:req:' . $uid . '*',
+			'users:list:*',
+			'prompts:list:req:' . $uid . ':*',
+			'articles:list:req:' . $uid . ':*',
+			'events:list:req:' . $uid . ':*',
+			'event:*:req:' . $uid,
+			'article:*:req:' . $uid,
+			'prompt:*:req:' . $uid . '*',
+			'prompt:responses:*:req:' . $uid . ':*',
+		]);
 	}
 
 	/**

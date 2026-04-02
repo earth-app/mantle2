@@ -7,6 +7,7 @@ use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\redis\ClientFactory;
 use Exception;
+use Drupal\user\UserInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -192,7 +193,16 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		$params['type'] = $request->query->get('type', 'all');
 
 		$requester = UsersHelper::findByRequest($request);
-		$params['req_uid'] = $requester ? $requester->id() : 0;
+		if ($requester instanceof UserInterface) {
+			$params['req_uid'] = $requester->id();
+		} elseif (
+			$request->headers->has('Authorization') ||
+			$request->headers->has('X-Admin-Key')
+		) {
+			$params['req_uid'] = -1;
+		} else {
+			$params['req_uid'] = 0;
+		}
 
 		return $params;
 	}

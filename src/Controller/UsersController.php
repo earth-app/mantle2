@@ -95,6 +95,7 @@ class UsersController extends ControllerBase
 			} else {
 				// Use entity query for normal sorting
 				$query = $storage->getQuery()->accessCheck(false)->condition('uid', 0, '!='); // Exclude anonymous user
+				$query->condition('status', 1);
 
 				if (!$isAdmin) {
 					// only admins can see non-public users
@@ -128,6 +129,10 @@ class UsersController extends ControllerBase
 			$loaded = $storage->loadMultiple($uids);
 
 			$users = array_filter($loaded, function ($user) use ($request) {
+				if (UsersHelper::isDisabled($user)) {
+					return false;
+				}
+
 				$res = UsersHelper::checkVisibility($user, $request);
 				if ($res instanceof JsonResponse) {
 					return false;
@@ -170,8 +175,12 @@ class UsersController extends ControllerBase
 		/** @var UserInterface $account */
 		$account = UsersHelper::findByUsername($name) ?? UsersHelper::findByEmail($name);
 
-		if (!$account || $account->isBlocked()) {
+		if (!$account) {
 			return GeneralHelper::unauthorized();
+		}
+
+		if (UsersHelper::isDisabled($account)) {
+			return GeneralHelper::forbidden('Account disabled by administrator');
 		}
 
 		// Check if user has a password set (not OAuth-only user)
@@ -2290,6 +2299,9 @@ class UsersController extends ControllerBase
 		$sessionUser = null;
 		if ($sessionToken && is_string($sessionToken)) {
 			$sessionUser = UsersHelper::getUserByToken($sessionToken);
+			if ($sessionUser instanceof UserInterface && UsersHelper::isDisabled($sessionUser)) {
+				return GeneralHelper::forbidden('Account disabled by administrator');
+			}
 		}
 
 		$existingProviderUser = OAuthHelper::findByProviderSub($provider, $userData['sub']);
@@ -2411,6 +2423,10 @@ class UsersController extends ControllerBase
 				}
 			}
 		}
+		if (UsersHelper::isDisabled($user)) {
+			return GeneralHelper::forbidden('Account disabled by administrator');
+		}
+
 		$this->finalizeLogin($user, $request, true);
 		$token = UsersHelper::issueToken($user);
 

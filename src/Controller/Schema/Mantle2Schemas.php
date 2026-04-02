@@ -468,6 +468,7 @@ class Mantle2Schemas
 				'phone_number' => self::$number,
 				'visibility' => self::visibility(),
 				'subscribed' => self::$bool,
+				'disabled' => self::$bool,
 			],
 		];
 	}
@@ -899,6 +900,12 @@ class Mantle2Schemas
 					'type' => 'integer',
 					'example' => 100,
 					'description' => 'Maximum number of users allowed in the private circle',
+				],
+				'disabled' => [
+					'type' => 'boolean',
+					'description' =>
+						'Whether the account is currently disabled by an administrator',
+					'example' => false,
 				],
 				'message' => [
 					'type' => 'string',
