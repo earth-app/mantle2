@@ -84,7 +84,39 @@ class CampaignHelper
 
 	/// Global Filters
 
-	private static int $newActivityThreshold = 7;
+	private static int $newActivityThreshold = 5;
+	private static string $noRecentActivitiesFoundText = 'No recently added activities found';
+	private static string $activityLastAddedPlaceholder = '{activity.last_added}';
+
+	private static function getMissingContentPlaceholders(): array
+	{
+		$noRecommendedActivityFoundText = 'No recommended activity found';
+		$noRandomActivityFoundText = 'No random activity found';
+		$noWeeklyActivitiesFoundText = 'No weekly activities found';
+		$noRandomPromptFoundText = 'No random prompt found';
+		$noWeeklyPromptsFoundText = 'No weekly prompts found';
+		$noRandomArticleFoundText = 'No random article found';
+		$noArticleFoundText = 'No article found';
+		$noWeeklyArticlesFoundText = 'No weekly articles found';
+		$noUpcomingEventFoundText = 'No upcoming event found';
+
+		return [
+			'{activity.recommended}' => $noRecommendedActivityFoundText,
+			'{activity.recommended.title}' => $noRecommendedActivityFoundText,
+			'{activity.random}' => $noRandomActivityFoundText,
+			'{activity.random.title}' => $noRandomActivityFoundText,
+			'{activity.weekly}' => $noWeeklyActivitiesFoundText,
+			self::$activityLastAddedPlaceholder => self::$noRecentActivitiesFoundText,
+			'{prompt.random}' => $noRandomPromptFoundText,
+			'{prompt.random.title}' => $noRandomPromptFoundText,
+			'{prompt.weekly}' => $noWeeklyPromptsFoundText,
+			'{article.random}' => $noRandomArticleFoundText,
+			'{article.random.title}' => $noArticleFoundText,
+			'{article.weekly}' => $noWeeklyArticlesFoundText,
+			'{event.upcoming}' => $noUpcomingEventFoundText,
+			'{event.upcoming.title}' => $noUpcomingEventFoundText,
+		];
+	}
 
 	public static function newActivitiesFilter(): bool
 	{
@@ -115,56 +147,55 @@ class CampaignHelper
 			'{user.email}' => fn() => $user->getEmail(),
 			// Activity
 			'{activity.recommended}' => function () use ($user) {
-				/** @var Activity|null $activity */
-				$activity = self::getRecommendedActivity($user) ?? null;
-				return $activity
-					? self::formatActivity($activity)
-					: 'No recommended activity found';
+				$activity = self::getRecommendedActivity($user);
+				return $activity ? self::formatActivity($activity) : null;
 			},
 			'{activity.recommended.title}' => function () use ($user) {
 				$activity = self::getRecommendedActivity($user);
-				return $activity ? $activity->getName() : 'No recommended activity found';
+				return $activity ? $activity->getName() : null;
 			},
 			'{activity.random}' => function () use ($cachedObjects) {
 				$activity = $cachedObjects['randomActivity'] ?? ActivityHelper::getRandomActivity();
-				return $activity ? self::formatActivity($activity) : 'No random activity found';
+				return $activity ? self::formatActivity($activity) : null;
 			},
 			'{activity.random.title}' => function () use ($cachedObjects) {
 				$activity = $cachedObjects['randomActivity'] ?? ActivityHelper::getRandomActivity();
-				return $activity ? $activity->getName() : 'No random activity found';
+				return $activity ? $activity->getName() : null;
 			},
 			'{activity.weekly}' => function () {
 				$activities = ActivityHelper::getRandomActivities(6);
 				if (empty($activities)) {
-					return 'No weekly activities found';
+					return null;
 				}
 
 				return implode("\n", array_map([self::class, 'formatActivity'], $activities));
 			},
 			'{activity.last_added}' => function () {
-				$acitvities = ActivityHelper::getActivitiesCreatedInLastDays(5);
-				if (empty($acitvities)) {
-					return 'No recently added activities found';
+				$activities = ActivityHelper::getActivitiesCreatedInLastDays(
+					self::$newActivityThreshold,
+				);
+				if (empty($activities)) {
+					return null;
 				}
 
 				// limit to 10 activities
-				$acitvities = array_slice($acitvities, 0, 10);
+				$activities = array_slice($activities, 0, 10);
 
-				return implode("\n", array_map([self::class, 'formatActivity'], $acitvities));
+				return implode("\n", array_map([self::class, 'formatActivity'], $activities));
 			},
 			// Prompts
 			'{prompt.random}' => function () use ($cachedObjects) {
 				$prompt = $cachedObjects['randomPrompt'] ?? PromptsHelper::getRandomPrompt();
-				return $prompt ? self::formatPrompt($prompt) : 'No random prompt found';
+				return $prompt ? self::formatPrompt($prompt) : null;
 			},
 			'{prompt.random.title}' => function () use ($cachedObjects) {
 				$prompt = $cachedObjects['randomPrompt'] ?? PromptsHelper::getRandomPrompt();
-				return $prompt ? $prompt->getPrompt() : 'No random prompt found';
+				return $prompt ? $prompt->getPrompt() : null;
 			},
 			'{prompt.weekly}' => function () {
 				$prompts = PromptsHelper::getRandomPrompts();
 				if (empty($prompts)) {
-					return 'No weekly prompts found';
+					return null;
 				}
 
 				return implode("\n", array_map([self::class, 'formatPrompt'], $prompts));
@@ -172,16 +203,16 @@ class CampaignHelper
 			// Articles
 			'{article.random}' => function () use ($cachedObjects) {
 				$article = $cachedObjects['randomArticle'] ?? ArticlesHelper::getRandomArticle();
-				return $article ? self::formatArticle($article) : 'No random article found';
+				return $article ? self::formatArticle($article) : null;
 			},
 			'{article.random.title}' => function () use ($cachedObjects) {
 				$article = $cachedObjects['randomArticle'] ?? ArticlesHelper::getRandomArticle();
-				return $article ? $article->getTitle() : 'No article found';
+				return $article ? $article->getTitle() : null;
 			},
 			'{article.weekly}' => function () {
 				$articles = ArticlesHelper::getRandomArticles(3);
 				if (empty($articles)) {
-					return 'No weekly articles found';
+					return null;
 				}
 
 				return implode("\n", array_map([self::class, 'formatArticle'], $articles));
@@ -189,11 +220,11 @@ class CampaignHelper
 			// Events
 			'{event.upcoming}' => function () use ($cachedObjects) {
 				$event = $cachedObjects['randomEvent'] ?? EventsHelper::getRandomEvent(true);
-				return $event ? self::formatEvent($event) : 'No upcoming event found';
+				return $event ? self::formatEvent($event) : null;
 			},
 			'{event.upcoming.title}' => function () use ($cachedObjects) {
 				$event = $cachedObjects['randomEvent'] ?? EventsHelper::getRandomEvent(true);
-				return $event ? $event->getName() : 'No upcoming event found';
+				return $event ? $event->getName() : null;
 			},
 		];
 	}
@@ -258,6 +289,63 @@ class CampaignHelper
 		return $processed;
 	}
 
+	private static function campaignContainsPlaceholder(array $campaign, string $placeholder): bool
+	{
+		$titleHasPlaceholder =
+			isset($campaign['title']) &&
+			is_string($campaign['title']) &&
+			str_contains($campaign['title'], $placeholder);
+		$bodyHasPlaceholder =
+			isset($campaign['body']) &&
+			is_string($campaign['body']) &&
+			str_contains($campaign['body'], $placeholder);
+
+		return $titleHasPlaceholder || $bodyHasPlaceholder;
+	}
+
+	private static function campaignContainsText(array $campaign, string $text): bool
+	{
+		$titleHasText =
+			isset($campaign['title']) &&
+			is_string($campaign['title']) &&
+			str_contains($campaign['title'], $text);
+		$bodyHasText =
+			isset($campaign['body']) &&
+			is_string($campaign['body']) &&
+			str_contains($campaign['body'], $text);
+
+		return $titleHasText || $bodyHasText;
+	}
+
+	private static function shouldSkipCampaign(array $campaign, array $processedCampaign): bool
+	{
+		foreach (self::getMissingContentPlaceholders() as $placeholder => $missingContentText) {
+			if (!self::campaignContainsPlaceholder($campaign, $placeholder)) {
+				continue;
+			}
+
+			if (self::campaignContainsText($processedCampaign, $missingContentText)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function resolvePlaceholderValue(
+		string $placeholder,
+		callable $callback,
+		array $missingContentPlaceholders,
+	): string {
+		$callbackValue = $callback();
+
+		if ($callbackValue === null) {
+			return $missingContentPlaceholders[$placeholder] ?? '';
+		}
+
+		return (string) $callbackValue;
+	}
+
 	private static function replacePlaceholders(
 		string $text,
 		UserInterface $user,
@@ -265,6 +353,7 @@ class CampaignHelper
 		array $cachedObjects = [],
 	): string {
 		$placeholders = self::getPlaceholderCallbacks($user, $cachedObjects);
+		$missingContentPlaceholders = self::getMissingContentPlaceholders();
 
 		foreach ($placeholders as $placeholder => $callback) {
 			if (!str_contains($text, $placeholder)) {
@@ -273,7 +362,12 @@ class CampaignHelper
 
 			if (!$repeat) {
 				// Use cached values for all occurrences
-				$text = str_replace($placeholder, (string) $callback(), $text);
+				$replacement = self::resolvePlaceholderValue(
+					$placeholder,
+					$callback,
+					$missingContentPlaceholders,
+				);
+				$text = str_replace($placeholder, $replacement, $text);
 			} else {
 				// For random placeholders, recompute each time
 				if (in_array($placeholder, self::$randomPlaceholders)) {
@@ -282,15 +376,21 @@ class CampaignHelper
 						if ($pos === false) {
 							break;
 						}
-						$text = substr_replace(
-							$text,
-							(string) $callback(),
-							$pos,
-							strlen($placeholder),
+
+						$replacement = self::resolvePlaceholderValue(
+							$placeholder,
+							$callback,
+							$missingContentPlaceholders,
 						);
+						$text = substr_replace($text, $replacement, $pos, strlen($placeholder));
 					}
 				} else {
-					$text = str_replace($placeholder, (string) $callback(), $text);
+					$replacement = self::resolvePlaceholderValue(
+						$placeholder,
+						$callback,
+						$missingContentPlaceholders,
+					);
+					$text = str_replace($placeholder, $replacement, $text);
 				}
 			}
 		}
@@ -498,11 +598,29 @@ class CampaignHelper
 					}
 				}
 
+				if (!$shouldSend) {
+					continue;
+				}
+
+				$processedCampaign = self::processCampaign($campaign, $user);
+				if (self::shouldSkipCampaign($campaign, $processedCampaign)) {
+					Drupal::logger('mantle2')->info(
+						"Skipped campaign '%campaign' for user %user (@%name): missing placeholder content",
+						[
+							'%campaign' => $campaignId,
+							'%user' => $userId,
+							'%name' => $user->getAccountName(),
+						],
+					);
+					continue;
+				}
+
 				// track the most overdue campaign
-				if ($shouldSend && $overdueAmount > $maxOverdueAmount) {
+				if ($overdueAmount > $maxOverdueAmount) {
 					$maxOverdueAmount = $overdueAmount;
 					$mostOverdueCampaign = [
 						'campaign' => $campaign,
+						'processed_campaign' => $processedCampaign,
 						'id' => $campaignId,
 						'interval' => $interval,
 						'redis_key' => $redisKey,
@@ -512,7 +630,7 @@ class CampaignHelper
 
 			// send the most overdue campaign if found
 			if ($mostOverdueCampaign) {
-				$processedCampaign = self::processCampaign($mostOverdueCampaign['campaign'], $user);
+				$processedCampaign = $mostOverdueCampaign['processed_campaign'];
 				$success = UsersHelper::sendEmailCampaign($mostOverdueCampaign['id'], $user, [
 					'processed_campaign' => $processedCampaign,
 				]);

@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\mantle2\Unit;
 
+use Drupal\mantle2\Service\CampaignHelper;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
@@ -27,6 +28,22 @@ class EmailCampaignsValidationTest extends TestCase
 		'{activity.last_added}' => 'Last added activities',
 		'{prompt.weekly}' => 'Weekly prompts',
 		'{article.weekly}' => 'Weekly articles',
+	];
+	private static array $mockMissingContentPlaceholderValues = [
+		'{activity.recommended}' => 'No recommended activity found',
+		'{activity.recommended.title}' => 'No recommended activity found',
+		'{activity.random}' => 'No random activity found',
+		'{activity.random.title}' => 'No random activity found',
+		'{activity.weekly}' => 'No weekly activities found',
+		'{activity.last_added}' => 'No recently added activities found',
+		'{prompt.random}' => 'No random prompt found',
+		'{prompt.random.title}' => 'No random prompt found',
+		'{prompt.weekly}' => 'No weekly prompts found',
+		'{article.random}' => 'No random article found',
+		'{article.random.title}' => 'No article found',
+		'{article.weekly}' => 'No weekly articles found',
+		'{event.upcoming}' => 'No upcoming event found',
+		'{event.upcoming.title}' => 'No upcoming event found',
 	];
 	private static array $mockRandomPools = [
 		'activity' => ['1', '2', '3', '4', '5'],
@@ -97,13 +114,19 @@ class EmailCampaignsValidationTest extends TestCase
 		bool $repeat,
 		array &$randomIndices,
 		array &$cachedByFamily,
+		array $mockStaticPlaceholderValues,
 	): string {
 		return (string) preg_replace_callback(
 			'/\{[^}]+\}/',
-			function (array $matches) use ($repeat, &$randomIndices, &$cachedByFamily): string {
+			function (array $matches) use (
+				$repeat,
+				&$randomIndices,
+				&$cachedByFamily,
+				$mockStaticPlaceholderValues,
+			): string {
 				$placeholder = $matches[0];
-				if (isset(self::$mockStaticPlaceholderValues[$placeholder])) {
-					return self::$mockStaticPlaceholderValues[$placeholder];
+				if (isset($mockStaticPlaceholderValues[$placeholder])) {
+					return $mockStaticPlaceholderValues[$placeholder];
 				}
 
 				if (isset(self::$randomPlaceholderFamilies[$placeholder])) {
@@ -122,11 +145,15 @@ class EmailCampaignsValidationTest extends TestCase
 		);
 	}
 
-	private static function processCampaignWithMockData(array $campaign): array
-	{
+	private static function processCampaignWithMockData(
+		array $campaign,
+		?array $mockStaticPlaceholderValues = null,
+	): array {
 		$repeat = self::normalizeRepeatValue($campaign['repeat'] ?? true);
 		$randomIndices = [];
 		$cachedByFamily = [];
+		$mockStaticPlaceholderValues =
+			$mockStaticPlaceholderValues ?? self::$mockStaticPlaceholderValues;
 
 		$processed = $campaign;
 		if (isset($campaign['title'])) {
@@ -135,6 +162,7 @@ class EmailCampaignsValidationTest extends TestCase
 				$repeat,
 				$randomIndices,
 				$cachedByFamily,
+				$mockStaticPlaceholderValues,
 			);
 		}
 
@@ -144,6 +172,7 @@ class EmailCampaignsValidationTest extends TestCase
 				$repeat,
 				$randomIndices,
 				$cachedByFamily,
+				$mockStaticPlaceholderValues,
 			);
 		}
 
@@ -190,6 +219,60 @@ class EmailCampaignsValidationTest extends TestCase
 		}
 
 		return $count;
+	}
+
+	private static function getMockSkipPlaceholderValues(): array
+	{
+		return array_merge(
+			self::$mockStaticPlaceholderValues,
+			self::$mockMissingContentPlaceholderValues,
+		);
+	}
+
+	private static function campaignContainsAnyContentPlaceholder(array $campaign): bool
+	{
+		$title = (string) ($campaign['title'] ?? '');
+		$body = (string) ($campaign['body'] ?? '');
+
+		foreach (array_keys(self::$mockMissingContentPlaceholderValues) as $placeholder) {
+			if (str_contains($title, $placeholder) || str_contains($body, $placeholder)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function invokeShouldSkipCampaign(
+		array $campaign,
+		array $processedCampaign,
+	): bool {
+		$method = new \ReflectionMethod(CampaignHelper::class, 'shouldSkipCampaign');
+
+		return (bool) $method->invoke(null, $campaign, $processedCampaign);
+	}
+
+	private static function shouldSkipCampaignWithMockData(
+		array $campaign,
+		array $mockStaticPlaceholderValues,
+	): bool {
+		$processedCampaign = self::processCampaignWithMockData(
+			$campaign,
+			$mockStaticPlaceholderValues,
+		);
+
+		return self::invokeShouldSkipCampaign($campaign, $processedCampaign);
+	}
+
+	private static function getCampaignById(string $campaignId): ?array
+	{
+		foreach (self::$campaigns as $campaign) {
+			if (($campaign['id'] ?? null) === $campaignId) {
+				return $campaign;
+			}
+		}
+
+		return null;
 	}
 
 	public static function setUpBeforeClass(): void
@@ -500,6 +583,74 @@ class EmailCampaignsValidationTest extends TestCase
 					);
 				}
 			}
+		}
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'new_activities campaign should remain sendable with valid activity.last_added content',
+		),
+	]
+	#[Group('mantle2/email-campaigns')]
+	public function testNewActivitiesCampaignNotSkippedWithValidLastAddedValue(): void
+	{
+		$campaign = self::getCampaignById('new_activities');
+		$this->assertIsArray($campaign, "Campaign 'new_activities' should exist");
+
+		$this->assertFalse(
+			self::shouldSkipCampaignWithMockData($campaign, self::$mockStaticPlaceholderValues),
+			"Campaign 'new_activities' should not be skipped when {activity.last_added} resolves to content",
+		);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'Campaigns with content placeholders should be skipped when placeholders resolve to missing content',
+		),
+	]
+	#[Group('mantle2/email-campaigns')]
+	public function testCampaignsWithContentPlaceholdersAreSkippedWhenContentMissing(): void
+	{
+		$skipPlaceholderValues = self::getMockSkipPlaceholderValues();
+
+		foreach (self::$campaigns as $campaign) {
+			$campaignId = (string) ($campaign['id'] ?? 'unknown');
+
+			if (!self::campaignContainsAnyContentPlaceholder($campaign)) {
+				continue;
+			}
+
+			$this->assertTrue(
+				self::shouldSkipCampaignWithMockData($campaign, $skipPlaceholderValues),
+				"Campaign '$campaignId' should be skipped when placeholders resolve to missing content values",
+			);
+		}
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'Campaigns without content placeholders should not be skipped by missing content values',
+		),
+	]
+	#[Group('mantle2/email-campaigns')]
+	public function testCampaignsWithoutContentPlaceholdersAreNotSkippedWhenContentMissing(): void
+	{
+		$skipPlaceholderValues = self::getMockSkipPlaceholderValues();
+
+		foreach (self::$campaigns as $campaign) {
+			$campaignId = (string) ($campaign['id'] ?? 'unknown');
+
+			if (self::campaignContainsAnyContentPlaceholder($campaign)) {
+				continue;
+			}
+
+			$this->assertFalse(
+				self::shouldSkipCampaignWithMockData($campaign, $skipPlaceholderValues),
+				"Campaign '$campaignId' should not be skipped when it has no content placeholders",
+			);
 		}
 	}
 
