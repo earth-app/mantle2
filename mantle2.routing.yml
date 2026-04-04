@@ -119,6 +119,7 @@ mantle2.users.login:
     schema/200: '#LoginResponse'
     schema/400: Invalid login credentials
     schema/401: Unauthorized
+    schema/403: Account Disabled
   methods: [POST]
 
 mantle2.users.logout:
@@ -278,6 +279,7 @@ mantle2.users.oauth.discord:
     schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
+    schema/403: Account Disabled
   methods: [POST]
 
 mantle2.users.oauth.github:
@@ -293,6 +295,7 @@ mantle2.users.oauth.github:
     schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
+    schema/403: Account Disabled
   methods: [POST]
 
 mantle2.users.oauth.microsoft:
@@ -308,6 +311,7 @@ mantle2.users.oauth.microsoft:
     schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
+    schema/403: Account Disabled
   methods: [POST]
 
 mantle2.users.oauth.facebook:
@@ -323,6 +327,7 @@ mantle2.users.oauth.facebook:
     schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
+    schema/403: Account Disabled
   methods: [POST]
 
 mantle2.users.oauth.google:
@@ -338,6 +343,7 @@ mantle2.users.oauth.google:
     schema/200: '#LoginResponse'
     schema/400: Invalid or missing id_token
     schema/401: Invalid OAuth token
+    schema/403: Account Disabled
   methods: [POST]
 
 mantle2.users.oauth.discord.unlink:
@@ -449,7 +455,7 @@ mantle2.users.id.patch:
     description: Updates user information by their identifier
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     body/description: User data to update
     body/schema: userUpdateJson()
@@ -470,7 +476,7 @@ mantle2.users.id.delete:
     tags: Users
     schema/204: User deleted successfully
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -490,7 +496,7 @@ mantle2.users.id.patch_field_privacy:
     description: Updates user field privacy settings by their identifier
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     body/description: User privacy field options
     body/schema: userFieldPrivacyJson()
@@ -511,6 +517,7 @@ mantle2.users.id.get_profile_photo:
     tags: Users
     description: Retrieves the profile photo of a user by their identifier
     schema/200/type: image/png
+    schema/403: Account Disabled
     schema/404: User not found
     parameters:
       id:
@@ -536,7 +543,7 @@ mantle2.users.id.set_profile_photo:
     description: Updates the profile photo of a user by their identifier
     schema/200/type: image/png
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -612,7 +619,7 @@ mantle2.users.id.set_account_type:
     description: Updates user account type by their identifier
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -638,7 +645,7 @@ mantle2.users.id.create_account_type_trial:
     description: Creates a temporary account type trial by user identifier
     schema/200: '#MessageResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -688,7 +695,7 @@ mantle2.users.id.activities.set:
     body/schema: activitiesIdList()
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -708,7 +715,7 @@ mantle2.users.id.activities.add:
     description: Updates user activities by their identifier
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Activity already added to user
     query:
@@ -734,7 +741,7 @@ mantle2.users.id.activities.remove:
     description: Removes a user activity by their identifier
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or activity not found
     parameters:
       id:
@@ -816,7 +823,7 @@ mantle2.users.id.friends.add:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Friend already added
     parameters:
@@ -842,7 +849,7 @@ mantle2.users.id.friends.remove:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or friend not found
     schema/409: Friend is not added
     parameters:
@@ -903,7 +910,7 @@ mantle2.users.id.circle.add:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Friend already added
     parameters:
@@ -929,7 +936,7 @@ mantle2.users.id.circle.remove:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or friend not found
     schema/409: Friend is not added
     parameters:
@@ -955,7 +962,7 @@ mantle2.users.id.send_email_verification:
     schema/200: '#EmailVerificationSent'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Email already verified
     parameters:
@@ -977,7 +984,7 @@ mantle2.users.id.verify_email:
     schema/200: '#EmailVerified'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Email already verified
     parameters:
@@ -1005,7 +1012,7 @@ mantle2.users.id.change_password:
     schema/200: '#PasswordChangeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -1036,7 +1043,7 @@ mantle2.users.id.subscribe:
     schema/200: '#SubscriptionResponse'
     schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -1057,7 +1064,7 @@ mantle2.users.id.unsubscribe:
     schema/200: '#SubscriptionResponse'
     schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -1116,7 +1123,7 @@ mantle2.users.id.notifications.create:
     description: Creates a new notification for a user by their ID (Admin Only)
     schema/201: '#Notification'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     body/description: Notification data to create
     body/schema: userNotificationCreateJson()
@@ -1138,7 +1145,7 @@ mantle2.users.id.notifications.mark_all_read:
     description: Marks all notifications for a user as read
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -1158,7 +1165,7 @@ mantle2.users.id.notifications.mark_all_unread:
     description: Marks all notifications for a user as unread
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -1179,7 +1186,7 @@ mantle2.users.id.notifications.mark_read:
     description: Marks a specific notification for a user as read
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or notification not found
     parameters:
       id:
@@ -1202,7 +1209,7 @@ mantle2.users.id.notifications.mark_unread:
     description: Marks a specific notification for a user as unread
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or notification not found
     parameters:
       id:
@@ -1225,7 +1232,7 @@ mantle2.users.id.notifications.delete:
     description: Deletes a specific notification for a user
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or notification not found
     parameters:
       id:
@@ -1247,7 +1254,7 @@ mantle2.users.id.notifications.clear:
     description: Clears all notifications for a user by their ID
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -1467,7 +1474,7 @@ mantle2.users.id.events.images.delete_all:
     description: Deletes all image submissions the user has ever made
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       id:
@@ -1531,7 +1538,7 @@ mantle2.users.id.events.images.delete:
     description: Deletes a specific image submission for a specific event the user is hosting or attending
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or event not found
     parameters:
       id:
@@ -1742,7 +1749,7 @@ mantle2.users.username.patch:
     description: Updates user information by their username
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     body/description: User data to update
     body/schema: userUpdateJson()
@@ -1763,7 +1770,7 @@ mantle2.users.username.delete:
     tags: Users
     schema/204: User deleted successfully
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -1783,7 +1790,7 @@ mantle2.users.username.patch_field_privacy:
     description: Updates user field privacy settings by their username
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     body/description: User privacy field options
     body/schema: userFieldPrivacyJson()
@@ -1804,6 +1811,7 @@ mantle2.users.username.get_profile_photo:
     tags: Users
     description: Retrieves the profile photo of a user by their username
     schema/200/type: image/png
+    schema/403: Account Disabled
     schema/404: User not found
     parameters:
       username:
@@ -1829,7 +1837,7 @@ mantle2.users.username.set_profile_photo:
     description: Updates the profile photo of a user by their username
     schema/200/type: image/png
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -1905,7 +1913,7 @@ mantle2.users.username.set_account_type:
     description: Updates user account type by their username
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -1931,7 +1939,7 @@ mantle2.users.username.create_account_type_trial:
     description: Creates a temporary account type trial by username
     schema/200: '#MessageResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -1981,7 +1989,7 @@ mantle2.users.username.activities.set:
     body/schema: activitiesIdList()
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -2001,7 +2009,7 @@ mantle2.users.username.activities.add:
     description: Updates user activities by their username
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Activity already added to user
     query:
@@ -2028,7 +2036,7 @@ mantle2.users.username.activities.remove:
     schema/200: '#User'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or activity not found
     parameters:
       username:
@@ -2110,7 +2118,7 @@ mantle2.users.username.friends.add:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Friend already added
     parameters:
@@ -2135,7 +2143,7 @@ mantle2.users.username.friends.remove:
     description: Removes a friend for the user by their username
     schema/200: '#FriendResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or friend not found
     schema/409: Friend is not added
     parameters:
@@ -2196,7 +2204,7 @@ mantle2.users.username.circle.add:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Friend already added
     parameters:
@@ -2221,7 +2229,7 @@ mantle2.users.username.circle.remove:
     description: Removes a user from their circle by their username
     schema/200: '#FriendResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or friend not found
     schema/409: Friend is not added
     parameters:
@@ -2247,7 +2255,7 @@ mantle2.users.username.send_email_verification:
     schema/200: '#EmailVerificationSent'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Email already verified
     parameters:
@@ -2269,7 +2277,7 @@ mantle2.users.username.verify_email:
     schema/200: '#EmailVerified'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     schema/409: Email already verified
     parameters:
@@ -2297,7 +2305,7 @@ mantle2.users.username.change_password:
     schema/200: '#PasswordChangeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -2328,7 +2336,7 @@ mantle2.users.username.subscribe:
     schema/200: '#SubscriptionResponse'
     schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -2349,7 +2357,7 @@ mantle2.users.username.unsubscribe:
     schema/200: '#SubscriptionResponse'
     schema/201: '#SubscriptionResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -2388,7 +2396,7 @@ mantle2.users.username.notifications.create:
     schema/201: '#Notification'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     body/description: Notification data to create
     body/schema: userNotificationCreateJson()
@@ -2431,7 +2439,7 @@ mantle2.users.username.notifications.mark_all_read:
     description: Marks all notifications for a user as read
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -2451,7 +2459,7 @@ mantle2.users.username.notifications.mark_all_unread:
     description: Marks all notifications for a user as unread
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -2472,7 +2480,7 @@ mantle2.users.username.notifications.mark_read:
     description: Marks a specific notification for a user as read
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or notification not found
     parameters:
       username:
@@ -2495,7 +2503,7 @@ mantle2.users.username.notifications.mark_unread:
     description: Marks a specific notification for a user as unread
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or notification not found
     parameters:
       username:
@@ -2518,7 +2526,7 @@ mantle2.users.username.notifications.delete:
     description: Deletes a specific notification for a user
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or notification not found
     parameters:
       username:
@@ -2540,7 +2548,7 @@ mantle2.users.username.notifications.clear:
     description: Clears all notifications for a user by their username
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -2760,7 +2768,7 @@ mantle2.users.username.events.images.delete_all:
     description: Deletes all image submissions the user has ever made
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     parameters:
       username:
@@ -2824,7 +2832,7 @@ mantle2.users.username.events.images.delete:
     description: Deletes a specific image submission for a specific event the user is hosting or attending
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or event not found
     parameters:
       username:
@@ -3078,6 +3086,7 @@ mantle2.users.current.get_profile_photo:
     tags: Users
     description: Retrieves the profile photo of a user according to the session ID
     schema/200/type: image/png
+    schema/403: Account Disabled
     schema/404: User not found
     query:
       size:
@@ -3168,7 +3177,7 @@ mantle2.users.current.set_account_type:
     description: Updates user account type according to the session ID
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     query:
       type:
@@ -3190,7 +3199,7 @@ mantle2.users.current.create_account_type_trial:
     description: Creates a temporary account type trial according to the session ID
     schema/200: '#MessageResponse'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
     query:
       type:
@@ -3236,7 +3245,7 @@ mantle2.users.current.activities.set:
     body/schema: activitiesIdList()
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User not found
   methods: [PATCH]
 
@@ -3252,7 +3261,7 @@ mantle2.users.current.activities.add:
     description: Updates user activities according to the session ID
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User not found
     schema/409: Activity already added to user
     query:
@@ -3274,7 +3283,7 @@ mantle2.users.current.activities.remove:
     description: Removes a user activity by their identifier
     schema/200: '#User'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User or activity not found
     query:
       activityId:
@@ -3352,7 +3361,7 @@ mantle2.users.current.friends.add:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User not found
     schema/409: Friend already added
     query:
@@ -3374,7 +3383,7 @@ mantle2.users.current.friends.remove:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User or friend not found
     query:
       friend:
@@ -3427,7 +3436,7 @@ mantle2.users.current.circle.add:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User not found
     schema/409: Friend already added
     query:
@@ -3449,7 +3458,7 @@ mantle2.users.current.circle.remove:
     schema/200: '#FriendResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User or friend not found
     query:
       friend:
@@ -3595,7 +3604,7 @@ mantle2.users.current.notifications.mark_all_read:
     description: Marks all notifications for the current user as read
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User not found
   methods: [POST]
 
@@ -3611,7 +3620,7 @@ mantle2.users.current.notifications.mark_all_unread:
     description: Marks all notifications for the current user as unread
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User not found
   methods: [POST]
 
@@ -3628,7 +3637,7 @@ mantle2.users.current.notifications.mark_read:
     description: Marks a specific notification for the current user as read
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User or notification not found
     parameters:
       notificationId:
@@ -3648,7 +3657,7 @@ mantle2.users.current.notifications.mark_unread:
     description: Marks a specific notification for the current user as unread
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User or notification not found
     parameters:
       notificationId:
@@ -3668,7 +3677,7 @@ mantle2.users.current.notifications.delete:
     description: Deletes a specific notification for the current user
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User or notification not found
     parameters:
       notificationId:
@@ -3687,7 +3696,7 @@ mantle2.users.current.notifications.clear:
     description: Clears all notifications for the current user
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: Account Disabled
     schema/404: User not found
     parameters:
       id:
@@ -3886,7 +3895,7 @@ mantle2.users.current.events.images.delete_all:
     description: Deletes all image submissions the user has ever made
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
   methods: [DELETE]
 
@@ -3943,7 +3952,7 @@ mantle2.users.current.events.images.delete:
     description: Deletes a specific image submission for a specific event the user is hosting or attending
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User or event not found
     parameters:
       eventId:
@@ -4185,7 +4194,7 @@ mantle2.activities.update:
     schema/200: '#Activity'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Activity not found
     body/description: Activity data to update
     body/schema: activityUpdate()
@@ -4209,7 +4218,7 @@ mantle2.activities.delete:
     schema/204: No Content
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Activity not found
     parameters:
       activityId:
@@ -4230,7 +4239,7 @@ mantle2.activities.create:
     schema/201: '#Activity'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/409: Activity already exists
     body/schema: activityCreate()
     body/description: Activity data to create
@@ -4323,7 +4332,7 @@ mantle2.events.create:
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/402: Account Upgrade Required
-    schema/403: Forbidden
+    schema/403: 403
     body/schema: eventCreate()
     body/description: Event data to create
   methods: [POST]
@@ -4362,7 +4371,7 @@ mantle2.events.update:
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/402: Account Upgrade Required
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event not found
     body/description: Event data to update
     body/schema: eventUpdate()
@@ -4386,7 +4395,7 @@ mantle2.events.delete:
     schema/204: Event deleted successfully
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event not found
     parameters:
       eventId:
@@ -4443,7 +4452,7 @@ mantle2.events.signup:
     schema/200: '#AttendeeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event not found
     parameters:
       eventId:
@@ -4465,7 +4474,7 @@ mantle2.events.leave:
     schema/200: '#AttendeeResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event not found
     parameters:
       eventId:
@@ -4486,7 +4495,7 @@ mantle2.events.cancel:
     description: Cancels an event (only accessible by the host or admin)
     schema/200: '#Event'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event not found
     parameters:
       eventId:
@@ -4507,7 +4516,7 @@ mantle2.events.uncancel:
     description: Reinstates a cancelled event (only accessible by the host or admin)
     schema/200: '#Event'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event not found
     parameters:
       eventId:
@@ -4599,7 +4608,7 @@ mantle2.events.current.images.delete_all:
     description: Deletes all image submissions the user has ever made
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: User not found
   methods: [DELETE]
 
@@ -4616,7 +4625,7 @@ mantle2.events.current.images.get:
     description: Retrieves a specific image submission for events the current user is hosting or attending by image ID
     schema/200: '#EventImageSubmission'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event or Image not found
     parameters:
       eventId:
@@ -4658,7 +4667,7 @@ mantle2.events.current.images.delete:
     description: Deletes a specific image submission for events the current user is hosting or attending by image ID
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event or Image not found
   methods: [DELETE]
 
@@ -4675,7 +4684,7 @@ mantle2.events.images:
     description: Retrieves image submissions for a specific event
     schema/200: '#EventImageSubmissions'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event not found
     parameters:
       eventId:
@@ -4718,7 +4727,7 @@ mantle2.events.images.get:
     description: Retrieves a specific image submission for a specific event by image ID
     schema/200: '#EventImageSubmission'
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event or Image not found
     parameters:
       eventId:
@@ -4743,7 +4752,7 @@ mantle2.events.images.post:
     schema/201: '#EventImageSubmissionResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event not found
     body/schema: eventImageSubmissionData()
     body/description: Event image submission data
@@ -4767,7 +4776,7 @@ mantle2.events.images.delete:
     description: Deletes an image submission for a specific event
     schema/204: No Content
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Event or Image not found
     parameters:
       eventId:
@@ -4807,7 +4816,7 @@ mantle2.prompts.create:
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/402: Account Upgrade Required
-    schema/403: Forbidden
+    schema/403: 403
     body/schema: promptCreate()
     body/description: Prompt data to create
   methods: [POST]
@@ -4865,7 +4874,7 @@ mantle2.prompts.update:
     schema/200: '#Prompt'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
     body/schema: promptCreate()
     body/description: Prompt data to update
@@ -4888,7 +4897,7 @@ mantle2.prompts.delete:
     schema/204: No Content
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
     parameters:
       prompt:
@@ -4927,7 +4936,7 @@ mantle2.prompts.responses.create:
     schema/201: '#PromptResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
     body/schema: $promptResponseBody
     body/description: Prompt response data to create
@@ -4972,7 +4981,7 @@ mantle2.prompts.responses.update:
     schema/200: '#PromptResponse'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
     body/schema: $promptResponseBody
     body/description: Prompt response data to update
@@ -4998,7 +5007,7 @@ mantle2.prompts.responses.delete:
     schema/204: No Content
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
     parameters:
       prompt:
@@ -5020,7 +5029,7 @@ mantle2.prompts.check_expired:
     schema/204: No Content
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
   methods: [POST]
 
@@ -5094,7 +5103,7 @@ mantle2.articles.create:
     schema/201: '#Article'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     body/schema: articleCreate()
     body/description: Article data to create
   methods: [POST]
@@ -5149,7 +5158,7 @@ mantle2.articles.update:
     schema/200: '#Article'
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
     body/schema: $articleBody
     body/description: Article data to update
@@ -5172,7 +5181,7 @@ mantle2.articles.delete:
     schema/204: No Content
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
     parameters:
       articleId:
@@ -5192,6 +5201,6 @@ mantle2.articles.check_expired:
     schema/204: No Content
     schema/400: Bad Request
     schema/401: Unauthorized
-    schema/403: Forbidden
+    schema/403: 403
     schema/404: Not Found
   methods: [POST]

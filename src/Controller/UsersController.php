@@ -409,10 +409,16 @@ class UsersController extends ControllerBase
 		if (!$resolved) {
 			return GeneralHelper::notFound('User not found');
 		}
+
+		if (UsersHelper::isDisabled($resolved) && !UsersHelper::isAdmin($requester)) {
+			return GeneralHelper::forbidden('Profile photos are unavailable for disabled accounts');
+		}
+
 		$visible = UsersHelper::checkVisibility($resolved, $request);
 		if ($visible instanceof JsonResponse) {
 			return $visible;
 		}
+
 		return new JsonResponse(
 			UsersHelper::serializeUser($visible, $requester),
 			Response::HTTP_OK,
@@ -545,6 +551,11 @@ class UsersController extends ControllerBase
 		if (!$resolved) {
 			return GeneralHelper::notFound('User not found');
 		}
+
+		if (UsersHelper::isDisabled($resolved)) {
+			return GeneralHelper::forbidden('Account Disabled');
+		}
+
 		$visible = UsersHelper::checkVisibility($resolved, $request);
 		if ($visible instanceof JsonResponse) {
 			return $visible;
