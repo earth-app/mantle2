@@ -17,6 +17,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use UnexpectedValueException;
+use Throwable;
 
 class EventsController extends ControllerBase
 {
@@ -394,21 +395,27 @@ class EventsController extends ControllerBase
 	{
 		$user = UsersHelper::getOwnerOfRequest($request);
 		$node = Node::load($eventId);
-		if (!$node) {
+		if (!$node || $node->getType() !== 'event') {
 			return GeneralHelper::notFound('Event not found');
 		}
 
-		$event = EventsHelper::nodeToEvent($node);
-		if (!$event) {
+		try {
+			$event = EventsHelper::nodeToEvent($node);
+
+			if (!EventsHelper::isVisible($event, $user)) {
+				return GeneralHelper::notFound('Event not found');
+			}
+
+			$result = EventsHelper::serializeEvent($event, $node, $user);
+			return new JsonResponse($result, Response::HTTP_OK);
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->error('Failed to load event @eventId: @message', [
+				'@eventId' => $eventId,
+				'@message' => $e->getMessage(),
+			]);
+
 			return GeneralHelper::internalError('Failed to load event');
 		}
-
-		if (!EventsHelper::isVisible($event, $user)) {
-			return GeneralHelper::notFound('Event not found');
-		}
-
-		$result = EventsHelper::serializeEvent($event, $node, $user);
-		return new JsonResponse($result, Response::HTTP_OK);
 	}
 
 	// PATCH /v2/events/{eventId}

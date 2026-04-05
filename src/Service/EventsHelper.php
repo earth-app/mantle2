@@ -40,11 +40,9 @@ class EventsHelper
 		$description = $node->get('field_event_description')->value ?? '';
 
 		$event_type_value = $node->get('field_event_type')->value;
+		$event_type_index = is_numeric($event_type_value) ? (int) $event_type_value : -1;
 		$eventTypeCases = EventType::cases();
-		$event_type =
-			isset($eventTypeCases[$event_type_value]) && is_int($event_type_value)
-				? $eventTypeCases[$event_type_value]
-				: EventType::HYBRID;
+		$event_type = $eventTypeCases[$event_type_index] ?? EventType::HYBRID;
 
 		// Load activities from JSON field
 		$activities_raw = $node->get('field_event_activity_types')->value;
@@ -96,11 +94,9 @@ class EventsHelper
 		}
 
 		$visibility_value = $node->get('field_visibility')->value ?? 1;
+		$visibility_index = is_numeric($visibility_value) ? (int) $visibility_value : -1;
 		$visibilityCases = Visibility::cases();
-		$visibility =
-			isset($visibilityCases[$visibility_value]) && is_int($visibility_value)
-				? $visibilityCases[$visibility_value]
-				: Visibility::UNLISTED;
+		$visibility = $visibilityCases[$visibility_index] ?? Visibility::UNLISTED;
 
 		$attendees = array_column($node->get('field_event_attendees')->getValue(), 'target_id');
 
@@ -982,10 +978,20 @@ class EventsHelper
 
 	public static function deleteThumbnail(Node $node): void
 	{
-		CloudHelper::sendRequest(
-			'/v1/events/thumbnail/' . GeneralHelper::formatId($node->id()),
-			'DELETE',
-		);
+		try {
+			CloudHelper::sendRequest(
+				'/v1/events/thumbnail/' . GeneralHelper::formatId($node->id()),
+				'DELETE',
+			);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to delete thumbnail for event ID @eventId: @message',
+				[
+					'@eventId' => $node->id(),
+					'@message' => $e->getMessage(),
+				],
+			);
+		}
 	}
 
 	public const EXPIRED_EVENTS_TTL = 30 * 24 * 3600; // 30 days after end date in seconds
