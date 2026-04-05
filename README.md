@@ -3,7 +3,7 @@
 > Backend for The Earth App, powered by Drupal 11
 
 This is the second version of the backend system for The Earth App,
-a comprehensive RESTful API built on top of PHP 8.4 and Drupal 11.2.
+a comprehensive RESTful API built on top of PHP 8.4 and Drupal 11.3.
 The module provides a complete backend infrastructure for a social
 networking platform focused on novelty, activities, and user engagement.
 
@@ -28,11 +28,12 @@ to create a modern, scalable API platform.
 ### Key Features
 
 - **RESTful API** with OpenAPI/Swagger documentation
-- **User Management** with authentication, profiles, and social features
+- **User Management** with token auth, OAuth, profiles, and social features
 - **Activity Tracking** for environmental activities with custom fields
-- **Event Management** with types, locations, and participation tracking
-- **Prompt System** for daily challenges and user engagement
-- **Article Content** with versioning and user attribution
+- **Event Management** with participation, cancellation, and image submissions
+- **Prompt System** with visibility-aware discovery and response threads
+- **Article Content** with quizzes, moderation, and user attribution
+- **Gamification** with badges, points, quests, and profile cosmetics
 - **Rate Limiting** with configurable per-endpoint and global limits
 - **CORS Support** with origin whitelisting
 - **Redis Caching** with automatic fallback to Drupal cache
@@ -43,7 +44,7 @@ to create a modern, scalable API platform.
 ### Core Technologies
 
 - **PHP**: 8.4+
-- **Drupal Core**: 11.2+
+- **Drupal Core**: 11.3+
 - **Symfony**: 7.3+ (Event Dispatcher, Rate Limiter, Cache)
 - **Redis**: Optional caching layer via `drupal/redis` module
 - **PostgreSQL/MySQL**: Database backend (Drupal standard)
@@ -53,7 +54,7 @@ to create a modern, scalable API platform.
 - **Composer**: PHP dependency management
 - **Bun**: JavaScript runtime for development tooling
 - **PHPUnit**: 11.5+ for unit testing
-- **Drush**: 13.6+ for Drupal CLI operations
+- **Drush**: 13.7+ for Drupal CLI operations
 - **PHPStan**: Static analysis
 - **PHP CodeSniffer**: Code quality enforcement
 - **Prettier**: Code formatting for PHP, XML, YAML, JSON
@@ -62,13 +63,15 @@ to create a modern, scalable API platform.
 
 ```json
 {
-	"drupal/core": "^11.2",
+	"drupal/core": "^11.3",
 	"drupal/json_field": "^1.4", // JSON field storage
-	"drupal/key": "1.20", // API key management
+	"drupal/key": "1.22.0", // API key management
 	"drupal/smtp": "^1.4", // Email delivery
 	"drupal/redis": "^1.10", // Redis integration
+	"drupal/openid_connect": "^3.0@alpha", // OAuth/OpenID providers
 	"symfony/rate-limiter": "^7.3", // Rate limiting
-	"symfony/event-dispatcher": "^7.3" // Event system
+	"symfony/event-dispatcher": "^7.3", // Event system
+	"symfony/cache": "^7.3" // Cache abstractions
 }
 ```
 
@@ -76,13 +79,14 @@ to create a modern, scalable API platform.
 
 ### Directory Structure
 
-```
+```text
 mantle2/
 ├── src/
 │   ├── Controller/          # API endpoint controllers
 │   │   └── Schema/          # OpenAPI schema generators
 │   ├── Custom/              # Domain models and enums
 │   ├── EventSubscriber/     # Symfony event subscribers
+│   ├── Plugin/              # OpenID Connect client plugins
 │   └── Service/             # Business logic helpers
 ├── tests/
 │   └── src/
@@ -115,7 +119,7 @@ class UsersController extends ControllerBase
 
 	public function login(Request $request): JsonResponse
 	{
-		// Authenticate and return session token
+		// Authenticate and return bearer token
 	}
 }
 ```
@@ -127,6 +131,10 @@ Business logic is encapsulated in helper services registered in `mantle2.service
 - **GeneralHelper**: Common utilities (pagination, validation)
 - **UsersHelper**: User operations and authentication
 - **ActivityHelper**: Activity-related business logic
+- **PointsHelper**: Points, badges, cosmetics, and quest lifecycle
+- **OAuthHelper**: OAuth token validation and provider linking
+- **CampaignHelper**: Email campaign content and placeholder expansion
+- **CloudHelper**: Cloud service requests and websocket notifications
 - **RedisHelper**: Cache abstraction with fallback
 
 #### 3. Domain Models
@@ -168,8 +176,11 @@ class Activity implements JsonSerializable
 Symfony's event dispatcher handles cross-cutting concerns:
 
 - **RateLimitSubscriber**: Pre-request rate limit enforcement
+- **RateLimitResponseSubscriber**: Appends global and endpoint rate headers
 - **CorsSubscriber**: CORS header injection
 - **ApiExceptionSubscriber**: Global error handling
+- **ResponseCacheSubscriber**: Config-driven read-through/invalidation caching
+- **PostResponseSubscriber**: Post-response badge progress tracking
 
 ## Installation
 
@@ -177,7 +188,7 @@ Symfony's event dispatcher handles cross-cutting concerns:
 
 - PHP 8.4 or higher
 - Composer 2.x
-- Drupal 11.2+ installed and configured
+- Drupal 11.3+ installed and configured
 - Redis server (optional, recommended for production)
 - SMTP server credentials for email functionality
 
@@ -200,7 +211,8 @@ Symfony's event dispatcher handles cross-cutting concerns:
 3. **Enable required Drupal modules**:
 
     ```bash
-    drush en node user comment json_field key field options datetime smtp redis -y
+    	drush en node user comment json_field key field options datetime smtp redis \
+    		openid_connect -y
     ```
 
 4. **Enable mantle2**:
@@ -212,7 +224,7 @@ Symfony's event dispatcher handles cross-cutting concerns:
     This runs the installation hooks in `mantle2.install` which:
     - Creates custom content types (Activity, Event, Article, Prompt)
     - Creates custom comment types (Activity Comments, Article Comments)
-    - Defines 50+ custom fields with JSON storage
+    - Defines extensive custom fields with JSON storage
     - Sets up user profile fields
     - Configures field display settings
 
@@ -232,6 +244,7 @@ Symfony's event dispatcher handles cross-cutting concerns:
     - Test email delivery
 
 7. **Clear cache**:
+
     ```bash
     drush cr
     ```
@@ -258,12 +271,13 @@ curl https://your-domain.com/v2/hello
 **Responsibilities:**
 
 - User CRUD operations
-- Authentication (login/logout)
-- Profile management (photos, privacy, account types)
-- Social graph (friends, circle)
-- Notifications management
-- Email verification
-- Activity associations
+- Authentication (token login/logout and provider-based OAuth)
+- Profile management (photos, privacy, account tiers)
+- Social graph (friends and circle management)
+- Notifications, badges, and points
+- Quest lifecycle and cosmetics
+- Email verification, unsubscribe, and password reset flows
+- Activity, prompt, article, and event associations
 
 **Database Queries:**
 
@@ -276,7 +290,6 @@ curl https://your-domain.com/v2/hello
 **Responsibilities:**
 
 - Activity catalog management
-- Activity comments
 - Type filtering and categorization
 - Activity-user associations
 
@@ -285,7 +298,7 @@ curl https://your-domain.com/v2/hello
 - Supports up to 5 activity types per activity
 - JSON field storage for flexible metadata
 - Full-text search across name, description, aliases
-- Comment system with threading
+- Randomized and deterministic list retrieval modes
 
 #### EventsController
 
@@ -294,43 +307,45 @@ curl https://your-domain.com/v2/hello
 - Event lifecycle management
 - Participation tracking
 - Date-based filtering
-- Location and event type handling
+- Event visibility and attendee list management
+- Event image submission moderation
 
 **Features:**
 
 - Date range queries for event discovery
-- RSVP/participation management
+- RSVP/signup/leave participation management
+- Event cancellation and uncancel flows
 - Event type enumeration
-- Geographic location support
+- Geographic location and activity tagging support
 
 #### PromptsController
 
 **Responsibilities:**
 
-- Daily prompt delivery
+- Prompt catalog and random prompt delivery
 - User response collection
-- Prompt scheduling and rotation
+- Visibility-aware filtering and moderation
 
 **Logic:**
 
-- Calculates daily prompt based on date
 - Tracks user responses
 - Prevents duplicate responses per user per prompt
+- Supports response update/delete and expiration checks
 
 #### ArticlesController
 
 **Responsibilities:**
 
 - Article content management
-- Version control
 - Content moderation
 - Author attribution
+- Expiration checks and quiz retrieval
 
 **Features:**
 
-- Full versioning of content changes
-- Comment integration
 - Rich text content support via JSON fields
+- Tag/ocean metadata support
+- Role-gated article creation and updates
 
 ### Services
 
@@ -348,10 +363,10 @@ curl https://your-domain.com/v2/hello
 **User Operations:**
 
 - `getOwnerOfRequest(Request)`: Extract authenticated user from request
-- `getUserFromUsernameOrId(string)`: Flexible user lookup
-- `validatePassword(string)`: Password strength validation
-- `hashPassword(string)`: Secure password hashing
-- `generateSessionToken()`: Create authentication tokens
+- `findBy(string)`: Flexible user lookup by ID/username/email
+- `issueToken(UserInterface)`: Create bearer token with bounded session count
+- `getUserByToken(string)`: Resolve and validate bearer tokens (with sliding expiry)
+- `revokeToken(string)`: Revoke active authentication token
 - Friend/circle relationship management
 
 #### RedisHelper
@@ -361,8 +376,11 @@ curl https://your-domain.com/v2/hello
 ```php
 RedisHelper::set(string $key, array $data, int $ttl = 900): bool
 RedisHelper::get(string $key): ?array
-RedisHelper::delete(string $key): bool
+RedisHelper::delete(mixed $key): bool
 RedisHelper::exists(string $key): bool
+RedisHelper::ttl(string $key): int
+RedisHelper::list(string $pattern): array
+RedisHelper::cache(?string $key, callable $callback, int $ttl = 900): array
 ```
 
 **Features:**
@@ -426,15 +444,19 @@ class Activity implements JsonSerializable
 ```php
 class Event implements JsonSerializable
 {
-	protected int $id;
-	protected string $name;
-	protected string $description;
-	protected EventType $type;
-	protected DateTimeImmutable $start;
-	protected DateTimeImmutable $end;
-	protected ?string $location;
-	protected int $creatorId;
-	protected array $participantIds;
+	private string $id;
+	private int $hostId;
+	private string $name;
+	private string $description;
+	private EventType $type;
+	private array $activities; // Activity[]|ActivityType[]
+	private float $latitude;
+	private float $longitude;
+	private int $date; // Unix timestamp in milliseconds
+	private ?int $endDate;
+	private Visibility $visibility;
+	private array $attendees;
+	private array $fields;
 }
 ```
 
@@ -443,13 +465,15 @@ class Event implements JsonSerializable
 ```php
 class Notification implements JsonSerializable
 {
-	protected int $id;
-	protected string $title;
-	protected string $message;
-	protected NotificationType $type;
-	protected bool $read;
-	protected DateTimeImmutable $created;
-	protected ?array $metadata;
+	public string $id;
+	public string $userId;
+	public string $title;
+	public string $message;
+	public ?string $link;
+	public string $type; // info, warning, error, success
+	public string $source;
+	public bool $isRead;
+	public int $timestamp;
 }
 ```
 
@@ -457,23 +481,25 @@ class Notification implements JsonSerializable
 
 **AccountType:**
 
-- `STANDARD`: Regular user
-- `PREMIUM`: Premium features
-- `ADMIN`: Administrative access
+- `FREE`: Regular user
+- `PRO`: Pro user tier
+- `WRITER`: Writer privileges
+- `ORGANIZER`: Organizer privileges
+- `ADMINISTRATOR`: Administrative access
 
 **Visibility:**
 
 - `PUBLIC`: Visible to all
-- `FRIENDS`: Friends only
+- `UNLISTED`: Hidden from broad listing, visible by context/owner
 - `PRIVATE`: Only user
 
 **Privacy:**
 
-- Settings for profile fields, activities, friends list
+- `PRIVATE`, `CIRCLE`, `MUTUAL`, `PUBLIC` settings for profile field visibility
 
-**ActivityType, EventType, NotificationType:**
+**ActivityType and EventType:**
 
-- Enumerated types for categorization
+- Enumerated types for categorization (notifications use string severity values)
 
 ### Event Subscribers
 
@@ -483,30 +509,31 @@ class Notification implements JsonSerializable
 
 ```php
 // Global limits
-Authenticated: 1000 requests / 15 minutes
-Anonymous: 100 requests / 15 minutes
+Authenticated: 120 requests / 60 seconds
+Anonymous: 60 requests / 60 seconds
 
 // Per-endpoint limits (examples)
-POST /v2/users/login: 5 requests / 5 minutes
-POST /v2/users/create: 3 requests / hour
-GET /v2/users: 100 requests / minute
+POST /v2/users/login: 3 requests / 60 seconds
+POST /v2/users/create: 5 requests / 5 minutes
+POST /v2/events/create: 3 requests / 2 minutes
 ```
 
 **Implementation:**
 
 - Uses Drupal's expirable key-value store
 - Separate counters for global and per-endpoint limits
+- Environment variable overrides for global limits
 - IP-based tracking (Cloudflare-aware)
 - Returns `429 Too Many Requests` with retry headers
 
 **Headers Added:**
 
-```
-X-RateLimit-Limit: 1000
-X-RateLimit-Remaining: 847
+```text
+X-RateLimit-Limit: 3
+X-RateLimit-Remaining: 2
 X-RateLimit-Reset: 1698765432
-X-Global-RateLimit-Limit: 1000
-X-Global-RateLimit-Remaining: 999
+X-Global-RateLimit-Limit: 120
+X-Global-RateLimit-Remaining: 119
 ```
 
 #### CorsSubscriber
@@ -519,17 +546,22 @@ X-Global-RateLimit-Remaining: 999
 	'https://earth-app.com',
 	'https://app.earth-app.com',
 	'https://cloud.earth-app.com',
+	'capacitor://localhost', // iOS
+	'http://localhost', // Android
 	'http://localhost:3000', // Development only
 	'http://127.0.0.1:3000', // Development only
+	'http://localhost:3001', // Development only
+	'http://127.0.0.1:3001', // Development only
 ];
 ```
 
 **Headers Set:**
 
-```
+```text
 Access-Control-Allow-Origin: <matched-origin>
 Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
-Access-Control-Allow-Headers: Content-Type, Authorization, Accept, X-Requested-With, X-Admin-Key
+Access-Control-Allow-Headers: Content-Type, Authorization, Accept,
+	X-Requested-With, X-Admin-Key
 Access-Control-Allow-Credentials: true
 Access-Control-Max-Age: 3600
 Vary: Origin
@@ -550,11 +582,11 @@ Vary: Origin
 
 #### 1. Authentication & Authorization
 
-- Session-based authentication with secure token generation
+- Bearer token authentication with issuance/revocation and sliding expiry
+- OAuth provider sign-in/linking (Google, Microsoft, Discord, GitHub, Facebook)
 - Password hashing using Drupal's password API (bcrypt)
 - Password strength validation
 - Email verification for account creation
-- Two-factor authentication support via verification codes
 - Admin key validation for privileged operations
 
 #### 2. Input Validation
@@ -575,7 +607,7 @@ Vary: Origin
 
 #### 4. Privacy Controls
 
-- User-level visibility settings (PUBLIC, FRIENDS, PRIVATE)
+- User-level visibility settings (PUBLIC, UNLISTED, PRIVATE)
 - Field-level privacy for profile attributes
 - Friend/circle-based content filtering
 - Profile photo access control
@@ -591,15 +623,14 @@ Vary: Origin
 #### 1. Caching Strategy
 
 ```php
-// Redis for session data, verification codes
-RedisHelper::set("session:{$token}", $sessionData, 3600);
+// Redis/key-value for token and short-lived verification data
+RedisHelper::set("email_verify:{$userId}", ['code' => $code], 900);
 
 // Entity caching via Drupal cache tags
 $users = $storage->loadMultiple($uids);
 
-// Query result caching
-$cache = Drupal::cache('mantle2');
-$cache->set($key, $data, $expire, $tags);
+// Config-driven response caching (mantle2.caching.yml)
+// ResponseCacheSubscriber sets X-Cache: HIT/MISS
 ```
 
 #### 2. Database Optimization
@@ -656,7 +687,7 @@ Drupal::logger('mantle2')->info('Info message');
 
     ```bash
     composer install
-    npm install  # or: bun install
+    bun install
     ```
 
 2. **Configure local environment:**
@@ -674,6 +705,7 @@ Drupal::logger('mantle2')->info('Info message');
     ```
 
 4. **Generate test data:**
+
     ```bash
     drush devel-generate-users 50
     drush devel-generate-content 100 --types=activity,event,article
@@ -685,8 +717,8 @@ Drupal::logger('mantle2')->info('Info message');
 
 ```bash
 # PHP, YAML, XML, JSON
-npm run prettier          # Format all files
-npm run prettier:check    # Check formatting
+bun run prettier          # Format all files
+bun run prettier:check    # Check formatting
 
 # PHP-specific
 vendor/bin/phpcbf        # Auto-fix coding standards
@@ -705,7 +737,7 @@ Configured via Husky and lint-staged in `package.json`:
 ```json
 {
 	"lint-staged": {
-		"*.{php,xml,json,yml,md}": "prettier --write"
+		"*.{php,xml,dist,json,install,module,yml,md}": "prettier --write"
 	}
 }
 ```
@@ -727,7 +759,7 @@ mantle2.users:
     options:
         tags: Users
         description: Retrieves a list of Earth App users
-        schema/200: users() # Links to schema definition
+        schema/200: '#Users'
         schema/400: Invalid Pagination Parameters
         query: # Query parameter schema
             limit:
@@ -775,7 +807,7 @@ drush redis-cli flushall  # Clear Redis
 vendor/bin/phpunit
 
 # Specific test file
-vendor/bin/phpunit tests/src/Unit/UserHelperTest.php
+vendor/bin/phpunit tests/src/Unit/GeneralUnitTest.php
 
 # With coverage
 vendor/bin/phpunit --coverage-html coverage/
@@ -789,14 +821,13 @@ vendor/bin/phpunit --coverage-html coverage/
 namespace Drupal\Tests\mantle2\Unit;
 
 use PHPUnit\Framework\TestCase;
-use Drupal\mantle2\Service\UsersHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 
-class UsersHelperTest extends TestCase
+class GeneralUnitTest extends TestCase
 {
-	public function testPasswordValidation()
+	public function testFormatId()
 	{
-		$this->assertTrue(UsersHelper::validatePassword('SecureP@ss123'));
-		$this->assertFalse(UsersHelper::validatePassword('weak'));
+		$this->assertEquals('000000000000000000000123', GeneralHelper::formatId(123));
 	}
 }
 ```
@@ -822,7 +853,7 @@ Provides test fixtures for:
 drush php-eval "print_r(\Drupal::service('http_kernel')->handle(Request::create('/v2/hello')));"
 
 # Test services
-drush php-eval "print_r(\Drupal::service('mantle2.helper.user')->validatePassword('test'));"
+drush php-eval "print(\Drupal\mantle2\Service\GeneralHelper::formatId(123));"
 ```
 
 ### API Testing
@@ -855,7 +886,7 @@ See [LICENSE](LICENSE) file for details.
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Run tests and formatting (`composer test && npm run prettier`)
+4. Run tests and formatting (`vendor/bin/phpunit && bun run prettier:check`)
 5. Push to the branch (`git push origin feature/amazing-feature`)
 6. Open a Pull Request
 
@@ -865,4 +896,4 @@ For issues, questions, or contributions, please open an issue on the GitHub repo
 
 ---
 
-**Built with ❤️ for The Earth App**
+Built with ❤️ for The Earth App
