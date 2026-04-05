@@ -28,6 +28,20 @@ class EventsHelper
 		return self::nodeToEvent($node);
 	}
 
+	public static function loadEventContentNode(int $nid): Node|JsonResponse
+	{
+		$node = Node::load($nid);
+		if (!$node) {
+			return GeneralHelper::notFound('Event not found');
+		}
+
+		if ($node->getType() !== 'event') {
+			return GeneralHelper::badRequest('ID does not point to an event');
+		}
+
+		return $node;
+	}
+
 	public static function getEventByNid(int $nid): ?Event
 	{
 		return self::loadEventNode($nid);

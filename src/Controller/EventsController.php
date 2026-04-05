@@ -394,9 +394,9 @@ class EventsController extends ControllerBase
 	public function getEvent(int $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::getOwnerOfRequest($request);
-		$node = Node::load($eventId);
-		if (!$node || $node->getType() !== 'event') {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
 
 		try {
@@ -426,10 +426,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to edit this event');
@@ -449,11 +451,6 @@ class EventsController extends ControllerBase
 			return $result;
 		}
 
-		$node = Node::load($eventId);
-		if (!$node) {
-			return GeneralHelper::internalError('Failed to load event node');
-		}
-
 		EventsHelper::updateEvent($node, $event);
 		return new JsonResponse(
 			EventsHelper::serializeEvent($event, $node, $user),
@@ -469,18 +466,15 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to delete this event');
-		}
-
-		$node = Node::load($eventId);
-		if (!$node) {
-			return GeneralHelper::internalError('Failed to load event node');
 		}
 
 		$node->delete();
@@ -497,10 +491,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
@@ -568,10 +564,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
@@ -592,10 +590,6 @@ class EventsController extends ControllerBase
 		}
 
 		$event->addAttendee($user->id());
-		$node = Node::load($eventId);
-		if (!$node) {
-			return GeneralHelper::internalError('Failed to load event node');
-		}
 
 		EventsHelper::updateEvent($node, $event);
 
@@ -616,10 +610,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
@@ -634,10 +630,6 @@ class EventsController extends ControllerBase
 		}
 
 		$event->removeAttendee($user->id());
-		$node = Node::load($eventId);
-		if (!$node) {
-			return GeneralHelper::internalError('Failed to load event node');
-		}
 
 		EventsHelper::updateEvent($node, $event);
 		return new JsonResponse(
@@ -719,10 +711,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to cancel this event');
@@ -731,11 +725,6 @@ class EventsController extends ControllerBase
 		$fields = $event->getFields();
 		$fields['cancelled'] = true;
 		$event->setFields($fields);
-
-		$node = Node::load($eventId);
-		if (!$node) {
-			return GeneralHelper::internalError('Failed to load event node');
-		}
 
 		EventsHelper::updateEvent($node, $event);
 
@@ -768,10 +757,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to uncancel this event');
@@ -781,11 +772,6 @@ class EventsController extends ControllerBase
 		$fields = $event->getFields();
 		$fields['cancelled'] = false;
 		$event->setFields($fields);
-
-		$node = Node::load($eventId);
-		if (!$node) {
-			return GeneralHelper::internalError('Failed to load event node');
-		}
 
 		EventsHelper::updateEvent($node, $event);
 
@@ -1043,10 +1029,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
@@ -1099,10 +1087,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
@@ -1139,10 +1129,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
@@ -1193,10 +1185,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
@@ -1229,10 +1223,12 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
-		$event = EventsHelper::loadEventNode($eventId);
-		if (!$event) {
-			return GeneralHelper::notFound('Event not found');
+		$node = EventsHelper::loadEventContentNode($eventId);
+		if ($node instanceof JsonResponse) {
+			return $node;
 		}
+
+		$event = EventsHelper::nodeToEvent($node);
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
