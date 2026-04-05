@@ -18,16 +18,6 @@ use Exception;
 
 class EventsHelper
 {
-	public static function loadEventNode(int $nid): ?Event
-	{
-		$node = Node::load($nid);
-		if (!$node || $node->getType() !== 'event') {
-			return null;
-		}
-
-		return self::nodeToEvent($node);
-	}
-
 	public static function loadEventContentNode(int $nid): Node|JsonResponse
 	{
 		$node = Node::load($nid);
@@ -40,11 +30,6 @@ class EventsHelper
 		}
 
 		return $node;
-	}
-
-	public static function getEventByNid(int $nid): ?Event
-	{
-		return self::loadEventNode($nid);
 	}
 
 	public static function nodeToEvent(Node $node): Event
@@ -846,7 +831,14 @@ class EventsHelper
 			return [];
 		}
 
-		return array_map(fn($nid) => self::getEventByNid($nid), $nids);
+		return array_map(function ($nid) {
+			$node = self::loadEventContentNode((int) $nid);
+			if ($node instanceof JsonResponse) {
+				return null;
+			}
+
+			return self::nodeToEvent($node);
+		}, $nids);
 	}
 
 	/**
@@ -1057,10 +1049,11 @@ class EventsHelper
 			throw new InvalidArgumentException('Event ID, User ID, and photo URL are required');
 		}
 
-		$event = EventsHelper::getEventByNid($eventId);
-		if (!$event) {
+		$node = self::loadEventContentNode((int) $eventId);
+		if ($node instanceof JsonResponse) {
 			throw new InvalidArgumentException('Event not found');
 		}
+		$event = self::nodeToEvent($node);
 
 		try {
 			$res = CloudHelper::sendRequest('/v1/events/submit_image', 'POST', [
