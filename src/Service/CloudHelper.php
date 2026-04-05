@@ -101,13 +101,6 @@ class CloudHelper
 
 		unset($ch);
 
-		// log that a request was sent
-		Drupal::logger('mantle2')->info('Sent Cloud Request: @method @url - @code', [
-			'@method' => $method,
-			'@url' => $url,
-			'@code' => $httpCode,
-		]);
-
 		if ($httpCode === 204) {
 			return [];
 		}
