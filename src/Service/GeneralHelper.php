@@ -701,11 +701,15 @@ class GeneralHelper
 		$selectedIndex = $currentIndex % $cycleCount;
 		$motd = self::$motdCycle[$selectedIndex];
 
-		RedisHelper::set('motd', $motd, 3600); // set MOTD with 1 hour TTL (cron hourly)
+		RedisHelper::set('motd', $motd, 86400); // set MOTD with 24 hour TTL (cron hourly plus some buffer)
 		$nextIndex = ($selectedIndex + 1) % $cycleCount;
-		RedisHelper::set('motd_cycle_index', [
-			'value' => $nextIndex,
-		]);
+		RedisHelper::set(
+			'motd_cycle_index',
+			[
+				'value' => $nextIndex,
+			],
+			86400, // 24 hour TTL for the index as well, so it resets if the server restarts or if cron doesn't run for a while
+		);
 
 		Drupal::logger('mantle2')->info('[cron] cycled motd to index @index: @motd', [
 			'@index' => $selectedIndex,
