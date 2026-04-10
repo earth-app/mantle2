@@ -24,6 +24,53 @@ function mantle2_help($route_name, RouteMatchInterface $route_match)
 	}
 }
 
+function mantle2_get_list_id_header(?string $campaignId = null): string
+{
+	$subdomain = 'notifications';
+	$listName = 'The Earth App Notifications';
+
+	if (is_string($campaignId) && $campaignId !== '') {
+		$slug = strtolower((string) preg_replace('/[^a-z0-9]+/i', '-', $campaignId));
+		$slug = trim($slug, '-');
+
+		if ($slug !== '') {
+			$subdomain = $slug . '.notifications';
+			$listName = 'The Earth App ' . ucwords(str_replace('-', ' ', $slug));
+		}
+	}
+
+	return $listName . ' <' . $subdomain . '.earth-app.com>';
+}
+
+function mantle2_apply_list_headers(
+	array &$message,
+	array $params,
+	?string $campaignId = null,
+): void {
+	$unsubscribeApiUrl = $params['unsubscribe_api_url'] ?? null;
+	if (!is_string($unsubscribeApiUrl) || $unsubscribeApiUrl === '') {
+		return;
+	}
+
+	$unsubscribeValues = ['<' . $unsubscribeApiUrl . '>'];
+
+	$unsubscribeMailto =
+		$params['unsubscribe_mailto'] ?? 'mailto:support@earth-app.com?subject=unsubscribe';
+	if (is_string($unsubscribeMailto) && $unsubscribeMailto !== '') {
+		if (!str_starts_with($unsubscribeMailto, 'mailto:')) {
+			$unsubscribeMailto = 'mailto:' . $unsubscribeMailto;
+		}
+
+		$unsubscribeValues[] = '<' . $unsubscribeMailto . '>';
+	}
+
+	$message['headers']['List-Unsubscribe'] = implode(', ', $unsubscribeValues);
+	$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+	$message['headers']['List-ID'] = mantle2_get_list_id_header($campaignId);
+	$message['headers']['List-Help'] = '<mailto:support@earth-app.com>';
+	$message['headers']['List-Subscribe'] = '<mailto:support@earth-app.com?subject=subscribe>';
+}
+
 function mantle2_mail($key, &$message, $params)
 {
 	$message['from'] = Drupal::config('system.site')->get('mail');
@@ -63,11 +110,8 @@ function mantle2_mail($key, &$message, $params)
 				$params['unsubscribe_url'] ?? null,
 			);
 
-			if (isset($params['unsubscribe_api_url'])) {
-				$message['headers']['List-Unsubscribe'] =
-					'<' . $params['unsubscribe_api_url'] . '>';
-				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-			}
+			mantle2_apply_list_headers($message, $params, $key);
+			$message['headers']['Precedence'] = 'bulk';
 
 			return;
 		}
@@ -108,12 +152,7 @@ function mantle2_mail($key, &$message, $params)
 			If you did not log in, please reset your password immediately to secure your account.";
 
 			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
-
-			if (isset($params['unsubscribe_api_url'])) {
-				$message['headers']['List-Unsubscribe'] =
-					'<' . $params['unsubscribe_api_url'] . '>';
-				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-			}
+			mantle2_apply_list_headers($message, $params, $key);
 			break;
 		case 'email_change_notification':
 			$message['subject'] = 'The Earth App - Email Change Notification';
@@ -162,12 +201,7 @@ function mantle2_mail($key, &$message, $params)
 				If you did not perform this action, please reset your password immediately to secure your account.";
 
 			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
-
-			if (isset($params['unsubscribe_api_url'])) {
-				$message['headers']['List-Unsubscribe'] =
-					'<' . $params['unsubscribe_api_url'] . '>';
-				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-			}
+			mantle2_apply_list_headers($message, $params, $key);
 			break;
 		case 'oauth_provider_linked':
 			$message['subject'] = 'The Earth App - OAuth Provider Linked';
@@ -180,12 +214,7 @@ function mantle2_mail($key, &$message, $params)
 			If you did not perform this action, please secure your account immediately by unlinking the provider and changing your password.";
 
 			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
-
-			if (isset($params['unsubscribe_api_url'])) {
-				$message['headers']['List-Unsubscribe'] =
-					'<' . $params['unsubscribe_api_url'] . '>';
-				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-			}
+			mantle2_apply_list_headers($message, $params, $key);
 			break;
 		case 'oauth_provider_unlinked':
 			$message['subject'] = 'The Earth App - OAuth Provider Unlinked';
@@ -198,12 +227,7 @@ function mantle2_mail($key, &$message, $params)
 			If you did not perform this action, please secure your account immediately and re-link the provider if necessary.";
 
 			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
-
-			if (isset($params['unsubscribe_api_url'])) {
-				$message['headers']['List-Unsubscribe'] =
-					'<' . $params['unsubscribe_api_url'] . '>';
-				$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-			}
+			mantle2_apply_list_headers($message, $params, $key);
 			break;
 		case 'account_disabled':
 			$message['subject'] = 'The Earth App - Account Disabled';
@@ -292,11 +316,9 @@ function mantle2_mail_alter(&$message)
 
 	// Add List-Unsubscribe headers for campaign emails
 	if (str_starts_with($message['id'], 'mantle2_campaign:')) {
-		if (isset($message['params']['unsubscribe_api_url'])) {
-			$message['headers']['List-Unsubscribe'] =
-				'<' . $message['params']['unsubscribe_api_url'] . '>';
-			$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-		}
+		$campaignId = substr($message['id'], strlen('mantle2_campaign:'));
+		mantle2_apply_list_headers($message, $message['params'] ?? [], $campaignId);
+		$message['headers']['Precedence'] = 'bulk';
 	}
 
 	// Add List-Unsubscribe headers for specific email types
@@ -307,11 +329,10 @@ function mantle2_mail_alter(&$message)
 		'mantle2_oauth_provider_unlinked',
 	];
 	if (in_array($message['id'], $unsubscribableMessages, true)) {
-		if (isset($message['params']['unsubscribe_api_url'])) {
-			$message['headers']['List-Unsubscribe'] =
-				'<' . $message['params']['unsubscribe_api_url'] . '>';
-			$message['headers']['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
-		}
+		$listId = str_starts_with($message['id'], 'mantle2_')
+			? substr($message['id'], strlen('mantle2_'))
+			: $message['id'];
+		mantle2_apply_list_headers($message, $message['params'] ?? [], $listId);
 	}
 }
 
