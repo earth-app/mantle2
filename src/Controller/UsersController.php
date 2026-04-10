@@ -388,6 +388,23 @@ class UsersController extends ControllerBase
 			'user' => UsersHelper::serializeUser($user, $user),
 			'session_token' => $token,
 		];
+
+		// Send user notification
+		UsersHelper::sendEmail(
+			$user,
+			'welcome',
+			[
+				'user' => $user,
+			],
+			false,
+		);
+
+		UsersHelper::addNotification(
+			$user,
+			'Welcome to The Earth App!',
+			'Your account has been successfully created. Explore the app and discover new activities to connect with the Earth!',
+		);
+
 		return new JsonResponse($data, Response::HTTP_CREATED);
 	}
 

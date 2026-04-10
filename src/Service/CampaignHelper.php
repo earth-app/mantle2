@@ -73,13 +73,19 @@ class CampaignHelper
 		if ($lastLogin === 0) {
 			return true;
 		}
-		$inactiveThreshold = strtotime('-2 weeks');
-		$ignoreThreshold = strtotime('-1 month'); // ignore dead users (no login for over a month)
-		if ($lastLogin < $ignoreThreshold) {
-			return false;
-		}
 
+		$inactiveThreshold = strtotime('-2 weeks');
 		return $lastLogin < $inactiveThreshold;
+	}
+
+	public static function activeFilter(UserInterface $user): bool
+	{
+		return !self::inactiveFilter($user);
+	}
+
+	public static function activeVerifiedFilter(UserInterface $user): bool
+	{
+		return self::activeFilter($user) && self::verifiedFilter($user);
 	}
 
 	/// Global Filters
@@ -532,10 +538,6 @@ class CampaignHelper
 				continue;
 			}
 
-			if (!UsersHelper::isSubscribed($user)) {
-				continue;
-			}
-
 			// find the most overdue campaign for this user and prioritize that
 			$mostOverdueCampaign = null;
 			$maxOverdueAmount = 0;
@@ -568,6 +570,12 @@ class CampaignHelper
 					if (!self::$filterName($user)) {
 						continue;
 					}
+				}
+
+				// skip if this campaign respects subscription and user unsubscribed
+				$unsubscribable = $campaign['unsubscribable'] ?? true;
+				if ($unsubscribable && !UsersHelper::isSubscribed($user)) {
+					continue;
 				}
 
 				$redisKey = "campaign:{$campaignId}:user:{$userId}";

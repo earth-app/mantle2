@@ -82,6 +82,11 @@ function mantle2_mail($key, &$message, $params)
 	$unsubscribeUrl = $params['unsubscribe_url'] ?? null; // Frontend URL for body link
 
 	switch ($key) {
+		case 'welcome':
+			$message['subject'] = 'Welcome to The Earth App!';
+			$markdown = "Hi @$username,\n\nWelcome to The Earth App! We're excited to have you on board. Explore the app to discover new insights, connect with others, and make a positive impact on our planet. If you have any questions or need assistance, feel free to reach out to our support team.\n\nLet's work together for a better Earth!";
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 		case 'email_verification':
 			$message['subject'] = 'The Earth App - Email Verification Code';
 
@@ -261,6 +266,7 @@ function mantle2_mail_alter(&$message)
 {
 	$messages = [
 		'mantle2_email_verification',
+		'mantle2_welcome',
 		'mantle2_new_login',
 		'mantle2_new_password',
 		'mantle2_password_reset',

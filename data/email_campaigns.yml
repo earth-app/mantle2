@@ -28,7 +28,7 @@
     We look forward to seeing you again soon!
 - id: insights
   title: Insights from The Earth App
-  filter: verifiedFilter
+  filter: activeVerifiedFilter
   interval: 432000 # 5 days
   body: |-
     {user.first_name},
@@ -60,7 +60,7 @@
 - id: daily_article
   title: '{article.random.title}'
   repeat: false
-  filter: verifiedFilter
+  filter: activeVerifiedFilter
   interval: 86400 # 1 day
   body: |-
     {user.first_name},
@@ -71,7 +71,7 @@
 - id: bidaily_prompt
   title: '{prompt.random.title}'
   repeat: false
-  filter: verifiedFilter
+  filter: activeVerifiedFilter
   interval: 172800 # 2 days
   body: |-
     {user.first_name},
