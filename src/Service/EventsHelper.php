@@ -124,6 +124,8 @@ class EventsHelper
 
 	private static $allowedFields = [
 		'moho_id',
+		'moho_source',
+		'moho_kind',
 		'link',
 		'info',
 		'max_in_person',
@@ -150,13 +152,13 @@ class EventsHelper
 				return GeneralHelper::badRequest("Field '$key' is not allowed");
 			}
 
-			if ($key === 'moho_id') {
+			if (str_starts_with($key, 'moho_')) {
 				if (!UsersHelper::isAdmin($user)) {
-					return GeneralHelper::forbidden('You do not have permission to set moho_id');
+					return GeneralHelper::forbidden("You do not have permission to set $key");
 				}
 
 				if (!is_string($value)) {
-					return GeneralHelper::badRequest('Field moho_id must be a string');
+					return GeneralHelper::badRequest("Field '$key' must be a string");
 				}
 			}
 
