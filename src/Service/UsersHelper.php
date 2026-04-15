@@ -1824,7 +1824,7 @@ class UsersHelper
 
 		$accountType = self::getAccountType($user);
 		return match ($accountType) {
-			AccountType::FREE => 50,
+			AccountType::FREE => 25,
 			AccountType::PRO => 500,
 			AccountType::WRITER => 500,
 			AccountType::ORGANIZER => 1000,
@@ -3332,10 +3332,9 @@ class UsersHelper
 	{
 		$type = self::getAccountType($user)->name;
 		return match ($type) {
-			'ADMINISTRATOR' => PHP_INT_MAX,
+			'ADMINISTRATOR', 'ORGANIZER' => PHP_INT_MAX,
 			'PRO', 'WRITER' => 5000,
-			'ORGANIZER' => 1_000_000,
-			default => 100,
+			default => 25,
 		};
 	}
 

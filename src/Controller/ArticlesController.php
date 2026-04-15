@@ -240,8 +240,8 @@ class ArticlesController extends ControllerBase
 			return $user;
 		}
 
-		if (!UsersHelper::isOrganizer($user)) {
-			return GeneralHelper::paymentRequired('Upgrade to Organizer required');
+		if (!UsersHelper::isWriter($user)) {
+			return GeneralHelper::paymentRequired('Upgrade to Writer required');
 		}
 
 		if (UsersHelper::getVisibility($user) === Visibility::PRIVATE) {
@@ -423,12 +423,12 @@ class ArticlesController extends ControllerBase
 			return $user;
 		}
 
-		if (!UsersHelper::isOrganizer($user)) {
-			return GeneralHelper::paymentRequired('Upgrade to Organizer required');
+		$author = $node->get('field_author_id')->entity;
+		if (!$author) {
+			return GeneralHelper::internalError('Article author not found');
 		}
 
-		$author = $node->get('field_author_id')->entity;
-		if ($author && $author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You do not have permission to update this article.');
 		}
 
@@ -572,11 +572,11 @@ class ArticlesController extends ControllerBase
 			return $user;
 		}
 
-		if (!UsersHelper::isOrganizer($user)) {
-			return GeneralHelper::paymentRequired('Upgrade to Organizer required');
+		$author = $node->get('field_author_id')->entity;
+		if (!$author) {
+			return GeneralHelper::internalError('Article author not found');
 		}
 
-		$author = $node->get('field_author_id')->entity;
 		if ($author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You do not have permission to delete this article.');
 		}
