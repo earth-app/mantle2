@@ -910,12 +910,14 @@ class PointsHelper
 
 	public static function startQuest(UserInterface $user, string $questId): bool
 	{
+		$rank = strtolower(UsersHelper::getAccountType($user)->name);
 		try {
 			CloudHelper::sendRequest(
 				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
 				'POST',
 				[
 					'quest_id' => $questId,
+					'rank' => $rank,
 				],
 			);
 
