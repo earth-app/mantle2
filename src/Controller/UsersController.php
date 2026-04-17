@@ -1417,9 +1417,10 @@ class UsersController extends ControllerBase
 	}
 
 	// GET /v2/users/cosmetics
-	public function getCosmeticsCatalog(): JsonResponse
+	public function getCosmeticsCatalog(Request $request): JsonResponse
 	{
-		$catalog = PointsHelper::getCosmeticsCatalog();
+		$user = UsersHelper::getOwnerOfRequest($request);
+		$catalog = PointsHelper::getCosmeticsCatalog($user);
 		return new JsonResponse(['cosmetics' => $catalog], Response::HTTP_OK);
 	}
 

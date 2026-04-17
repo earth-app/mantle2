@@ -3,6 +3,7 @@
 namespace Drupal\mantle2\Service;
 
 use Drupal;
+use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Quest;
 use Drupal\mantle2\Custom\QuestData;
 use Drupal\user\UserInterface;
@@ -607,6 +608,19 @@ class PointsHelper
 		];
 	}
 
+	// multiplicative discount based on role
+	public static function getPriceDiscount(UserInterface $user): float
+	{
+		$accountType = UsersHelper::getAccountType($user);
+		return match ($accountType) {
+			AccountType::FREE => 0.0, // no discount for free users
+			AccountType::PRO => 0.1, // 10% off for PRO users
+			AccountType::WRITER => 0.45, // 45% off for Writers
+			AccountType::ORGANIZER => 0.6, // 60% off for Organizers
+			AccountType::ADMINISTRATOR => 1.0, // 100% off for Admins
+		};
+	}
+
 	public static function getAvatarCosmetic(UserInterface $user): ?string
 	{
 		$selectedCosmetic = $user->get('field_selected_cosmetic')->value;
@@ -665,7 +679,8 @@ class PointsHelper
 			return GeneralHelper::conflict('Cosmetic already purchased');
 		}
 
-		$price = $cosmetics[$cosmeticKey]['price'];
+		$rawPrice = $cosmetics[$cosmeticKey]['price'] * (1 - self::getPriceDiscount($user));
+		$price = (int) round($rawPrice);
 		$currentPoints = self::getPoints($user)[0];
 		if ($currentPoints < $price && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::badRequest('Not enough points to purchase this cosmetic');
@@ -721,14 +736,18 @@ class PointsHelper
 		return null;
 	}
 
-	public static function getCosmeticsCatalog(): array
+	public static function getCosmeticsCatalog(?UserInterface $user = null): array
 	{
 		$cosmetics = self::cosmetics();
 		$catalog = [];
 		foreach ($cosmetics as $key => $data) {
 			$catalog[] = [
 				'key' => $key,
-				'price' => $data['price'],
+				'price' => (int) round(
+					$data['price'] * (1 - ($user ? self::getPriceDiscount($user) : 0.0)),
+				),
+				'discount' => $user ? self::getPriceDiscount($user) : 0.0,
+				'full_price' => $data['price'],
 				'rarity' => $data['rarity'],
 			];
 		}
