@@ -15,6 +15,7 @@ class Quest implements JsonSerializable
 	/** @var (QuestStep[]|QuestStep)[] $steps */
 	public array $steps = []; // either array of steps or 2D array for OR conditions (e.g. complete step 1 OR step 2)
 	public int $reward = 0;
+	public bool $premium = false;
 	/** @var string[] $permissions */
 	public array $permissions = [];
 
@@ -28,6 +29,7 @@ class Quest implements JsonSerializable
 		int $reward = 0,
 		array $permissions = [],
 		bool $mobileOnly = false,
+		bool $premium = false,
 	) {
 		$this->id = $id;
 		$this->title = $title;
@@ -38,6 +40,7 @@ class Quest implements JsonSerializable
 		$this->reward = $reward;
 		$this->permissions = $permissions;
 		$this->mobileOnly = $mobileOnly;
+		$this->premium = $premium;
 	}
 
 	public function jsonSerialize(): array
@@ -46,6 +49,7 @@ class Quest implements JsonSerializable
 			'id' => $this->id,
 			'title' => $this->title,
 			'description' => $this->description,
+			'premium' => $this->premium,
 			'icon' => $this->icon,
 			'rarity' => $this->rarity,
 			'mobile_only' => $this->mobileOnly,
@@ -72,6 +76,7 @@ class Quest implements JsonSerializable
 			$data['reward'] ?? 0,
 			$data['permissions'] ?? [],
 			$data['mobile_only'] ?? false,
+			$data['premium'] ?? false,
 		);
 	}
 }
