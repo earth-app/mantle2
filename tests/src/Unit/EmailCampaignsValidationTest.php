@@ -431,6 +431,7 @@ class EmailCampaignsValidationTest extends TestCase
 			'unverifiedFilter',
 			'inactiveFilter',
 			'activeFilter',
+			'activeVerifiedFilter',
 			'allFilter',
 		];
 
