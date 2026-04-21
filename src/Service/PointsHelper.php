@@ -701,7 +701,10 @@ class PointsHelper
 			return GeneralHelper::internalError('Failed to save user cosmetics');
 		}
 
-		self::removePoints($user, $price, 'Purchased cosmetic: ' . $cosmeticKey);
+		if ($price > 0) {
+			self::removePoints($user, $price, 'Purchased cosmetic: ' . $cosmeticKey);
+		}
+
 		self::invalidateUserCache($user);
 
 		// users are likely to view/use the cosmetic they just purchased
