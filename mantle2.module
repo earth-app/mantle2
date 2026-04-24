@@ -1,6 +1,7 @@
 <?php
 
 use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\mantle2\Custom\Notification;
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\mantle2\Service\EventsHelper;
@@ -234,8 +235,10 @@ function mantle2_mail($key, &$message, $params)
 
 			$actor = $params['actor'] ?? 'an administrator';
 			$time = $params['time'] ?? date(DATE_ATOM);
+			$reason = $params['disable_reason'] ?? 'No reason provided';
 			$markdown = "@$username, Your account has been disabled by {$actor}.\n\n
 			**Time:** {$time}\n\n
+			**Reason:** {$reason}\n\n
 			If you believe this is a mistake, please contact support to appeal this action.";
 
 			$message['body'][] = $parser->toHtml($markdown, false);
@@ -245,8 +248,10 @@ function mantle2_mail($key, &$message, $params)
 
 			$actor = $params['actor'] ?? 'an administrator';
 			$time = $params['time'] ?? date(DATE_ATOM);
+			$reason = $params['enable_reason'] ?? 'No reason provided';
 			$markdown = "@$username, Your account has been re-enabled by {$actor}.\n\n
 			**Time:** {$time}\n\n
+			**Reason:** {$reason}\n\n
 			You can now sign in again and continue using The Earth App.";
 
 			$message['body'][] = $parser->toHtml($markdown, false);
@@ -283,6 +288,52 @@ function mantle2_mail($key, &$message, $params)
 
 			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
+		case 'unread_notifications_reminder':
+			/** @var array<Notification> $notifications */
+			$notifications = is_array($params['notifications'] ?? null)
+				? array_values(
+					array_filter(
+						$params['notifications'],
+						fn($notification) => $notification instanceof Notification,
+					),
+				)
+				: [];
+
+			$count = (int) ($params['count'] ?? count($notifications));
+
+			$message['subject'] = "You have $count unread notifications on The Earth App";
+
+			$notificationsList = array_map(function ($notification) {
+				$link =
+					$notification->getLink() ?? '/profile/notifications/' . $notification->getId();
+				if (!preg_match('/^https?:\/\//i', $link)) {
+					$link =
+						'https://app.earth-app.com' .
+						(str_starts_with($link, '/') ? $link : '/' . $link);
+				}
+				$timestamp = date('Y-m-d H:i:s', $notification->getTimestamp());
+
+				return '**' .
+					$notification->getTitle() .
+					'** from ' .
+					$notification->getSource() .
+					"\n\n" .
+					$notification->getMessage() .
+					"\n\n[View Notification](" .
+					$link .
+					")\n*" .
+					$timestamp .
+					"*\n\n";
+			}, $notifications);
+
+			$markdown =
+				"@$username, You have **{$count}** unread notifications in The Earth App.\n\n" .
+				implode("\n", $notificationsList) .
+				"\n\n
+			Don't miss out on important updates and interactions! Visit your notifications page to stay informed and engaged with the community.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 	}
 }
 
@@ -304,6 +355,7 @@ function mantle2_mail_alter(&$message)
 		'mantle2_plan_trial',
 		'mantle2_plan_trial_warning',
 		'mantle2_plan_trial_expired',
+		'mantle2_unread_notifications_reminder',
 	];
 
 	if (
@@ -357,6 +409,7 @@ function mantle2_cron()
 	UsersHelper::checkBadges();
 	UsersHelper::checkAccountTrials();
 	UsersHelper::enforceDisabledAccountRestrictions();
+	UsersHelper::checkUnreadNotifications();
 
 	// Cycle MOTD
 	GeneralHelper::cycleMotd();

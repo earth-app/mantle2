@@ -1186,6 +1186,7 @@ class UsersHelper
 					[
 						'time' => $timestamp,
 						'actor' => $actorName,
+						'disable_reason' => $data['disable_reason'] ?? 'No reason provided',
 					],
 					false,
 				);
@@ -1203,6 +1204,7 @@ class UsersHelper
 					[
 						'time' => $timestamp,
 						'actor' => $actorName,
+						'enable_reason' => $data['enable_reason'] ?? 'No reason provided',
 					],
 					false,
 				);
@@ -3574,6 +3576,50 @@ class UsersHelper
 					RedisHelper::set($lastCheckKey, ['value' => true], 3600);
 				}
 			}
+		}
+	}
+
+	public static function checkUnreadNotifications(): void
+	{
+		$users = User::loadMultiple();
+		foreach ($users as $user) {
+			if ($user->id() === self::cloud()->id()) {
+				continue; // skip root user
+			}
+
+			// skip inactive users
+			if (CampaignHelper::inactiveFilter($user)) {
+				continue;
+			}
+
+			// skip users that cannot receive unsubscribable reminders
+			if (!self::isSubscribed($user) || !$user->getEmail()) {
+				continue;
+			}
+
+			$sentAlreadyKey = 'user:unread_notifications_sent:' . $user->id();
+			$sentAlready = RedisHelper::get($sentAlreadyKey);
+			if ($sentAlready) {
+				continue; // already sent notification recently
+			}
+
+			$notifications = self::getNotifications($user);
+			$unread = array_filter($notifications, fn($n) => !$n->isRead());
+			if (empty($unread)) {
+				continue; // no unread notifications
+			}
+
+			// Keep reminder emails concise and avoid unusually large payloads.
+			$unread = array_slice(array_values($unread), 0, 10);
+
+			// send email reminder about unread notifications
+			self::sendEmail($user, 'unread_notifications_reminder', [
+				'user' => $user,
+				'count' => count($unread),
+				'notifications' => $unread,
+			]);
+
+			RedisHelper::set($sentAlreadyKey, ['value' => true], 86400); // 24 hours
 		}
 	}
 
