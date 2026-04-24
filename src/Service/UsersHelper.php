@@ -1677,6 +1677,125 @@ class UsersHelper
 		}
 	}
 
+	public static function getAddedBy(
+		UserInterface $user,
+		int $limit = 25,
+		int $page = 1,
+		string $search = '',
+		string $sort = 'desc',
+	): array {
+		try {
+			$limit = max(1, $limit);
+			$page = max(1, $page);
+			$sort = $sort === 'asc' || $sort === 'rand' ? $sort : 'desc';
+
+			$addedByIndex = self::resolveAddedByIndex($user, $search);
+			if (empty($addedByIndex)) {
+				return [];
+			}
+
+			if ($sort === 'rand') {
+				$addedByIds = array_map(fn($item) => $item['id'], $addedByIndex);
+				shuffle($addedByIds);
+			} else {
+				usort($addedByIndex, function (array $a, array $b) use ($sort) {
+					return $sort === 'desc'
+						? $b['created'] <=> $a['created']
+						: $a['created'] <=> $b['created'];
+				});
+				$addedByIds = array_map(fn($item) => $item['id'], $addedByIndex);
+			}
+
+			$offset = ($page - 1) * $limit;
+			$addedByIds = array_slice($addedByIds, $offset, $limit);
+			if (empty($addedByIds)) {
+				return [];
+			}
+
+			$storage = Drupal::entityTypeManager()->getStorage('user');
+			$addedByUsers = $storage->loadMultiple($addedByIds);
+
+			// Preserve order from pagination/sort.
+			$result = [];
+			foreach ($addedByIds as $addedById) {
+				if (isset($addedByUsers[$addedById])) {
+					$result[] = $addedByUsers[$addedById];
+				}
+			}
+
+			return $result;
+		} catch (Exception $e) {
+			return [];
+		}
+	}
+
+	/**
+	 * @return array<array{id: int, created: int}>
+	 */
+	private static function resolveAddedByIndex(UserInterface $user, string $search = ''): array
+	{
+		$cacheKey = 'helper:added_by_index:' . $user->id() . ':' . md5($search);
+
+		$addedByIndex = RedisHelper::cache(
+			$cacheKey,
+			function () use ($user, $search) {
+				$storage = Drupal::entityTypeManager()->getStorage('user');
+				$uids = $storage
+					->getQuery()
+					->accessCheck(false)
+					->condition('uid', 0, '>')
+					->execute();
+				$users = $storage->loadMultiple($uids);
+
+				$targetId = (int) $user->id();
+				$addedBy = [];
+
+				foreach ($users as $candidate) {
+					if (
+						!$candidate instanceof UserInterface ||
+						(int) $candidate->id() === $targetId
+					) {
+						continue;
+					}
+
+					$friendsRaw = $candidate->get('field_friends')->value ?? '[]';
+					$friends = $friendsRaw ? json_decode($friendsRaw, true) : [];
+					if (!is_array($friends)) {
+						$friends = [];
+					}
+
+					$friends = array_map(fn($id) => (int) $id, $friends);
+					if (!in_array($targetId, $friends, true)) {
+						continue;
+					}
+
+					if (!empty($search) && !str_contains($candidate->getAccountName(), $search)) {
+						continue;
+					}
+
+					$addedBy[] = [
+						'id' => (int) $candidate->id(),
+						'created' => (int) $candidate->getCreatedTime(),
+					];
+				}
+
+				return $addedBy;
+			},
+			120,
+		);
+
+		return is_array($addedByIndex) ? $addedByIndex : [];
+	}
+
+	public static function getAddedByCount(UserInterface $user, string $search = ''): int
+	{
+		try {
+			return count(self::resolveAddedByIndex($user, $search));
+		} catch (Exception $e) {
+			return 0;
+		}
+	}
+
 	public static function addFriend(UserInterface $user, UserInterface $friend): bool
 	{
 		try {

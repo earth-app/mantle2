@@ -802,8 +802,8 @@ mantle2.users.id.friends:
         description: The search term to filter results
       filter:
         type: enum
-        description: The type of friends to return. Mutual friends, added friends, or non-mutual friends (friends you have added that are not mutual).
-        enum: [mutual, added, non_mutual]
+        description: The type of friends to return. Mutual friends, added friends, users who have added you, or non-mutual friends (friends you have added that are not mutual).
+        enum: [mutual, added, added_by, non_mutual]
     parameters:
       id:
         type: string
@@ -2097,8 +2097,8 @@ mantle2.users.username.friends:
         description: The search term to filter results
       filter:
         type: enum
-        description: The type of friends to return. Mutual friends, added friends, or non-mutual friends (friends you have added that are not mutual).
-        enum: [mutual, added, non_mutual]
+        description: The type of friends to return. Mutual friends, added friends, users who have added you, or non-mutual friends (friends you have added that are not mutual).
+        enum: [mutual, added, added_by, non_mutual]
     parameters:
       username:
         type: string
@@ -3344,8 +3344,8 @@ mantle2.users.current.friends:
         description: The search term to filter results
       filter:
         type: enum
-        description: The type of friends to return. Mutual friends, added friends, or non-mutual friends (friends you have added that are not mutual).
-        enum: [mutual, added, non_mutual]
+        description: The type of friends to return. Mutual friends, added friends, users who have added you, or non-mutual friends (friends you have added that are not mutual).
+        enum: [mutual, added, added_by, non_mutual]
   methods: [GET]
 
 mantle2.users.current.friends.add:
