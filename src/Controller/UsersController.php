@@ -854,6 +854,10 @@ class UsersController extends ControllerBase
 				$friends = UsersHelper::getAddedFriends($visible, $limit, $page, $search, $sort);
 				$total = UsersHelper::getAddedFriendsCount($visible, $search);
 				break;
+			case 'added_by':
+				$friends = UsersHelper::getAddedBy($visible, $limit, $page, $search, $sort);
+				$total = UsersHelper::getAddedByCount($visible, $search);
+				break;
 			case 'non_mutual':
 				$friends = UsersHelper::getNonMutualFriends(
 					$visible,
@@ -866,7 +870,7 @@ class UsersController extends ControllerBase
 				break;
 			default:
 				return GeneralHelper::badRequest(
-					"Invalid filter '$filter'; Must be one of 'mutual', 'added', or 'non_mutual'",
+					"Invalid filter '$filter'; Must be one of 'mutual', 'added', 'added_by', or 'non_mutual'",
 				);
 		}
 
