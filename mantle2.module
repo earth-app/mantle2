@@ -328,9 +328,16 @@ function mantle2_mail($key, &$message, $params)
 
 			$markdown =
 				"@$username, You have **{$count}** unread notifications in The Earth App.\n\n" .
-				implode("\n", $notificationsList) .
-				"\n\n
-			Don't miss out on important updates and interactions! Visit your notifications page to stay informed and engaged with the community.";
+				implode("\n", $notificationsList);
+
+			$shown = count($notifications);
+			$more = $count - $shown;
+			if ($more > 0) {
+				$markdown .= "\n\n**{$more} more on The Earth App...** [View all](https://app.earth-app.com/profile/notifications)";
+			}
+
+			$markdown .=
+				"\n\n\nDon't miss out on important updates and interactions! Visit your notifications page to stay informed and engaged with the community.";
 
 			$message['body'][] = $parser->toHtml($markdown, false);
 			break;

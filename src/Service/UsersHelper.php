@@ -3609,13 +3609,16 @@ class UsersHelper
 				continue; // no unread notifications
 			}
 
-			// Keep reminder emails concise and avoid unusually large payloads.
+			// total unread count (true count shown in subject)
+			$totalUnread = count($unread);
+
+			// keep reminder emails concise and avoid unusually large payloads: include only the most recent 10
 			$unread = array_slice(array_values($unread), 0, 10);
 
-			// send email reminder about unread notifications
+			// send email reminder about unread notifications (pass true total count)
 			self::sendEmail($user, 'unread_notifications_reminder', [
 				'user' => $user,
-				'count' => count($unread),
+				'count' => $totalUnread,
 				'notifications' => $unread,
 			]);
 
