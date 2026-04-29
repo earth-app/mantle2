@@ -19,3 +19,4 @@ tests/out
 .DS_Store
 .env
 .env.local
+data/service-account.json
