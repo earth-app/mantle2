@@ -70,6 +70,9 @@ services:
   mantle2.helper.points:
     class: Drupal\mantle2\Service\PointsHelper
 
+  mantle2.helper.fcm:
+    class: Drupal\mantle2\Service\FCMHelper
+
   # Email Verification Tempstore (deprecated - use Redis instead)
   mantle2.tempstore.email_verification:
     class: Drupal\Core\TempStore\PrivateTempStoreFactory
