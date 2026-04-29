@@ -3703,6 +3703,24 @@ mantle2.users.current.notifications.clear:
         type: string
   methods: [DELETE]
 
+mantle2.users.current.notifications.register_push:
+  path: '/v2/users/current/notifications/push'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::registerPushToken'
+    _title: 'Register Push Notification Token for Current User [Mobile]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,User Notifications
+    description: Registers a push notification token for the current user to receive push notifications on mobile devices
+    body/description: Push notification token data
+    body/schema: pushTokenRegistrationJson()
+    schema/200: '#MessageResponse'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [POST]
+
 mantle2.users.current.prompts:
   path: '/v2/users/current/prompts'
   defaults:

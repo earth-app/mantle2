@@ -2549,6 +2549,31 @@ class UsersHelper
 			'data' => $notification->jsonSerialize(),
 		]);
 
+		// notify via push notifications
+		$tokens = self::getFCMTokens($user);
+
+		// normalize link for push payloads
+		$finalLink = null;
+		if (!empty($link)) {
+			if (str_starts_with($link, 'http')) {
+				$finalLink = $link;
+			} else {
+				$path = ltrim($link, '/');
+				$finalLink = 'earth-app://' . $path;
+			}
+		}
+
+		if (!empty($tokens)) {
+			foreach ($tokens as $token) {
+				FCMHelper::send($token, $title, $message, [
+					'link' => $finalLink,
+					'type' => $type,
+					'source' => $source,
+					'id' => $id,
+				]);
+			}
+		}
+
 		self::setNotifications($user, $notifications);
 		return $notification;
 	}
@@ -2647,6 +2672,65 @@ class UsersHelper
 	public static function clearNotifications(UserInterface $user): void
 	{
 		self::setNotifications($user, []);
+	}
+
+	public static function checkUnreadNotifications(): void
+	{
+		$users = User::loadMultiple();
+		foreach ($users as $user) {
+			if ($user->id() === self::cloud()->id()) {
+				continue; // skip root user
+			}
+
+			// skip inactive users
+			if (CampaignHelper::inactiveFilter($user)) {
+				continue;
+			}
+
+			// skip users that cannot receive unsubscribable reminders
+			if (!self::isSubscribed($user) || !$user->getEmail()) {
+				continue;
+			}
+
+			$sentAlreadyKey = 'user:unread_notifications_sent:' . $user->id();
+			$sentAlready = RedisHelper::get($sentAlreadyKey);
+			if ($sentAlready) {
+				continue; // already sent notification recently
+			}
+
+			$notifications = self::getNotifications($user);
+			$unread = array_filter($notifications, fn($n) => !$n->isRead());
+			if (empty($unread)) {
+				continue; // no unread notifications
+			}
+
+			// total unread count (true count shown in subject)
+			$totalUnread = count($unread);
+
+			// keep reminder emails concise and avoid unusually large payloads: include only the most recent 10
+			$unread = array_slice(array_values($unread), 0, 10);
+
+			// send email reminder about unread notifications (pass true total count)
+			self::sendEmail($user, 'unread_notifications_reminder', [
+				'user' => $user,
+				'count' => $totalUnread,
+				'notifications' => $unread,
+			]);
+
+			RedisHelper::set($sentAlreadyKey, ['value' => true], 86400); // 24 hours
+		}
+	}
+
+	public static function getFCMTokens(UserInterface $user)
+	{
+		$tokens = Drupal::database()
+			->select('push_tokens', 'p')
+			->fields('p', ['token'])
+			->condition('user_id', $user->id())
+			->execute()
+			->fetchCol();
+
+		return $tokens;
 	}
 
 	#endregion
@@ -3576,53 +3660,6 @@ class UsersHelper
 					RedisHelper::set($lastCheckKey, ['value' => true], 3600);
 				}
 			}
-		}
-	}
-
-	public static function checkUnreadNotifications(): void
-	{
-		$users = User::loadMultiple();
-		foreach ($users as $user) {
-			if ($user->id() === self::cloud()->id()) {
-				continue; // skip root user
-			}
-
-			// skip inactive users
-			if (CampaignHelper::inactiveFilter($user)) {
-				continue;
-			}
-
-			// skip users that cannot receive unsubscribable reminders
-			if (!self::isSubscribed($user) || !$user->getEmail()) {
-				continue;
-			}
-
-			$sentAlreadyKey = 'user:unread_notifications_sent:' . $user->id();
-			$sentAlready = RedisHelper::get($sentAlreadyKey);
-			if ($sentAlready) {
-				continue; // already sent notification recently
-			}
-
-			$notifications = self::getNotifications($user);
-			$unread = array_filter($notifications, fn($n) => !$n->isRead());
-			if (empty($unread)) {
-				continue; // no unread notifications
-			}
-
-			// total unread count (true count shown in subject)
-			$totalUnread = count($unread);
-
-			// keep reminder emails concise and avoid unusually large payloads: include only the most recent 10
-			$unread = array_slice(array_values($unread), 0, 10);
-
-			// send email reminder about unread notifications (pass true total count)
-			self::sendEmail($user, 'unread_notifications_reminder', [
-				'user' => $user,
-				'count' => $totalUnread,
-				'notifications' => $unread,
-			]);
-
-			RedisHelper::set($sentAlreadyKey, ['value' => true], 86400); // 24 hours
 		}
 	}
 

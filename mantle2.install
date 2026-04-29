@@ -7,6 +7,7 @@ use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\Core\Entity\Entity\EntityViewDisplay;
+use Drupal\Core\Database\Database;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\EventType;
@@ -1037,4 +1038,85 @@ function mantle2_install(): void
 
 	/// Clear Caches
 	RedisHelper::delete('cloud:*');
+}
+
+function mantle2_schema()
+{
+	return [
+		'push_tokens' => [
+			'description' =>
+				'Stores device push tokens for user notifications (one per user per platform)',
+			'fields' => [
+				'user_id' => [
+					'type' => 'int',
+					'not null' => true,
+				],
+				'platform' => [
+					'type' => 'varchar',
+					'length' => 8,
+					'not null' => true,
+					'description' => "Device platform: 'ios' or 'android'",
+				],
+				'token' => [
+					'type' => 'varchar',
+					'length' => 255,
+					'not null' => true,
+					'description' => 'Push notification token from FCM/APNS',
+				],
+				'updated' => [
+					'type' => 'int',
+					'not null' => true,
+					'description' => 'Unix timestamp of last update',
+				],
+			],
+			'primary key' => ['user_id', 'platform'],
+			'indexes' => [
+				'token' => ['token'],
+			],
+		],
+	];
+}
+
+/**
+ * Install: Create push_tokens table for device push notification registry.
+ */
+function mantle2_update_9001(): string
+{
+	$schema = Database::getConnection()->schema();
+	if (!$schema->tableExists('push_tokens')) {
+		$table_schema = [
+			'description' =>
+				'Stores device push tokens for user notifications (one per user per platform)',
+			'fields' => [
+				'user_id' => [
+					'type' => 'int',
+					'not null' => true,
+				],
+				'platform' => [
+					'type' => 'varchar',
+					'length' => 8,
+					'not null' => true,
+					'description' => "Device platform: 'ios' or 'android'",
+				],
+				'token' => [
+					'type' => 'varchar',
+					'length' => 255,
+					'not null' => true,
+					'description' => 'Push notification token from FCM/APNS',
+				],
+				'updated' => [
+					'type' => 'int',
+					'not null' => true,
+					'description' => 'Unix timestamp of last update',
+				],
+			],
+			'primary key' => ['user_id', 'platform'],
+			'indexes' => [
+				'token' => ['token'],
+			],
+		];
+		$schema->createTable('push_tokens', $table_schema);
+		return 'Created push_tokens table for device push notification registry';
+	}
+	return 'push_tokens table already exists';
 }

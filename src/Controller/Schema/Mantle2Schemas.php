@@ -2421,6 +2421,31 @@ class Mantle2Schemas
 	}
 
 	/**
+	 * Schema for push token registration request body.
+	 */
+	public static function pushTokenRegistrationJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'token' => [
+					'type' => 'string',
+					'description' => 'The push notification token to register',
+					'example' => 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+				],
+				'platform' => [
+					'type' => 'string',
+					'enum' => ['ios', 'android'],
+					'description' => 'The platform of the device for this push token',
+					'example' => 'ios',
+				],
+			],
+			'required' => ['token', 'platform'],
+		];
+	}
+
+	/**
 	 * Get all schemas for OpenAPI components/schemas section.
 	 * This method returns all reusable schema definitions that can be
 	 * referenced via $ref in the OpenAPI spec.
