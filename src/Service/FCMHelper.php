@@ -37,7 +37,6 @@ class FCMHelper
 
 		$credentialsJson = self::loadCredentials();
 		if (!$credentialsJson) {
-			Drupal::logger('mantle2')->error('FCM credentials not found, cannot send notification');
 			return; // fail silently if credentials are not available
 		}
 
