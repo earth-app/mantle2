@@ -158,9 +158,9 @@ class ArticlesHelper
 				return GeneralHelper::badRequest('Field ocean.keywords must be an array');
 			}
 
-			if (count($ocean['keywords']) > 25) {
+			if (count($ocean['keywords']) > 35) {
 				return GeneralHelper::badRequest(
-					'Field ocean.keywords can have a maximum of 25 items',
+					'Field ocean.keywords can have a maximum of 35 items',
 				);
 			}
 
@@ -171,9 +171,9 @@ class ArticlesHelper
 					);
 				}
 
-				if (strlen($keyword) > 100) {
+				if (strlen($keyword) > 320) {
 					return GeneralHelper::badRequest(
-						'Field ocean.keywords must be an array of strings up to 100 characters',
+						'Field ocean.keywords must be an array of strings up to 320 characters',
 					);
 				}
 			}
