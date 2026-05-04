@@ -1037,7 +1037,7 @@ function mantle2_install(): void
 	mantle2_ensure_form_display('comment', 'comment');
 
 	/// Clear Caches
-	RedisHelper::delete('cloud:*');
+	RedisHelper::delete(['cloud:*', 'request_cache:*']);
 }
 
 function mantle2_schema()
