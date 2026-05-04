@@ -65,10 +65,16 @@ jobs:
         with:
           host: ${{ secrets.MANTLE2_IP }}
           username: ${{ secrets.MANTLE2_USERNAME }}
-          key: ${{ secrets.MANTLE2_SSH_KEY}}
+          key: ${{ secrets.MANTLE2_SSH_KEY }}
           passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
-          source: .
+          source: |
+            ./
+            !vendor
+            !.git
+            !tests
+            !coverage
           target: /var/www/drupal/web/modules/mantle2
+          strip_components: 1
       - name: Restart Drupal Service
         uses: appleboy/ssh-action@v1
         with:
