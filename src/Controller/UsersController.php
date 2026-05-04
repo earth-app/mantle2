@@ -1500,8 +1500,8 @@ class UsersController extends ControllerBase
 
 		// null = reset, handled automatically
 		$cosmeticKey = $body['current'] ?? null;
+		$availableCosmetics = PointsHelper::getAvailableCosmetics($user);
 		if ($cosmeticKey !== null && !UsersHelper::isAdmin($requester)) {
-			$availableCosmetics = PointsHelper::getAvailableCosmetics($user);
 			if (!in_array($cosmeticKey, $availableCosmetics, true)) {
 				return GeneralHelper::badRequest(
 					'You do not own this cosmetic. Please purchase it first.',
@@ -1547,7 +1547,7 @@ class UsersController extends ControllerBase
 		}
 
 		$user = User::load($user->id());
-		[$points, $history] = PointsHelper::getPoints($user);
+		[$points, $_] = PointsHelper::getPoints($user);
 		$unlocked = PointsHelper::getAvailableCosmetics($user);
 
 		return new JsonResponse(
@@ -1564,7 +1564,7 @@ class UsersController extends ControllerBase
 		if ($id) {
 			$quest = PointsHelper::getQuest($id);
 			if (!$quest) {
-				return GeneralHelper::notFound('Quest not found');
+				return GeneralHelper::notFound("Quest '$id' not found");
 			}
 
 			return new JsonResponse($quest, Response::HTTP_OK);

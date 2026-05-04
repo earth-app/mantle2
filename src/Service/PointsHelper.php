@@ -866,16 +866,7 @@ class PointsHelper
 
 	public static function getQuest(string $questId): ?Quest
 	{
-		$cacheKey = 'cloud:quest:' . $questId;
-		$questData = RedisHelper::cache(
-			$cacheKey,
-			function () use ($questId) {
-				$data = CloudHelper::sendRequest('/v1/users/quests/' . $questId);
-				return is_array($data) ? $data : null;
-			},
-			3600,
-		);
-
+		$questData = CloudHelper::sendRequest('/v1/users/quests/' . $questId);
 		return $questData ? Quest::fromArray($questData) : null;
 	}
 
