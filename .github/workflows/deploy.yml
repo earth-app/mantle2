@@ -60,6 +60,12 @@ jobs:
           extensions: mbstring
       - name: Install Composer Dependencies
         run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Get Changed Files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          since_last_remote_commit: true
+          separator: ','
       - name: Upload via SSH
         uses: appleboy/scp-action@v1
         with:
@@ -67,12 +73,7 @@ jobs:
           username: ${{ secrets.MANTLE2_USERNAME }}
           key: ${{ secrets.MANTLE2_SSH_KEY }}
           passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
-          source: |
-            ./
-            !vendor
-            !.git
-            !tests
-            !coverage
+          source: ${{ steps.changed-files.outputs.all_changed_files }}
           target: /var/www/drupal/web/modules/mantle2
           strip_components: 1
       - name: Restart Drupal Service
@@ -83,7 +84,6 @@ jobs:
           key: ${{ secrets.MANTLE2_SSH_KEY }}
           passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
           script: |
-            export COMPOSER_ALLOW_SUPERUSER=1
             cd /var/www/drupal
             ./vendor/bin/drush un mantle2 -y
             cd /var/www/drupal/web/modules/mantle2
