@@ -850,7 +850,7 @@ class PointsHelper
 	/** @return Quest[] */
 	public static function getAllQuests(): array
 	{
-		$cacheKey = 'cloud:quests:all';
+		$cacheKey = 'cloud:quest:all';
 		return array_map(
 			fn($questData) => Quest::fromArray($questData),
 			RedisHelper::cache(
@@ -866,7 +866,7 @@ class PointsHelper
 
 	public static function getQuest(string $questId): ?Quest
 	{
-		$cacheKey = 'cloud:quests:' . $questId;
+		$cacheKey = 'cloud:quest:' . $questId;
 		$questData = RedisHelper::cache(
 			$cacheKey,
 			function () use ($questId) {

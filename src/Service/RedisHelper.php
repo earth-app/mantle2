@@ -5,6 +5,7 @@ namespace Drupal\mantle2\Service;
 use Drupal;
 use Drupal\redis\ClientFactory;
 use Exception;
+use Throwable;
 
 class RedisHelper
 {
@@ -98,44 +99,67 @@ class RedisHelper
 	{
 		try {
 			$redis = self::getRedisClient();
-			$keys_to_delete = is_array($key) ? $key : [$key];
+			$keys = is_array($key) ? $key : [$key];
 
-			if ($redis && !self::$use_cache_fallback) {
-				$all_keys = [];
-				foreach ($keys_to_delete as $k) {
-					if (strpos($k, '*') !== false) {
-						// Glob pattern - find all matching keys
-						$matching_keys = $redis->keys($k);
-						if (!empty($matching_keys)) {
-							$all_keys = array_merge($all_keys, $matching_keys);
-						}
-					} else {
-						// Regular key
-						$all_keys[] = $k;
-					}
-				}
-
-				// Delete all collected keys
-				if (!empty($all_keys)) {
-					return $redis->del(...$all_keys) > 0;
-				}
-				return true;
-			} else {
+			if (!$redis || self::$use_cache_fallback) {
 				// Fallback to Drupal cache
-				$cache = Drupal::cache('mantle2');
-				foreach ($keys_to_delete as $k) {
-					if (strpos($k, '*') !== false) {
-						Drupal::logger('mantle2')->warning(
+				$cache = \Drupal::cache('mantle2');
+
+				foreach ($keys as $k) {
+					if (is_string($k) && str_contains($k, '*')) {
+						\Drupal::logger('mantle2')->warning(
 							'Glob pattern %pattern not supported in cache fallback mode',
 							['%pattern' => $k],
 						);
-					} else {
-						$cache->delete($k);
+						continue;
 					}
+					$cache->delete($k);
 				}
 				return true;
 			}
-		} catch (Exception $e) {
+
+			$totalDeleted = 0;
+
+			$scanCount = 1000; // hint to Redis for SCAN batch size
+			$delChunk = 1000; // max keys per DEL call
+
+			foreach ($keys as $k) {
+				if (!is_string($k) || $k === '') {
+					continue;
+				}
+
+				if (str_contains($k, '*')) {
+					$it = null;
+
+					do {
+						// phpredis: scan(&$iterator, $pattern = null, $count = 0)
+						$batch = $redis->scan($it, $k, $scanCount);
+
+						if ($batch === false || empty($batch)) {
+							continue;
+						}
+
+						// Chunk deletes to avoid huge argument lists
+						foreach (array_chunk($batch, $delChunk) as $chunk) {
+							// DEL returns number of keys removed
+							$deleted = $redis->del(...$chunk);
+							if (is_int($deleted)) {
+								$totalDeleted += $deleted;
+							}
+						}
+					} while ($it !== 0);
+				}
+				// Direct key path
+				else {
+					$deleted = $redis->del($k);
+					if (is_int($deleted)) {
+						$totalDeleted += $deleted;
+					}
+				}
+			}
+
+			return true;
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Redis DELETE failed: %message', [
 				'%message' => $e->getMessage(),
 			]);
