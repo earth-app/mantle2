@@ -866,13 +866,17 @@ class PointsHelper
 
 	public static function getQuest(string $questId): ?Quest
 	{
-		$allQuests = self::getAllQuests();
-		foreach ($allQuests as $quest) {
-			if ($quest->id === $questId) {
-				return $quest;
-			}
-		}
-		return null;
+		$cacheKey = 'cloud:quests:' . $questId;
+		$questData = RedisHelper::cache(
+			$cacheKey,
+			function () use ($questId) {
+				$data = CloudHelper::sendRequest('/v1/users/quests/' . $questId);
+				return is_array($data) ? $data : null;
+			},
+			3600,
+		);
+
+		return $questData ? Quest::fromArray($questData) : null;
 	}
 
 	public static function getCurrentQuest(UserInterface $user): QuestData
