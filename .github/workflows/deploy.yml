@@ -85,3 +85,4 @@ jobs:
             ./vendor/bin/drush en mantle2 -y
             ./vendor/bin/drush updb -y
             ./vendor/bin/drush cr
+            sudo /usr/bin/systemctl restart apache2

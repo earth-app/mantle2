@@ -101,10 +101,14 @@ class CloudHelper
 
 		unset($ch);
 
+		// truncate response for logging if it's too long
+		$logResponse =
+			strlen($response) > 250 ? substr($response, 0, 250) . '... [truncated]' : $response;
+
 		Drupal::logger('mantle2_cloud')->info('Cloud request: [@code] @method @url : @response', [
 			'@method' => $method,
 			'@url' => $url,
-			'@response' => $response,
+			'@response' => $logResponse,
 			'@code' => $httpCode,
 		]);
 
