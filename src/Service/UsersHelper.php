@@ -1311,7 +1311,7 @@ class UsersHelper
 				'visibility' => self::getVisibility($user)->name,
 				'country' => self::getCountry($user, $user),
 				'full_name' => self::getName($user, $user),
-				'activities' => self::getActivities($user, $user),
+				'activities' => self::getActivities($user),
 			]);
 
 			$data = $res['data'] ?? null;

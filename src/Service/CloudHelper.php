@@ -54,6 +54,10 @@ class CloudHelper
 			curl_setopt($ch, CURLOPT_HTTPGET, true);
 		} elseif (!empty($data)) {
 			$payload = json_encode($data);
+			if ($payload === false) {
+				throw new Exception('Failed to encode data to JSON: ' . json_last_error_msg());
+			}
+
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
 		}
 
@@ -121,12 +125,16 @@ class CloudHelper
 		$logResponse =
 			strlen($response) > 250 ? substr($response, 0, 250) . '... [truncated]' : $response;
 
-		Drupal::logger('mantle2_cloud')->info('Cloud request: [@code] @method @url : \n@response', [
-			'@method' => $method,
-			'@url' => $url,
-			'@response' => $logResponse,
-			'@code' => $httpCode,
-		]);
+		Drupal::logger('mantle2_cloud')->info(
+			'Cloud request: [@code] @method @url : @payload : @response',
+			[
+				'@method' => $method,
+				'@url' => $url,
+				'@payload' => $payload ?? '<empty>',
+				'@response' => $logResponse,
+				'@code' => $httpCode,
+			],
+		);
 
 		if ($httpCode === 204) {
 			return [];
