@@ -61,6 +61,7 @@ class CloudHelper
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+		curl_setopt($ch, CURLINFO_HEADER_OUT, true);
 
 		$headers = ['Accept: application/json'];
 
@@ -77,6 +78,7 @@ class CloudHelper
 
 		$response = curl_exec($ch);
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		$requestHeaders = curl_getinfo($ch, CURLINFO_HEADER_OUT);
 
 		$curlError = curl_error($ch);
 		if ($curlError) {
@@ -101,11 +103,25 @@ class CloudHelper
 
 		unset($ch);
 
+		preg_match('/^(GET|POST|PATCH|DELETE|PUT|OPTIONS|HEAD)\s/i', $requestHeaders, $matches);
+		$actualMethod = $matches[1] ?? 'UNKNOWN';
+
+		if ($actualMethod !== $method) {
+			Drupal::logger('mantle2_cloud')->warning(
+				'Expected HTTP method @expected but got @actual for URL: @url',
+				[
+					'@expected' => $method,
+					'@actual' => $actualMethod,
+					'@url' => $url,
+				],
+			);
+		}
+
 		// truncate response for logging if it's too long
 		$logResponse =
 			strlen($response) > 250 ? substr($response, 0, 250) . '... [truncated]' : $response;
 
-		Drupal::logger('mantle2_cloud')->info('Cloud request: [@code] @method @url : @response', [
+		Drupal::logger('mantle2_cloud')->info('Cloud request: [@code] @method @url : \n@response', [
 			'@method' => $method,
 			'@url' => $url,
 			'@response' => $logResponse,
