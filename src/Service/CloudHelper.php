@@ -101,6 +101,13 @@ class CloudHelper
 
 		unset($ch);
 
+		Drupal::logger('mantle2_cloud')->info('Cloud request: [@code] @method @url : @response', [
+			'@method' => $method,
+			'@url' => $url,
+			'@response' => $response,
+			'@code' => $httpCode,
+		]);
+
 		if ($httpCode === 204) {
 			return [];
 		}
