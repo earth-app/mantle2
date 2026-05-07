@@ -214,6 +214,14 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		}
 
 		$request = $event->getRequest();
+		$headers = $request->headers;
+		$cacheControl = $headers->get('Cache-Control', '');
+
+		// skip cache on no-cache or private directives
+		if (str_contains($cacheControl, 'no-cache') || str_contains($cacheControl, 'private')) {
+			return;
+		}
+
 		$method = $request->getMethod();
 		$path = $request->getPathInfo();
 
