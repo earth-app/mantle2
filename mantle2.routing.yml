@@ -5162,6 +5162,53 @@ mantle2.articles.get.quiz:
         description: The ID of the article to retrieve the quiz for
   methods: [GET]
 
+mantle2.articles.create.quiz:
+  path: '/v2/articles/{articleId}/quiz'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::createOrUpdateArticleQuiz'
+    _title: 'Create or Update Article Quiz'
+  requirements:
+    _access: 'TRUE'
+    articleId: \d+
+  options:
+    tags: Articles
+    description: Creates or updates a quiz for a specific article. Requires Organizer account type.
+    schema/200: '#ArticleQuizCreateUpdateResponse'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/402: Upgrade to Organizer Required
+    schema/403: Forbidden
+    schema/404: Not Found
+    schema/500: Internal Server Error
+    body/schema: $articleQuizCreateUpdate
+    body/description: Quiz questions to create or update
+    parameters:
+      articleId:
+        description: The ID of the article to create or update the quiz for
+  methods: [POST]
+
+mantle2.articles.delete.quiz:
+  path: '/v2/articles/{articleId}/quiz'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ArticlesController::deleteArticleQuiz'
+    _title: 'Delete Article Quiz'
+  requirements:
+    _access: 'TRUE'
+    articleId: \d+
+  options:
+    tags: Articles
+    description: Deletes the quiz associated with a specific article
+    schema/204: No Content
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Not Found
+    schema/500: Internal Server Error
+    parameters:
+      articleId:
+        description: The ID of the article to delete the quiz for
+  methods: [DELETE]
+
 mantle2.articles.update:
   path: '/v2/articles/{articleId}'
   defaults:

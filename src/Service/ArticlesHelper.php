@@ -381,4 +381,23 @@ class ArticlesHelper
 			],
 		];
 	}
+
+	public static function saveArticleQuiz(string $articleId, array $quizData): bool
+	{
+		$response = CloudHelper::sendRequest('/v1/articles/quiz/create_manual', 'POST', [
+			'articleId' => $articleId,
+			'quiz' => $quizData,
+		]);
+
+		return !empty($response) && isset($response['success']) && $response['success'] === true;
+	}
+
+	public static function deleteArticleQuiz(string $articleId): bool
+	{
+		$response = CloudHelper::sendRequest('/v1/articles/quiz/delete', 'DELETE', [
+			'articleId' => $articleId,
+		]);
+
+		return !empty($response) && isset($response['success']) && $response['success'] === true;
+	}
 }

@@ -590,6 +590,172 @@ class ArticlesController extends ControllerBase
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
 	}
 
+	// POST /v2/articles/{articleId}/quiz
+	public function createOrUpdateArticleQuiz(int $articleId, Request $request): JsonResponse
+	{
+		$node = Node::load($articleId);
+		if (!$node) {
+			return GeneralHelper::notFound('Article not found');
+		}
+
+		if ($node->getType() !== 'article') {
+			return GeneralHelper::badRequest('ID does not point to an article');
+		}
+
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$author = $node->get('field_author_id')->entity;
+		if (!$author) {
+			return GeneralHelper::internalError('Article author not found');
+		}
+
+		if ($author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden(
+				'You do not have permission to create a quiz for this article.',
+			);
+		}
+
+		$rank = UsersHelper::getAccountType($user)->name;
+		if ($rank !== 'ORGANIZER' && $rank !== 'ADMINISTRATOR') {
+			return GeneralHelper::paymentRequired('Upgrade to Organizer required');
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
+			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		$questions = $body['questions'] ?? null;
+		if (!is_array($questions) || empty($questions)) {
+			return GeneralHelper::badRequest('Field questions must be a non-empty array');
+		}
+
+		if (count($questions) > 10) {
+			return GeneralHelper::badRequest('Field questions can have a maximum of 10 items');
+		}
+
+		foreach ($questions as $index => $question) {
+			if (!is_array($question)) {
+				return GeneralHelper::badRequest("Question at index $index must be an object");
+			}
+
+			$qText = $question['question'] ?? null;
+			if (!is_string($qText) || strlen($qText) < 5 || strlen($qText) > 500) {
+				return GeneralHelper::badRequest(
+					"Question text at index $index must be a string between 5 and 500 characters",
+				);
+			}
+
+			$qType = $question['type'] ?? null;
+			if (!in_array($qType, ['multiple_choice', 'true_false'], true)) {
+				return GeneralHelper::badRequest("Invalid question type at index $index");
+			}
+
+			$options = $question['options'] ?? null;
+			if (!is_array($options) || empty($options)) {
+				return GeneralHelper::badRequest(
+					"Field options for question at index $index must be a non-empty array",
+				);
+			}
+
+			$correctAnswer = $question['correct_answer'] ?? null;
+			if ($correctAnswer === null) {
+				return GeneralHelper::badRequest(
+					"Field correct_answer is required for question at index $index",
+				);
+			}
+
+			// verify and set correct_answer_index
+			$correctAnswerIndex = array_search($correctAnswer, $options, true);
+			if ($correctAnswerIndex === false) {
+				return GeneralHelper::badRequest(
+					"Correct answer for question at index $index must be one of the options",
+				);
+			}
+			$question['correct_answer_index'] = $correctAnswerIndex;
+
+			if ($qType === 'multiple_choice') {
+				if (count($options) < 2 || count($options) > 6) {
+					return GeneralHelper::badRequest(
+						"Field options for multiple choice question at index $index must have between 2 and 6 items",
+					);
+				}
+			} elseif ($qType === 'true_false') {
+				if (
+					count($options) !== 2 &&
+					!in_array('True', $options, true) &&
+					!in_array('False', $options, true)
+				) {
+					return GeneralHelper::badRequest(
+						"Field options for true/false question at index $index must have exactly 2 items",
+					);
+				}
+
+				// verify and set is_true and is_false
+				$question['is_true'] = $correctAnswer === 'True';
+				$question['is_false'] = $correctAnswer === 'False';
+			}
+		}
+
+		try {
+			ArticlesHelper::saveArticleQuiz($articleId, $questions);
+			return new JsonResponse(
+				['message' => 'Article quiz saved successfully', 'questions' => $questions],
+				Response::HTTP_OK,
+			);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to save quiz: ' . $e->getMessage());
+		}
+	}
+
+	// DELETE /v2/articles/{articleId}/quiz
+	public function deleteArticleQuiz(int $articleId, Request $request): JsonResponse
+	{
+		$node = Node::load($articleId);
+		if (!$node) {
+			return GeneralHelper::notFound('Article not found');
+		}
+
+		if ($node->getType() !== 'article') {
+			return GeneralHelper::badRequest('ID does not point to an article');
+		}
+
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$author = $node->get('field_author_id')->entity;
+		if (!$author) {
+			return GeneralHelper::internalError('Article author not found');
+		}
+
+		if ($author->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden(
+				'You do not have permission to delete the quiz for this article.',
+			);
+		}
+
+		$existingQuiz = ArticlesHelper::getArticleQuiz($articleId);
+		if ($existingQuiz === null || empty($existingQuiz) || empty($existingQuiz['questions'])) {
+			return GeneralHelper::notFound('Quiz not found for this article');
+		}
+
+		try {
+			ArticlesHelper::deleteArticleQuiz($articleId);
+			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to delete quiz: ' . $e->getMessage());
+		}
+	}
+
 	// POST /v2/articles/check_expired
 	public function checkExpiredArticles(Request $request): JsonResponse
 	{
