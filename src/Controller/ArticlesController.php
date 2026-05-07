@@ -647,9 +647,9 @@ class ArticlesController extends ControllerBase
 			}
 
 			$qText = $question['question'] ?? null;
-			if (!is_string($qText) || strlen($qText) < 5 || strlen($qText) > 500) {
+			if (!is_string($qText) || strlen($qText) < 5 || strlen($qText) > 256) {
 				return GeneralHelper::badRequest(
-					"Question text at index $index must be a string between 5 and 500 characters",
+					"Question text at index $index must be a string between 5 and 256 characters",
 				);
 			}
 
@@ -686,6 +686,14 @@ class ArticlesController extends ControllerBase
 					return GeneralHelper::badRequest(
 						"Field options for multiple choice question at index $index must have between 2 and 6 items",
 					);
+				}
+
+				foreach ($options as $option) {
+					if (!is_string($option) || strlen($option) < 1 || strlen($option) > 64) {
+						return GeneralHelper::badRequest(
+							"Each option for question at index $index must be a string between 1 and 64 characters",
+						);
+					}
 				}
 			} elseif ($qType === 'true_false') {
 				if (
