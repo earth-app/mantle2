@@ -19,6 +19,7 @@ use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ActivityHelper;
+use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\OAuthHelper;
 use Drupal\mantle2\Service\PointsHelper;
@@ -514,6 +515,7 @@ class UsersController extends ControllerBase
 
 		try {
 			$user->delete();
+			CloudHelper::sendRequest('/v1/users/' . $user->id(), 'DELETE');
 		} catch (EntityStorageException $e) {
 			return GeneralHelper::internalError('Failed to delete user: ' . $e->getMessage());
 		}
