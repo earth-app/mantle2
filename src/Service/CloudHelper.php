@@ -67,7 +67,7 @@ class CloudHelper
 		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 		curl_setopt($ch, CURLINFO_HEADER_OUT, true);
 
-		$headers = ['Accept: application/json'];
+		$headers = ['Accept: application/json', 'User-Agent: @earth-app/mantle2'];
 
 		if ($payload !== '') {
 			$headers[] = 'Content-Type: application/json';

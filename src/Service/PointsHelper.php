@@ -911,7 +911,7 @@ class PointsHelper
 		$rank = strtolower(UsersHelper::getAccountType($user)->name);
 		try {
 			CloudHelper::sendRequest(
-				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
+				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()) . '/start',
 				'POST',
 				[
 					'quest_id' => $questId,
@@ -939,7 +939,7 @@ class PointsHelper
 	{
 		try {
 			CloudHelper::sendRequest(
-				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
+				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()) . '/reset',
 				'DELETE',
 			);
 
