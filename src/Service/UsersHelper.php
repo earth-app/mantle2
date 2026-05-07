@@ -3599,8 +3599,15 @@ class UsersHelper
 		);
 	}
 
-	public static function trackBadgeProgress(UserInterface $user, string $trackerId, $value): void
-	{
+	public static function trackBadgeProgress(
+		UserInterface $user,
+		string $trackerId,
+		mixed $value,
+	): void {
+		if ($user->id() === self::cloud()->id()) {
+			return; // skip root user
+		}
+
 		$trackerPath = '/v1/users/badges/' . GeneralHelper::formatId($user->id()) . '/track';
 		CloudHelper::sendRequest($trackerPath, 'POST', [
 			'tracker_id' => $trackerId,
