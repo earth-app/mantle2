@@ -47,7 +47,7 @@ class CorsSubscriber implements EventSubscriberInterface
 		);
 		$response->headers->set(
 			'Access-Control-Allow-Headers',
-			'Content-Type, Cache-Control, Authorization, Accept,  X-Requested-With, X-Admin-Key',
+			'Content-Type, Cache-Control, Authorization, Accept, Accept-Encoding, X-Requested-With, X-Admin-Key, X-Cloud-Endpoint',
 		);
 		$response->headers->set('Access-Control-Allow-Credentials', 'true');
 		$response->headers->set('Access-Control-Max-Age', '3600');
