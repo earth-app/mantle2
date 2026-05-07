@@ -3664,7 +3664,7 @@ class UsersHelper
 						self::grantBadge($user, 'verified');
 					}
 
-					RedisHelper::set($lastCheckKey, ['value' => true], 3600);
+					RedisHelper::set($lastCheckKey, ['value' => true], 14400); // 4 hours
 				}
 			}
 		}
