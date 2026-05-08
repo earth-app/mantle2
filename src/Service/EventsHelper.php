@@ -873,6 +873,7 @@ class EventsHelper
 			$event = self::nodeToEvent($node);
 			$startTime = $event->getRawDate();
 			$endTime = $event->getRawEndDate();
+			$hasEnded = $endTime !== null ? $endTime <= $now : $startTime <= $now;
 
 			if ($startTime > $now && $startTime <= $oneHourFromNow) {
 				$minutesUntilStart = (int) ceil(($startTime - $now) / 60000); // milliseconds to minutes
@@ -884,7 +885,7 @@ class EventsHelper
 				self::notifyEventEnding($event, $node, $minutesUntilEnd);
 			}
 
-			if ($endTime && $endTime <= $now) {
+			if ($hasEnded) {
 				self::notifyEventEnded($event, $node);
 			}
 		}
@@ -975,6 +976,9 @@ class EventsHelper
 					GeneralHelper::formatId($event->getId()),
 				);
 
+				// check quest progress for attending events once the event has ended
+				PointsHelper::checkQuestProgress($user, null, ['attend_event'], $event);
+
 				UsersHelper::trackBadgeProgress(
 					$user,
 					'event_types_attended',
@@ -1041,6 +1045,26 @@ class EventsHelper
 				self::deleteThumbnail($node);
 			}
 		}
+	}
+
+	public static function getLastAttendedEvent(UserInterface $user): ?Event
+	{
+		$query = Drupal::entityQuery('node')
+			->condition('type', 'event')
+			->condition('status', 1)
+			->condition('field_event_attendees.target_id', $user->id())
+			->sort('field_event_date', 'DESC')
+			->range(0, 1)
+			->accessCheck(false);
+
+		$nids = $query->execute();
+
+		if (empty($nids)) {
+			return null;
+		}
+
+		$node = Node::load(reset($nids));
+		return $node ? self::nodeToEvent($node) : null;
 	}
 
 	#region Event Image Submissions

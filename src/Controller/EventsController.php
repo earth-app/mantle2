@@ -45,6 +45,7 @@ class EventsController extends ControllerBase
 		$filter_ends_after = $request->query->get('filter_ends_after');
 		$filter_ends_before = $request->query->get('filter_ends_before');
 		$filter_is_upcoming = $request->query->get('filter_is_upcoming');
+		$storage = Drupal::entityTypeManager()->getStorage('node');
 
 		try {
 			// Handle random sorting separately using database query
@@ -187,7 +188,6 @@ class EventsController extends ControllerBase
 				$nids = $query->execute()->fetchCol();
 			} else {
 				// Use entity query for normal sorting
-				$storage = Drupal::entityTypeManager()->getStorage('node');
 				$query = $storage->getQuery()->accessCheck(false)->condition('type', 'event');
 
 				// Check visibility

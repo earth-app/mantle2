@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\EventSubscriber;
 
+use Drupal\mantle2\Service\PointsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\user\UserInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -100,6 +101,9 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				if ($id) {
 					UsersHelper::trackBadgeProgress($user, 'prompts_responded', $id);
 				}
+
+				// check quest progress for responding to prompts
+				PointsHelper::checkQuestProgress($user, $data, ['respond_to_prompt']);
 			},
 			'POST mantle2.events.create' => function (?UserInterface $user, array $data) {
 				if ($user == null) {

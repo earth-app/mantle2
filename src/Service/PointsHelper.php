@@ -4,8 +4,12 @@ namespace Drupal\mantle2\Service;
 
 use Drupal;
 use Drupal\mantle2\Custom\AccountType;
+use Drupal\mantle2\Custom\Activity;
+use Drupal\mantle2\Custom\ActivityType;
+use Drupal\mantle2\Custom\Event;
 use Drupal\mantle2\Custom\Quest;
 use Drupal\mantle2\Custom\QuestData;
+use Drupal\mantle2\Custom\QuestStep;
 use Drupal\user\UserInterface;
 use Exception;
 use GdImage;
@@ -872,6 +876,10 @@ class PointsHelper
 
 	public static function getCurrentQuest(UserInterface $user): QuestData
 	{
+		if ($user->id() == UsersHelper::cloud()->id()) {
+			return new QuestData(null, null, null);
+		}
+
 		$data =
 			CloudHelper::sendRequest(
 				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
@@ -992,5 +1000,224 @@ class PointsHelper
 			},
 			3600,
 		);
+	}
+
+	private static function updateQuest(UserInterface $user, array $data): array
+	{
+		$payload = [
+			'device' => [
+				'make' => '@earth-app/mantle2',
+				'model' => 'unknown',
+				'os' => 'API',
+			],
+			'response' => $data,
+			'rank' => strtolower(UsersHelper::getAccountType($user)->name),
+		];
+
+		try {
+			$response = CloudHelper::sendRequest(
+				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()) . '/update',
+				'PATCH',
+				$payload,
+			);
+
+			return $response;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to update quest for user %uid: %message', [
+				'%uid' => $user->id(),
+				'%message' => $e->getMessage(),
+			]);
+
+			return [];
+		}
+	}
+
+	private static function runAttendEventCheck(
+		UserInterface $user,
+		QuestStep $step,
+		int $index,
+		?int $altIndex,
+		?Event $event = null,
+	): void {
+		if ($step->type !== 'attend_event') {
+			return;
+		}
+
+		$parameters = $step->parameters ?? [];
+		$requiredType = $parameters[0] ?? null;
+		$minAttendees = $parameters[1] ?? 0;
+		$event = $event ?? EventsHelper::getLastAttendedEvent($user);
+		if (!$event) {
+			return;
+		}
+
+		// verify event type if required
+		if ($requiredType) {
+			$typeOfRequired = $requiredType['type'] ?? null;
+			$activities = $event->getActivities();
+			if ($typeOfRequired === 'activity_type') {
+				$foundActivityOrType = false;
+				foreach ($activities as $activity) {
+					if ($activity instanceof Activity) {
+						if (
+							array_search($requiredType['value'], $activity->getTypes(), true) !==
+							false
+						) {
+							$foundActivityOrType = true;
+							break;
+						}
+					} elseif ($activity instanceof ActivityType) {
+						if ($activity->name === $requiredType['value']) {
+							$foundActivityOrType = true;
+							break;
+						}
+					}
+				}
+
+				if (!$foundActivityOrType) {
+					return;
+				}
+			}
+
+			if ($typeOfRequired === 'activity') {
+				$foundActivity = false;
+				foreach ($activities as $activity) {
+					if (
+						$activity instanceof Activity &&
+						$activity->getId() === $requiredType['id']
+					) {
+						$foundActivity = true;
+						break;
+					}
+				}
+
+				if (!$foundActivity) {
+					return;
+				}
+			}
+		}
+
+		// verify minimum attendees
+		if ($event->getAttendeesCount() < $minAttendees) {
+			return;
+		}
+
+		// send update
+		self::updateQuest($user, [
+			'event_id' => $event->getId(),
+			'type' => 'attend_event',
+			'index' => $index,
+			'alt_index' => $altIndex,
+		]);
+	}
+
+	private static function runRespondToPromptCheck(
+		UserInterface $user,
+		QuestStep $step,
+		array $data,
+		int $index,
+		?int $altIndex,
+	): void {
+		if (empty($data) || $step->type !== 'respond_to_prompt') {
+			return;
+		}
+
+		$parameters = $step->parameters ?? [];
+		$keyword = $parameters[0] ?? null;
+		$authorId = $parameters[1] ?? null;
+		$responseText = $data['text'] ?? ($data['response'] ?? ($data['content'] ?? ''));
+
+		if ($keyword && (!is_string($responseText) || stripos($responseText, $keyword) === false)) {
+			return;
+		}
+
+		if ($authorId) {
+			$contentAuthorId = $data['author_id'] ?? ($data['owner_id'] ?? null);
+			if ($contentAuthorId === null && isset($data['owner']) && is_array($data['owner'])) {
+				$contentAuthorId = $data['owner']['id'] ?? null;
+			}
+
+			if ($contentAuthorId != $authorId) {
+				return;
+			}
+		}
+
+		self::updateQuest($user, [
+			'type' => 'respond_to_prompt',
+			'index' => $index,
+			'alt_index' => $altIndex,
+			'response_data' => $data,
+		]);
+	}
+
+	// can function in either cron space (no data) or on-demand after request (with data)
+	public static function checkQuestProgress(
+		UserInterface $user,
+		?array $data,
+		array $stepTypes = ['attend_event', 'respond_to_prompt'],
+		?Event $attendedEvent = null,
+	): void {
+		if (empty($stepTypes)) {
+			return;
+		}
+
+		$checkAttendEvent = in_array('attend_event', $stepTypes, true);
+		$checkRespondToPrompt = in_array('respond_to_prompt', $stepTypes, true);
+
+		$currentQuest = self::getCurrentQuest($user);
+		if ($currentQuest->questId === null) {
+			return;
+		}
+
+		$currentStep = $currentQuest->currentStep;
+		if ($currentStep === null) {
+			return;
+		}
+
+		$currentStepIndex = $currentQuest->currentStepIndex ?? 0;
+
+		if (is_array($currentStep)) {
+			foreach ($currentStep as $altIndex => $altStep) {
+				if ($checkAttendEvent) {
+					self::runAttendEventCheck(
+						$user,
+						$altStep,
+						$currentStepIndex,
+						$altIndex,
+						$attendedEvent,
+					);
+				}
+
+				if ($checkRespondToPrompt) {
+					self::runRespondToPromptCheck(
+						$user,
+						$altStep,
+						$data ?? [],
+						$currentStepIndex,
+						$altIndex,
+					);
+				}
+			}
+		} else {
+			if ($checkAttendEvent) {
+				self::runAttendEventCheck(
+					$user,
+					$currentStep,
+					$currentStepIndex,
+					null,
+					$attendedEvent,
+				);
+			}
+
+			if ($checkRespondToPrompt) {
+				self::runRespondToPromptCheck(
+					$user,
+					$currentStep,
+					$data ?? [],
+					$currentStepIndex,
+					null,
+				);
+			}
+		}
 	}
 }
