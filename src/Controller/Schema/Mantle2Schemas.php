@@ -50,87 +50,111 @@ class Mantle2Schemas
 
 	public static function E400($description = 'Bad request'): array
 	{
-		return [
-			'description' => $description,
-			'content' => [
-				'application/json' => [
-					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
-				],
-			],
-		];
+		return self::responseBody(['$ref' => '#/components/schemas/ErrorResponse'], $description);
 	}
 
 	public static function E401($description = 'Unauthorized'): array
 	{
-		return [
-			'description' => $description,
-			'content' => [
-				'application/json' => [
-					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
-				],
-			],
-		];
+		return self::responseBody(['$ref' => '#/components/schemas/ErrorResponse'], $description);
 	}
 
 	public static function E402($description = 'Payment Required'): array
 	{
-		return [
-			'description' => $description,
-			'content' => [
-				'application/json' => [
-					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
-				],
-			],
-		];
+		return self::responseBody(['$ref' => '#/components/schemas/ErrorResponse'], $description);
 	}
 
 	public static function E403($description = 'Forbidden'): array
 	{
-		return [
-			'description' => $description,
-			'content' => [
-				'application/json' => [
-					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
-				],
-			],
-		];
+		return self::responseBody(['$ref' => '#/components/schemas/ErrorResponse'], $description);
 	}
 
 	public static function E404($description = 'Not found'): array
 	{
-		return [
-			'description' => $description,
-			'content' => [
-				'application/json' => [
-					'schema' => ['$ref' => '#/components/schemas/ErrorResponse'],
-				],
-			],
-		];
+		return self::responseBody(['$ref' => '#/components/schemas/ErrorResponse'], $description);
 	}
 
 	public static function E409($description = 'Duplicate entry'): array
 	{
+		return self::responseBody(['$ref' => '#/components/schemas/ConflictError'], $description);
+	}
+
+	public static function E429($description = 'Rate limit exceeded'): array
+	{
+		return self::responseBody(['$ref' => '#/components/schemas/RateLimitError'], $description);
+	}
+
+	// Root Types (schemas)
+
+	public static function requestBody(
+		array $schema,
+		string $description = 'Request object',
+		bool $required = true,
+	): array {
 		return [
 			'description' => $description,
+			'required' => $required,
 			'content' => [
 				'application/json' => [
-					'schema' => ['$ref' => '#/components/schemas/ConflictError'],
+					'schema' => $schema,
+				],
+				'application/xml' => [
+					'schema' => self::withXmlRoot($schema, 'request'),
 				],
 			],
 		];
 	}
 
-	public static function E429($description = 'Rate limit exceeded'): array
-	{
+	public static function responseBody(
+		array $schema,
+		string $description = 'Successful response',
+		string $contentType = 'application/json',
+	): array {
 		return [
 			'description' => $description,
-			'content' => [
-				'application/json' => [
-					'schema' => ['$ref' => '#/components/schemas/RateLimitError'],
-				],
+			'content' => self::responseContent($schema, $contentType),
+		];
+	}
+
+	public static function jsonAndXmlContent(array $schema): array
+	{
+		return [
+			'application/json' => [
+				'schema' => $schema,
+			],
+			'application/xml' => [
+				'schema' => self::withXmlRoot($schema, 'response'),
 			],
 		];
-	} // Root Types (schemas)
+	}
+
+	public static function responseContent(
+		array $schema,
+		string $contentType = 'application/json',
+	): array {
+		if (str_contains($contentType, 'json')) {
+			return self::jsonAndXmlContent($schema);
+		}
+
+		if (str_contains($contentType, 'xml')) {
+			return [
+				'application/xml' => [
+					'schema' => self::withXmlRoot($schema, 'response'),
+				],
+			];
+		}
+
+		return [
+			$contentType => [
+				'schema' => $schema,
+			],
+		];
+	}
+
+	private static function withXmlRoot(array $schema, string $rootName): array
+	{
+		$schema['xml'] = ['name' => $rootName];
+		return $schema;
+	}
 
 	public static array $info = [
 		'type' => 'object',

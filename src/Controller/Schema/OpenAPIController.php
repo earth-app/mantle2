@@ -46,44 +46,30 @@ class OpenAPIController extends ControllerBase
 
 			$requestBody = [];
 			if (array_key_exists('body/schema', $options)) {
-				$requestBody = [
-					'description' => $options['body/description'] ?? 'Request object',
-					'required' => $options['body/required'] ?? true,
-					'content' => [
-						'application/json' => [
-							'schema' => $this->resolveSchemaSpecifier($options['body/schema']),
-						],
-					],
-				];
+				$requestBody = Mantle2Schemas::requestBody(
+					$this->resolveSchemaSpecifier($options['body/schema']),
+					$options['body/description'] ?? 'Request object',
+					$options['body/required'] ?? true,
+				);
 			}
 
 			$responses = array_filter(
 				[
 					'200' =>
 						$options['schema/200'] ?? null
-							? [
-								'description' => 'Successful response',
-								'content' => [
-									$options['schema/200/type'] ?? 'application/json' => [
-										'schema' => $this->resolveSchemaSpecifier(
-											$options['schema/200'],
-										),
-									],
-								],
-							]
+							? Mantle2Schemas::responseBody(
+								$this->resolveSchemaSpecifier($options['schema/200']),
+								'Successful response',
+								$options['schema/200/type'] ?? 'application/json',
+							)
 							: null,
 					'201' =>
 						$options['schema/201'] ?? null
-							? [
-								'description' => 'Resource created',
-								'content' => [
-									$options['schema/201/type'] ?? 'application/json' => [
-										'schema' => $this->resolveSchemaSpecifier(
-											$options['schema/201'],
-										),
-									],
-								],
-							]
+							? Mantle2Schemas::responseBody(
+								$this->resolveSchemaSpecifier($options['schema/201']),
+								'Resource created',
+								$options['schema/201/type'] ?? 'application/json',
+							)
 							: null,
 					'204' =>
 						$options['schema/204'] ?? null ? ['description' => 'No Content'] : null,
