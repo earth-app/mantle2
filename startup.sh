@@ -32,7 +32,7 @@ if [ ! -d "$SITE_DIR" ]; then
 
   echo ">>> Configuring ddev for Drupal 11"
 
-  ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME" --host-webserver-port=8787
+  ddev config --project-type=drupal11 --docroot=web --project-name="$PROJECT_NAME" --host-webserver-port=8787 --database=mariadb:10.11
 
   ddev start
 
