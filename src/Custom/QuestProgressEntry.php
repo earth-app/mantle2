@@ -12,7 +12,7 @@ class QuestProgressEntry implements JsonSerializable
 	public int $altIndex = 0; // for tracking progress of OR conditions (e.g. complete step 1 OR step 2)
 	public int $submittedAt; // unix ms timestamp of when the step was completed
 
-	// photo submission types (take_photo_classification, take_photo_location, draw_picture, etc)
+	// photo submission types (take_photo_classification, take_photo_location, draw_picture, etc.) + audio (transcribe_audio)
 	public string $r2Key = '';
 	public int $lat = 0;
 	public int $lng = 0;
@@ -24,6 +24,12 @@ class QuestProgressEntry implements JsonSerializable
 	// article_quiz
 	public string $scoreKey = '';
 	public int $score = 0;
+
+	// describe_text, respond_to_prompt
+	public string $text = '';
+
+	// article_read_time, activity_read_time
+	public int $duration = 0; // in seconds
 
 	private function __construct(
 		string $type,
@@ -37,6 +43,8 @@ class QuestProgressEntry implements JsonSerializable
 		int $timestamp = 0,
 		string $scoreKey = '',
 		int $score = 0,
+		string $text = '',
+		int $duration = 0,
 	) {
 		$this->type = $type;
 		$this->index = $index;
@@ -49,6 +57,8 @@ class QuestProgressEntry implements JsonSerializable
 		$this->timestamp = $timestamp;
 		$this->scoreKey = $scoreKey;
 		$this->score = $score;
+		$this->text = $text;
+		$this->duration = $duration;
 	}
 
 	public function jsonSerialize(): array
@@ -65,6 +75,8 @@ class QuestProgressEntry implements JsonSerializable
 			'timestamp' => $this->timestamp,
 			'scoreKey' => $this->scoreKey,
 			'score' => $this->score,
+			'text' => $this->text,
+			'duration' => $this->duration,
 		];
 	}
 
@@ -136,6 +148,8 @@ class QuestProgressEntry implements JsonSerializable
 			$data['timestamp'] ?? 0,
 			$data['scoreKey'] ?? '',
 			$data['score'] ?? 0,
+			$data['text'] ?? '',
+			$data['duration'] ?? 0,
 		);
 	}
 }

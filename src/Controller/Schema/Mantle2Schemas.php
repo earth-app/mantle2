@@ -2144,6 +2144,10 @@ class Mantle2Schemas
 						'take_photo_caption',
 						'draw_picture',
 						'take_photo_objects',
+						'describe_text',
+						'respond_to_prompt',
+						'article_read_time',
+						'activity_read_time',
 						'attend_event',
 						'transcribe_audio',
 						'article_quiz',
@@ -2296,6 +2300,10 @@ class Mantle2Schemas
 								'take_photo_caption',
 								'draw_picture',
 								'take_photo_objects',
+								'describe_text',
+								'respond_to_prompt',
+								'article_read_time',
+								'activity_read_time',
 								'transcribe_audio',
 							],
 						],
@@ -2331,6 +2339,20 @@ class Mantle2Schemas
 							'type' => 'number',
 							'description' => 'Longitude coordinate for location-based steps',
 							'examples' => [-74.006, -118.2437, -87.6298],
+						],
+						'text' => [
+							'type' => 'string',
+							'description' =>
+								'Text response for describe_text and respond_to_prompt steps',
+							'examples' => [
+								'I enjoy hiking in forest preserves because it helps me focus.',
+							],
+						],
+						'duration' => [
+							'type' => 'integer',
+							'description' =>
+								'Read time duration in seconds for article_read_time and activity_read_time steps',
+							'examples' => [30, 120, 600],
 						],
 					],
 					'description' =>
