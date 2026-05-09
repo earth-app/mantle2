@@ -137,6 +137,16 @@ class XmlContentNegotiationSubscriber implements EventSubscriberInterface
 			return false;
 		}
 
+		// first, check "format" query parameter
+		$format = strtolower((string) $request->query->get('format', ''));
+		if ($format === 'json') {
+			return false;
+		}
+		if ($format === 'xml') {
+			return true;
+		}
+
+		// then check "Accept" header for XML content types
 		$accept = strtolower((string) $request->headers->get('Accept', ''));
 		return $accept !== '' &&
 			(str_contains($accept, 'application/xml') ||
