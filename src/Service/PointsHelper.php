@@ -1045,14 +1045,14 @@ class PointsHelper
 
 		$parameters = $step->parameters ?? [];
 		$requiredType = $parameters[0] ?? null;
-		$minAttendees = $parameters[1] ?? 0;
+		$minAttendees = is_numeric($parameters[1] ?? null) ? (int) $parameters[1] : 0;
 		$event = $event ?? EventsHelper::getLastAttendedEvent($user);
 		if (!$event) {
 			return;
 		}
 
 		// verify event type if required
-		if ($requiredType) {
+		if (is_array($requiredType)) {
 			$typeOfRequired = $requiredType['type'] ?? null;
 			$activities = $event->getActivities();
 			if ($typeOfRequired === 'activity_type') {
@@ -1176,8 +1176,35 @@ class PointsHelper
 
 		$currentStepIndex = $currentQuest->currentStepIndex ?? 0;
 
+		if ($currentStep instanceof QuestStep) {
+			if ($checkAttendEvent) {
+				self::runAttendEventCheck(
+					$user,
+					$currentStep,
+					$currentStepIndex,
+					null,
+					$attendedEvent,
+				);
+			}
+
+			if ($checkRespondToPrompt) {
+				self::runRespondToPromptCheck(
+					$user,
+					$currentStep,
+					$data ?? [],
+					$currentStepIndex,
+					null,
+				);
+			}
+			return;
+		}
+
 		if (is_array($currentStep)) {
 			foreach ($currentStep as $altIndex => $altStep) {
+				if (!$altStep instanceof QuestStep) {
+					continue;
+				}
+
 				if ($checkAttendEvent) {
 					self::runAttendEventCheck(
 						$user,
@@ -1197,26 +1224,6 @@ class PointsHelper
 						$altIndex,
 					);
 				}
-			}
-		} else {
-			if ($checkAttendEvent) {
-				self::runAttendEventCheck(
-					$user,
-					$currentStep,
-					$currentStepIndex,
-					null,
-					$attendedEvent,
-				);
-			}
-
-			if ($checkRespondToPrompt) {
-				self::runRespondToPromptCheck(
-					$user,
-					$currentStep,
-					$data ?? [],
-					$currentStepIndex,
-					null,
-				);
 			}
 		}
 	}

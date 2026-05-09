@@ -45,6 +45,8 @@ class QuestData implements JsonSerializable
 
 	public static function fromArray(array $data): self
 	{
+		$currentStep = self::parseCurrentStep($data['currentStep'] ?? null);
+
 		// Process progress entries - can be either single entries or arrays of entries (for alt steps)
 		$progressEntries = [];
 		foreach ($data['progress'] ?? [] as $entry) {
@@ -66,10 +68,47 @@ class QuestData implements JsonSerializable
 		return new self(
 			isset($data['quest']) ? Quest::fromArray($data['quest']) : null,
 			$data['questId'] ?? null,
-			$data['currentStep'] ?? null,
+			$currentStep,
 			$data['currentStepIndex'] ?? 0,
 			$data['completed'] ?? false,
 			$progressEntries,
 		);
+	}
+
+	private static function parseCurrentStep(mixed $step): mixed
+	{
+		if (!is_array($step)) {
+			return null;
+		}
+
+		if (
+			isset($step['type']) &&
+			is_string($step['type']) &&
+			isset($step['description']) &&
+			is_string($step['description'])
+		) {
+			return QuestStep::fromArray($step);
+		}
+
+		if (!array_is_list($step)) {
+			return null;
+		}
+
+		$alternatives = [];
+		foreach ($step as $altStep) {
+			if (
+				!is_array($altStep) ||
+				!isset($altStep['type']) ||
+				!is_string($altStep['type']) ||
+				!isset($altStep['description']) ||
+				!is_string($altStep['description'])
+			) {
+				continue;
+			}
+
+			$alternatives[] = QuestStep::fromArray($altStep);
+		}
+
+		return empty($alternatives) ? null : $alternatives;
 	}
 }
