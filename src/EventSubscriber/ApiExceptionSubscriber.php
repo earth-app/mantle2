@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\EventSubscriber;
 
+use Drupal;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -28,43 +29,55 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
 
 		$exception = $event->getThrowable();
 		$statusCode = 500;
-		$message = 'Internal server error';
-		$extra = [
-			'exception' => get_class($exception),
-			'message' => $exception->getMessage(),
-			'stack_trace' => $exception->getTrace(),
-		];
+		$message = 'Internal Server Error';
 
 		if ($exception instanceof HttpExceptionInterface) {
 			$statusCode = $exception->getStatusCode();
-			$message = $exception->getMessage() ?: $this->getDefaultMessage($statusCode);
+			$message =
+				$statusCode >= 500
+					? 'Internal Server Error'
+					: ($exception->getMessage() ?:
+					$this->getDefaultMessage($statusCode));
 		} else {
 			$exceptionCode = $exception->getCode();
 			if ($exceptionCode >= 400 && $exceptionCode < 600) {
 				$statusCode = $exceptionCode;
-				$message = $exception->getMessage() ?: $this->getDefaultMessage($statusCode);
+				$message =
+					$statusCode >= 500
+						? 'Internal Server Error'
+						: ($exception->getMessage() ?:
+						$this->getDefaultMessage($statusCode));
 			}
 		}
 
-		$response = new JsonResponse(
-			['error' => $message, 'code' => $statusCode, 'extra' => $extra],
-			$statusCode,
-			[
-				'Content-Type' => 'application/json',
-			],
-		);
+		if ($statusCode >= 500) {
+			Drupal::logger('mantle2')->error('[api] Unhandled exception: @class :: @message', [
+				'@class' => get_class($exception),
+				'@message' => $exception->getMessage(),
+			]);
+		}
+
+		$response = new JsonResponse(['message' => $message, 'code' => $statusCode], $statusCode, [
+			'Content-Type' => 'application/json; charset=UTF-8',
+		]);
 
 		$event->setResponse($response);
 	}
 
-	private function getDefaultMessage($statusCode): string
+	private function getDefaultMessage(int $statusCode): string
 	{
 		return match ($statusCode) {
+			400 => 'Bad Request',
 			401 => 'Unauthorized',
-			402 => 'Payment required',
-			403 => 'Access denied',
-			404 => 'Not found',
-			default => 'Error',
+			402 => 'Payment Required',
+			403 => 'Forbidden',
+			404 => 'Not Found',
+			405 => 'Method Not Allowed',
+			406 => 'Not Acceptable',
+			415 => 'Unsupported Media Type',
+			422 => 'Unprocessable Entity',
+			429 => 'Too Many Requests',
+			default => 'Internal Server Error',
 		};
 	}
 }

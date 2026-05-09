@@ -44,6 +44,12 @@ class XmlContentNegotiationSubscriber implements EventSubscriberInterface
 
 		$data = self::xmlToArray($content);
 		if ($data === []) {
+			$event->setResponse(
+				new JsonResponse(
+					['message' => 'Invalid XML body', 'code' => 400],
+					Response::HTTP_BAD_REQUEST,
+				),
+			);
 			return;
 		}
 
@@ -148,10 +154,21 @@ class XmlContentNegotiationSubscriber implements EventSubscriberInterface
 
 		// then check "Accept" header for XML content types
 		$accept = strtolower((string) $request->headers->get('Accept', ''));
-		return $accept !== '' &&
+		if (
+			$accept !== '' &&
 			(str_contains($accept, 'application/xml') ||
 				str_contains($accept, 'text/xml') ||
-				str_contains($accept, '+xml'));
+				str_contains($accept, '+xml'))
+		) {
+			return true;
+		}
+
+		// finally, if request body itself is XML, default response to XML as well
+		$contentType = strtolower((string) $request->headers->get('Content-Type', ''));
+		return $contentType !== '' &&
+			(str_contains($contentType, 'application/xml') ||
+				str_contains($contentType, 'text/xml') ||
+				str_contains($contentType, '+xml'));
 	}
 
 	private static function xmlNodeToValue(SimpleXMLElement $element): mixed
