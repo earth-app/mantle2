@@ -125,16 +125,16 @@ class CloudHelper
 		$logResponse =
 			strlen($response) > 250 ? substr($response, 0, 250) . '... [truncated]' : $response;
 
-		Drupal::logger('mantle2_cloud')->info(
-			'Cloud request: [@code] @method @url : @payload : @response',
-			[
-				'@method' => $method,
-				'@url' => $url,
-				'@payload' => $payload ?? '<empty>',
-				'@response' => $logResponse,
-				'@code' => $httpCode,
-			],
-		);
+		// Drupal::logger('mantle2_cloud')->info(
+		// 	'Cloud request: [@code] @method @url : @payload : @response',
+		// 	[
+		// 		'@method' => $method,
+		// 		'@url' => $url,
+		// 		'@payload' => $payload ?? '<empty>',
+		// 		'@response' => $logResponse,
+		// 		'@code' => $httpCode,
+		// 	],
+		// );
 
 		if ($httpCode === 204) {
 			return [];
