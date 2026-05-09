@@ -1157,60 +1157,33 @@ class PointsHelper
 		array $stepTypes = ['attend_event', 'respond_to_prompt'],
 		?Event $attendedEvent = null,
 	): void {
-		if (empty($stepTypes)) {
-			return;
-		}
-
-		$checkAttendEvent = in_array('attend_event', $stepTypes, true);
-		$checkRespondToPrompt = in_array('respond_to_prompt', $stepTypes, true);
-
-		$currentQuest = self::getCurrentQuest($user);
-		if ($currentQuest->questId === null) {
-			return;
-		}
-
-		$currentStep = $currentQuest->currentStep;
-		if ($currentStep === null) {
-			return;
-		}
-
-		$currentStepIndex = $currentQuest->currentStepIndex ?? 0;
-
-		if ($currentStep instanceof QuestStep) {
-			if ($checkAttendEvent) {
-				self::runAttendEventCheck(
-					$user,
-					$currentStep,
-					$currentStepIndex,
-					null,
-					$attendedEvent,
-				);
+		try {
+			if (empty($stepTypes)) {
+				return;
 			}
 
-			if ($checkRespondToPrompt) {
-				self::runRespondToPromptCheck(
-					$user,
-					$currentStep,
-					$data ?? [],
-					$currentStepIndex,
-					null,
-				);
+			$checkAttendEvent = in_array('attend_event', $stepTypes, true);
+			$checkRespondToPrompt = in_array('respond_to_prompt', $stepTypes, true);
+
+			$currentQuest = self::getCurrentQuest($user);
+			if ($currentQuest->questId === null) {
+				return;
 			}
-			return;
-		}
 
-		if (is_array($currentStep)) {
-			foreach ($currentStep as $altIndex => $altStep) {
-				if (!$altStep instanceof QuestStep) {
-					continue;
-				}
+			$currentStep = $currentQuest->currentStep;
+			if ($currentStep === null) {
+				return;
+			}
 
+			$currentStepIndex = $currentQuest->currentStepIndex ?? 0;
+
+			if ($currentStep instanceof QuestStep) {
 				if ($checkAttendEvent) {
 					self::runAttendEventCheck(
 						$user,
-						$altStep,
+						$currentStep,
 						$currentStepIndex,
-						$altIndex,
+						null,
 						$attendedEvent,
 					);
 				}
@@ -1218,13 +1191,52 @@ class PointsHelper
 				if ($checkRespondToPrompt) {
 					self::runRespondToPromptCheck(
 						$user,
-						$altStep,
+						$currentStep,
 						$data ?? [],
 						$currentStepIndex,
-						$altIndex,
+						null,
 					);
 				}
+				return;
 			}
+
+			if (is_array($currentStep)) {
+				foreach ($currentStep as $altIndex => $altStep) {
+					if (!$altStep instanceof QuestStep) {
+						continue;
+					}
+
+					if ($checkAttendEvent) {
+						self::runAttendEventCheck(
+							$user,
+							$altStep,
+							$currentStepIndex,
+							$altIndex,
+							$attendedEvent,
+						);
+					}
+
+					if ($checkRespondToPrompt) {
+						self::runRespondToPromptCheck(
+							$user,
+							$altStep,
+							$data ?? [],
+							$currentStepIndex,
+							$altIndex,
+						);
+					}
+				}
+			}
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error(
+				'Error checking quest progress for user %uid: %message',
+				[
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+
+			return;
 		}
 	}
 }
