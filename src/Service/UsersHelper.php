@@ -1416,6 +1416,10 @@ class UsersHelper
 			return false;
 		}
 
+		if ($user->id() === $friend->id()) {
+			return false; // a user cannot be their own friend (sadly)
+		}
+
 		$friends = $user->get('field_friends')->value ?? '[]';
 		$friends = $friends ? json_decode($friends, true) : [];
 		return in_array($friend->id(), $friends, true);
@@ -1425,6 +1429,10 @@ class UsersHelper
 	{
 		if (!$user1 || !$user2) {
 			return false;
+		}
+
+		if ($user1->id() === $user2->id()) {
+			return false; // a user cannot be a mutual friend with themselves
 		}
 
 		try {
