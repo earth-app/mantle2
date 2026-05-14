@@ -16,9 +16,9 @@ class CorsSubscriber implements EventSubscriberInterface
 	}
 
 	private array $allowedOrigins = [
+		'https://app.earth-app.com',
 		'https://api.earth-app.com',
 		'https://earth-app.com',
-		'https://app.earth-app.com',
 		'https://cloud.earth-app.com',
 		'capacitor://localhost', // ios
 		'http://localhost', // android
@@ -28,13 +28,32 @@ class CorsSubscriber implements EventSubscriberInterface
 		'http://127.0.0.1:3001',
 	];
 
+	private array $allowedOriginPatterns = [
+		// staging workers subdomain
+		'#^https://[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[-.](earthapp-crust)\.gmitch215\.workers\.dev$#i',
+	];
+
 	public function onRespond(ResponseEvent $event)
 	{
 		$request = $event->getRequest();
 		$origin = $request->headers->get('Origin');
 		$response = $event->getResponse();
 
-		if (in_array($origin, $this->allowedOrigins)) {
+		// check allowed origins based on list or pattern
+		$isAllowed = false;
+		if (in_array($origin, $this->allowedOrigins, true)) {
+			$isAllowed = true;
+		}
+		if (!$isAllowed && $origin) {
+			foreach ($this->allowedOriginPatterns as $pattern) {
+				if (preg_match($pattern, $origin)) {
+					$isAllowed = true;
+					break;
+				}
+			}
+		}
+
+		if ($isAllowed) {
 			$response->headers->set('Access-Control-Allow-Origin', $origin);
 		} else {
 			$response->headers->set('Access-Control-Allow-Origin', $this->allowedOrigins[0]); // Default to the first allowed origin
