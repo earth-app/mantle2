@@ -31,8 +31,9 @@ function createField(
 	// If no bundle is provided, default to entity (e.g., user entity uses 'user' bundle).
 	$bundle = $bundle ?? $entity;
 	$field_is_new = false;
+	$field_storage = FieldStorageConfig::loadByName($entity, $name);
 
-	if (!FieldStorageConfig::loadByName($entity, $name)) {
+	if (!$field_storage) {
 		try {
 			FieldStorageConfig::create([
 				'field_name' => $name,
@@ -50,6 +51,36 @@ function createField(
 					'%message' => $e->getMessage(),
 				],
 			);
+		}
+	} else {
+		$storage_needs_save = false;
+
+		if ($settings && $field_storage->getSettings() !== $settings) {
+			$field_storage->setSettings($settings);
+			$storage_needs_save = true;
+		}
+
+		if ($field_storage->getCardinality() !== $cardinality) {
+			$field_storage->setCardinality($cardinality);
+			$storage_needs_save = true;
+		}
+
+		if ($storage_needs_save) {
+			try {
+				$field_storage->save();
+				Drupal::logger('mantle2')->notice(
+					'Updated field storage for \'%field\' under \'%bundle\' due to settings/cardinality changes.',
+					['%field' => $name, '%bundle' => $bundle],
+				);
+			} catch (EntityStorageException $e) {
+				Drupal::logger('mantle2')->error(
+					'Failed to update field storage for %field: %message',
+					[
+						'%field' => $name,
+						'%message' => $e->getMessage(),
+					],
+				);
+			}
 		}
 	}
 
@@ -757,7 +788,7 @@ function mantle2_install(): void
 			'label' => 'Prompt',
 			'required' => true,
 			'settings' => [
-				'max_length' => 100,
+				'max_length' => 256,
 			],
 		],
 		[
