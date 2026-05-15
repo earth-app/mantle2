@@ -240,9 +240,9 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid fields');
 		}
 
-		if (strlen($data) < 10 || strlen($data) > 100) {
+		if (strlen($data) < 10 || strlen($data) > 256) {
 			return GeneralHelper::badRequest(
-				'Prompt must be between length of 10 and 100 characters',
+				'Prompt must be between length of 10 and 256 characters',
 			);
 		}
 

@@ -98,7 +98,7 @@ class PromptsHelper
 
 		$node = Node::create([
 			'type' => 'prompt',
-			'title' => substr($prompt->getPrompt(), 0, 255),
+			'title' => substr($prompt->getPrompt(), 0, 127),
 			'uid' => $author ? $author->id() : 1,
 		]);
 
