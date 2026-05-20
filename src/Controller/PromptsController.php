@@ -292,6 +292,11 @@ class PromptsController extends ControllerBase
 				return GeneralHelper::badRequest('Count must be between 1 and 25');
 			}
 
+			$author = $request->query->getInt('author');
+			if ($author < 0) {
+				return GeneralHelper::badRequest('Author must be a positive integer');
+			}
+
 			$connection = Drupal::database();
 			$query = $connection
 				->select('node_field_data', 'n')
@@ -301,6 +306,10 @@ class PromptsController extends ControllerBase
 
 			$fv = $query->leftJoin('node__field_visibility', 'fv', 'fv.entity_id = n.nid');
 			$query->condition("$fv.delta", 0);
+
+			if ($author > 0) {
+				$query->condition('n.uid', $author);
+			}
 
 			// Check visibility
 			$user = UsersHelper::getOwnerOfRequest($request);
