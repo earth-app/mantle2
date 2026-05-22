@@ -10,11 +10,11 @@ if [ ! -d "$SITE_DIR" ]; then
   echo ">>> Creating new Drupal site in $SITE_DIR"
   echo ">>> Using Path: $SRC_PATH"
 
-  composer create-project drupal/recommended-project "$SITE_DIR"
+  composer create-project --no-interaction drupal/recommended-project "$SITE_DIR"
 
   cd "$SITE_DIR"
 
-  composer require drush/drush drupal/json_field drupal/key drupal/smtp drupal/redis drupal/smtp drupal/openid_connect:^3.0@alpha
+  composer require --no-interaction drush/drush drupal/json_field drupal/key drupal/smtp drupal/redis drupal/smtp drupal/openid_connect:^3.0@alpha
 
   mkdir -p web/modules/custom/$PROJECT_NAME
   find "$SRC_PATH" -maxdepth 1 -name "*.php" \
@@ -70,6 +70,62 @@ else
   ddev drush en "$PROJECT_NAME" -y
 fi
 
+BASE_URLS=(
+  "https://${PROJECT_NAME}.ddev.site"
+  "http://127.0.0.1:8787"
+)
+
+verify_endpoint() {
+  local base="$1"
+  local path="$2"
+  local expect="$3"
+  local url="${base}${path}"
+  local max_attempts=30
+  local attempt=1
+  local headers body http_code ctype
+
+  echo ">>> Pinging ${url} (expecting ${expect})"
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    headers="$(mktemp)"
+    body="$(mktemp)"
+    http_code="$(curl -sS -k -D "$headers" -o "$body" -w '%{http_code}' "$url" 2>/dev/null || echo 000)"
+
+    if [ "$http_code" = "200" ]; then
+      ctype="$(grep -i '^content-type:' "$headers" | tail -n1 | tr -d '\r')"
+      if [ "$expect" = "json" ] && ! echo "$ctype" | grep -qi 'application/json'; then
+        echo "    FAIL: HTTP 200 but content-type is not JSON (${ctype})"
+        head -c 500 "$body"; echo
+        rm -f "$headers" "$body"
+        return 1
+      fi
+      echo "    OK [${http_code}] ${ctype}"
+      head -c 500 "$body"; echo
+      rm -f "$headers" "$body"
+      return 0
+    fi
+
+    rm -f "$headers" "$body"
+    echo "    attempt ${attempt}/${max_attempts}: HTTP ${http_code}, retrying..."
+    attempt=$((attempt + 1))
+    sleep 2
+  done
+
+  echo ">>> ${url} did not respond after ${max_attempts} attempts"
+  return 1
+}
+
+echo
+echo ">>> Verifying mantle2 endpoints"
+for base in "${BASE_URLS[@]}"; do
+  verify_endpoint "$base" /v2/hello text
+  verify_endpoint "$base" /v2/info json
+done
+
 echo
 echo ">>> Drupal site with $PROJECT_NAME is ready!"
 echo "Project directory: $SITE_DIR"
+echo "Base URLs:"
+for base in "${BASE_URLS[@]}"; do
+  echo "  - ${base}"
+done
