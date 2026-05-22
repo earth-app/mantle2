@@ -103,6 +103,14 @@ mantle2/
 └── phpunit.xml.dist         # Test configuration
 ```
 
+### Repository Map
+
+- `data/` contains runtime content used by helpers and tests, including email campaign definitions and cloud service credentials.
+- `tests/src/Unit/` contains the repo's main safety net: YAML/config validation and helper/unit tests.
+- `tests/src/Mocks.php` provides Drupal container mocks for helpers that expect runtime services.
+- `.github/workflows/` contains the formatting, deploy, and external E2E dispatch workflows.
+- `coverage/` is generated output from PHPUnit and should not be edited manually.
+
 ### Design Patterns
 
 #### 1. Controller Layer
@@ -711,6 +719,17 @@ Drupal::logger('mantle2')->info('Info message');
     drush devel-generate-content 100 --types=activity,event,article
     ```
 
+### Configuration Files
+
+The following files should stay aligned with the code that consumes them:
+
+- `mantle2.services.yml` registers helpers and event subscribers.
+- `mantle2.routing.yml` defines the API surface and OpenAPI metadata.
+- `mantle2.caching.yml` mirrors route patterns for read caching and invalidation.
+- `drush.services.yml` exposes the Drush command service.
+- `mantle2.info.yml` declares Drupal module dependencies.
+- `data/email_campaigns.yml` powers email campaign rendering and placeholder expansion.
+
 ### Code Quality
 
 **Formatting:**
@@ -831,6 +850,14 @@ class GeneralUnitTest extends TestCase
 	}
 }
 ```
+
+**Current pattern:**
+
+- Config-oriented tests live under `tests/src/Unit/` and validate YAML files with `Symfony\Component\Yaml\Yaml`.
+- Most validation tests use `#[DataProvider]` to iterate through every service, route, or cache rule.
+- `#[TestDox]` is used heavily so failures read like requirements.
+- The common groups are `mantle2/services`, `mantle2/routing`, `mantle2/caching`, `mantle2/drush`, `mantle2/html`, `mantle2/cloud`, and `mantle2/util`.
+- `tests/src/Mocks.php` supplies the Drupal container and service doubles needed by helper tests.
 
 ### Mocks
 
