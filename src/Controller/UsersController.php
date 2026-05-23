@@ -2114,22 +2114,26 @@ class UsersController extends ControllerBase
 		$description = $body['description'] ?? null;
 		$type = $body['type'] ?? 'info';
 		$link = $body['link'] ?? null;
-		$source = $body['source'] ?? null;
+		$source = $body['source'] ?? 'system';
 
 		if (!$title || !$description) {
 			return GeneralHelper::badRequest('Missing title or description');
 		}
 
-		if (!$type) {
+		if (!is_string($type) || $type === '') {
 			$type = 'info';
+		}
+
+		if (!is_string($source) || $source === '') {
+			$source = 'system';
 		}
 
 		$notification = UsersHelper::addNotification(
 			$user,
 			$title,
 			$description,
-			$type,
 			$link,
+			$type,
 			$source,
 		);
 

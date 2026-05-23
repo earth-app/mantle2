@@ -532,143 +532,168 @@ class CampaignHelper
 
 		/** @var \Drupal\user\UserInterface $user */
 		foreach ($users as $user) {
-			$userId = $user->id();
+			try {
+				$userId = $user->id();
 
-			if (isset($sentThisRun[$userId])) {
-				continue;
-			}
-
-			// find the most overdue campaign for this user and prioritize that
-			$mostOverdueCampaign = null;
-			$maxOverdueAmount = 0;
-
-			foreach ($campaigns as $campaign) {
-				if (!isset($campaign['id']) || !isset($campaign['interval'])) {
+				if (isset($sentThisRun[$userId])) {
 					continue;
 				}
 
-				$campaignId = $campaign['id'];
-				$interval = (int) $campaign['interval'];
-				$globalFilterName = $campaign['global_filter'] ?? null;
+				// find the most overdue campaign for this user and prioritize that
+				$mostOverdueCampaign = null;
+				$maxOverdueAmount = 0;
 
-				// check global filter
-				if ($globalFilterName && method_exists(self::class, $globalFilterName)) {
-					if (!array_key_exists($globalFilterName, $globalFilterResults)) {
-						$result = self::$globalFilterName();
-						$globalFilterResults[$globalFilterName] = $result;
-					}
-
-					if (!$globalFilterResults[$globalFilterName]) {
+				foreach ($campaigns as $campaign) {
+					if (!isset($campaign['id']) || !isset($campaign['interval'])) {
 						continue;
 					}
-				}
 
-				$filterName = $campaign['filter'] ?? null;
+					$campaignId = $campaign['id'];
+					$interval = (int) $campaign['interval'];
+					$globalFilterName = $campaign['global_filter'] ?? null;
 
-				// check filter
-				if ($filterName && method_exists(self::class, $filterName)) {
-					if (!self::$filterName($user)) {
+					// check global filter
+					if ($globalFilterName && method_exists(self::class, $globalFilterName)) {
+						if (!array_key_exists($globalFilterName, $globalFilterResults)) {
+							$result = self::$globalFilterName();
+							$globalFilterResults[$globalFilterName] = $result;
+						}
+
+						if (!$globalFilterResults[$globalFilterName]) {
+							continue;
+						}
+					}
+
+					$filterName = $campaign['filter'] ?? null;
+
+					// check filter
+					if ($filterName && method_exists(self::class, $filterName)) {
+						if (!self::$filterName($user)) {
+							continue;
+						}
+					}
+
+					// skip if this campaign respects subscription and user unsubscribed
+					$unsubscribable = $campaign['unsubscribable'] ?? true;
+					if ($unsubscribable && !UsersHelper::isSubscribed($user)) {
 						continue;
 					}
-				}
 
-				// skip if this campaign respects subscription and user unsubscribed
-				$unsubscribable = $campaign['unsubscribable'] ?? true;
-				if ($unsubscribable && !UsersHelper::isSubscribed($user)) {
-					continue;
-				}
+					$redisKey = "campaign:{$campaignId}:user:{$userId}";
+					$lastSentData = RedisHelper::get($redisKey);
 
-				$redisKey = "campaign:{$campaignId}:user:{$userId}";
-				$lastSentData = RedisHelper::get($redisKey);
+					$shouldSend = false;
+					$overdueAmount = 0;
 
-				$shouldSend = false;
-				$overdueAmount = 0;
+					if ($lastSentData && isset($lastSentData['sent_at'])) {
+						$lastSent = (int) $lastSentData['sent_at'];
+						$nextSend = $lastSent + $interval;
 
-				if ($lastSentData && isset($lastSentData['sent_at'])) {
-					$lastSent = (int) $lastSentData['sent_at'];
-					$nextSend = $lastSent + $interval;
+						// add random variation (+ or - $variation seconds)
+						$variation = rand(-self::$variation, self::$variation);
+						$nextSendWithVariation = $nextSend + $variation;
 
-					// add random variation (+ or - $variation seconds)
-					$variation = rand(-self::$variation, self::$variation);
-					$nextSendWithVariation = $nextSend + $variation;
+						if ($time >= $nextSendWithVariation) {
+							$shouldSend = true;
+							$overdueAmount = $time - $nextSendWithVariation;
+						}
+					} else {
+						// first time sending - stagger by a deterministic per-(user, campaign) offset
+						// from the user's creation time so new users don't all fire in the same cron tick
+						// and old users compete on the same scale as already-overdue campaigns
+						$userCreated = (int) $user->getCreatedTime();
+						$initialOffset = crc32("{$campaignId}:{$userId}") % self::$variation;
+						$firstAvailable = $userCreated + $initialOffset;
 
-					if ($time >= $nextSendWithVariation) {
-						$shouldSend = true;
-						$overdueAmount = $time - $nextSendWithVariation;
+						if ($time >= $firstAvailable) {
+							$shouldSend = true;
+							$overdueAmount = $time - $firstAvailable;
+						}
 					}
-				} else {
-					// first time sending - stagger by a deterministic per-(user, campaign) offset
-					// from the user's creation time so new users don't all fire in the same cron tick
-					// and old users compete on the same scale as already-overdue campaigns
-					$userCreated = (int) $user->getCreatedTime();
-					$initialOffset = crc32("{$campaignId}:{$userId}") % self::$variation;
-					$firstAvailable = $userCreated + $initialOffset;
 
-					if ($time >= $firstAvailable) {
-						$shouldSend = true;
-						$overdueAmount = $time - $firstAvailable;
+					if (!$shouldSend) {
+						continue;
+					}
+
+					$processedCampaign = self::processCampaign($campaign, $user);
+					if (self::shouldSkipCampaign($campaign, $processedCampaign)) {
+						Drupal::logger('mantle2')->info(
+							"Skipped campaign '%campaign' for user %user (@%name): missing placeholder content",
+							[
+								'%campaign' => $campaignId,
+								'%user' => $userId,
+								'%name' => $user->getAccountName(),
+							],
+						);
+						continue;
+					}
+
+					// track the most overdue campaign
+					if ($overdueAmount > $maxOverdueAmount) {
+						$maxOverdueAmount = $overdueAmount;
+						$mostOverdueCampaign = [
+							'campaign' => $campaign,
+							'processed_campaign' => $processedCampaign,
+							'id' => $campaignId,
+							'interval' => $interval,
+							'redis_key' => $redisKey,
+						];
 					}
 				}
 
-				if (!$shouldSend) {
-					continue;
-				}
+				// send the most overdue campaign if found
+				if ($mostOverdueCampaign) {
+					$campaignId = $mostOverdueCampaign['id'];
+					$processedCampaign = $mostOverdueCampaign['processed_campaign'];
 
-				$processedCampaign = self::processCampaign($campaign, $user);
-				if (self::shouldSkipCampaign($campaign, $processedCampaign)) {
-					Drupal::logger('mantle2')->info(
-						"Skipped campaign '%campaign' for user %user (@%name): missing placeholder content",
-						[
-							'%campaign' => $campaignId,
-							'%user' => $userId,
-							'%name' => $user->getAccountName(),
-						],
-					);
-					continue;
-				}
-
-				// track the most overdue campaign
-				if ($overdueAmount > $maxOverdueAmount) {
-					$maxOverdueAmount = $overdueAmount;
-					$mostOverdueCampaign = [
-						'campaign' => $campaign,
-						'processed_campaign' => $processedCampaign,
-						'id' => $campaignId,
-						'interval' => $interval,
-						'redis_key' => $redisKey,
-					];
-				}
-			}
-
-			// send the most overdue campaign if found
-			if ($mostOverdueCampaign) {
-				$processedCampaign = $mostOverdueCampaign['processed_campaign'];
-				$success = UsersHelper::sendEmailCampaign($mostOverdueCampaign['id'], $user, [
-					'processed_campaign' => $processedCampaign,
-				]);
-				if ($success) {
-					$ttl = $mostOverdueCampaign['interval'] + self::$variation * 2 + 86400; // Add extra day buffer
+					// Persist the send marker BEFORE attempting delivery so that if anything in
+					// the mail path throws (e.g. session/header errors from web-triggered cron,
+					// SMTP hiccup) we don't re-send on the next cron tick. A failed send means
+					// the user misses one cycle and gets the campaign on the next interval.
+					$ttl = $mostOverdueCampaign['interval'] + self::$variation * 2 + 86400;
 					RedisHelper::set(
 						$mostOverdueCampaign['redis_key'],
 						[
 							'sent_at' => $time,
-							'campaign_id' => $mostOverdueCampaign['id'],
+							'campaign_id' => $campaignId,
 						],
 						$ttl,
 					);
-
-					// mark that this user has received a campaign this cron run
 					$sentThisRun[$userId] = true;
 
-					Drupal::logger('mantle2')->info(
-						"Sent campaign '%campaign' to user %user (@%name)",
-						[
-							'%campaign' => $mostOverdueCampaign['id'],
-							'%user' => $userId,
-							'%name' => $user->getAccountName(),
-						],
-					);
+					try {
+						UsersHelper::sendEmailCampaign($campaignId, $user, [
+							'processed_campaign' => $processedCampaign,
+						]);
+
+						Drupal::logger('mantle2')->info(
+							"Sent campaign '%campaign' to user %user (@%name)",
+							[
+								'%campaign' => $campaignId,
+								'%user' => $userId,
+								'%name' => $user->getAccountName(),
+							],
+						);
+					} catch (\Throwable $sendError) {
+						Drupal::logger('mantle2')->error(
+							"Failed to deliver campaign '%campaign' to user %user (@%name): %message",
+							[
+								'%campaign' => $campaignId,
+								'%user' => $userId,
+								'%name' => $user->getAccountName(),
+								'%message' => $sendError->getMessage(),
+							],
+						);
+					}
 				}
+			} catch (\Throwable $userError) {
+				Drupal::logger('mantle2')->error(
+					'Campaign processing failed for user %uid: %message',
+					[
+						'%uid' => $user->id(),
+						'%message' => $userError->getMessage(),
+					],
+				);
 			}
 		}
 	}
