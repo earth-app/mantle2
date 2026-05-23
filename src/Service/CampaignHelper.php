@@ -597,12 +597,16 @@ class CampaignHelper
 						$overdueAmount = $time - $nextSendWithVariation;
 					}
 				} else {
-					// first time sending - add initial random variation to stagger sends
-					$initialVariation = rand(0, self::$variation);
-					if ($time >= $initialVariation) {
+					// first time sending - stagger by a deterministic per-(user, campaign) offset
+					// from the user's creation time so new users don't all fire in the same cron tick
+					// and old users compete on the same scale as already-overdue campaigns
+					$userCreated = (int) $user->getCreatedTime();
+					$initialOffset = crc32("{$campaignId}:{$userId}") % self::$variation;
+					$firstAvailable = $userCreated + $initialOffset;
+
+					if ($time >= $firstAvailable) {
 						$shouldSend = true;
-						// for new campaigns, prioritize by how long they've been available
-						$overdueAmount = $time;
+						$overdueAmount = $time - $firstAvailable;
 					}
 				}
 
