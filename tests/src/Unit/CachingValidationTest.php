@@ -262,7 +262,7 @@ class CachingValidationTest extends TestCase
 		$normalized = preg_replace('/\(\[0-9\]\+\)/', '{param}', $normalized);
 		$normalized = preg_replace('/\(\[a-zA-Z0-9_\]\+\)/', '{param}', $normalized);
 		$normalized = preg_replace('/\(\[0-9\]\+\|\[a-zA-Z0-9_\]\+\)/', '{param}', $normalized);
-		$normalized = preg_replace('/\([a-z]+\|[a-z]+\)/', '{option}', $normalized);
+		$normalized = preg_replace('/\([a-z]+(?:\|[a-z]+)+\)/', '{option}', $normalized);
 
 		return $normalized;
 	}

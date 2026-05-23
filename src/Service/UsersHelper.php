@@ -2377,28 +2377,26 @@ class UsersHelper
 		}
 
 		RedisHelper::delete([
-			'user:profile:' . $uid . ':*',
-			'user:photo:' . $uid . ':*',
-			'user:activities:' . $uid . '*',
-			'user:friends:' . $uid . ':*',
-			'user:circle:' . $uid . ':*',
-			'user:notifications:' . $uid . ':*',
-			'user:prompts:' . $uid . ':*',
-			'user:articles:' . $uid . ':*',
-			'user:events:' . $uid . ':*',
-			'user:events_attending:' . $uid . ':*',
-			'user:event_images:' . $uid . ':*',
-			'user:badges:' . $uid . '*',
-			'user:points:' . $uid . '*',
-			'user:*:req:' . $uid . '*',
-			'users:list:*',
-			'prompts:list:req:' . $uid . ':*',
-			'articles:list:req:' . $uid . ':*',
-			'events:list:req:' . $uid . ':*',
-			'event:*:req:' . $uid,
-			'article:*:req:' . $uid,
-			'prompt:*:req:' . $uid . '*',
-			'prompt:responses:*:req:' . $uid . ':*',
+			// serializeUser internal cache (90s TTL)
+			'user:' . $uid . ':public',
+			'user:' . $uid . ':private',
+			'user:' . $uid . ':circle:*',
+			'user:' . $uid . ':mutual:*',
+			// response cache for the user's profile when viewed by id
+			'request_cache:user:profile:' . $uid . ':*',
+			// response cache for the user's `/v2/users/current` view (empty {uid} placeholder)
+			'request_cache:user:profile::req:' . $uid,
+			// response cache for profile photo and other per-user reads
+			'request_cache:user:photo:' . $uid . ':*',
+			'request_cache:user:activities:' . $uid,
+			'request_cache:user:notifications:' . $uid . ':*',
+			'request_cache:user:badges:' . $uid,
+			'request_cache:user:points:' . $uid,
+			// response caches keyed by requester
+			'request_cache:users:list:*',
+			'request_cache:prompts:list:req:' . $uid . ':*',
+			'request_cache:articles:list:req:' . $uid . ':*',
+			'request_cache:events:list:req:' . $uid . ':*',
 		]);
 	}
 

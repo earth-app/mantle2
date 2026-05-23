@@ -2453,6 +2453,8 @@ class UsersController extends ControllerBase
 					return GeneralHelper::internalError('Failed to link OAuth provider');
 				}
 
+				UsersHelper::clearCachedUserResponses((int) $sessionUser->id());
+
 				// send notification for OAuth provider linked
 				$providerName = ucfirst($provider);
 				$currentIP = $request->getClientIp() ?? 'Unknown';
@@ -2504,6 +2506,8 @@ class UsersController extends ControllerBase
 					if (!$success) {
 						return GeneralHelper::internalError('Failed to link OAuth provider');
 					}
+
+					UsersHelper::clearCachedUserResponses((int) $existingEmailUser->id());
 
 					// send notification for OAuth provider linked
 					$providerName = ucfirst($provider);
@@ -2595,6 +2599,8 @@ class UsersController extends ControllerBase
 				'Cannot unlink: this is your only login method. Set a password first.',
 			);
 		}
+
+		UsersHelper::clearCachedUserResponses((int) $user->id());
 
 		// send notification for OAuth provider unlinked
 		$providerName = ucfirst($provider);

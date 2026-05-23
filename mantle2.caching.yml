@@ -235,6 +235,12 @@ cache:
       invalidate_patterns:
         - 'request_cache:user:notifications:{uid}:*'
 
+    - route: '^/v2/users/oauth/(google|microsoft|facebook|discord|github|apple)$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'request_cache:user:profile:{req_uid}:*'
+        - 'request_cache:users:list:*'
+
   deletes:
     - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)$'
       methods: [DELETE]
@@ -295,6 +301,12 @@ cache:
       methods: [DELETE]
       invalidate_patterns:
         - 'request_cache:user:notifications:{uid}:*'
+
+    - route: '^/v2/users/oauth/(google|microsoft|facebook|discord|github|apple)$'
+      methods: [DELETE]
+      invalidate_patterns:
+        - 'request_cache:user:profile:{req_uid}:*'
+        - 'request_cache:users:list:*'
 
   exclusions:
     - '/random'
