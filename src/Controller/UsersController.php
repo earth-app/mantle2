@@ -2120,6 +2120,10 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Missing title or description');
 		}
 
+		if (!$type) {
+			$type = 'info';
+		}
+
 		$notification = UsersHelper::addNotification(
 			$user,
 			$title,
