@@ -11,7 +11,14 @@ use Drupal\Core\Entity\EntityStorageException;
 
 class OAuthHelper
 {
-	public static array $providers = ['google', 'microsoft', 'discord', 'github', 'facebook'];
+	public static array $providers = [
+		'google',
+		'microsoft',
+		'discord',
+		'github',
+		'facebook',
+		'apple',
+	];
 
 	public static function validateToken(string $provider, string $token): ?array
 	{

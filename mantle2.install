@@ -517,6 +517,10 @@ function mantle2_install(): void
 		'max_length' => 255,
 	]);
 
+	createField('user', 'field_oauth_apple_sub', 'string', 'Apple OAuth Sub', false, '', [
+		'max_length' => 255,
+	]);
+
 	/// Subscribed
 	createField('user', 'field_subscribed', 'boolean', 'Subscribed', false, true);
 

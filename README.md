@@ -591,7 +591,7 @@ Vary: Origin
 #### 1. Authentication & Authorization
 
 - Bearer token authentication with issuance/revocation and sliding expiry
-- OAuth provider sign-in/linking (Google, Microsoft, Discord, GitHub, Facebook)
+- OAuth provider sign-in/linking (Google, Microsoft, Discord, GitHub, Facebook, Apple)
 - Password hashing using Drupal's password API (bcrypt)
 - Password strength validation
 - Email verification for account creation

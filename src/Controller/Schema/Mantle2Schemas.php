@@ -906,7 +906,7 @@ class Mantle2Schemas
 								'enum' => OAuthHelper::$providers,
 							],
 							'description' => 'List of OAuth providers linked to this account',
-							'example' => ['discord', 'github'],
+							'example' => ['discord', 'github', 'apple'],
 						],
 						'field_privacy' => ['$ref' => '#/components/schemas/UserFieldPrivacy'],
 					],

@@ -346,6 +346,22 @@ mantle2.users.oauth.google:
     schema/403: Account Disabled
   methods: [POST]
 
+mantle2.users.oauth.apple:
+  path: '/v2/users/oauth/apple'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::oauthApple'
+    _title: 'Apple OAuth Login'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Sign in or sign up with Apple OAuth'
+    schema/200: '#LoginResponse'
+    schema/400: Invalid or missing id_token
+    schema/401: Invalid OAuth token
+    schema/403: Account Disabled
+  methods: [POST]
+
 mantle2.users.oauth.discord.unlink:
   path: '/v2/users/oauth/discord'
   defaults:
@@ -416,6 +432,21 @@ mantle2.users.oauth.google.unlink:
   options:
     tags: Users
     description: 'Unlink Google OAuth provider from your account'
+    schema/200: '#User'
+    schema/400: Invalid or missing id_token, or cannot unlink only login method
+    schema/401: Invalid OAuth token or not authenticated
+  methods: [DELETE]
+
+mantle2.users.oauth.apple.unlink:
+  path: '/v2/users/oauth/apple'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unlinkOAuthApple'
+    _title: 'Unlink Apple OAuth'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: 'Unlink Apple OAuth provider from your account'
     schema/200: '#User'
     schema/400: Invalid or missing id_token, or cannot unlink only login method
     schema/401: Invalid OAuth token or not authenticated

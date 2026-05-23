@@ -2359,6 +2359,12 @@ class UsersController extends ControllerBase
 		return $this->handleOAuthLogin($request, 'github');
 	}
 
+	// POST /v2/users/oauth/apple
+	public function oauthApple(Request $request): JsonResponse
+	{
+		return $this->handleOAuthLogin($request, 'apple');
+	}
+
 	// DELETE /v2/users/oauth/google
 	public function unlinkOAuthGoogle(Request $request): JsonResponse
 	{
@@ -2389,6 +2395,12 @@ class UsersController extends ControllerBase
 		return $this->handleOAuthUnlink($request, 'github');
 	}
 
+	// DELETE /v2/users/oauth/apple
+	public function unlinkOAuthApple(Request $request): JsonResponse
+	{
+		return $this->handleOAuthUnlink($request, 'apple');
+	}
+
 	private function handleOAuthLogin(Request $request, string $provider)
 	{
 		if (!in_array($provider, OAuthHelper::$providers, true)) {
@@ -2400,7 +2412,7 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		// Accept id_token (Microsoft) or access_token (Discord, GitHub, Facebook)
+		// Accept id_token (Microsoft, Apple) or access_token (Discord, GitHub, Facebook)
 		$token = $body['id_token'] ?? ($body['access_token'] ?? null);
 		if (!$token || !is_string($token)) {
 			return GeneralHelper::badRequest('Missing or invalid id_token or access_token');
