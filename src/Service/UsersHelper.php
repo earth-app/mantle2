@@ -2571,14 +2571,19 @@ class UsersHelper
 			}
 		}
 
+		$body = [
+			'type' => $type,
+			'source' => $source,
+			'id' => $id,
+		];
+
+		if ($finalLink !== null) {
+			$body['link'] = $finalLink;
+		}
+
 		if (!empty($tokens)) {
 			foreach ($tokens as $token) {
-				FCMHelper::send($token, $title, $message, [
-					'link' => $finalLink,
-					'type' => $type,
-					'source' => $source,
-					'id' => $id,
-				]);
+				FCMHelper::send($token, $title, $message, $body);
 			}
 		}
 

@@ -18,7 +18,7 @@ class FCMHelper
 
 		$credentialsEnv = getenv('FCM_SERVICE_ACCOUNT_JSON');
 
-		if ($credentialsEnv) {
+		if (!empty($credentialsEnv)) {
 			$credentialsJson = $credentialsEnv;
 		} elseif (file_exists($credentialsPath)) {
 			$credentialsJson = file_get_contents($credentialsPath);
@@ -40,7 +40,15 @@ class FCMHelper
 			return; // fail silently if credentials are not available
 		}
 
-		$creds = new ServiceAccountCredentials($scopes, json_decode($credentialsJson, true));
+		$credsArray = json_decode($credentialsJson, true);
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			Drupal::logger('mantle2')->error('Failed to decode FCM credentials JSON: %error', [
+				'%error' => json_last_error_msg(),
+			]);
+			throw new Exception('Failed to decode FCM credentials JSON');
+		}
+
+		$creds = new ServiceAccountCredentials($scopes, $credsArray);
 		$auth = $creds->fetchAuthToken();
 		$accessToken = $auth['access_token'] ?? null;
 
@@ -62,10 +70,16 @@ class FCMHelper
 			],
 		];
 
+		$projectId = $credsArray['project_id'] ?? null;
+		if (!$projectId) {
+			Drupal::logger('mantle2')->error('Failed to obtain project ID for FCM');
+			throw new Exception('Failed to obtain project ID for FCM');
+		}
+
 		curl_setopt(
 			$ch,
 			CURLOPT_URL,
-			'https://fcm.googleapis.com/v1/projects/mantle2/messages:send',
+			'https://fcm.googleapis.com/v1/projects/' . $projectId . '/messages:send',
 		);
 		curl_setopt($ch, CURLOPT_POST, true);
 		curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -76,6 +90,7 @@ class FCMHelper
 		$payload = json_encode($requestBody);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
 		curl_exec($ch);
 
