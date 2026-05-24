@@ -2411,21 +2411,6 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Failed to register push notification token');
 		}
 
-		Drupal::logger('mantle2')->info(
-			'registerPushToken: stored token for uid %uid, platform %platform, token_length %len (merge_status %status)',
-			[
-				'%uid' => $uid,
-				'%platform' => $platform,
-				'%len' => strlen($token),
-				'%status' =>
-					$mergeResult === Merge::STATUS_INSERT
-						? 'insert'
-						: ($mergeResult === Merge::STATUS_UPDATE
-							? 'update'
-							: (string) $mergeResult),
-			],
-		);
-
 		try {
 			// remove when token exists for other users
 			Drupal::database()
@@ -2450,15 +2435,6 @@ class UsersController extends ControllerBase
 				],
 			);
 		}
-
-		Drupal::logger('mantle2')->info(
-			'Registered push notification token for user %uid (platform %platform, token_length %len)',
-			[
-				'%uid' => $uid,
-				'%platform' => $platform,
-				'%len' => strlen($token),
-			],
-		);
 
 		return new JsonResponse(
 			['message' => 'Push notification token registered successfully'],
