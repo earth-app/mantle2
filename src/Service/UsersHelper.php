@@ -2513,7 +2513,54 @@ class UsersHelper
 			$notifications,
 		);
 		$user->set('field_notifications', json_encode($serialized));
-		$user->save();
+		self::saveUserWithDeadlockRetry($user);
+
+		// Bust response cache so polled GETs see fresh state when a
+		// mutation arrived through an internal helper call rather than
+		// the HTTP routes covered by mantle2.caching.yml.
+		RedisHelper::delete('request_cache:user:notifications:' . $user->id() . ':*');
+	}
+
+	/**
+	 * Saves the user, retrying on transient Postgres deadlocks (SQLSTATE 40P01)
+	 * that surface from concurrent cache_entity invalidations. Reraises after
+	 * exhausting retries or on any non-deadlock error.
+	 */
+	private static function saveUserWithDeadlockRetry(
+		UserInterface $user,
+		int $maxAttempts = 3,
+	): void {
+		$attempt = 0;
+		while (true) {
+			try {
+				$user->save();
+				return;
+			} catch (EntityStorageException $e) {
+				$attempt++;
+				if ($attempt >= $maxAttempts || !self::isDeadlockException($e)) {
+					throw $e;
+				}
+				Drupal::logger('mantle2')->warning(
+					'Deadlock saving user %uid, retrying (attempt %attempt): %message',
+					[
+						'%uid' => $user->id(),
+						'%attempt' => $attempt,
+						'%message' => $e->getMessage(),
+					],
+				);
+				usleep((10 << $attempt - 1) * 1000 + random_int(0, 5000));
+			}
+		}
+	}
+
+	private static function isDeadlockException(Exception $e): bool
+	{
+		$message = $e->getMessage();
+		if (str_contains($message, '40P01') || stripos($message, 'deadlock detected') !== false) {
+			return true;
+		}
+		$previous = $e->getPrevious();
+		return $previous instanceof Exception && self::isDeadlockException($previous);
 	}
 
 	public static function addNotification(
