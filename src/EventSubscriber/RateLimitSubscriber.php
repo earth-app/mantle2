@@ -4,6 +4,7 @@ namespace Drupal\mantle2\EventSubscriber;
 
 use DateInterval;
 use DateTimeImmutable;
+use Drupal;
 use Drupal\Core\KeyValueStore\KeyValueExpirableFactoryInterface;
 use Drupal\Core\KeyValueStore\KeyValueStoreExpirableInterface;
 use Drupal\mantle2\Service\UsersHelper;
@@ -60,6 +61,7 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		}
 
 		$isAuthenticated = $requester !== null;
+		$routeName = (string) $request->attributes->get('_route');
 		$globalConfig = $this->getGlobalConfig($isAuthenticated);
 		$globalCheck = $this->checkLimit(
 			$isAuthenticated ? 'global:auth' : 'global:anon',
@@ -68,6 +70,7 @@ class RateLimitSubscriber implements EventSubscriberInterface
 			$ip,
 		);
 		if (!$globalCheck['allowed']) {
+			$this->log429('global', $path, $routeName, $ip, $requester, $globalCheck);
 			$response = $this->build429Array($globalCheck, 'Global rate limit exceeded');
 			$this->setRateHeadersArray($response, $globalCheck, prefix: 'X-Global-RateLimit-');
 			$event->setResponse($response);
@@ -75,7 +78,6 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		}
 
 		// Per-endpoint limiter (if configured for this route)
-		$routeName = (string) $request->attributes->get('_route');
 		$endpointConfig = $this->getEndpointConfig($routeName);
 		if ($endpointConfig) {
 			$endpointCheck = $this->checkLimit(
@@ -89,6 +91,7 @@ class RateLimitSubscriber implements EventSubscriberInterface
 			$request->attributes->set('_mantle2_rl_endpoint_interval', $endpointConfig['interval']);
 
 			if (!$endpointCheck['allowed']) {
+				$this->log429('endpoint', $path, $routeName, $ip, $requester, $endpointCheck);
 				$response = $this->build429Array($endpointCheck, 'Rate limit exceeded');
 				$this->setRateHeadersArray($response, $endpointCheck);
 				$this->setRateHeadersArray($response, $globalCheck, prefix: 'X-Global-RateLimit-');
@@ -218,6 +221,28 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		];
 
 		return $map[$routeName] ?? null;
+	}
+
+	private function log429(
+		string $limiter,
+		string $path,
+		string $routeName,
+		string $ip,
+		$requester,
+		array $result,
+	): void {
+		Drupal::logger('mantle2')->warning(
+			'Rate limit 429 (limiter %limiter, path %path, route %route, uid %uid, ip %ip, limit %limit, reset %reset)',
+			[
+				'%limiter' => $limiter,
+				'%path' => $path,
+				'%route' => $routeName ?: '<none>',
+				'%uid' => $requester ? $requester->id() : 'anonymous',
+				'%ip' => $ip,
+				'%limit' => (int) ($result['total'] ?? 0),
+				'%reset' => (int) ($result['resetTime'] ?? 0),
+			],
+		);
 	}
 
 	private function build429Array(array $result, string $prefixMessage): JsonResponse

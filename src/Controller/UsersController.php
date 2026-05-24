@@ -2254,78 +2254,155 @@ class UsersController extends ControllerBase
 	// POST /v2/users/current/notifications/push
 	public function registerPushToken(Request $request): JsonResponse
 	{
+		Drupal::logger('mantle2')->info(
+			'registerPushToken: request received (path %path, method %method, content_length %clen, has_auth %hasauth, user_agent %ua)',
+			[
+				'%path' => $request->getPathInfo(),
+				'%method' => $request->getMethod(),
+				'%clen' =>
+					(int) ($request->headers->get('Content-Length') ??
+						strlen((string) $request->getContent())),
+				'%hasauth' => $request->headers->has('Authorization') ? 'true' : 'false',
+				'%ua' => $request->headers->get('User-Agent', '<none>'),
+			],
+		);
+
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
+			// findByRequest already logged the specific auth failure reason.
 			return $user;
 		}
 
+		$uid = $user->id();
+
 		$userAgent = $request->headers->get('User-Agent', '');
 		if (!$userAgent) {
+			Drupal::logger('mantle2')->warning(
+				'registerPushToken rejected: missing User-Agent header (uid %uid)',
+				['%uid' => $uid],
+			);
 			return GeneralHelper::badRequest('Missing User-Agent header');
 		}
 
 		$data = json_decode((string) $request->getContent(), true);
 		if (json_last_error() !== JSON_ERROR_NONE) {
+			Drupal::logger('mantle2')->warning(
+				'registerPushToken rejected: invalid JSON body (uid %uid, error %error)',
+				[
+					'%uid' => $uid,
+					'%error' => json_last_error_msg(),
+				],
+			);
 			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
 		$token = $data['token'] ?? null;
 		$platform = $data['platform'] ?? null;
 		if (!$token || !is_string($token)) {
+			Drupal::logger('mantle2')->warning(
+				'registerPushToken rejected: token field missing or non-string (uid %uid, type %type)',
+				[
+					'%uid' => $uid,
+					'%type' => gettype($token),
+				],
+			);
 			return GeneralHelper::badRequest('Missing or invalid token');
 		}
 
 		if (strlen($token) > 512 || strlen($token) < 10) {
+			Drupal::logger('mantle2')->warning(
+				'registerPushToken rejected: token length %len out of range [10, 512] (uid %uid)',
+				[
+					'%uid' => $uid,
+					'%len' => strlen($token),
+				],
+			);
 			return GeneralHelper::badRequest('Invalid token');
 		}
 
 		if (!$platform || !is_string($platform)) {
+			Drupal::logger('mantle2')->warning(
+				'registerPushToken rejected: platform field missing or non-string (uid %uid, type %type)',
+				[
+					'%uid' => $uid,
+					'%type' => gettype($platform),
+				],
+			);
 			return GeneralHelper::badRequest('Missing or invalid platform');
 		}
 
 		if ($platform !== 'ios' && $platform !== 'android') {
+			Drupal::logger('mantle2')->warning(
+				'registerPushToken rejected: invalid platform value (uid %uid, platform %platform)',
+				[
+					'%uid' => $uid,
+					'%platform' => $platform,
+				],
+			);
 			return GeneralHelper::badRequest(
 				'Platform must be either "ios" or "android," found "' . $platform . '"',
 			);
 		}
 
-		Drupal::database()
-			->merge('push_tokens')
-			->key([
-				'user_id' => $user->id(),
-				'platform' => $platform,
-			])
-			->fields([
-				'token' => $token,
-				'updated' => time(),
-			])
-			->execute();
+		try {
+			Drupal::database()
+				->merge('push_tokens')
+				->key([
+					'user_id' => $uid,
+					'platform' => $platform,
+				])
+				->fields([
+					'token' => $token,
+					'updated' => time(),
+				])
+				->execute();
+		} catch (\Throwable $e) {
+			Drupal::logger('mantle2')->error(
+				'registerPushToken db merge failed (uid %uid, platform %platform, token_length %len): %class :: %message',
+				[
+					'%uid' => $uid,
+					'%platform' => $platform,
+					'%len' => strlen($token),
+					'%class' => get_class($e),
+					'%message' => $e->getMessage(),
+				],
+			);
+			return GeneralHelper::badRequest('Failed to register push notification token');
+		}
 
 		try {
 			// remove when token exists for other users
 			Drupal::database()
 				->delete('push_tokens')
 				->condition('token', $token)
-				->condition('user_id', $user->id(), '<>')
+				->condition('user_id', $uid, '<>')
 				->execute();
 
 			// remove when token exists on other platform for same user
 			Drupal::database()
 				->delete('push_tokens')
 				->condition('token', $token)
-				->condition('user_id', $user->id())
+				->condition('user_id', $uid)
 				->condition('platform', $platform, '<>')
 				->execute();
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->warning(
-				'Failed to cleanup duplicate push token entries: %message',
-				['%message' => $e->getMessage()],
+				'Failed to cleanup duplicate push token entries (uid %uid): %message',
+				[
+					'%uid' => $uid,
+					'%message' => $e->getMessage(),
+				],
 			);
 		}
 
-		Drupal::logger('mantle2')->info('Registered push notification token for user %user', [
-			'%user' => $user->id(),
-		]);
+		Drupal::logger('mantle2')->info(
+			'Registered push notification token for user %uid (platform %platform, token_length %len)',
+			[
+				'%uid' => $uid,
+				'%platform' => $platform,
+				'%len' => strlen($token),
+			],
+		);
 
 		return new JsonResponse(
 			['message' => 'Push notification token registered successfully'],

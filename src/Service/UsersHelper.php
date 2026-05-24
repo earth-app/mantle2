@@ -208,45 +208,103 @@ class UsersHelper
 		return $result;
 	}
 
+	private static ?string $lastTokenFailureReason = null;
+
 	public static function findByRequest(Request $request)
 	{
+		$path = $request->getPathInfo();
+
 		if ($request->headers->has('X-Admin-Key')) {
 			$adminKey = $request->headers->get('X-Admin-Key');
 			$expectedKey = CloudHelper::getAdminKey();
 			if ($adminKey && $expectedKey && hash_equals($expectedKey, $adminKey)) {
 				return self::cloud();
 			}
+			Drupal::logger('mantle2')->warning(
+				'Auth failure: invalid X-Admin-Key (path %path, key_length %len)',
+				[
+					'%path' => $path,
+					'%len' => is_string($adminKey) ? strlen($adminKey) : 0,
+				],
+			);
+		}
+
+		$authHeader = $request->headers->get('Authorization');
+		if (!$authHeader) {
+			Drupal::logger('mantle2')->warning(
+				'Auth failure: missing Authorization header (path %path)',
+				['%path' => $path],
+			);
+			return GeneralHelper::unauthorized('Authentication required');
+		}
+
+		if (stripos($authHeader, 'Bearer ') !== 0) {
+			$scheme = strtok($authHeader, ' ') ?: '?';
+			Drupal::logger('mantle2')->warning(
+				'Auth failure: malformed Authorization header (path %path, scheme %scheme)',
+				[
+					'%path' => $path,
+					'%scheme' => $scheme,
+				],
+			);
+			return GeneralHelper::unauthorized('Authentication required');
 		}
 
 		$sessionId = GeneralHelper::getBearerToken($request);
-		if ($sessionId) {
-			// First, try persistent API token lookup.
-			$user = self::getUserByToken($sessionId);
-			if ($user instanceof UserInterface) {
-				if (self::isDisabled($user)) {
-					return GeneralHelper::forbidden('Account disabled by administrator');
-				}
-
-				return $user;
-			}
-
-			// Back-compat: attempt to treat bearer as a PHP session id.
-			$user = self::withSessionId($sessionId, function ($session) {
-				$uid = $session->get('uid');
-				return $uid ? User::load($uid) : null;
-			});
-			if ($user instanceof UserInterface) {
-				if (self::isDisabled($user)) {
-					return GeneralHelper::forbidden('Account disabled by administrator');
-				}
-
-				return $user;
-			}
-
-			return GeneralHelper::unauthorized('Invalid or expired session token');
+		if (!$sessionId) {
+			Drupal::logger('mantle2')->warning(
+				'Auth failure: empty bearer token after "Bearer " prefix (path %path)',
+				['%path' => $path],
+			);
+			return GeneralHelper::unauthorized('Authentication required');
 		}
 
-		return GeneralHelper::unauthorized('Authentication required');
+		// First, try persistent API token lookup.
+		$user = self::getUserByToken($sessionId);
+		if ($user instanceof UserInterface) {
+			if (self::isDisabled($user)) {
+				Drupal::logger('mantle2')->warning(
+					'Auth failure: account disabled (path %path, uid %uid)',
+					[
+						'%path' => $path,
+						'%uid' => $user->id(),
+					],
+				);
+				return GeneralHelper::forbidden('Account disabled by administrator');
+			}
+
+			return $user;
+		}
+
+		// Back-compat: attempt to treat bearer as a PHP session id.
+		$user = self::withSessionId($sessionId, function ($session) {
+			$uid = $session->get('uid');
+			return $uid ? User::load($uid) : null;
+		});
+		if ($user instanceof UserInterface) {
+			if (self::isDisabled($user)) {
+				Drupal::logger('mantle2')->warning(
+					'Auth failure: account disabled via session fallback (path %path, uid %uid)',
+					[
+						'%path' => $path,
+						'%uid' => $user->id(),
+					],
+				);
+				return GeneralHelper::forbidden('Account disabled by administrator');
+			}
+
+			return $user;
+		}
+
+		Drupal::logger('mantle2')->warning(
+			'Auth failure: bearer token rejected (path %path, token_length %len, reason %reason)',
+			[
+				'%path' => $path,
+				'%len' => strlen($sessionId),
+				'%reason' => self::$lastTokenFailureReason ?? 'unknown',
+			],
+		);
+		return GeneralHelper::unauthorized('Invalid or expired session token');
 	}
 
 	public static function getOwnerOfRequest(Request $request)
@@ -2267,7 +2325,10 @@ class UsersHelper
 
 	public static function getUserByToken(string $token): ?UserInterface
 	{
+		self::$lastTokenFailureReason = null;
+
 		if ($token === '') {
+			self::$lastTokenFailureReason = 'empty token';
 			return null;
 		}
 
@@ -2281,10 +2342,18 @@ class UsersHelper
 		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
 		$data = $store->get($token);
 		if (!$data || !is_array($data)) {
+			self::$lastTokenFailureReason = 'token not found in keyvalue';
 			return null;
 		}
 		$exp = (int) ($data['exp'] ?? 0);
-		if ($exp < time()) {
+		$now = time();
+		if ($exp < $now) {
+			self::$lastTokenFailureReason = sprintf(
+				'token expired (exp %d, now %d, diff %ds)',
+				$exp,
+				$now,
+				$now - $exp,
+			);
 			// Expired: cleanup and reject.
 			$store->delete($token);
 			$uid = (int) ($data['uid'] ?? 0);
@@ -2296,12 +2365,13 @@ class UsersHelper
 			return null;
 		}
 		// Sliding expiration: extend when half-life passed.
-		if ($exp - time() < self::TOKEN_TTL / 2) {
-			$data['exp'] = time() + self::TOKEN_TTL;
+		if ($exp - $now < self::TOKEN_TTL / 2) {
+			$data['exp'] = $now + self::TOKEN_TTL;
 			$store->set($token, $data);
 		}
 		$uid = (int) ($data['uid'] ?? 0);
 		if ($uid <= 0) {
+			self::$lastTokenFailureReason = 'token data missing uid';
 			return null;
 		}
 
@@ -2312,7 +2382,13 @@ class UsersHelper
 			$indexStore->set((string) $uid, $tokens);
 		}
 
-		return User::load($uid);
+		$user = User::load($uid);
+		if (!$user instanceof UserInterface) {
+			self::$lastTokenFailureReason = sprintf('user uid %d not loadable', $uid);
+			return null;
+		}
+
+		return $user;
 	}
 
 	/**

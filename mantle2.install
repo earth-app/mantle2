@@ -1090,7 +1090,7 @@ function mantle2_schema()
 				],
 				'token' => [
 					'type' => 'varchar',
-					'length' => 255,
+					'length' => 512,
 					'not null' => true,
 					'description' => 'Push notification token from FCM/APNS',
 				],
@@ -1150,4 +1150,24 @@ function mantle2_update_9001(): string
 		return 'Created push_tokens table for device push notification registry';
 	}
 	return 'push_tokens table already exists';
+}
+
+/**
+ * Widen push_tokens.token from varchar(255) to varchar(512) to fit longer FCM/APNs tokens.
+ */
+function mantle2_update_9002(): string
+{
+	$schema = Database::getConnection()->schema();
+	if (!$schema->tableExists('push_tokens')) {
+		return 'push_tokens table does not exist, nothing to widen';
+	}
+
+	$schema->changeField('push_tokens', 'token', 'token', [
+		'type' => 'varchar',
+		'length' => 512,
+		'not null' => true,
+		'description' => 'Push notification token from FCM/APNS',
+	]);
+
+	return 'Widened push_tokens.token to varchar(512)';
 }
