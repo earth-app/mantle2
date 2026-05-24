@@ -2,8 +2,10 @@
 
 namespace Drupal\mantle2\EventSubscriber;
 
+use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\PointsHelper;
 use Drupal\mantle2\Service\UsersHelper;
+use Drupal\node\Entity\Node;
 use Drupal\user\UserInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -65,11 +67,14 @@ class PostResponseSubscriber implements EventSubscriberInterface
 					return;
 				}
 
+				$article = ArticlesHelper::loadArticleNode($id);
+				$message = $article->getTitle() || 'Click to view what they wrote about';
+
 				UsersHelper::trackBadgeProgress($user, 'articles_created', $id);
 				self::notifyAddedByCreation(
 					$user,
-					'New Article',
-					'Your friend ' . $user->getDisplayName() . ' has created a new article!',
+					'New Article from @' . $user->getAccountName(),
+					$message,
 					'/articles/' . $id,
 				);
 			},
