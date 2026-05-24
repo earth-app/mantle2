@@ -27,6 +27,9 @@ class RateLimitSubscriber implements EventSubscriberInterface
 	public static function getSubscribedEvents(): array
 	{
 		// Run early to short-circuit expensive work when rate limited.
+		// Note: ResponseCacheSubscriber runs at priority 400 (higher), so cache
+		// HITs set a response and stop propagation before this listener fires —
+		// cached reads do not count against the rate limit.
 		return [
 			KernelEvents::REQUEST => ['onKernelRequest', 300],
 		];
@@ -61,16 +64,18 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		}
 
 		$isAuthenticated = $requester !== null;
+		$method = strtoupper($request->getMethod());
+		$isRead = in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
 		$routeName = (string) $request->attributes->get('_route');
-		$globalConfig = $this->getGlobalConfig($isAuthenticated);
+		$globalConfig = $this->getGlobalConfig($isAuthenticated, $isRead);
+		$globalScope = ($isAuthenticated ? 'auth' : 'anon') . ':' . ($isRead ? 'read' : 'write');
 		$globalCheck = $this->checkLimit(
-			$isAuthenticated ? 'global:auth' : 'global:anon',
+			'global:' . $globalScope,
 			$globalConfig['limit'],
 			$this->intervalToSeconds($globalConfig['interval']),
 			$ip,
 		);
 		if (!$globalCheck['allowed']) {
-			$this->log429('global', $path, $routeName, $ip, $requester, $globalCheck);
 			$response = $this->build429Array($globalCheck, 'Global rate limit exceeded');
 			$this->setRateHeadersArray($response, $globalCheck, prefix: 'X-Global-RateLimit-');
 			$event->setResponse($response);
@@ -91,7 +96,6 @@ class RateLimitSubscriber implements EventSubscriberInterface
 			$request->attributes->set('_mantle2_rl_endpoint_interval', $endpointConfig['interval']);
 
 			if (!$endpointCheck['allowed']) {
-				$this->log429('endpoint', $path, $routeName, $ip, $requester, $endpointCheck);
 				$response = $this->build429Array($endpointCheck, 'Rate limit exceeded');
 				$this->setRateHeadersArray($response, $endpointCheck);
 				$this->setRateHeadersArray($response, $globalCheck, prefix: 'X-Global-RateLimit-');
@@ -157,17 +161,30 @@ class RateLimitSubscriber implements EventSubscriberInterface
 	}
 
 	/**
-	 * Global rate limit configuration (authenticated vs anonymous).
-	 * Defaults can be overridden via environment variables.
+	 * Global rate limit configuration. Reads (GET/HEAD/OPTIONS) get a much
+	 * larger budget than writes since they're cheaper and most hot reads are
+	 * served from the response cache (which bypasses this subscriber). Defaults
+	 * are tuned for a properly configured 4GB host and can be overridden via
+	 * environment variables.
 	 */
-	private function getGlobalConfig(bool $authenticated): array
+	private function getGlobalConfig(bool $authenticated, bool $isRead): array
 	{
 		if ($authenticated) {
-			$requests = (int) getenv('MANTLE2_GLOBAL_AUTH_LIMIT_REQUESTS') ?: 120;
-			$window = (int) getenv('MANTLE2_GLOBAL_AUTH_LIMIT_WINDOW_SECONDS') ?: 60;
+			if ($isRead) {
+				$requests = (int) getenv('MANTLE2_GLOBAL_AUTH_READ_LIMIT_REQUESTS') ?: 1200;
+				$window = (int) getenv('MANTLE2_GLOBAL_AUTH_READ_LIMIT_WINDOW_SECONDS') ?: 60;
+			} else {
+				$requests = (int) getenv('MANTLE2_GLOBAL_AUTH_WRITE_LIMIT_REQUESTS') ?: 300;
+				$window = (int) getenv('MANTLE2_GLOBAL_AUTH_WRITE_LIMIT_WINDOW_SECONDS') ?: 60;
+			}
 		} else {
-			$requests = (int) getenv('MANTLE2_GLOBAL_ANON_LIMIT_REQUESTS') ?: 60;
-			$window = (int) getenv('MANTLE2_GLOBAL_ANON_LIMIT_WINDOW_SECONDS') ?: 60;
+			if ($isRead) {
+				$requests = (int) getenv('MANTLE2_GLOBAL_ANON_READ_LIMIT_REQUESTS') ?: 600;
+				$window = (int) getenv('MANTLE2_GLOBAL_ANON_READ_LIMIT_WINDOW_SECONDS') ?: 60;
+			} else {
+				$requests = (int) getenv('MANTLE2_GLOBAL_ANON_WRITE_LIMIT_REQUESTS') ?: 120;
+				$window = (int) getenv('MANTLE2_GLOBAL_ANON_WRITE_LIMIT_WINDOW_SECONDS') ?: 60;
+			}
 		}
 		return [
 			'limit' => $requests,
@@ -184,65 +201,43 @@ class RateLimitSubscriber implements EventSubscriberInterface
 
 		$map = [
 			// Users
-			'mantle2.users.create' => ['limit' => 5, 'interval' => $sec(5 * 60)],
-			'mantle2.users.login' => ['limit' => 3, 'interval' => $sec(60)],
+			'mantle2.users.create' => ['limit' => 15, 'interval' => $sec(5 * 60)],
+			'mantle2.users.login' => ['limit' => 30, 'interval' => $sec(60)],
 
 			// Any user updates
-			'mantle2.users.id.patch' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.username.patch' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.current.patch' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.id.set_profile_photo' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.username.set_profile_photo' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.current.set_profile_photo' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.id.set_account_type' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.username.set_account_type' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.current.set_account_type' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.id.patch_field_privacy' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.username.patch_field_privacy' => ['limit' => 10, 'interval' => $sec(60)],
-			'mantle2.users.current.patch_field_privacy' => ['limit' => 10, 'interval' => $sec(60)],
+			'mantle2.users.id.patch' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.username.patch' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.current.patch' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.id.set_profile_photo' => ['limit' => 20, 'interval' => $sec(60)],
+			'mantle2.users.username.set_profile_photo' => ['limit' => 20, 'interval' => $sec(60)],
+			'mantle2.users.current.set_profile_photo' => ['limit' => 20, 'interval' => $sec(60)],
+			'mantle2.users.id.set_account_type' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.username.set_account_type' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.current.set_account_type' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.id.patch_field_privacy' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.username.patch_field_privacy' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.current.patch_field_privacy' => ['limit' => 30, 'interval' => $sec(60)],
 
 			// Events
-			'mantle2.events.create' => ['limit' => 3, 'interval' => $sec(2 * 60)],
-			'mantle2.events.update' => ['limit' => 5, 'interval' => $sec(2 * 60)],
+			'mantle2.events.create' => ['limit' => 10, 'interval' => $sec(2 * 60)],
+			'mantle2.events.update' => ['limit' => 20, 'interval' => $sec(2 * 60)],
 
-			// Activities
-			'mantle2.activities.random' => ['limit' => 25, 'interval' => $sec(5 * 60)],
+			// Activities (GET — excluded from response cache)
+			'mantle2.activities.random' => ['limit' => 120, 'interval' => $sec(5 * 60)],
 
 			// Prompts
-			'mantle2.prompts.random' => ['limit' => 10, 'interval' => $sec(3 * 60)],
-			'mantle2.prompts.create' => ['limit' => 7, 'interval' => $sec(2 * 60)],
-			'mantle2.prompts.update' => ['limit' => 15, 'interval' => $sec(2 * 60)],
-			'mantle2.prompts.responses.create' => ['limit' => 2, 'interval' => $sec(30)],
-			'mantle2.prompts.responses.update' => ['limit' => 1, 'interval' => $sec(60)],
+			'mantle2.prompts.random' => ['limit' => 60, 'interval' => $sec(3 * 60)],
+			'mantle2.prompts.create' => ['limit' => 20, 'interval' => $sec(2 * 60)],
+			'mantle2.prompts.update' => ['limit' => 30, 'interval' => $sec(2 * 60)],
+			'mantle2.prompts.responses.create' => ['limit' => 10, 'interval' => $sec(30)],
+			'mantle2.prompts.responses.update' => ['limit' => 10, 'interval' => $sec(60)],
 
 			// Articles
-			'mantle2.articles.create' => ['limit' => 1, 'interval' => $sec(3 * 60)],
-			'mantle2.articles.update' => ['limit' => 2, 'interval' => $sec(3 * 60)],
+			'mantle2.articles.create' => ['limit' => 5, 'interval' => $sec(3 * 60)],
+			'mantle2.articles.update' => ['limit' => 10, 'interval' => $sec(3 * 60)],
 		];
 
 		return $map[$routeName] ?? null;
-	}
-
-	private function log429(
-		string $limiter,
-		string $path,
-		string $routeName,
-		string $ip,
-		$requester,
-		array $result,
-	): void {
-		Drupal::logger('mantle2')->warning(
-			'Rate limit 429 (limiter %limiter, path %path, route %route, uid %uid, ip %ip, limit %limit, reset %reset)',
-			[
-				'%limiter' => $limiter,
-				'%path' => $path,
-				'%route' => $routeName ?: '<none>',
-				'%uid' => $requester ? $requester->id() : 'anonymous',
-				'%ip' => $ip,
-				'%limit' => (int) ($result['total'] ?? 0),
-				'%reset' => (int) ($result['resetTime'] ?? 0),
-			],
-		);
 	}
 
 	private function build429Array(array $result, string $prefixMessage): JsonResponse

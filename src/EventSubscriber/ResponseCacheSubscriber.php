@@ -22,8 +22,10 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 
 	public static function getSubscribedEvents(): array
 	{
+		// REQUEST priority is above RateLimitSubscriber (300) so that a cache HIT
+		// sets the response and stops propagation before the rate limiter counts it.
 		return [
-			KernelEvents::REQUEST => ['onRequest', 10],
+			KernelEvents::REQUEST => ['onRequest', 400],
 			KernelEvents::RESPONSE => ['onResponse', -10],
 		];
 	}
