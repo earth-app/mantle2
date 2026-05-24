@@ -398,6 +398,10 @@ function mantle2_mail_alter(&$message)
 // hourly implementation
 function mantle2_cron()
 {
+	if (PHP_SAPI !== 'cli') {
+		return;
+	}
+
 	$lock = Drupal::lock();
 
 	// hard execution ceiling
