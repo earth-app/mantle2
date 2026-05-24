@@ -2431,6 +2431,12 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized('Invalid OAuth token');
 		}
 
+		$bodyEmail = is_string($body['email'] ?? null) ? trim($body['email']) : null;
+		$bodyGivenName = is_string($body['given_name'] ?? null) ? trim($body['given_name']) : null;
+		$bodyFamilyName = is_string($body['family_name'] ?? null)
+			? trim($body['family_name'])
+			: null;
+
 		$isLinking = $request->query->getBoolean('is_linking', false);
 
 		$sessionToken = $body['session_token'] ?? null;
@@ -2548,6 +2554,20 @@ class UsersController extends ControllerBase
 						return GeneralHelper::badRequest(
 							'Cannot link OAuth provider: no existing account found with matching email',
 						);
+					}
+
+					// merge client-supported profile fields on trusted new signups
+					if (!empty($bodyEmail) && empty($userData['email'])) {
+						$userData['email'] = $bodyEmail;
+						$userData['emails'] = array_values(
+							array_unique(array_merge($userData['emails'] ?? [], [$bodyEmail])),
+						);
+					}
+					if (!empty($bodyGivenName) && empty($userData['given_name'])) {
+						$userData['given_name'] = $bodyGivenName;
+					}
+					if (!empty($bodyFamilyName) && empty($userData['family_name'])) {
+						$userData['family_name'] = $bodyFamilyName;
 					}
 
 					// create new user
