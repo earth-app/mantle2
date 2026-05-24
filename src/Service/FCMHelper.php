@@ -8,27 +8,37 @@ use Google\Auth\Credentials\ServiceAccountCredentials;
 
 class FCMHelper
 {
+	public const KEY_NAME = 'mantle2_fcm_service_account';
+
 	private static function loadCredentials(): ?string
 	{
-		$credentialsJson = null;
+		$key = Drupal::service('key.repository')->getKey(self::KEY_NAME);
+		if ($key) {
+			$value = $key->getKeyValue();
+			if (!empty($value)) {
+				return $value;
+			}
+		}
+
+		$credentialsEnv = getenv('FCM_SERVICE_ACCOUNT_JSON');
+		if (!empty($credentialsEnv)) {
+			return $credentialsEnv;
+		}
 
 		$credentialsPath =
 			Drupal::service('extension.list.module')->getPath('mantle2') .
 			'/data/service-account.json';
 
-		$credentialsEnv = getenv('FCM_SERVICE_ACCOUNT_JSON');
-
-		if (!empty($credentialsEnv)) {
-			$credentialsJson = $credentialsEnv;
-		} elseif (file_exists($credentialsPath)) {
+		if (file_exists($credentialsPath)) {
 			$credentialsJson = file_get_contents($credentialsPath);
 			if ($credentialsJson === false) {
 				Drupal::logger('mantle2')->error('Failed to read FCM credentials from file');
-				throw new Exception('Failed to read FCM credentials from file');
+				return null;
 			}
+			return $credentialsJson;
 		}
 
-		return $credentialsJson;
+		return null;
 	}
 
 	public static function send(string $token, string $title, string $body, array $data = [])
@@ -37,7 +47,8 @@ class FCMHelper
 
 		$credentialsJson = self::loadCredentials();
 		if (!$credentialsJson) {
-			return; // fail silently if credentials are not available
+			Drupal::logger('mantle2')->error('Failed to load FCM credentials: Not found');
+			return;
 		}
 
 		$credsArray = json_decode($credentialsJson, true);
@@ -45,20 +56,31 @@ class FCMHelper
 			Drupal::logger('mantle2')->error('Failed to decode FCM credentials JSON: %error', [
 				'%error' => json_last_error_msg(),
 			]);
-			throw new Exception('Failed to decode FCM credentials JSON');
+			return;
 		}
 
-		$creds = new ServiceAccountCredentials($scopes, $credsArray);
-		$auth = $creds->fetchAuthToken();
-		$accessToken = $auth['access_token'] ?? null;
+		try {
+			$creds = new ServiceAccountCredentials($scopes, $credsArray);
+			$auth = $creds->fetchAuthToken();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to obtain access token for FCM: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return;
+		}
 
+		$accessToken = $auth['access_token'] ?? null;
 		if (!$accessToken) {
 			Drupal::logger('mantle2')->error('Failed to obtain access token for FCM');
-			throw new Exception('Failed to obtain access token for FCM');
+			return;
 		}
 
-		// send post request via curl
-		$ch = curl_init();
+		$projectId = $credsArray['project_id'] ?? null;
+		if (!$projectId) {
+			Drupal::logger('mantle2')->error('Failed to obtain project ID for FCM');
+			return;
+		}
+
 		$requestBody = [
 			'message' => [
 				'token' => $token,
@@ -70,12 +92,7 @@ class FCMHelper
 			],
 		];
 
-		$projectId = $credsArray['project_id'] ?? null;
-		if (!$projectId) {
-			Drupal::logger('mantle2')->error('Failed to obtain project ID for FCM');
-			throw new Exception('Failed to obtain project ID for FCM');
-		}
-
+		$ch = curl_init();
 		curl_setopt(
 			$ch,
 			CURLOPT_URL,
@@ -92,38 +109,24 @@ class FCMHelper
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
-		curl_exec($ch);
-
+		$response = curl_exec($ch);
 		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		$curlError = curl_error($ch);
+		unset($ch);
 
 		if ($curlError) {
-			// return empty on timeout or connection error
-			if (
-				str_contains($curlError, 'timed out') ||
-				str_contains($curlError, 'Failed to connect')
-			) {
-				Drupal::logger('mantle2')->warning(
-					'FCM request timeout or connection error: @error',
-					[
-						'@error' => $curlError,
-					],
-				);
-				return [];
-			}
-
-			// otherwise, throw an exception for other types of cURL errors
-			throw new Exception('FCM cURL Error: ' . $httpCode . $curlError);
-		}
-
-		// validate HTTP response code for successful delivery
-		if ($httpCode < 200 || $httpCode >= 300) {
-			Drupal::logger('mantle2')->error('FCM notification delivery failed with HTTP %code', [
+			Drupal::logger('mantle2')->warning('FCM request error (HTTP %code): %error', [
 				'%code' => $httpCode,
+				'%error' => $curlError,
 			]);
-			throw new Exception('FCM request failed with HTTP status code: ' . $httpCode);
+			return;
 		}
 
-		unset($ch);
+		if ($httpCode < 200 || $httpCode >= 300) {
+			Drupal::logger('mantle2')->error('FCM delivery failed with HTTP %code: %response', [
+				'%code' => $httpCode,
+				'%response' => is_string($response) ? substr($response, 0, 500) : '<no body>',
+			]);
+		}
 	}
 }
