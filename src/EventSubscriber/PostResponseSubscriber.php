@@ -82,11 +82,14 @@ class PostResponseSubscriber implements EventSubscriberInterface
 					return;
 				}
 
+				$prompt = $body['prompt'] ?? null;
+				$message = $prompt || 'Click to see what they have to say';
+
 				UsersHelper::trackBadgeProgress($user, 'prompts_created', $id);
 				self::notifyAddedByCreation(
 					$user,
-					'New Prompt',
-					'Your friend ' . $user->getDisplayName() . ' has created a new prompt!',
+					'New Prompt from @' . $user->getAccountName(),
+					$message,
 					'/prompts/' . $id,
 				);
 			},
@@ -117,7 +120,7 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				UsersHelper::trackBadgeProgress($user, 'events_created', $id);
 				self::notifyAddedByCreation(
 					$user,
-					'New Event',
+					'New Event from @' . $user->getAccountName(),
 					'Your friend ' . $user->getDisplayName() . ' has created a new event!',
 					'/events/' . $id,
 				);
