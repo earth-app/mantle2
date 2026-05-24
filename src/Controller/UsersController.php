@@ -251,20 +251,38 @@ class UsersController extends ControllerBase
 			return GeneralHelper::unauthorized();
 		}
 
+		// Optional body { platform: 'web' | 'ios' | 'android' } so the client can
+		// unregister its push token at sign-out. Missing/invalid body is fine —
+		// older clients don't send one.
+		$platform = null;
+		$rawBody = (string) $request->getContent();
+		if ($rawBody !== '') {
+			$body = json_decode($rawBody, true);
+			if (is_array($body) && isset($body['platform']) && is_string($body['platform'])) {
+				$platform = $body['platform'];
+			}
+		}
+
 		// Prefer API token revocation; fall back to PHP session destruction if needed.
 		$payloadUser = null;
+		$uid = null;
 		$tokenUser = UsersHelper::getUserByToken($sessionId);
 		if ($tokenUser) {
+			$uid = (int) $tokenUser->id();
 			$payloadUser = UsersHelper::serializeUser($tokenUser, $tokenUser);
 			UsersHelper::revokeToken($sessionId);
 		} else {
-			$payloadUser = UsersHelper::withSessionId($sessionId, function ($session) {
-				$uid = $session->get('uid');
-				if (!$uid) {
+			$payloadUser = UsersHelper::withSessionId($sessionId, function ($session) use (&$uid) {
+				$sessUid = $session->get('uid');
+				if (!$sessUid) {
 					return null;
 				}
-				$user = User::load($uid);
-				return $user ? UsersHelper::serializeUser($user, $user) : null;
+				$user = User::load($sessUid);
+				if (!$user) {
+					return null;
+				}
+				$uid = (int) $user->id();
+				return UsersHelper::serializeUser($user, $user);
 			});
 
 			// Destroy that session (legacy behavior).
@@ -272,6 +290,27 @@ class UsersController extends ControllerBase
 				Drupal::service('session_manager')->destroy();
 				return null;
 			});
+		}
+
+		// Remove the device's push token if the client identified itself.
+		// 'web' has no push_tokens row to delete.
+		if ($uid !== null && ($platform === 'ios' || $platform === 'android')) {
+			try {
+				Drupal::database()
+					->delete('push_tokens')
+					->condition('user_id', $uid)
+					->condition('platform', $platform)
+					->execute();
+			} catch (Exception $e) {
+				Drupal::logger('mantle2')->warning(
+					'Failed to remove push token on logout (uid %uid, platform %platform): %message',
+					[
+						'%uid' => $uid,
+						'%platform' => $platform,
+						'%message' => $e->getMessage(),
+					],
+				);
+			}
 		}
 
 		$data = [
