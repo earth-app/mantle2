@@ -123,10 +123,30 @@ class FCMHelper
 		}
 
 		if ($httpCode < 200 || $httpCode >= 300) {
-			Drupal::logger('mantle2')->error('FCM delivery failed with HTTP %code: %response', [
-				'%code' => $httpCode,
-				'%response' => is_string($response) ? substr($response, 0, 500) : '<no body>',
-			]);
+			if ($httpCode === 404 || $httpCode === 403) {
+				// 404 == expired token, 403 == invalid device
+				self::removeInvalidToken($token, $httpCode);
+			} else {
+				Drupal::logger('mantle2')->error('FCM delivery failed with HTTP %code: %response', [
+					'%code' => $httpCode,
+					'%response' => is_string($response) ? substr($response, 0, 500) : '<no body>',
+				]);
+			}
+		}
+	}
+
+	private static function removeInvalidToken(string $token, int $httpCode): void
+	{
+		try {
+			$deleted = Drupal::database()
+				->delete('push_tokens')
+				->condition('token', $token)
+				->execute();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'FCM: failed to remove invalid push token: %message',
+				['%message' => $e->getMessage()],
+			);
 		}
 	}
 }

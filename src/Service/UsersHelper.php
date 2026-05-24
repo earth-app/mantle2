@@ -2816,6 +2816,29 @@ class UsersHelper
 		return $tokens;
 	}
 
+	private const PUSH_TOKEN_MAX_AGE_SECONDS = 60 * 86400; // 60 days
+
+	public static function pruneStalePushTokens(): int
+	{
+		$cutoff = time() - self::PUSH_TOKEN_MAX_AGE_SECONDS;
+		$deleted = Drupal::database()
+			->delete('push_tokens')
+			->condition('updated', $cutoff, '<')
+			->execute();
+
+		if ($deleted > 0) {
+			Drupal::logger('mantle2')->info(
+				'Pruned %count stale push_tokens rows (cutoff %cutoff)',
+				[
+					'%count' => $deleted,
+					'%cutoff' => $cutoff,
+				],
+			);
+		}
+
+		return (int) $deleted;
+	}
+
 	#endregion
 
 	#region User Emails

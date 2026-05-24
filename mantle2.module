@@ -424,6 +424,7 @@ function mantle2_cron()
 		'Account Trials' => fn() => UsersHelper::checkAccountTrials(),
 		'Disabled Account Restrictions' => fn() => UsersHelper::enforceDisabledAccountRestrictions(),
 		'Unread Notifications' => fn() => UsersHelper::checkUnreadNotifications(),
+		'Stale Push Tokens' => fn() => UsersHelper::pruneStalePushTokens(),
 		'Cycle MOTD' => fn() => GeneralHelper::cycleMotd(),
 	];
 

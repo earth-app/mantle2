@@ -514,11 +514,25 @@ class UsersController extends ControllerBase
 			return GeneralHelper::forbidden('Cannot delete admin users via the API');
 		}
 
+		$deletedUid = (int) $user->id();
+
 		try {
 			$user->delete();
-			CloudHelper::sendRequest('/v1/users/' . $user->id(), 'DELETE');
+			CloudHelper::sendRequest('/v1/users/' . $deletedUid, 'DELETE');
 		} catch (EntityStorageException $e) {
 			return GeneralHelper::internalError('Failed to delete user: ' . $e->getMessage());
+		}
+
+		try {
+			Drupal::database()->delete('push_tokens')->condition('user_id', $deletedUid)->execute();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to remove push tokens for deleted user %uid: %message',
+				[
+					'%uid' => $deletedUid,
+					'%message' => $e->getMessage(),
+				],
+			);
 		}
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
@@ -2255,19 +2269,6 @@ class UsersController extends ControllerBase
 	// POST /v2/users/current/notifications/push
 	public function registerPushToken(Request $request): JsonResponse
 	{
-		Drupal::logger('mantle2')->info(
-			'registerPushToken: request received (path %path, method %method, content_length %clen, has_auth %hasauth, user_agent %ua)',
-			[
-				'%path' => $request->getPathInfo(),
-				'%method' => $request->getMethod(),
-				'%clen' =>
-					(int) ($request->headers->get('Content-Length') ??
-						strlen((string) $request->getContent())),
-				'%hasauth' => $request->headers->has('Authorization') ? 'true' : 'false',
-				'%ua' => $request->headers->get('User-Agent', '<none>'),
-			],
-		);
-
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			// findByRequest already logged the specific auth failure reason.
