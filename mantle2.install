@@ -68,10 +68,6 @@ function createField(
 		if ($storage_needs_save) {
 			try {
 				$field_storage->save();
-				Drupal::logger('mantle2')->notice(
-					'Updated field storage for \'%field\' under \'%bundle\' due to settings/cardinality changes.',
-					['%field' => $name, '%bundle' => $bundle],
-				);
 			} catch (EntityStorageException $e) {
 				Drupal::logger('mantle2')->error(
 					'Failed to update field storage for %field: %message',
