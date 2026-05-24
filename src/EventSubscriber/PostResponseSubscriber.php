@@ -82,7 +82,7 @@ class PostResponseSubscriber implements EventSubscriberInterface
 					return;
 				}
 
-				$prompt = $body['prompt'] ?? null;
+				$prompt = $data['prompt'] ?? null;
 				$message = $prompt || 'Click to see what they have to say';
 
 				UsersHelper::trackBadgeProgress($user, 'prompts_created', $id);
