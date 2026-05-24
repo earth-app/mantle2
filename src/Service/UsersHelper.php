@@ -220,56 +220,20 @@ class UsersHelper
 			if ($adminKey && $expectedKey && hash_equals($expectedKey, $adminKey)) {
 				return self::cloud();
 			}
-			Drupal::logger('mantle2')->warning(
-				'Auth failure: invalid X-Admin-Key (path %path, key_length %len)',
-				[
-					'%path' => $path,
-					'%len' => is_string($adminKey) ? strlen($adminKey) : 0,
-				],
-			);
 		}
 
 		$authHeader = $request->headers->get('Authorization');
-		if (!$authHeader) {
-			Drupal::logger('mantle2')->warning(
-				'Auth failure: missing Authorization header (path %path)',
-				['%path' => $path],
-			);
-			return GeneralHelper::unauthorized('Authentication required');
-		}
-
 		if (stripos($authHeader, 'Bearer ') !== 0) {
 			$scheme = strtok($authHeader, ' ') ?: '?';
-			Drupal::logger('mantle2')->warning(
-				'Auth failure: malformed Authorization header (path %path, scheme %scheme)',
-				[
-					'%path' => $path,
-					'%scheme' => $scheme,
-				],
-			);
 			return GeneralHelper::unauthorized('Authentication required');
 		}
 
 		$sessionId = GeneralHelper::getBearerToken($request);
-		if (!$sessionId) {
-			Drupal::logger('mantle2')->warning(
-				'Auth failure: empty bearer token after "Bearer " prefix (path %path)',
-				['%path' => $path],
-			);
-			return GeneralHelper::unauthorized('Authentication required');
-		}
 
 		// First, try persistent API token lookup.
 		$user = self::getUserByToken($sessionId);
 		if ($user instanceof UserInterface) {
 			if (self::isDisabled($user)) {
-				Drupal::logger('mantle2')->warning(
-					'Auth failure: account disabled (path %path, uid %uid)',
-					[
-						'%path' => $path,
-						'%uid' => $user->id(),
-					],
-				);
 				return GeneralHelper::forbidden('Account disabled by administrator');
 			}
 
@@ -283,27 +247,12 @@ class UsersHelper
 		});
 		if ($user instanceof UserInterface) {
 			if (self::isDisabled($user)) {
-				Drupal::logger('mantle2')->warning(
-					'Auth failure: account disabled via session fallback (path %path, uid %uid)',
-					[
-						'%path' => $path,
-						'%uid' => $user->id(),
-					],
-				);
 				return GeneralHelper::forbidden('Account disabled by administrator');
 			}
 
 			return $user;
 		}
 
-		Drupal::logger('mantle2')->warning(
-			'Auth failure: bearer token rejected (path %path, token_length %len, reason %reason)',
-			[
-				'%path' => $path,
-				'%len' => strlen($sessionId),
-				'%reason' => self::$lastTokenFailureReason ?? 'unknown',
-			],
-		);
 		return GeneralHelper::unauthorized('Invalid or expired session token');
 	}
 
