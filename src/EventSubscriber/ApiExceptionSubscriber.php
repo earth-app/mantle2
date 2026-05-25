@@ -74,6 +74,7 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
 			404 => 'Not Found',
 			405 => 'Method Not Allowed',
 			406 => 'Not Acceptable',
+			410 => 'Gone',
 			415 => 'Unsupported Media Type',
 			422 => 'Unprocessable Entity',
 			429 => 'Too Many Requests',

@@ -71,6 +71,14 @@ class OpenAPIController extends ControllerBase
 								$options['schema/201/type'] ?? 'application/json',
 							)
 							: null,
+					'202' =>
+						$options['schema/202'] ?? null
+							? Mantle2Schemas::responseBody(
+								$this->resolveSchemaSpecifier($options['schema/202']),
+								'Accepted',
+								$options['schema/202/type'] ?? 'application/json',
+							)
+							: null,
 					'204' =>
 						$options['schema/204'] ?? null ? ['description' => 'No Content'] : null,
 					'400' =>
@@ -96,6 +104,10 @@ class OpenAPIController extends ControllerBase
 					'409' =>
 						$options['schema/409'] ?? null
 							? Mantle2Schemas::E409($options['schema/409'])
+							: null,
+					'410' =>
+						$options['schema/410'] ?? null
+							? Mantle2Schemas::E410($options['schema/410'])
 							: null,
 					'429' =>
 						$options['schema/429'] ?? null

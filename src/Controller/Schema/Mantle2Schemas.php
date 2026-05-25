@@ -78,6 +78,11 @@ class Mantle2Schemas
 		return self::responseBody(['$ref' => '#/components/schemas/ConflictError'], $description);
 	}
 
+	public static function E410($description = 'Gone'): array
+	{
+		return self::responseBody(['$ref' => '#/components/schemas/ErrorResponse'], $description);
+	}
+
 	public static function E429($description = 'Rate limit exceeded'): array
 	{
 		return self::responseBody(['$ref' => '#/components/schemas/RateLimitError'], $description);
@@ -1394,6 +1399,11 @@ class Mantle2Schemas
 					'maximum' => 1.0,
 					'description' => 'Progress towards earning the badge (0.0 to 1.0)',
 				],
+				'mastered' => ['$ref' => '#/components/schemas/Bool'],
+				'mastered_at' => [
+					'oneOf' => [['$ref' => '#/components/schemas/Date'], ['type' => 'null']],
+					'description' => 'Timestamp when the badge was mastered, if applicable',
+				],
 			],
 			'required' => [
 				'id',
@@ -1404,6 +1414,7 @@ class Mantle2Schemas
 				'user_id',
 				'granted',
 				'progress',
+				'mastered',
 			],
 		];
 	}
@@ -1412,6 +1423,29 @@ class Mantle2Schemas
 		return [
 			'type' => 'array',
 			'items' => ['$ref' => '#/components/schemas/UserBadge'],
+		];
+	}
+
+	public static function badgeMastery(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'user_id' => ['$ref' => '#/components/schemas/Id'],
+				'badge_id' => ['type' => 'string', 'example' => 'you_know_ball'],
+				'generated' => ['$ref' => '#/components/schemas/Bool'],
+				'locked' => ['$ref' => '#/components/schemas/Bool'],
+				'mastered' => ['$ref' => '#/components/schemas/Bool'],
+				'mastered_at' => [
+					'oneOf' => [['$ref' => '#/components/schemas/Date'], ['type' => 'null']],
+					'description' => 'Timestamp when the badge was mastered, if applicable',
+				],
+				'quest' => [
+					'oneOf' => [['$ref' => '#/components/schemas/Quest'], ['type' => 'null']],
+					'description' => 'Generated mastery quest for this badge, if one exists',
+				],
+			],
+			'required' => ['user_id', 'badge_id', 'generated', 'locked', 'mastered'],
 		];
 	}
 
@@ -2756,6 +2790,7 @@ class Mantle2Schemas
 			'Badges' => self::badges(),
 			'UserBadge' => self::userBadge(),
 			'UserBadges' => self::userBadges(),
+			'BadgeMastery' => self::badgeMastery(),
 			'ImpactPoints' => self::impactPoints(),
 			'Users' => self::users(),
 			'Event' => self::event(),
