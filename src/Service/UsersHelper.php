@@ -1309,18 +1309,27 @@ class UsersHelper
 		return '';
 	}
 
+	public static function buildUserProfilePromptData(UserInterface $user): array
+	{
+		return [
+			'username' => $user->getAccountName(),
+			'bio' => self::getBiography($user, $user),
+			'created_at' => date('c', $user->getCreatedTime()),
+			'visibility' => self::getVisibility($user)->name,
+			'country' => self::getCountry($user, $user),
+			'full_name' => self::getName($user, $user),
+			'activities' => self::getActivities($user),
+		];
+	}
+
 	public static function regenerateProfilePhoto(UserInterface $user): string
 	{
 		try {
-			$res = CloudHelper::sendRequest('/v1/users/profile_photo/' . $user->id(), 'PUT', [
-				'username' => $user->getAccountName(),
-				'bio' => self::getBiography($user, $user),
-				'created_at' => date('c', $user->getCreatedTime()),
-				'visibility' => self::getVisibility($user)->name,
-				'country' => self::getCountry($user, $user),
-				'full_name' => self::getName($user, $user),
-				'activities' => self::getActivities($user),
-			]);
+			$res = CloudHelper::sendRequest(
+				'/v1/users/profile_photo/' . $user->id(),
+				'PUT',
+				self::buildUserProfilePromptData($user),
+			);
 
 			$data = $res['data'] ?? null;
 			return $data ?: '';
