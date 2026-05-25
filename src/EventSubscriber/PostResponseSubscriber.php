@@ -113,8 +113,13 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				}
 
 				$article = ArticlesHelper::loadArticleNode($id);
-				$message =
-					$article ? $article->getTitle() : '' ?: 'Click to view what they wrote about';
+				$message = 'Click to view what they wrote about';
+				if ($article) {
+					$title = $article->getTitle();
+					if (!empty($title)) {
+						$message = $title;
+					}
+				}
 
 				UsersHelper::trackBadgeProgress($user, 'articles_created', $id);
 				self::notifyAddedByCreation(
@@ -134,8 +139,10 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				}
 
 				$prompt = $data['prompt'] ?? null;
-				$message =
-					is_string($prompt) ? $prompt : '' ?: 'Click to see what they have to say';
+				$message = 'Click to see what they have to say';
+				if (is_string($prompt) && $prompt !== '') {
+					$message = $prompt;
+				}
 
 				UsersHelper::trackBadgeProgress($user, 'prompts_created', $id);
 				self::notifyAddedByCreation(
