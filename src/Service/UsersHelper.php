@@ -3950,6 +3950,12 @@ class UsersHelper
 
 	public static function checkBadges(): void
 	{
+		$accountAgeBadges = [
+			['threshold' => 3 * 365 * 86400, 'badge' => 'old_account_2'],
+			['threshold' => 365 * 86400, 'badge' => 'old_account'],
+			['threshold' => 182 * 86400, 'badge' => 'early_adopter'],
+		];
+
 		$users = User::loadMultiple();
 		foreach ($users as $user) {
 			if ($user->id() === self::cloud()->id()) {
@@ -3968,6 +3974,25 @@ class UsersHelper
 
 					RedisHelper::set($lastCheckKey, ['value' => true], 14400); // 4 hours
 				}
+			}
+
+			// account-age badges (early_adopter, old_account, old_account_2)
+			$age = time() - (int) $user->getCreatedTime();
+			foreach ($accountAgeBadges as $tier) {
+				if ($age < $tier['threshold']) {
+					continue;
+				}
+
+				$lastCheckKey =
+					'badge_check_' . $tier['badge'] . '_' . GeneralHelper::formatId($user->id());
+				if (RedisHelper::get($lastCheckKey)) {
+					continue;
+				}
+
+				if (!self::getBadge($user, $tier['badge'])) {
+					self::grantBadge($user, $tier['badge']);
+				}
+				RedisHelper::set($lastCheckKey, ['value' => true], 86400); // 24 hours
 			}
 		}
 	}

@@ -2,11 +2,14 @@
 
 namespace Drupal\mantle2\EventSubscriber;
 
+use DateTime;
+use DateTimeZone;
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\PointsHelper;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\Entity\Node;
+use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -91,6 +94,27 @@ class PostResponseSubscriber implements EventSubscriberInterface
 
 			$page++;
 		}
+	}
+
+	/**
+	 * Resolves the user's local timezone from their stored ISO-2 country code,
+	 * falling back to UTC. Used for time-of-day badges (night_owl / early_bird)
+	 * since the user model has no explicit timezone field.
+	 */
+	private static function userTimezone(UserInterface $user): DateTimeZone
+	{
+		$country = strtoupper(trim((string) ($user->get('field_country')->value ?? '')));
+		if (strlen($country) === 2) {
+			try {
+				$ids = DateTimeZone::listIdentifiers(DateTimeZone::PER_COUNTRY, $country);
+				if (!empty($ids)) {
+					return new DateTimeZone($ids[0]);
+				}
+			} catch (\Throwable $e) {
+				// fall through to UTC
+			}
+		}
+		return new DateTimeZone('UTC');
 	}
 
 	public static function getSubscribedEvents()
@@ -192,11 +216,69 @@ class PostResponseSubscriber implements EventSubscriberInterface
 					return;
 				}
 				$friendData = $data['friend'] ?? null;
-				if ($friendData) {
-					$friendId = $friendData['id'] ?? null;
-					if ($friendId) {
-						UsersHelper::trackBadgeProgress($user, 'friends_added', $friendId);
-					}
+				if (!$friendData) {
+					return;
+				}
+				$friendId = $friendData['id'] ?? null;
+				if (!$friendId) {
+					return;
+				}
+
+				UsersHelper::trackBadgeProgress($user, 'friends_added', $friendId);
+
+				$friend = User::load((int) $friendId);
+				if (!$friend) {
+					return;
+				}
+
+				// you_know_ball: become friends with an administrator
+				if (UsersHelper::isAdmin($friend)) {
+					UsersHelper::grantBadge($user, 'you_know_ball');
+				}
+
+				// outreacher: become friends with someone from a different country
+				$userCountry = strtoupper(
+					trim((string) ($user->get('field_country')->value ?? '')),
+				);
+				$friendCountry = strtoupper(
+					trim((string) ($friend->get('field_country')->value ?? '')),
+				);
+				if (
+					$userCountry !== '' &&
+					$friendCountry !== '' &&
+					$userCountry !== $friendCountry
+				) {
+					UsersHelper::grantBadge($user, 'outreacher');
+				}
+			},
+			'PUT mantle2.users.current.circle.add' => function (?UserInterface $user, array $data) {
+				if ($user == null) {
+					return;
+				}
+				// close_friends: add someone to your close friends
+				UsersHelper::grantBadge($user, 'close_friends');
+			},
+			'POST mantle2.events.signup' => function (?UserInterface $user, array $data) {
+				if ($user == null) {
+					return;
+				}
+
+				$tz = self::userTimezone($user);
+				try {
+					$hour = (int) new DateTime('now', $tz)->format('G');
+				} catch (\Throwable $e) {
+					return;
+				}
+
+				// night_owl: signed up between 12 AM and 4 AM local time
+				if ($hour >= 0 && $hour < 4) {
+					UsersHelper::grantBadge($user, 'night_owl');
+					return;
+				}
+
+				// early_bird: signed up between 4 AM and 9 AM local time
+				if ($hour >= 4 && $hour < 9) {
+					UsersHelper::grantBadge($user, 'early_bird');
 				}
 			},
 			'PATCH mantle2.users.current.activities.set' => function (
