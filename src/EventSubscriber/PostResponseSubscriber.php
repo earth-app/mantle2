@@ -4,6 +4,7 @@ namespace Drupal\mantle2\EventSubscriber;
 
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\PointsHelper;
+use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\Entity\Node;
 use Drupal\user\UserInterface;
@@ -13,6 +14,46 @@ use Symfony\Component\HttpKernel\Event\TerminateEvent;
 
 class PostResponseSubscriber implements EventSubscriberInterface
 {
+	private const NOTIFY_CREATION_RATE_LIMIT = 5;
+	private const NOTIFY_CREATION_RATE_WINDOW = 3600;
+
+	/**
+	 * Returns true and increments the counter when the adder is still under the
+	 * per-hour creation-notification budget. Returns false (no side effects)
+	 * once the budget is exhausted, so bulk creates from earth-app/cloud do not
+	 * fan out to FCM. Failures in Redis are treated as "allow" so we never
+	 * accidentally suppress real-user notifications.
+	 */
+	private static function tryConsumeCreationNotifyBudget(UserInterface $adder): bool
+	{
+		$key = 'notify_creation_rate_limit_' . $adder->id();
+		$now = time();
+		$data = RedisHelper::get($key);
+
+		$windowStart = $data['window_start'] ?? null;
+		$count = $data['count'] ?? 0;
+
+		if (!is_int($windowStart) || $now - $windowStart >= self::NOTIFY_CREATION_RATE_WINDOW) {
+			$windowStart = $now;
+			$count = 0;
+		}
+
+		if ($count >= self::NOTIFY_CREATION_RATE_LIMIT) {
+			return false;
+		}
+
+		$ttl = max(1, self::NOTIFY_CREATION_RATE_WINDOW - ($now - $windowStart));
+		RedisHelper::set(
+			$key,
+			[
+				'window_start' => $windowStart,
+				'count' => $count + 1,
+			],
+			$ttl,
+		);
+		return true;
+	}
+
 	private static function notifyAddedByCreation(
 		UserInterface $user,
 		string $title,
@@ -30,6 +71,10 @@ class PostResponseSubscriber implements EventSubscriberInterface
 			}
 
 			foreach ($addedBy as $adder) {
+				if (!self::tryConsumeCreationNotifyBudget($adder)) {
+					continue;
+				}
+
 				UsersHelper::addNotification(
 					$adder,
 					$title,
@@ -68,7 +113,8 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				}
 
 				$article = ArticlesHelper::loadArticleNode($id);
-				$message = $article->getTitle() || 'Click to view what they wrote about';
+				$message =
+					$article ? $article->getTitle() : '' ?: 'Click to view what they wrote about';
 
 				UsersHelper::trackBadgeProgress($user, 'articles_created', $id);
 				self::notifyAddedByCreation(
@@ -88,7 +134,8 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				}
 
 				$prompt = $data['prompt'] ?? null;
-				$message = $prompt || 'Click to see what they have to say';
+				$message =
+					is_string($prompt) ? $prompt : '' ?: 'Click to see what they have to say';
 
 				UsersHelper::trackBadgeProgress($user, 'prompts_created', $id);
 				self::notifyAddedByCreation(
