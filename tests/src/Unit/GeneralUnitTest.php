@@ -300,6 +300,17 @@ class GeneralUnitTest extends TestCase
 		$this->assertEquals(409, $conflict->getStatusCode());
 		$this->assertEquals('{"code":409,"message":"Conflict occurred"}', $conflict->getContent());
 
+		$gone = GeneralHelper::gone('Resource permanently gone');
+		$this->assertEquals(410, $gone->getStatusCode());
+		$this->assertEquals(
+			'{"code":410,"message":"Resource permanently gone"}',
+			$gone->getContent(),
+		);
+
+		$goneDefault = GeneralHelper::gone();
+		$this->assertEquals(410, $goneDefault->getStatusCode());
+		$this->assertEquals('{"code":410,"message":"Gone"}', $goneDefault->getContent());
+
 		$internalError = GeneralHelper::internalError('Internal server error');
 		$this->assertEquals(500, $internalError->getStatusCode());
 		$this->assertEquals(
