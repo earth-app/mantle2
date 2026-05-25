@@ -1681,6 +1681,7 @@ mantle2.users.id.badges.mastery.generate:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
     schema/201: '#Quest'
+    schema/400: Badge does not support mastery quests
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/409: Badge not granted, already generated, or already mastered
@@ -3023,6 +3024,7 @@ mantle2.users.username.badges.mastery.generate:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
     schema/201: '#Quest'
+    schema/400: Badge does not support mastery quests
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/409: Badge not granted, already generated, or already mastered
@@ -4195,6 +4197,7 @@ mantle2.users.current.badges.mastery.generate:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
     schema/201: '#Quest'
+    schema/400: Badge does not support mastery quests
     schema/401: Unauthorized
     schema/409: Badge not granted, already generated, or already mastered
     schema/410: Mastery permanently locked

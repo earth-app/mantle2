@@ -1597,6 +1597,7 @@ class UsersController extends ControllerBase
 			$message = CloudHelper::extractCloudMessage($e);
 
 			return match ($code) {
+				400 => GeneralHelper::badRequest($message ?: 'Bad Request'),
 				409 => GeneralHelper::conflict($message ?: 'Conflict'),
 				410 => GeneralHelper::gone($message ?: 'Gone'),
 				default => GeneralHelper::internalError(
