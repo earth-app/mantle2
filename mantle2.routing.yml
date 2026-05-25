@@ -1645,6 +1645,54 @@ mantle2.users.id.badges.get:
         type: string
   methods: [GET]
 
+mantle2.users.id.badges.mastery:
+  path: '/v2/users/{id}/badges/{badgeId}/mastery'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badgeMastery'
+    _title: 'Get Badge Mastery Status by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges
+    description: Retrieves the badge mastery status for the user
+    schema/200: '#BadgeMastery'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or badge not found
+    parameters:
+      id:
+        type: string
+      badgeId:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.badges.mastery.generate:
+  path: '/v2/users/{id}/badges/{badgeId}/mastery/generate'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::generateBadgeMastery'
+    _title: 'Generate Badge Mastery Quest by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges,Quests
+    description: Generates an AI-driven mastery quest for the badge
+    schema/201: '#Quest'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/409: Badge not granted, already generated, or already mastered
+    schema/410: Mastery permanently locked
+    schema/500: Mastery generation failed; please try again
+    parameters:
+      id:
+        type: string
+      badgeId:
+        type: string
+  methods: [POST]
+
 mantle2.users.id.impact_points:
   path: '/v2/users/{id}/points'
   defaults:
@@ -2939,6 +2987,54 @@ mantle2.users.username.badges.get:
         type: string
   methods: [GET]
 
+mantle2.users.username.badges.mastery:
+  path: '/v2/users/{username}/badges/{badgeId}/mastery'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badgeMastery'
+    _title: 'Get Badge Mastery Status by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges
+    description: Retrieves the badge mastery status for the user
+    schema/200: '#BadgeMastery'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User or badge not found
+    parameters:
+      username:
+        type: string
+      badgeId:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.badges.mastery.generate:
+  path: '/v2/users/{username}/badges/{badgeId}/mastery/generate'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::generateBadgeMastery'
+    _title: 'Generate Badge Mastery Quest by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges,Quests
+    description: Generates an AI-driven mastery quest for the badge
+    schema/201: '#Quest'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/409: Badge not granted, already generated, or already mastered
+    schema/410: Mastery permanently locked
+    schema/500: Mastery generation failed; please try again
+    parameters:
+      username:
+        type: string
+      badgeId:
+        type: string
+  methods: [POST]
+
 mantle2.users.username.impact_points:
   path: '/v2/users/{username}/points'
   defaults:
@@ -4067,6 +4163,46 @@ mantle2.users.current.badges.get:
       badgeId:
         type: string
   methods: [GET]
+
+mantle2.users.current.badges.mastery:
+  path: '/v2/users/current/badges/{badgeId}/mastery'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badgeMastery'
+    _title: 'Get Badge Mastery Status by Current User'
+  requirements:
+    _access: 'TRUE'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges
+    description: Retrieves the badge mastery status for the current user
+    schema/200: '#BadgeMastery'
+    schema/401: Unauthorized
+    schema/404: User or badge not found
+    parameters:
+      badgeId:
+        type: string
+  methods: [GET]
+
+mantle2.users.current.badges.mastery.generate:
+  path: '/v2/users/current/badges/{badgeId}/mastery/generate'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::generateBadgeMastery'
+    _title: 'Generate Badge Mastery Quest by Current User'
+  requirements:
+    _access: 'TRUE'
+    badgeId: '\d+'
+  options:
+    tags: Users,Badges,Quests
+    description: Generates an AI-driven mastery quest for the badge
+    schema/201: '#Quest'
+    schema/401: Unauthorized
+    schema/409: Badge not granted, already generated, or already mastered
+    schema/410: Mastery permanently locked
+    schema/500: Mastery generation failed; please try again
+    parameters:
+      badgeId:
+        type: string
+  methods: [POST]
 
 mantle2.users.current.impact_points:
   path: '/v2/users/current/points'

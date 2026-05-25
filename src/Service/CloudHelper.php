@@ -4,6 +4,7 @@ namespace Drupal\mantle2\Service;
 
 use Drupal;
 use Exception;
+use Symfony\Component\HttpFoundation\JsonResponse;
 
 class CloudHelper
 {
@@ -165,5 +166,33 @@ class CloudHelper
 			'channel' => $channel . ':' . $id,
 			'data' => $data,
 		]);
+	}
+
+	public static function mapCloudException(Exception $e, string $fallback): JsonResponse
+	{
+		$code = (int) $e->getCode();
+		if ($code === 404) {
+			return GeneralHelper::notFound();
+		}
+
+		return GeneralHelper::internalError($fallback);
+	}
+
+	public static function extractCloudMessage(Exception $e): string
+	{
+		$raw = $e->getMessage();
+		if (preg_match('/Response:\s*(.*)$/s', $raw, $matches)) {
+			$body = trim($matches[1]);
+			$decoded = json_decode($body, true);
+			if (
+				is_array($decoded) &&
+				isset($decoded['message']) &&
+				is_string($decoded['message'])
+			) {
+				return $decoded['message'];
+			}
+		}
+
+		return '';
 	}
 }

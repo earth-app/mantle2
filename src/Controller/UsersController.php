@@ -1527,6 +1527,87 @@ class UsersController extends ControllerBase
 		return new JsonResponse($badge, Response::HTTP_OK);
 	}
 
+	// GET /v2/users/{id}/badges/{badgeId}/mastery
+	// GET /v2/users/{username}/badges/{badgeId}/mastery
+	public function badgeMastery(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+		?string $badgeId = null,
+	): JsonResponse {
+		if (!$badgeId) {
+			return GeneralHelper::badRequest('Missing badgeId');
+		}
+
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/badges/' .
+					GeneralHelper::formatId($user->id()) .
+					'/' .
+					$badgeId .
+					'/mastery',
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to fetch badge mastery status');
+		}
+
+		if (empty($data)) {
+			return GeneralHelper::notFound('Badge not found');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/{id}/badges/{badgeId}/mastery/generate
+	// POST /v2/users/{username}/badges/{badgeId}/mastery/generate
+	public function generateBadgeMastery(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+		?string $badgeId = null,
+	): JsonResponse {
+		if (!$badgeId) {
+			return GeneralHelper::badRequest('Missing badgeId');
+		}
+
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$payload = UsersHelper::buildUserProfilePromptData($user);
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/badges/' .
+					GeneralHelper::formatId($user->id()) .
+					'/' .
+					$badgeId .
+					'/mastery/generate',
+				'POST',
+				$payload,
+			);
+		} catch (Exception $e) {
+			$code = (int) $e->getCode();
+			$message = CloudHelper::extractCloudMessage($e);
+
+			return match ($code) {
+				409 => GeneralHelper::conflict($message ?: 'Conflict'),
+				410 => GeneralHelper::gone($message ?: 'Gone'),
+				default => GeneralHelper::internalError(
+					'Mastery generation failed; please try again.',
+				),
+			};
+		}
+
+		return new JsonResponse($data, Response::HTTP_CREATED);
+	}
+
 	// GET /v2/users/current/points
 	// GET /v2/users/{id}/points
 	// GET /v2/users/{username}/points
