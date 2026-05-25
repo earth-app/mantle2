@@ -141,6 +141,35 @@ function mantle2_mail($key, &$message, $params)
 
 			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
+		case 'login_verification':
+			$message['subject'] = 'The Earth App - Sign-in Verification Code';
+
+			$ip = $params['ip'] ?? 'unknown';
+			$ua = $params['user_agent'] ?? 'Unknown Device';
+			$time = $params['time'] ?? date(DATE_ATOM);
+			$markdown = "@$username, A sign-in to your account was attempted from a new device or location.\n\n
+			**Verification code:** **{$params['verification_code']}**\n\n
+			This code will expire in 10 minutes.\n\n
+			**Details:**\n
+			- Time: {$time}\n
+			- IP: {$ip}\n
+			- User Agent: {$ua}\n\n
+			If this was you, enter the code in the app to complete sign-in.\n
+			If this wasn't you, **do not share this code** and please change your password immediately.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'oauth_email_auto_set':
+			$message['subject'] = 'The Earth App - Email Address Set';
+
+			$providerName = ucfirst($params['provider'] ?? 'Unknown');
+			$newEmail = $params['new_email'] ?? '';
+			$markdown = "@$username, Your account did not have an email address on file. We've automatically set it to **{$newEmail}** using the address from your **{$providerName}** sign-in.\n\n
+			You can change this at any time from your account settings.\n\n
+			If this wasn't you, please secure your account immediately by unlinking the provider and updating your email.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 		case 'new_login':
 			$message['subject'] = 'The Earth App - New Login Notification';
 			$markdown = "@$username, Your account was just used to log in from a new device or location.\n\n
@@ -348,6 +377,8 @@ function mantle2_mail_alter(&$message)
 {
 	$messages = [
 		'mantle2_email_verification',
+		'mantle2_login_verification',
+		'mantle2_oauth_email_auto_set',
 		'mantle2_welcome',
 		'mantle2_new_login',
 		'mantle2_new_password',

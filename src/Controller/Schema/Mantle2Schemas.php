@@ -1022,6 +1022,45 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function loginVerificationRequired(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'requires_verification' => [
+					'type' => 'boolean',
+					'example' => true,
+					'description' =>
+						'Always true. Indicates the client must complete email verification before a session token is issued.',
+				],
+				'ticket' => [
+					'type' => 'string',
+					'minLength' => 32,
+					'maxLength' => 32,
+					'pattern' => '^[a-f0-9]{32}$',
+					'example' => 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',
+					'description' =>
+						'Opaque ticket binding the pending login to the user and code. Send this back to /v2/users/login/verify_new_ip with the emailed code.',
+				],
+				'email' => [
+					'type' => 'string',
+					'example' => 'a***e@example.com',
+					'description' => 'Masked email address that the verification code was sent to.',
+				],
+				'expires_in' => [
+					'type' => 'integer',
+					'example' => 600,
+					'description' =>
+						'Seconds until the ticket and code expire. After this window the client must restart at /v2/users/login.',
+				],
+				'message' => ['type' => 'string'],
+			],
+			'required' => ['requires_verification', 'ticket', 'email', 'expires_in'],
+			'description' =>
+				'Returned with HTTP 202 from /v2/users/login when the request originated from an IP not previously associated with the account and the account has an email address on file.',
+		];
+	}
+
 	public static function logoutResponse(): array
 	{
 		return [
@@ -2699,6 +2738,7 @@ class Mantle2Schemas
 			'User' => self::user(),
 			'SignupResponse' => self::signupResponse(),
 			'LoginResponse' => self::loginResponse(),
+			'LoginVerificationRequired' => self::loginVerificationRequired(),
 			'LogoutResponse' => self::logoutResponse(),
 			'EmailVerificationSent' => self::emailVerificationSent(),
 			'EmailVerified' => self::emailVerified(),

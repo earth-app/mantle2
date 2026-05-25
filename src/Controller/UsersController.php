@@ -160,6 +160,7 @@ class UsersController extends ControllerBase
 	}
 
 	// POST /v2/users/login (Basic auth expected)
+	// Accepts either a username or an email address as the Basic Auth "user" field.
 	public function login(Request $request): JsonResponse
 	{
 		$auth = $request->headers->get('Authorization');
@@ -175,6 +176,7 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid login credentials');
 		}
 
+		// Allow login with either username or email; resolve to a canonical username for user.auth.
 		/** @var UserInterface $account */
 		$account = UsersHelper::findByUsername($name) ?? UsersHelper::findByEmail($name);
 
@@ -195,7 +197,9 @@ class UsersController extends ControllerBase
 
 		/** @var UserAuthInterface $userAuth */
 		$userAuth = Drupal::service('user.auth');
-		$uid = $userAuth->authenticate($name, $pass);
+		// `user.auth` expects the canonical username; pass that even when the client
+		// supplied an email.
+		$uid = $userAuth->authenticate($account->getAccountName(), $pass);
 		if (!$uid) {
 			return GeneralHelper::unauthorized();
 		}
@@ -223,6 +227,29 @@ class UsersController extends ControllerBase
 			}
 		}
 
+		// New-IP email 2FA: if this client IP is not in the user's known list AND the
+		// account has an email address on file, hold the token issuance behind an
+		// 8-digit code sent to that email. Accounts without an email skip this step
+		// (email is optional).
+		if (UsersHelper::shouldGate2FAForNewIP($account, $request)) {
+			$ticket = UsersHelper::beginLogin2FAChallenge($account, $request);
+			if ($ticket instanceof JsonResponse) {
+				return $ticket;
+			}
+
+			return new JsonResponse(
+				[
+					'requires_verification' => true,
+					'ticket' => $ticket['ticket'],
+					'email' => $ticket['masked_email'],
+					'expires_in' => $ticket['expires_in'],
+					'message' =>
+						'A verification code was emailed to the address on file. Submit it to /v2/users/login/verify_new_ip with the returned ticket to complete sign-in.',
+				],
+				Response::HTTP_ACCEPTED,
+			);
+		}
+
 		// log the user in for bookkeeping then issue API token
 		$this->finalizeLogin($account, $request);
 		$token = UsersHelper::issueToken($account);
@@ -241,6 +268,61 @@ class UsersController extends ControllerBase
 			'session_token' => $token,
 		];
 		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/login/verify_new_ip
+	// Exchanges a ticket + emailed 8-digit code for a session_token. The ticket is
+	// returned by /v2/users/login when the user attempts to sign in from an IP
+	// that the account has never been seen at before.
+	public function verifyLoginNewIP(Request $request): JsonResponse
+	{
+		$ticket = $request->query->get('ticket');
+		$code = $request->query->get('code');
+
+		if (!$ticket || !is_string($ticket)) {
+			return GeneralHelper::badRequest('Missing ticket');
+		}
+		if (!$code || !is_string($code)) {
+			return GeneralHelper::badRequest('Missing verification code');
+		}
+		if (!preg_match('/^\d{8}$/', $code)) {
+			return GeneralHelper::badRequest('Invalid verification code format');
+		}
+
+		$result = UsersHelper::consumeLogin2FAChallenge($ticket, $code);
+		if ($result instanceof JsonResponse) {
+			return $result;
+		}
+
+		/** @var UserInterface $account */
+		$account = $result;
+
+		if (UsersHelper::isDisabled($account)) {
+			return GeneralHelper::forbidden('Account disabled by administrator');
+		}
+
+		// finalizeLogin records the new IP and emits the standard "New Login" email/notification.
+		$this->finalizeLogin($account, $request);
+		$token = UsersHelper::issueToken($account);
+
+		$rateLimitKey = 'login_success_rate_limit_' . $account->id();
+		RedisHelper::set(
+			$rateLimitKey,
+			[
+				'timestamp' => time(),
+				'user_id' => $account->id(),
+			],
+			30,
+		);
+
+		return new JsonResponse(
+			[
+				'id' => GeneralHelper::formatId($account->id()),
+				'username' => $account->getAccountName(),
+				'session_token' => $token,
+			],
+			Response::HTTP_OK,
+		);
 	}
 
 	// POST /v2/users/logout
@@ -2562,11 +2644,13 @@ class UsersController extends ControllerBase
 			$user = $existingProviderUser;
 		} else {
 			if ($sessionUser) {
+				$autoSetEmail = null;
 				$success = OAuthHelper::linkProvider(
 					$sessionUser,
 					$provider,
 					$userData['sub'],
 					$userData,
+					$autoSetEmail,
 				);
 				if (!$success) {
 					return GeneralHelper::internalError('Failed to link OAuth provider');
@@ -2602,6 +2686,10 @@ class UsersController extends ControllerBase
 					]);
 				}
 
+				if ($autoSetEmail !== null) {
+					$this->notifyOAuthEmailAutoSet($sessionUser, $provider, $autoSetEmail);
+				}
+
 				$user = $sessionUser;
 			} else {
 				// Try email matching
@@ -2616,11 +2704,13 @@ class UsersController extends ControllerBase
 				}
 
 				if ($existingEmailUser) {
+					$autoSetEmail = null;
 					$success = OAuthHelper::linkProvider(
 						$existingEmailUser,
 						$provider,
 						$userData['sub'],
 						$userData,
+						$autoSetEmail,
 					);
 					if (!$success) {
 						return GeneralHelper::internalError('Failed to link OAuth provider');
@@ -2654,6 +2744,14 @@ class UsersController extends ControllerBase
 							'time' => $timestamp,
 							'ip' => $currentIP,
 						]);
+					}
+
+					if ($autoSetEmail !== null) {
+						$this->notifyOAuthEmailAutoSet(
+							$existingEmailUser,
+							$provider,
+							$autoSetEmail,
+						);
 					}
 
 					$user = $existingEmailUser;
@@ -3133,6 +3231,38 @@ class UsersController extends ControllerBase
 			return UsersHelper::findByAuthorized($identifier, $request);
 		}
 		return UsersHelper::findByRequest($request);
+	}
+
+	private function notifyOAuthEmailAutoSet(
+		UserInterface $user,
+		string $provider,
+		string $newEmail,
+	): void {
+		$providerName = ucfirst($provider);
+
+		UsersHelper::addNotification(
+			$user,
+			Drupal::translation()->translate('Email Address Set'),
+			Drupal::translation()->translate(
+				'Your account did not have an email address on file. ' .
+					"It has been automatically set to {$newEmail} based on the one present in {$providerName}.\n\n" .
+					'You can change this from your account settings.',
+			),
+			null,
+			'info',
+			'system',
+		);
+
+		UsersHelper::sendEmail(
+			$user,
+			'oauth_email_auto_set',
+			[
+				'provider' => $provider,
+				'new_email' => $newEmail,
+				'user' => $user,
+			],
+			false,
+		);
 	}
 
 	#endregion

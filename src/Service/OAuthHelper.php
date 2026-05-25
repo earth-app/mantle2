@@ -155,11 +155,13 @@ class OAuthHelper
 	}
 
 	// link OAuth provider to existing user
+	// fills in email address if not present
 	public static function linkProvider(
 		UserInterface $user,
 		string $provider,
 		string $sub,
 		array $userData = [],
+		?string &$autoSetEmail = null,
 	): bool {
 		// check if provider is already linked to another account
 		$existingUser = self::findByProviderSub($provider, $sub);
@@ -172,6 +174,7 @@ class OAuthHelper
 		if (!$user->getEmail() && !empty($userData['email'])) {
 			$user->setEmail($userData['email']);
 			$user->set('field_email_verified', true);
+			$autoSetEmail = $userData['email'];
 		}
 
 		// Set first_name and last_name if they're empty

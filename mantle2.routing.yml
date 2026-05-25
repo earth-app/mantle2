@@ -115,11 +115,53 @@ mantle2.users.login:
     _access: 'TRUE'
   options:
     tags: Users
-    description: 'Log in to your Earth App account'
+    description: >-
+      Log in to your Earth App account using HTTP Basic authentication. The
+      Basic Auth "user" field accepts either a username or an email address.
+      If the request originates from an IP address that has never been seen on
+      this account and the account has an email on file, the response is HTTP
+      202 with a ticket and a masked email; the client must then call
+      /v2/users/login/verify_new_ip with the ticket and the emailed 8-digit
+      code to receive a session_token. Accounts without an email skip the
+      verification step entirely.
     schema/200: '#LoginResponse'
+    schema/202: '#LoginVerificationRequired'
     schema/400: Invalid login credentials
     schema/401: Unauthorized
     schema/403: Account Disabled
+    schema/429: Rate limit exceeded (verification code requested too frequently)
+  methods: [POST]
+
+mantle2.users.login.verify_new_ip:
+  path: '/v2/users/login/verify_new_ip'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::verifyLoginNewIP'
+    _title: 'Verify New-IP Login'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: >-
+      Complete a sign-in started at /v2/users/login by submitting the ticket
+      returned in the 202 response together with the 8-digit verification code
+      that was emailed to the account. On success, returns the same payload as
+      /v2/users/login (id, username, session_token). The ticket is single-use
+      and expires 10 minutes after issuance; after 5 invalid code attempts the
+      ticket is invalidated and the client must restart at /v2/users/login.
+    schema/200: '#LoginResponse'
+    schema/400: Missing/invalid ticket or code, or code attempts exhausted
+    schema/403: Account Disabled
+    query:
+      ticket:
+        type: string
+        required: true
+        description: Opaque ticket returned by /v2/users/login when verification is required
+      code:
+        type: string
+        required: true
+        pattern: '^\d{8}$'
+        description: 8-digit verification code received via email
+        example: '12345678'
   methods: [POST]
 
 mantle2.users.logout:

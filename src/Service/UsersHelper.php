@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Service;
 
+use DateTimeImmutable;
 use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
@@ -2877,6 +2878,192 @@ class UsersHelper
 			],
 			Response::HTTP_OK,
 		);
+	}
+
+	/**
+	 * Whether sign-in from the current request IP should be gated behind an
+	 * emailed 8-digit verification code (de-facto 2FA on first-seen IPs).
+	 */
+	public static function shouldGate2FAForNewIP(UserInterface $user, Request $request): bool
+	{
+		$email = $user->getEmail();
+		if (!$email) {
+			return false;
+		}
+
+		$currentIP = $request->getClientIp();
+		if (!$currentIP) {
+			return false;
+		}
+
+		$previousIPs = self::getKnownLoginIPs($user);
+
+		// First-ever login: there is nothing to compare against, so don't gate.
+		if (empty($previousIPs)) {
+			return false;
+		}
+
+		return !in_array($currentIP, $previousIPs, true);
+	}
+
+	/**
+	 * Return the user's known-login IP list. Falls back to the keyvalue store
+	 * mirror used by checkAndNotifyNewIP() when the field is absent.
+	 */
+	public static function getKnownLoginIPs(UserInterface $user): array
+	{
+		if ($user->hasField('field_previous_ips')) {
+			$raw = $user->get('field_previous_ips')->value;
+			if ($raw) {
+				$decoded = json_decode($raw, true);
+				if (is_array($decoded)) {
+					return $decoded;
+				}
+			}
+			return [];
+		}
+
+		$store = Drupal::service('keyvalue')->get('mantle2_user_ips');
+		$value = $store->get((string) $user->id());
+		return is_array($value) ? $value : [];
+	}
+
+	/**
+	 * Begin a login 2FA challenge: generate a ticket+code, store them in Redis,
+	 * and email the code to the user. Returns ['ticket' => ..., 'masked_email'
+	 * => ..., 'expires_in' => seconds] on success or a JsonResponse on failure.
+	 *
+	 * The challenge is bound to the user id and (best-effort) to the originating
+	 * IP / user-agent so a leaked ticket cannot be redeemed from elsewhere.
+	 *
+	 * @return array{ticket: string, masked_email: string, expires_in: int}|JsonResponse
+	 */
+	public static function beginLogin2FAChallenge(
+		UserInterface $user,
+		Request $request,
+	): array|JsonResponse {
+		$email = $user->getEmail();
+		if (!$email) {
+			return GeneralHelper::badRequest('User has no email address on file');
+		}
+
+		// Rate-limit per user: at most one challenge issued every 60 seconds.
+		$rateLimitKey = 'login_2fa_rate_limit_' . $user->id();
+		$lastSentData = RedisHelper::get($rateLimitKey);
+		if ($lastSentData && isset($lastSentData['timestamp'])) {
+			$timeSinceLast = time() - (int) $lastSentData['timestamp'];
+			if ($timeSinceLast < 60) {
+				$remaining = 60 - $timeSinceLast;
+				$response = new JsonResponse(
+					[
+						'error' => 'Rate limit exceeded',
+						'message' =>
+							'Please wait ' .
+							$remaining .
+							' seconds before requesting another login verification code',
+						'retry_after' => $remaining,
+					],
+					Response::HTTP_TOO_MANY_REQUESTS,
+				);
+				$response->headers->set('Retry-After', (string) $remaining);
+				return $response;
+			}
+		}
+
+		$ticket = bin2hex(random_bytes(16));
+		$code = str_pad((string) random_int(10000000, 99999999), 8, '0', STR_PAD_LEFT);
+		$ttl = 600; // 10 minutes
+
+		$payload = [
+			'code' => $code,
+			'user_id' => (int) $user->id(),
+			'timestamp' => time(),
+			'ip' => $request->getClientIp() ?? '',
+			'user_agent' => $request->headers->get('User-Agent', ''),
+			'attempts' => 0,
+		];
+
+		if (!RedisHelper::set('login_2fa:' . $ticket, $payload, $ttl)) {
+			Drupal::logger('mantle2')->error('Failed to store login 2FA ticket in Redis');
+			return GeneralHelper::internalError('Failed to issue login verification ticket');
+		}
+
+		RedisHelper::set(
+			$rateLimitKey,
+			['timestamp' => time(), 'user_id' => (int) $user->id()],
+			60,
+		);
+
+		$timestamp = new DateTimeImmutable()->format(DATE_ATOM);
+		self::sendEmail(
+			$user,
+			'login_verification',
+			[
+				'verification_code' => $code,
+				'user' => $user,
+				'time' => $timestamp,
+				'ip' => $request->getClientIp() ?? 'unknown',
+				'user_agent' => $request->headers->get('User-Agent', 'Unknown Device'),
+			],
+			false, // not unsubscribable; security-critical
+		);
+
+		return [
+			'ticket' => $ticket,
+			'masked_email' => self::maskEmail($email),
+			'expires_in' => $ttl,
+		];
+	}
+
+	public static function consumeLogin2FAChallenge(
+		string $ticket,
+		string $code,
+	): UserInterface|JsonResponse {
+		$key = 'login_2fa:' . $ticket;
+		$payload = RedisHelper::get($key);
+		if (!$payload || !is_array($payload) || !isset($payload['code'], $payload['user_id'])) {
+			return GeneralHelper::badRequest('Ticket expired or invalid');
+		}
+
+		$attempts = (int) ($payload['attempts'] ?? 0);
+		if ($attempts >= 5) {
+			RedisHelper::delete($key);
+			return GeneralHelper::badRequest(
+				'Too many invalid attempts; request a new verification code',
+			);
+		}
+
+		if (!hash_equals((string) $payload['code'], $code)) {
+			$payload['attempts'] = $attempts + 1;
+			RedisHelper::set($key, $payload, 600);
+			return GeneralHelper::badRequest('Invalid verification code');
+		}
+
+		$user = User::load((int) $payload['user_id']);
+		if (!$user instanceof UserInterface) {
+			RedisHelper::delete($key);
+			return GeneralHelper::badRequest('Account no longer exists');
+		}
+
+		RedisHelper::delete($key);
+		return $user;
+	}
+
+	private static function maskEmail(string $email): string
+	{
+		$at = strrpos($email, '@');
+		if ($at === false || $at < 1) {
+			return '***';
+		}
+		$local = substr($email, 0, $at);
+		$domain = substr($email, $at);
+		if (strlen($local) <= 2) {
+			$maskedLocal = str_repeat('*', strlen($local));
+		} else {
+			$maskedLocal =
+				$local[0] . str_repeat('*', max(1, strlen($local) - 2)) . substr($local, -1);
+		}
+		return $maskedLocal . $domain;
 	}
 
 	public static function sendEmailCampaign(
