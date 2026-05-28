@@ -1632,7 +1632,7 @@ mantle2.users.id.badges.get:
   requirements:
     _access: 'TRUE'
     id: '\d+'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
@@ -1653,7 +1653,7 @@ mantle2.users.id.badges.mastery:
   requirements:
     _access: 'TRUE'
     id: '\d+'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges
     description: Retrieves the badge mastery status for the user
@@ -1676,7 +1676,7 @@ mantle2.users.id.badges.mastery.generate:
   requirements:
     _access: 'TRUE'
     id: '\d+'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
@@ -2975,7 +2975,7 @@ mantle2.users.username.badges.get:
   requirements:
     _access: 'TRUE'
     username: '@[\w.]+'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
@@ -2996,7 +2996,7 @@ mantle2.users.username.badges.mastery:
   requirements:
     _access: 'TRUE'
     username: '@[\w.]+'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges
     description: Retrieves the badge mastery status for the user
@@ -3019,7 +3019,7 @@ mantle2.users.username.badges.mastery.generate:
   requirements:
     _access: 'TRUE'
     username: '@[\w.]+'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
@@ -4155,7 +4155,7 @@ mantle2.users.current.badges.get:
     _title: 'Get User Badge by Current User'
   requirements:
     _access: 'TRUE'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges
     description: Retrieves a specific badge earned by the user
@@ -4173,7 +4173,7 @@ mantle2.users.current.badges.mastery:
     _title: 'Get Badge Mastery Status by Current User'
   requirements:
     _access: 'TRUE'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges
     description: Retrieves the badge mastery status for the current user
@@ -4192,7 +4192,7 @@ mantle2.users.current.badges.mastery.generate:
     _title: 'Generate Badge Mastery Quest by Current User'
   requirements:
     _access: 'TRUE'
-    badgeId: '\d+'
+    badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
