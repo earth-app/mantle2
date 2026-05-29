@@ -1597,10 +1597,13 @@ class UsersController extends ControllerBase
 			$code = (int) $e->getCode();
 			$message = CloudHelper::extractCloudMessage($e);
 
+			// cloud emits 429 when the per-user active-mastery cap is hit; surface as 400 so
+			// the frontend can show a disabled CTA + countdown without parsing rate-limit headers
 			return match ($code) {
 				400 => GeneralHelper::badRequest($message ?: 'Bad Request'),
 				409 => GeneralHelper::conflict($message ?: 'Conflict'),
 				410 => GeneralHelper::gone($message ?: 'Gone'),
+				429 => GeneralHelper::badRequest($message ?: 'Active mastery cap reached'),
 				default => GeneralHelper::internalError(
 					'Mastery generation failed; please try again.',
 				),
@@ -1617,6 +1620,30 @@ class UsersController extends ControllerBase
 		}
 
 		return new JsonResponse($data, Response::HTTP_CREATED);
+	}
+
+	// GET /v2/users/{id}/badges/masteries
+	// GET /v2/users/{username}/badges/masteries
+	// GET /v2/users/current/badges/masteries
+	public function badgesMasteries(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/' . GeneralHelper::formatId($user->id()) . '/badges/masteries',
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to list badge masteries');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
 	}
 
 	// GET /v2/users/current/points

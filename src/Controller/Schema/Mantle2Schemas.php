@@ -1449,6 +1449,54 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function masteryList(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'cap' => [
+					'type' => 'integer',
+					'example' => 5,
+					'description' => 'Max active masteries per user',
+				],
+				'active' => [
+					'type' => 'integer',
+					'example' => 2,
+					'description' => 'Currently generated and not yet mastered',
+				],
+				'ttl_seconds' => [
+					'type' => 'integer',
+					'example' => 7776000,
+					'description' => 'Seconds a generated mastery survives before kv reclaims it',
+				],
+				'items' => [
+					'type' => 'array',
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'badge_id' => ['type' => 'string', 'example' => 'social_butterfly'],
+							'quest' => ['$ref' => '#/components/schemas/Quest'],
+							'generated_at' => ['type' => 'integer', 'example' => 1717000000000],
+							'expires_at' => ['type' => 'integer', 'example' => 1724776000000],
+							'mastered' => ['$ref' => '#/components/schemas/Bool'],
+							'mastered_at' => [
+								'oneOf' => [['type' => 'integer'], ['type' => 'null']],
+							],
+						],
+						'required' => [
+							'badge_id',
+							'quest',
+							'generated_at',
+							'expires_at',
+							'mastered',
+						],
+					],
+				],
+			],
+			'required' => ['cap', 'active', 'ttl_seconds', 'items'],
+		];
+	}
+
 	public static function event(): array
 	{
 		return [
@@ -2791,6 +2839,7 @@ class Mantle2Schemas
 			'UserBadge' => self::userBadge(),
 			'UserBadges' => self::userBadges(),
 			'BadgeMastery' => self::badgeMastery(),
+			'MasteryList' => self::masteryList(),
 			'ImpactPoints' => self::impactPoints(),
 			'Users' => self::users(),
 			'Event' => self::event(),

@@ -1681,7 +1681,7 @@ mantle2.users.id.badges.mastery.generate:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
     schema/201: '#Quest'
-    schema/400: Badge does not support mastery quests
+    schema/400: Badge does not support mastery quests, or active mastery cap reached
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/409: Badge not granted, already generated, or already mastered
@@ -1693,6 +1693,26 @@ mantle2.users.id.badges.mastery.generate:
       badgeId:
         type: string
   methods: [POST]
+
+mantle2.users.id.badges.masteries:
+  path: '/v2/users/{id}/badges/masteries'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badgesMasteries'
+    _title: 'List User Active Badge Masteries by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Badges,Quests
+    description: Lists the user's stored mastery quests (active + within ttl) plus cap state
+    schema/200: '#MasteryList'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
 
 mantle2.users.id.impact_points:
   path: '/v2/users/{id}/points'
@@ -3024,7 +3044,7 @@ mantle2.users.username.badges.mastery.generate:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
     schema/201: '#Quest'
-    schema/400: Badge does not support mastery quests
+    schema/400: Badge does not support mastery quests, or active mastery cap reached
     schema/401: Unauthorized
     schema/403: Forbidden
     schema/409: Badge not granted, already generated, or already mastered
@@ -3036,6 +3056,26 @@ mantle2.users.username.badges.mastery.generate:
       badgeId:
         type: string
   methods: [POST]
+
+mantle2.users.username.badges.masteries:
+  path: '/v2/users/{username}/badges/masteries'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badgesMasteries'
+    _title: 'List User Active Badge Masteries by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Badges,Quests
+    description: Lists the user's stored mastery quests (active + within ttl) plus cap state
+    schema/200: '#MasteryList'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
 
 mantle2.users.username.impact_points:
   path: '/v2/users/{username}/points'
@@ -4197,7 +4237,7 @@ mantle2.users.current.badges.mastery.generate:
     tags: Users,Badges,Quests
     description: Generates an AI-driven mastery quest for the badge
     schema/201: '#Quest'
-    schema/400: Badge does not support mastery quests
+    schema/400: Badge does not support mastery quests, or active mastery cap reached
     schema/401: Unauthorized
     schema/409: Badge not granted, already generated, or already mastered
     schema/410: Mastery permanently locked
@@ -4206,6 +4246,20 @@ mantle2.users.current.badges.mastery.generate:
       badgeId:
         type: string
   methods: [POST]
+
+mantle2.users.current.badges.masteries:
+  path: '/v2/users/current/badges/masteries'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::badgesMasteries'
+    _title: 'List User Active Badge Masteries by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Badges,Quests
+    description: Lists the user's stored mastery quests (active + within ttl) plus cap state
+    schema/200: '#MasteryList'
+    schema/401: Unauthorized
+  methods: [GET]
 
 mantle2.users.current.impact_points:
   path: '/v2/users/current/points'
