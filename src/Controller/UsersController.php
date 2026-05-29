@@ -1819,6 +1819,26 @@ class UsersController extends ControllerBase
 		$id = $request->query->get('id', '');
 
 		if ($id) {
+			// mastery quest state is per-user and private; require auth so we know whose
+			// generated quest to look up (cloud needs userId to resolve badge_mastery_*)
+			if (str_starts_with($id, 'badge_mastery_')) {
+				$user = UsersHelper::getOwnerOfRequest($request);
+				if (!$user) {
+					return GeneralHelper::unauthorized(
+						'Authentication required to fetch badge mastery quests',
+					);
+				}
+
+				$quest = PointsHelper::getQuestForUser($id, (string) $user->id());
+				if (!$quest) {
+					return GeneralHelper::notFound(
+						'Mastery quest for badge has not been generated yet',
+					);
+				}
+
+				return new JsonResponse($quest, Response::HTTP_OK);
+			}
+
 			$quest = PointsHelper::getQuest($id);
 			if (!$quest) {
 				return GeneralHelper::notFound("Quest '$id' not found");

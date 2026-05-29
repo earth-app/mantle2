@@ -874,6 +874,14 @@ class PointsHelper
 		return $questData ? Quest::fromArray($questData) : null;
 	}
 
+	public static function getQuestForUser(string $questId, string $userId): ?Quest
+	{
+		$questData = CloudHelper::sendRequest('/v1/users/quests/' . $questId, 'GET', [
+			'user_id' => GeneralHelper::formatId($userId),
+		]);
+		return $questData ? Quest::fromArray($questData) : null;
+	}
+
 	public static function getCurrentQuest(UserInterface $user): QuestData
 	{
 		if ($user->id() == UsersHelper::cloud()->id()) {

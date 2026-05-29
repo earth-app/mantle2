@@ -3966,9 +3966,8 @@ class UsersHelper
 			if ($user->get('field_email_verified')->value) {
 				$lastCheckKey = 'badge_check_verified_' . GeneralHelper::formatId($user->id());
 
-				$lastCheck = RedisHelper::get($lastCheckKey);
-				if (!$lastCheck) {
-					if (!self::getBadge($user, 'verified')) {
+				if (!RedisHelper::get($lastCheckKey)) {
+					if (!self::isBadgeGranted($user, 'verified')) {
 						self::grantBadge($user, 'verified');
 					}
 
@@ -3989,12 +3988,21 @@ class UsersHelper
 					continue;
 				}
 
-				if (!self::getBadge($user, $tier['badge'])) {
+				if (!self::isBadgeGranted($user, $tier['badge'])) {
 					self::grantBadge($user, $tier['badge']);
 				}
 				RedisHelper::set($lastCheckKey, ['value' => true], 86400); // 24 hours
 			}
 		}
+	}
+
+	// cloud returns the catalog badge metadata even when the user has not earned it
+	// (with granted=false, progress=0), so plain getBadge() truthiness is not a grant
+	// check. always inspect the granted flag.
+	public static function isBadgeGranted(UserInterface $user, string $badgeId): bool
+	{
+		$badge = self::getBadge($user, $badgeId);
+		return is_array($badge) && !empty($badge['granted']);
 	}
 
 	#endregion

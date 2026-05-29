@@ -875,18 +875,32 @@ class EventsHelper
 			$endTime = $event->getRawEndDate();
 			$hasEnded = $endTime !== null ? $endTime <= $now : $startTime <= $now;
 
+			$eventKey = GeneralHelper::formatId($node->id());
+
 			if ($startTime > $now && $startTime <= $oneHourFromNow) {
-				$minutesUntilStart = (int) ceil(($startTime - $now) / 60000); // milliseconds to minutes
-				self::notifyEventStarting($event, $node, $minutesUntilStart);
+				$startNotifiedKey = 'event_notified_start:' . $eventKey;
+				if (!RedisHelper::get($startNotifiedKey)) {
+					$minutesUntilStart = (int) ceil(($startTime - $now) / 60000); // milliseconds to minutes
+					self::notifyEventStarting($event, $node, $minutesUntilStart);
+					RedisHelper::set($startNotifiedKey, ['value' => true], 7200); // 2h — covers the 1h window
+				}
 			}
 
 			if ($endTime && $endTime > $now && $endTime <= $oneHourFromNow) {
-				$minutesUntilEnd = (int) ceil(($endTime - $now) / 60000); // milliseconds to minutes
-				self::notifyEventEnding($event, $node, $minutesUntilEnd);
+				$endingNotifiedKey = 'event_notified_ending:' . $eventKey;
+				if (!RedisHelper::get($endingNotifiedKey)) {
+					$minutesUntilEnd = (int) ceil(($endTime - $now) / 60000); // milliseconds to minutes
+					self::notifyEventEnding($event, $node, $minutesUntilEnd);
+					RedisHelper::set($endingNotifiedKey, ['value' => true], 7200);
+				}
 			}
 
 			if ($hasEnded) {
-				self::notifyEventEnded($event, $node);
+				$endedNotifiedKey = 'event_notified_ended:' . $eventKey;
+				if (!RedisHelper::get($endedNotifiedKey)) {
+					self::notifyEventEnded($event, $node);
+					RedisHelper::set($endedNotifiedKey, ['value' => true], 86400 * 30); // 30 days
+				}
 			}
 		}
 	}

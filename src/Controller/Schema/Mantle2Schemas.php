@@ -173,7 +173,7 @@ class Mantle2Schemas
 		'required' => ['name', 'title', 'version', 'description', 'date'],
 	];
 
-	public static function paginated($itemSchema): array
+	public static function paginated(mixed $itemSchema): array
 	{
 		return [
 			'type' => 'object',
