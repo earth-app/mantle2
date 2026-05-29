@@ -1591,6 +1591,7 @@ class UsersController extends ControllerBase
 					'/mastery/generate',
 				'POST',
 				$payload,
+				90,
 			);
 		} catch (Exception $e) {
 			$code = (int) $e->getCode();
@@ -1604,6 +1605,15 @@ class UsersController extends ControllerBase
 					'Mastery generation failed; please try again.',
 				),
 			};
+		}
+
+		// CloudHelper swallows curl timeouts into [] (see sendRequest); detect that here
+		// so the client gets a real 504 instead of an empty 201
+		if (empty($data) || !isset($data['id'])) {
+			return new JsonResponse(
+				['error' => 'Mastery generation timed out; please try again.'],
+				Response::HTTP_GATEWAY_TIMEOUT,
+			);
 		}
 
 		return new JsonResponse($data, Response::HTTP_CREATED);

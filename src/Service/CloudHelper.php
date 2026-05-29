@@ -36,6 +36,7 @@ class CloudHelper
 		string $path,
 		string $method = 'GET',
 		array $data = [],
+		int $timeoutSeconds = 10,
 	): array {
 		$cloud = self::getCloudEndpoint();
 		if (empty($path)) {
@@ -65,7 +66,7 @@ class CloudHelper
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+		curl_setopt($ch, CURLOPT_TIMEOUT, $timeoutSeconds);
 		curl_setopt($ch, CURLINFO_HEADER_OUT, true);
 
 		$headers = ['Accept: application/json', 'User-Agent: @earth-app/mantle2'];
