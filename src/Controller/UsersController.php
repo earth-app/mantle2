@@ -1591,7 +1591,7 @@ class UsersController extends ControllerBase
 					'/mastery/generate',
 				'POST',
 				$payload,
-				90,
+				300,
 			);
 		} catch (Exception $e) {
 			$code = (int) $e->getCode();
