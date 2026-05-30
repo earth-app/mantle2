@@ -245,17 +245,20 @@ class RedisHelper
 	public static function cache(?string $key, callable $callback, int $ttl = 900): array
 	{
 		// null or empty key implies no caching
-		if ($key === null || empty($key)) {
+		if ($key === null || $key === '') {
 			return $callback();
 		}
 
+		// treat a cached empty array as a miss
 		$data = self::get($key);
-		if ($data !== null) {
+		if ($data !== null && $data !== []) {
 			return $data;
 		}
 
 		$data = $callback();
-		self::set($key, $data, $ttl);
+		if ($data !== []) {
+			self::set($key, $data, $ttl);
+		}
 		return $data;
 	}
 }
