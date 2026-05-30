@@ -1164,11 +1164,13 @@ class UsersHelper
 			return GeneralHelper::internalError('Failed to save user');
 		}
 
+		// invalidate before re-serializing so the fresh state — not a stale
+		// `user:<id>:*` entry — is what gets re-cached on the next read.
+		self::clearCachedUserResponses((int) $user->id());
+
 		$responseData = self::serializeUser($user, $requester);
 
 		if ($disabledChanged) {
-			self::clearCachedUserResponses((int) $user->id());
-
 			$actorName = $requester ? $requester->getAccountName() : 'system';
 			$action = $newDisabled ? 'disabled' : 're-enabled';
 			$timestamp = date(DATE_ATOM);
