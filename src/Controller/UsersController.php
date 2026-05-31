@@ -484,6 +484,30 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Email already in use');
 		}
 
+		// admin blacklist gate — block known-bad usernames/emails before persisting
+		try {
+			$usernameCheck = CloudHelper::sendRequest(
+				'/v1/admin/blacklist/check?kind=username&value=' . urlencode($username),
+			);
+			if (!empty($usernameCheck['blacklisted'])) {
+				return GeneralHelper::badRequest('This username is not allowed');
+			}
+			if ($email) {
+				$emailCheck = CloudHelper::sendRequest(
+					'/v1/admin/blacklist/check?kind=email&value=' . urlencode($email),
+				);
+				if (!empty($emailCheck['blacklisted'])) {
+					return GeneralHelper::badRequest('This email is not allowed');
+				}
+			}
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'Blacklist check failed for signup, allowing through: @msg',
+				['@msg' => $e->getMessage()],
+			);
+			// fail open on cloud unreachable — better UX than blocking all signups
+		}
+
 		$user = User::create();
 		$user->setUsername($username);
 		if ($email) {
@@ -528,6 +552,13 @@ class UsersController extends ControllerBase
 			'Welcome to The Earth App!',
 			'Your account has been successfully created. Explore the app and discover new activities to connect with the Earth!',
 		);
+
+		// fire-and-forget funnel bump for the admin analytics dashboard
+		try {
+			CloudHelper::sendRequest('/v1/admin/funnel/signups_completed', 'POST');
+		} catch (Exception $e) {
+			// analytics is non-critical — never block signup on a cloud blip
+		}
 
 		return new JsonResponse($data, Response::HTTP_CREATED);
 	}
@@ -1964,6 +1995,119 @@ class UsersController extends ControllerBase
 		return new JsonResponse(['message' => 'Quest cancelled successfully'], Response::HTTP_OK);
 	}
 
+	// GET /v2/users/current/onboarding
+	// GET /v2/users/{id}/onboarding
+	// GET /v2/users/{username}/onboarding
+	public function getOnboarding(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest('/v1/users/onboarding/' . $user->id());
+			return new JsonResponse($data, Response::HTTP_OK);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to fetch onboarding state');
+		}
+	}
+
+	// POST /v2/users/current/onboarding/step
+	public function completeOnboardingStep(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (!is_array($body) || empty($body['step']) || !is_string($body['step'])) {
+			return GeneralHelper::badRequest('Missing or invalid step');
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/onboarding/' . $user->id() . '/step',
+				'POST',
+				['step' => $body['step']],
+			);
+			return new JsonResponse($data, Response::HTTP_OK);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to record onboarding step');
+		}
+	}
+
+	// POST /v2/users/current/onboarding/persona
+	public function setOnboardingPersona(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (
+			!is_array($body) ||
+			empty($body['persona']) ||
+			!is_string($body['persona']) ||
+			strlen($body['persona']) > 64
+		) {
+			return GeneralHelper::badRequest('Missing or invalid persona');
+		}
+
+		$interests = $body['interests'] ?? [];
+		if (!is_array($interests)) {
+			return GeneralHelper::badRequest('Field interests must be an array');
+		}
+
+		$interests = array_values(
+			array_filter($interests, fn($i) => is_string($i) && $i !== '' && strlen($i) <= 64),
+		);
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/onboarding/' . $user->id() . '/persona',
+				'POST',
+				['persona' => $body['persona'], 'interests' => array_slice($interests, 0, 20)],
+			);
+			return new JsonResponse($data, Response::HTTP_OK);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to save onboarding persona');
+		}
+	}
+
+	// POST /v2/users/current/onboarding/dismiss
+	public function dismissOnboarding(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/onboarding/' . $user->id() . '/dismiss',
+				'POST',
+			);
+			return new JsonResponse($data, Response::HTTP_OK);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to dismiss onboarding');
+		}
+	}
+
 	// GET /v2/users/current/quest/history
 	// GET /v2/users/{id}/quest/history
 	// GET /v2/users/{username}/quest/history
@@ -2119,6 +2263,13 @@ class UsersController extends ControllerBase
 
 		// badges: 'verified'
 		UsersHelper::grantBadge($user, 'verified');
+
+		// fire-and-forget funnel bump for the admin analytics dashboard
+		try {
+			CloudHelper::sendRequest('/v1/admin/funnel/verifications_completed', 'POST');
+		} catch (Exception $e) {
+			// analytics is non-critical
+		}
 
 		return new JsonResponse(
 			[
