@@ -315,31 +315,25 @@ class EventsHelper
 			return GeneralHelper::badRequest('Field censor must be a boolean');
 		}
 
-		// Check event name for inappropriate content
-		$flagResult = GeneralHelper::isFlagged($name);
-		if ($flagResult['flagged']) {
-			if ($censor) {
-				$name = GeneralHelper::censorText($name);
-			} else {
-				return GeneralHelper::badRequest(
-					'Event name contains inappropriate content: ' . $flagResult['matched_word'],
-				);
-			}
-		}
+		$uid = $user ? (int) $user->id() : 0;
 
-		// Check event description for inappropriate content (if provided)
+		$validatedName = GeneralHelper::validateUserContent($name, $censor, 'event name', $uid);
+		if ($validatedName instanceof JsonResponse) {
+			return $validatedName;
+		}
+		$name = $validatedName;
+
 		if ($description) {
-			$flagResult = GeneralHelper::isFlagged($description);
-			if ($flagResult['flagged']) {
-				if ($censor) {
-					$description = GeneralHelper::censorText($description);
-				} else {
-					return GeneralHelper::badRequest(
-						'Event description contains inappropriate content: ' .
-							$flagResult['matched_word'],
-					);
-				}
+			$validatedDesc = GeneralHelper::validateUserContent(
+				$description,
+				$censor,
+				'event description',
+				$uid,
+			);
+			if ($validatedDesc instanceof JsonResponse) {
+				return $validatedDesc;
 			}
+			$description = $validatedDesc;
 		}
 
 		if (!$type || !is_string($type)) {
@@ -493,17 +487,12 @@ class EventsHelper
 				return GeneralHelper::badRequest('Field censor must be a boolean');
 			}
 
-			// Check event name for inappropriate content
-			$flagResult = GeneralHelper::isFlagged($name);
-			if ($flagResult['flagged']) {
-				if ($censor) {
-					$name = GeneralHelper::censorText($name);
-				} else {
-					return GeneralHelper::badRequest(
-						'Event name contains inappropriate content: ' . $flagResult['matched_word'],
-					);
-				}
+			$uid = $user ? (int) $user->id() : 0;
+			$validatedName = GeneralHelper::validateUserContent($name, $censor, 'event name', $uid);
+			if ($validatedName instanceof JsonResponse) {
+				return $validatedName;
 			}
+			$name = $validatedName;
 
 			$event->setName($name);
 		}
@@ -520,18 +509,17 @@ class EventsHelper
 				return GeneralHelper::badRequest('Field censor must be a boolean');
 			}
 
-			// Check event description for inappropriate content
-			$flagResult = GeneralHelper::isFlagged($description);
-			if ($flagResult['flagged']) {
-				if ($censor) {
-					$description = GeneralHelper::censorText($description);
-				} else {
-					return GeneralHelper::badRequest(
-						'Event description contains inappropriate content: ' .
-							$flagResult['matched_word'],
-					);
-				}
+			$uid = $user ? (int) $user->id() : 0;
+			$validatedDesc = GeneralHelper::validateUserContent(
+				$description,
+				$censor,
+				'event description',
+				$uid,
+			);
+			if ($validatedDesc instanceof JsonResponse) {
+				return $validatedDesc;
 			}
+			$description = $validatedDesc;
 
 			if (!is_string($type)) {
 				return GeneralHelper::badRequest('Invalid type');

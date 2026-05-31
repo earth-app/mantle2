@@ -48,6 +48,23 @@ class GeneralHelper
 		return new JsonResponse(['code' => 409, 'message' => $message], Response::HTTP_CONFLICT);
 	}
 
+	// 403 with a discriminator so the frontend can branch on it (add-email vs verify CTA)
+	public static function emailVerificationRequired(
+		string $action = 'perform this action',
+		bool $hasEmail = true,
+	): JsonResponse {
+		$reason = $hasEmail ? 'verify' : 'add';
+		return new JsonResponse(
+			[
+				'code' => 403,
+				'reason' => 'EMAIL_VERIFICATION_REQUIRED',
+				'has_email' => $hasEmail,
+				'message' => "You must $reason your email to $action.",
+			],
+			Response::HTTP_FORBIDDEN,
+		);
+	}
+
 	public static function gone(string $message = 'Gone'): JsonResponse
 	{
 		return new JsonResponse(['code' => 410, 'message' => $message], Response::HTTP_GONE);
@@ -519,6 +536,35 @@ class GeneralHelper
 		}
 
 		return $score;
+	}
+
+	public static function validateUserContent(
+		string $text,
+		bool $censor,
+		string $label,
+		?int $uid = null,
+	): string|JsonResponse {
+		$result = self::isFlagged($text);
+		if (!$result['flagged']) {
+			return $text;
+		}
+
+		if ($censor) {
+			return self::censorText($text);
+		}
+
+		Drupal::logger('mantle2')->warning(
+			'User %uid attempted to create flagged %label (matched: %matched)',
+			[
+				'%uid' => $uid ?? 0,
+				'%label' => $label,
+				'%matched' => $result['matched_word'],
+			],
+		);
+
+		return self::badRequest(
+			ucfirst($label) . ' contains inappropriate content: ' . $result['matched_word'],
+		);
 	}
 
 	public static function isFlagged(string $text): array

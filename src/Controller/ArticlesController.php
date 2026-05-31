@@ -240,6 +240,10 @@ class ArticlesController extends ControllerBase
 			return $user;
 		}
 
+		if ($block = UsersHelper::requireEmailVerified($user, 'publish articles')) {
+			return $block;
+		}
+
 		if (!UsersHelper::isWriter($user)) {
 			return GeneralHelper::paymentRequired('Upgrade to Writer required');
 		}
@@ -309,24 +313,16 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::badRequest('Field censor must be a boolean');
 		}
 
-		$flagResult = GeneralHelper::isFlagged($content);
-		if ($flagResult['flagged']) {
-			if ($censor) {
-				$content = GeneralHelper::censorText($content);
-			} else {
-				Drupal::logger('mantle2')->warning(
-					'User %uid attempted to create flagged article: %article (matched: %matched)',
-					[
-						'%uid' => $user->id(),
-						'%article' => $content,
-						'%matched' => $flagResult['matched_word'],
-					],
-				);
-				return GeneralHelper::badRequest(
-					'Article contains inappropriate content: ' . $flagResult['matched_word'],
-				);
-			}
+		$validated = GeneralHelper::validateUserContent(
+			$content,
+			$censor,
+			'article',
+			(int) $user->id(),
+		);
+		if ($validated instanceof JsonResponse) {
+			return $validated;
 		}
+		$content = $validated;
 
 		// Validate ocean article
 		$ocean = $body['ocean'] ?? null;
@@ -607,6 +603,10 @@ class ArticlesController extends ControllerBase
 			return $user;
 		}
 
+		if ($block = UsersHelper::requireEmailVerified($user, 'create quizzes')) {
+			return $block;
+		}
+
 		$author = $node->get('field_author_id')->entity;
 		if (!$author) {
 			return GeneralHelper::internalError('Article author not found');
@@ -641,6 +641,7 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::badRequest('Field questions can have a maximum of 10 items');
 		}
 
+		$uid = (int) $user->id();
 		foreach ($questions as $index => $question) {
 			if (!is_array($question)) {
 				return GeneralHelper::badRequest("Question at index $index must be an object");
@@ -651,6 +652,16 @@ class ArticlesController extends ControllerBase
 				return GeneralHelper::badRequest(
 					"Question text at index $index must be a string between 5 and 256 characters",
 				);
+			}
+
+			$validatedQ = GeneralHelper::validateUserContent(
+				$qText,
+				false,
+				"quiz question $index",
+				$uid,
+			);
+			if ($validatedQ instanceof JsonResponse) {
+				return $validatedQ;
 			}
 
 			$qType = $question['type'] ?? null;
@@ -688,11 +699,21 @@ class ArticlesController extends ControllerBase
 					);
 				}
 
-				foreach ($options as $option) {
+				foreach ($options as $optIndex => $option) {
 					if (!is_string($option) || strlen($option) < 1 || strlen($option) > 64) {
 						return GeneralHelper::badRequest(
 							"Each option for question at index $index must be a string between 1 and 64 characters",
 						);
+					}
+
+					$validatedOpt = GeneralHelper::validateUserContent(
+						$option,
+						false,
+						"quiz question $index option $optIndex",
+						$uid,
+					);
+					if ($validatedOpt instanceof JsonResponse) {
+						return $validatedOpt;
 					}
 				}
 			} elseif ($qType === 'true_false') {

@@ -209,6 +209,10 @@ class PromptsController extends ControllerBase
 			return $user;
 		}
 
+		if ($block = UsersHelper::requireEmailVerified($user, 'create prompts')) {
+			return $block;
+		}
+
 		$count = PromptsHelper::getPromptsCount($user);
 		if ($count >= 1 && !UsersHelper::isWriter($user)) {
 			return GeneralHelper::paymentRequired('Upgrade to Writer required for more prompts');
@@ -251,24 +255,16 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Field censor must be a boolean');
 		}
 
-		$flagResult = GeneralHelper::isFlagged($data);
-		if ($flagResult['flagged']) {
-			if ($censor) {
-				$data = GeneralHelper::censorText($data);
-			} else {
-				Drupal::logger('mantle2')->warning(
-					'User %uid attempted to create flagged prompt: %prompt (matched: %matched)',
-					[
-						'%uid' => $user->id(),
-						'%prompt' => $data,
-						'%matched' => $flagResult['matched_word'],
-					],
-				);
-				return GeneralHelper::badRequest(
-					'Prompt contains inappropriate content: ' . $flagResult['matched_word'],
-				);
-			}
+		$validated = GeneralHelper::validateUserContent(
+			$data,
+			$censor,
+			'prompt',
+			(int) $user->id(),
+		);
+		if ($validated instanceof JsonResponse) {
+			return $validated;
 		}
+		$data = $validated;
 
 		// temporary id (0) for new prompt
 		$obj = new Prompt(0, $data, $user->id(), Visibility::from($visibility));
@@ -571,6 +567,10 @@ class PromptsController extends ControllerBase
 			return $user;
 		}
 
+		if ($block = UsersHelper::requireEmailVerified($user, 'post a prompt response')) {
+			return $block;
+		}
+
 		$data = PromptsHelper::nodeToPrompt($node);
 		if (!$data) {
 			return GeneralHelper::internalError('Failed to load prompt');
@@ -594,20 +594,16 @@ class PromptsController extends ControllerBase
 			return GeneralHelper::badRequest('Missing or invalid content');
 		}
 
-		$flagResult = GeneralHelper::isFlagged($content);
-		if ($flagResult['flagged']) {
-			Drupal::logger('mantle2')->warning(
-				'User %uid attempted to create flagged prompt response: %prompt (matched: %matched)',
-				[
-					'%uid' => $user->id(),
-					'%prompt' => $content,
-					'%matched' => $flagResult['matched_word'],
-				],
-			);
-			return GeneralHelper::badRequest(
-				'Prompt response contains inappropriate content: ' . $flagResult['matched_word'],
-			);
+		$validated = GeneralHelper::validateUserContent(
+			$content,
+			false,
+			'prompt response',
+			(int) $user->id(),
+		);
+		if ($validated instanceof JsonResponse) {
+			return $validated;
 		}
+		$content = $validated;
 
 		if (!$user->hasPermission('post comments')) {
 			return GeneralHelper::forbidden('You do not have permission to post responses');

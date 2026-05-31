@@ -359,6 +359,10 @@ class EventsController extends ControllerBase
 			return $user;
 		}
 
+		if ($block = UsersHelper::requireEmailVerified($user, 'create events')) {
+			return $block;
+		}
+
 		$count = UsersHelper::getUserEventsCount($user);
 		if ($count >= UsersHelper::getMaxEventsCount($user)) {
 			return GeneralHelper::paymentRequired(
