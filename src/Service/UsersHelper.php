@@ -762,6 +762,22 @@ class UsersHelper
 		return (bool) $user->get('field_email_verified')->value;
 	}
 
+	public static function hasEmail(UserInterface $user): bool
+	{
+		$email = $user->getEmail();
+		return is_string($email) && trim($email) !== '';
+	}
+
+	public static function requireEmailVerified(
+		UserInterface $user,
+		string $action = 'perform this action',
+	): ?JsonResponse {
+		if (self::isAdmin($user) || self::isEmailVerified($user)) {
+			return null;
+		}
+		return GeneralHelper::emailVerificationRequired($action, self::hasEmail($user));
+	}
+
 	public static function isSubscribed(UserInterface $user): bool
 	{
 		return (bool) ($user->get('field_subscribed')->value ?? true);
@@ -1026,9 +1042,22 @@ class UsersHelper
 			$email = trim((string) $data['email']);
 			$currentEmail = $user->getEmail();
 			if ($currentEmail === $email) {
-				// No change needed, skip email processing
+				// no change needed, skip email processing
 			} else {
-				// Use the email change verification flow for different emails
+				// first, verify email shape
+				if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+					return GeneralHelper::badRequest('Invalid email format');
+				}
+
+				// second, verify that email is not blacklisted
+				$emailCheck = CloudHelper::sendRequest(
+					'/v1/admin/blacklist/check?kind=email&value=' . urlencode($email),
+				);
+				if (!empty($emailCheck['blacklisted'])) {
+					return GeneralHelper::badRequest('This email is not allowed');
+				}
+
+				// use the email change verification flow for different emails
 				$emailChangeResult = self::sendEmailChangeVerification($user, $email);
 				if ($emailChangeResult->getStatusCode() !== Response::HTTP_OK) {
 					return $emailChangeResult;
