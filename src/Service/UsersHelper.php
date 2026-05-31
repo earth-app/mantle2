@@ -832,8 +832,12 @@ class UsersHelper
 
 		$visibility = self::getVisibility($user);
 
-		// PRIVATE requires admin or as an added friend
+		// short-circuit: a user always sees their own profile
+		$isSelf = $requester && $requester->id() === $user->id();
+
+		// PRIVATE requires admin, friend, or self
 		if (
+			!$isSelf &&
 			$visibility === Visibility::PRIVATE &&
 			!UsersHelper::isAdmin($requester) &&
 			!self::isAddedFriend($requester, $user)
@@ -841,8 +845,8 @@ class UsersHelper
 			return [];
 		}
 
-		// UNLISTED requires logged in user
-		if ($visibility === Visibility::UNLISTED && !$requester) {
+		// UNLISTED requires logged in user (self always passes since they're logged in)
+		if (!$isSelf && $visibility === Visibility::UNLISTED && !$requester) {
 			return [];
 		}
 
