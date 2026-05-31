@@ -625,6 +625,31 @@ class PointsHelper
 		};
 	}
 
+	public static function getQuestDelayReduction(UserInterface $user): float
+	{
+		$accountType = UsersHelper::getAccountType($user);
+		return match ($accountType) {
+			AccountType::FREE => 0.0,
+			AccountType::PRO => 0.1, // 10% time off
+			AccountType::WRITER => 0.25, // 25% time off
+			AccountType::ORGANIZER => 0.5, // 50% time off
+			AccountType::ADMINISTRATOR => 1.0, // admins bypass step delays
+		};
+	}
+
+	// returns the effective (rank-adjusted) delay in seconds
+	public static function getEffectiveQuestStepDelay(int $delaySeconds, UserInterface $user): int
+	{
+		if ($delaySeconds <= 0) {
+			return 0;
+		}
+		$reduction = self::getQuestDelayReduction($user);
+		if ($reduction >= 1.0) {
+			return 0;
+		}
+		return (int) round($delaySeconds * (1 - $reduction));
+	}
+
 	public static function getAvatarCosmetic(UserInterface $user): ?string
 	{
 		$selectedCosmetic = $user->get('field_selected_cosmetic')->value;
