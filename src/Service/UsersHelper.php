@@ -1029,6 +1029,10 @@ class UsersHelper
 				return GeneralHelper::badRequest('Invalid username length');
 			}
 
+			if (GeneralHelper::isFlagged($username)) {
+				return GeneralHelper::badRequest('Username contains inappropriate content');
+			}
+
 			$existing = self::findByUsername($username);
 			if ($existing && $existing->id() !== $user->id()) {
 				return GeneralHelper::badRequest('Username already exists');

@@ -461,15 +461,27 @@ class UsersController extends ControllerBase
 			);
 		}
 
+		if (GeneralHelper::isFlagged($username)) {
+			return GeneralHelper::badRequest('Username contains inappropriate content');
+		}
+
 		if ($firstName) {
 			if (strlen($firstName) < 2 || strlen($firstName) > 50) {
 				return GeneralHelper::badRequest('First name must be between 2 and 50 characters');
+			}
+
+			if (GeneralHelper::isFlagged($firstName)) {
+				return GeneralHelper::badRequest('First name contains inappropriate content');
 			}
 		}
 
 		if ($lastName) {
 			if (strlen($lastName) < 2 || strlen($lastName) > 50) {
 				return GeneralHelper::badRequest('Last name must be between 2 and 50 characters');
+			}
+
+			if (GeneralHelper::isFlagged($lastName)) {
+				return GeneralHelper::badRequest('Last name contains inappropriate content');
 			}
 		}
 
