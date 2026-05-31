@@ -4367,6 +4367,102 @@ mantle2.users.current.quest.history:
     schema/404: User not found
   methods: [GET]
 
+mantle2.users.current.onboarding:
+  path: '/v2/users/current/onboarding'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getOnboarding'
+    _title: 'Get Onboarding State for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Onboarding
+    description: Returns the user's onboarding checklist and persona state
+  methods: [GET]
+
+mantle2.users.current.onboarding.step:
+  path: '/v2/users/current/onboarding/step'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::completeOnboardingStep'
+    _title: 'Mark Onboarding Step Completed'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Onboarding
+    description: Records a completed onboarding step for the current user
+  methods: [POST]
+
+mantle2.users.current.onboarding.persona:
+  path: '/v2/users/current/onboarding/persona'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::setOnboardingPersona'
+    _title: 'Set Onboarding Persona'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Onboarding
+    description: Saves the user's onboarding persona + interest selection
+  methods: [POST]
+
+mantle2.users.current.onboarding.dismiss:
+  path: '/v2/users/current/onboarding/dismiss'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::dismissOnboarding'
+    _title: 'Dismiss Onboarding'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Onboarding
+    description: Stops the onboarding checklist from being prompted on this account
+  methods: [POST]
+
+mantle2.admin.blacklist:
+  path: '/v2/admin/blacklist'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::listBlacklist'
+    _title: 'List Blacklist'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Admin
+    description: Lists blacklisted usernames and emails (admin only)
+  methods: [GET]
+
+mantle2.admin.blacklist.add:
+  path: '/v2/admin/blacklist'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::addBlacklist'
+    _title: 'Add to Blacklist'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Admin
+    description: Adds a username or email pattern to the blacklist (admin only)
+  methods: [POST]
+
+mantle2.admin.blacklist.remove:
+  path: '/v2/admin/blacklist'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::removeBlacklist'
+    _title: 'Remove from Blacklist'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Admin
+    description: Removes a blacklist entry (admin only)
+  methods: [DELETE]
+
+mantle2.admin.analytics:
+  path: '/v2/admin/analytics'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::analytics'
+    _title: 'Admin Analytics Snapshot'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Admin
+    description: Returns a Cloudflare + content analytics snapshot for the admin panel
+  methods: [GET]
+
 #endregion
 
 ## Activity Routes
