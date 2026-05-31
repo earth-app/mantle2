@@ -146,14 +146,7 @@ class CloudHelper
 			return [];
 		}
 
-		if ($httpCode === 400) {
-			return [
-				'code' => 400,
-				'message' => 'Bad Request: ' . $response,
-				'details' => json_decode($response, true) ?? [],
-			];
-		}
-
+		// any non-2xx must throw so callers can react via the status code
 		if ($httpCode < 200 || $httpCode >= 300) {
 			throw new Exception('HTTP Error: ' . $httpCode . ' Response: ' . $response, $httpCode);
 		}
@@ -191,6 +184,11 @@ class CloudHelper
 				is_string($decoded['message'])
 			) {
 				return $decoded['message'];
+			}
+
+			// return plain text if provided as well
+			if ($body !== '' && strlen($body) <= 500) {
+				return $body;
 			}
 		}
 
