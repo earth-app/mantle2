@@ -429,57 +429,85 @@ function mantle2_mail_alter(&$message)
 // hourly implementation
 function mantle2_cron()
 {
-	if (PHP_SAPI !== 'cli') {
-		return;
-	}
-
 	$lock = Drupal::lock();
+	$lockName = 'mantle2.cron';
 
-	// hard execution ceiling
-	if (!$lock->acquire('mantle2.cron', 3600)) {
+	// short TTL so a hard-killed cron self-heals
+	if (!$lock->acquire($lockName, 600)) {
 		Drupal::logger('mantle2')->warning('[cron] Previous cron still running.');
 		return;
 	}
 
-	// hard execution ceiling
+	// no-op under most web SAPIs but real on CLI; harmless either way
 	@set_time_limit(3600);
+	// keep running if the triggering web request is aborted by the client
+	@ignore_user_abort(true);
 
-	$tasks = [
-		'Expired Prompts' => fn() => PromptsHelper::checkExpiredPrompts(),
-		'Expired Articles' => fn() => ArticlesHelper::checkExpiredArticles(),
-		'Expired Events' => fn() => EventsHelper::checkExpiredEvents(),
-		'Email Campaigns' => fn() => CampaignHelper::runEmailCampaigns(),
-		'Event Notifications' => fn() => EventsHelper::checkEventNotifications(),
-		'Fix Event Dates' => fn() => mantle2_fix_event_dates(),
-		'User Badges' => fn() => UsersHelper::checkBadges(),
-		'Account Trials' => fn() => UsersHelper::checkAccountTrials(),
-		'Disabled Account Restrictions' => fn() => UsersHelper::enforceDisabledAccountRestrictions(),
-		'Unread Notifications' => fn() => UsersHelper::checkUnreadNotifications(),
-		'Stale Push Tokens' => fn() => UsersHelper::pruneStalePushTokens(),
-		'Cycle MOTD' => fn() => GeneralHelper::cycleMotd(),
-	];
-
-	foreach ($tasks as $label => $task) {
-		try {
-			$start = microtime(true);
-			$task();
-			$duration = round(microtime(true) - $start, 2);
-
-			Drupal::logger('mantle2')->notice('[cron] Task completed: @task (@seconds sec)', [
-				'@task' => $label,
-				'@seconds' => $duration,
-			]);
-		} catch (Throwable $e) {
-			Drupal::logger('mantle2')->error('[cron] Task failed: @task :: @message', [
-				'@task' => $label,
-				'@message' => $e->getMessage(),
-			]);
+	$state = ['released' => false, 'normal' => false];
+	$release = function () use ($lock, $lockName, &$state) {
+		if ($state['released']) {
+			return;
 		}
+		$state['released'] = true;
+
+		if (!$state['normal']) {
+			try {
+				Drupal::logger('mantle2')->error(
+					'[cron] shutdown handler releasing lock — cron did not finish normally',
+				);
+			} catch (Throwable) {
+				// best-effort during shutdown
+			}
+		}
+
+		try {
+			$lock->release($lockName);
+		} catch (Throwable) {
+			// best-effort during shutdown
+		}
+	};
+	register_shutdown_function($release);
+
+	try {
+		$tasks = [
+			'Expired Prompts' => fn() => PromptsHelper::checkExpiredPrompts(),
+			'Expired Articles' => fn() => ArticlesHelper::checkExpiredArticles(),
+			'Expired Events' => fn() => EventsHelper::checkExpiredEvents(),
+			'Email Campaigns' => fn() => CampaignHelper::runEmailCampaigns(),
+			'Event Notifications' => fn() => EventsHelper::checkEventNotifications(),
+			'Fix Event Dates' => fn() => mantle2_fix_event_dates(),
+			'User Badges' => fn() => UsersHelper::checkBadges(),
+			'Account Trials' => fn() => UsersHelper::checkAccountTrials(),
+			'Disabled Account Restrictions' => fn() => UsersHelper::enforceDisabledAccountRestrictions(),
+			'Unread Notifications' => fn() => UsersHelper::checkUnreadNotifications(),
+			'Stale Push Tokens' => fn() => UsersHelper::pruneStalePushTokens(),
+			'Cycle MOTD' => fn() => GeneralHelper::cycleMotd(),
+		];
+
+		foreach ($tasks as $label => $task) {
+			try {
+				$start = microtime(true);
+				$task();
+				$duration = round(microtime(true) - $start, 2);
+
+				Drupal::logger('mantle2')->notice('[cron] Task completed: @task (@seconds sec)', [
+					'@task' => $label,
+					'@seconds' => $duration,
+				]);
+			} catch (Throwable $e) {
+				Drupal::logger('mantle2')->error('[cron] Task failed: @task :: @message', [
+					'@task' => $label,
+					'@message' => $e->getMessage(),
+				]);
+			}
+		}
+
+		$state['normal'] = true;
+		Drupal::logger('mantle2')->notice('[cron] mantle2 cron finished.');
+	} finally {
+		// normal path + any uncaught throwable that escapes the task loop
+		$release();
 	}
-
-	$lock->release('mantle2.cron');
-
-	Drupal::logger('mantle2')->notice('[cron] mantle2 cron finished.');
 }
 
 function mantle2_fix_event_dates(): void
