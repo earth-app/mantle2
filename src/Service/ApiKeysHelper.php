@@ -1000,7 +1000,7 @@ class ApiKeysHelper
 			$user,
 			'API key expiring ' . $window,
 			"Your API key '{$key->getName()}' will expire $friendly. Rotate it in your account settings to avoid disruption.",
-			'/profile/edit#api-keys',
+			'/profile#api-keys',
 			'warning',
 			'system',
 		);
@@ -1023,7 +1023,7 @@ class ApiKeysHelper
 			$user,
 			'API key expired',
 			"Your API key '{$key->getName()}' has expired and can no longer authenticate requests.",
-			'/profile/edit#api-keys',
+			'/profile#api-keys',
 			'warning',
 			'system',
 		);
