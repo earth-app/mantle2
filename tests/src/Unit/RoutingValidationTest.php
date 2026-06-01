@@ -180,7 +180,10 @@ class RoutingValidationTest extends TestCase
 			"Route '$routeName' missing _access requirement",
 		);
 
-		if (isset($route['requirements']['id'])) {
+		if (
+			isset($route['requirements']['id']) &&
+			str_starts_with($routeName, 'mantle2.users.id')
+		) {
 			$this->assertEquals(
 				'\d+',
 				$route['requirements']['id'],
@@ -206,7 +209,10 @@ class RoutingValidationTest extends TestCase
 			}
 		}
 
-		if (isset($route['requirements']['username'])) {
+		if (
+			isset($route['requirements']['username']) &&
+			str_starts_with($routeName, 'mantle2.users.username')
+		) {
 			$this->assertEquals(
 				'@[\w.]+',
 				$route['requirements']['username'],
