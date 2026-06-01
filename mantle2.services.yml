@@ -44,6 +44,11 @@ services:
     tags:
       - { name: event_subscriber }
 
+  mantle2.api_key_scope_subscriber:
+    class: Drupal\mantle2\EventSubscriber\ApiKeyScopeSubscriber
+    tags:
+      - { name: event_subscriber }
+
   # Utility Classes
   mantle2.helper:
     class: Drupal\mantle2\Service\GeneralHelper
@@ -74,6 +79,9 @@ services:
 
   mantle2.helper.points:
     class: Drupal\mantle2\Service\PointsHelper
+
+  mantle2.helper.api_keys:
+    class: Drupal\mantle2\Service\ApiKeysHelper
 
   mantle2.helper.fcm:
     class: Drupal\mantle2\Service\FCMHelper

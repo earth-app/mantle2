@@ -13,6 +13,7 @@ use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Notification;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\ApiKeysHelper;
 use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
@@ -213,58 +214,162 @@ class UsersHelper
 
 	public static function findByRequest(Request $request)
 	{
-		$path = $request->getPathInfo();
+		// cache resolved user since called multiple times per request
+		$cached = $request->attributes->get('_mantle2_resolved_user', false);
+		if ($cached !== false) {
+			return $cached;
+		}
 
 		if ($request->headers->has('X-Admin-Key')) {
 			$adminKey = $request->headers->get('X-Admin-Key');
 			$expectedKey = CloudHelper::getAdminKey();
 			if ($adminKey && $expectedKey && hash_equals($expectedKey, $adminKey)) {
-				return self::cloud();
+				$resolved = self::cloud();
+				$request->attributes->set('_mantle2_resolved_user', $resolved);
+				return $resolved;
 			}
 		}
 
 		$authHeader = $request->headers->get('Authorization');
 		if (stripos($authHeader, 'Bearer ') !== 0) {
 			$scheme = strtok($authHeader, ' ') ?: '?';
-			return GeneralHelper::unauthorized('Authentication required');
+			$resolved = GeneralHelper::unauthorized('Authentication required');
+			$request->attributes->set('_mantle2_resolved_user', $resolved);
+			return $resolved;
 		}
 
 		$sessionId = GeneralHelper::getBearerToken($request);
 
-		// First, try persistent API token lookup.
+		// first, try api key
+		if ($sessionId !== null && ApiKeysHelper::looksLikeApiKey($sessionId)) {
+			$resolved = ApiKeysHelper::lookupByToken($sessionId, $request);
+			if ($resolved !== null) {
+				$user = $resolved['user'];
+				if (self::isDisabled($user)) {
+					$response = GeneralHelper::forbidden('Account disabled by administrator');
+					$request->attributes->set('_mantle2_resolved_user', $response);
+					return $response;
+				}
+				$request->attributes->set('_mantle2_resolved_user', $user);
+				$request->attributes->set('_mantle2_api_key', $resolved['key']);
+				return $user;
+			}
+
+			$response = GeneralHelper::unauthorized('Invalid, expired, or revoked API key');
+			$request->attributes->set('_mantle2_resolved_user', $response);
+			return $response;
+		}
+
+		// persistent session token lookup
 		$user = self::getUserByToken($sessionId);
 		if ($user instanceof UserInterface) {
 			if (self::isDisabled($user)) {
-				return GeneralHelper::forbidden('Account disabled by administrator');
+				$response = GeneralHelper::forbidden('Account disabled by administrator');
+				$request->attributes->set('_mantle2_resolved_user', $response);
+				return $response;
 			}
 
+			$request->attributes->set('_mantle2_resolved_user', $user);
 			return $user;
 		}
 
-		// Back-compat: attempt to treat bearer as a PHP session id.
+		// back-compat - attempt to treat bearer as a PHP session id
 		$user = self::withSessionId($sessionId, function ($session) {
 			$uid = $session->get('uid');
 			return $uid ? User::load($uid) : null;
 		});
+
 		if ($user instanceof UserInterface) {
 			if (self::isDisabled($user)) {
-				return GeneralHelper::forbidden('Account disabled by administrator');
+				$response = GeneralHelper::forbidden('Account disabled by administrator');
+				$request->attributes->set('_mantle2_resolved_user', $response);
+				return $response;
 			}
 
+			$request->attributes->set('_mantle2_resolved_user', $user);
 			return $user;
 		}
 
-		return GeneralHelper::unauthorized('Invalid or expired session token');
+		$response = GeneralHelper::unauthorized('Invalid or expired session token');
+		$request->attributes->set('_mantle2_resolved_user', $response);
+		return $response;
 	}
 
 	public static function getOwnerOfRequest(Request $request)
 	{
+		// return null if demoted to anonymous from out-of-scope API key
+		if ($request->attributes->get('_mantle2_anon_demoted') === true) {
+			return null;
+		}
+
 		$user = self::findByRequest($request);
 		if ($user instanceof JsonResponse) {
 			return null;
 		}
 
 		return $user;
+	}
+
+	#endregion
+
+	#region User Scope Permissions
+
+	public static function getRequestApiKey(Request $request): ?\Drupal\mantle2\Custom\ApiKey
+	{
+		// Ensure findByRequest has run so the attribute is populated.
+		self::findByRequest($request);
+		$key = $request->attributes->get('_mantle2_api_key');
+		return $key instanceof \Drupal\mantle2\Custom\ApiKey ? $key : null;
+	}
+
+	public static function isApiKeyRequest(Request $request): bool
+	{
+		return self::getRequestApiKey($request) !== null;
+	}
+
+	public static function hasScope(Request $request, string $scope): bool
+	{
+		$user = self::getOwnerOfRequest($request);
+		if (!$user instanceof UserInterface) {
+			return false;
+		}
+
+		$key = self::getRequestApiKey($request);
+		if (!$key) {
+			// session token or admin key bypass
+			return true;
+		}
+
+		return $key->hasScope($scope);
+	}
+
+	public static function requireScope(Request $request, string $scope): ?JsonResponse
+	{
+		$user = self::getOwnerOfRequest($request);
+		if (!$user instanceof UserInterface) {
+			return GeneralHelper::unauthorized('Authentication required');
+		}
+
+		$key = self::getRequestApiKey($request);
+		if (!$key) {
+			return null;
+		}
+
+		if (!$key->hasScope($scope)) {
+			return GeneralHelper::forbidden("API key is missing required scope: $scope");
+		}
+
+		return null;
+	}
+
+	public static function requireSessionToken(Request $request): ?JsonResponse
+	{
+		if (self::isApiKeyRequest($request)) {
+			return GeneralHelper::forbidden(
+				'This endpoint requires an interactive session token (not an API key).',
+			);
+		}
+		return null;
 	}
 
 	#endregion
@@ -2437,6 +2542,10 @@ class UsersHelper
 		}
 
 		$indexStore->set((string) $uid, []);
+
+		// Also revoke any API keys so a banned/disabled account can't keep
+		// driving traffic via long-lived bearers.
+		$revoked += ApiKeysHelper::revokeAllForUser($uid);
 
 		return $revoked;
 	}

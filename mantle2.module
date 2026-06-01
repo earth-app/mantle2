@@ -2,6 +2,7 @@
 
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\mantle2\Custom\Notification;
+use Drupal\mantle2\Service\ApiKeysHelper;
 use Drupal\mantle2\Service\ArticlesHelper;
 use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\mantle2\Service\EventsHelper;
@@ -317,6 +318,38 @@ function mantle2_mail($key, &$message, $params)
 
 			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
+		case 'api_key_expiring':
+			$keyName = $params['key_name'] ?? 'Unnamed key';
+			$prefix = $params['key_prefix'] ?? '';
+			$window = $params['window'] ?? 'soon';
+			$expiresAt = isset($params['expires_at'])
+				? gmdate('c', (int) $params['expires_at'])
+				: null;
+			$message['subject'] = "The Earth App - API Key Expiring $window";
+
+			$expiresLine = $expiresAt ? "**Expires:** {$expiresAt}\n\n" : '';
+			$markdown = "@$username, Your API key **{$keyName}** (`{$prefix}...`) will expire {$window}.\n\n
+			{$expiresLine}If you still need this key, rotate it now from your account settings:\n
+			https://app.earth-app.com/settings/api-keys\n\n
+			If you no longer use this key you can ignore this email and it will expire automatically.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'api_key_expired':
+			$keyName = $params['key_name'] ?? 'Unnamed key';
+			$prefix = $params['key_prefix'] ?? '';
+			$expiresAt = isset($params['expires_at'])
+				? gmdate('c', (int) $params['expires_at'])
+				: null;
+			$message['subject'] = 'The Earth App - API Key Expired';
+
+			$expiresLine = $expiresAt ? "**Expired at:** {$expiresAt}\n\n" : '';
+			$markdown = "@$username, Your API key **{$keyName}** (`{$prefix}...`) has expired.\n\n
+			{$expiresLine}It can no longer authenticate requests. If you still need it, create a replacement from your account settings:\n
+			https://app.earth-app.com/settings/api-keys";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 		case 'unread_notifications_reminder':
 			/** @var array<Notification> $notifications */
 			$notifications = is_array($params['notifications'] ?? null)
@@ -394,6 +427,8 @@ function mantle2_mail_alter(&$message)
 		'mantle2_plan_trial_warning',
 		'mantle2_plan_trial_expired',
 		'mantle2_unread_notifications_reminder',
+		'mantle2_api_key_expiring',
+		'mantle2_api_key_expired',
 	];
 
 	if (
@@ -481,6 +516,7 @@ function mantle2_cron()
 			'Disabled Account Restrictions' => fn() => UsersHelper::enforceDisabledAccountRestrictions(),
 			'Unread Notifications' => fn() => UsersHelper::checkUnreadNotifications(),
 			'Stale Push Tokens' => fn() => UsersHelper::pruneStalePushTokens(),
+			'API Key Expirations' => fn() => ApiKeysHelper::checkExpirations(),
 			'Cycle MOTD' => fn() => GeneralHelper::cycleMotd(),
 		];
 

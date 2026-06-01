@@ -5184,3 +5184,149 @@ mantle2.articles.check_expired:
     schema/403: 403
     schema/404: Not Found
   methods: [POST]
+
+#region API Keys
+
+mantle2.api_keys.scopes:
+  path: '/v2/api-keys/scopes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ApiKeysController::scopes'
+    _title: 'List API Key Scope Catalog'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: ApiKeys
+    description: Returns the hierarchical scope catalog, expiry presets, tier limits, and token format hints for the API key UI.
+    schema/200: '#ApiKeyScopeCatalog'
+  methods: [GET]
+
+mantle2.api_keys.list:
+  path: '/v2/users/current/api-keys'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ApiKeysController::list'
+    _title: 'List API Keys (Current User)'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: ApiKeys
+    description: Returns metadata for every API key (active, revoked, expired) the current user has issued. Tokens themselves are never returned.
+    schema/200: '#ApiKeyList'
+    schema/401: Unauthorized
+    schema/403: API keys cannot manage other API keys
+  methods: [GET]
+
+mantle2.api_keys.list_by_user:
+  path: '/v2/users/{id}/api-keys'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ApiKeysController::listByUser'
+    _title: 'List API Keys by User [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+|@[\w.]+'
+  options:
+    tags: ApiKeys,Admin
+    description: Admin view of another user's API keys.
+    schema/200: '#ApiKeyList'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.api_keys.create:
+  path: '/v2/users/current/api-keys'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ApiKeysController::create_'
+    _title: 'Create API Key'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: ApiKeys
+    description: Generates a new API key. The raw token is returned exactly once in this response.
+    schema/201: '#ApiKeyCreated'
+    schema/400: Invalid name, description, scopes, or expiration
+    schema/401: Unauthorized
+    schema/403: Email verification required or session token required
+    schema/409: Tier key limit reached
+    body/description: Name, optional description, scopes, and expiry
+    body/schema: apiKeyCreateJson()
+  methods: [POST]
+
+mantle2.api_keys.get:
+  path: '/v2/users/current/api-keys/{keyId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ApiKeysController::get'
+    _title: 'Get API Key'
+  requirements:
+    _access: 'TRUE'
+    keyId: '[0-9]{1,24}'
+  options:
+    tags: ApiKeys
+    description: Returns metadata for a single API key the current user owns.
+    schema/200: '#ApiKey'
+    schema/401: Unauthorized
+    schema/404: Not found
+    parameters:
+      keyId:
+        type: string
+  methods: [GET]
+
+mantle2.api_keys.patch:
+  path: '/v2/users/current/api-keys/{keyId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ApiKeysController::patch'
+    _title: 'Update API Key'
+  requirements:
+    _access: 'TRUE'
+    keyId: '[0-9]{1,24}'
+  options:
+    tags: ApiKeys
+    description: Update name, description, or scopes on an existing key. Cannot extend expiration; create a new key instead.
+    schema/200: '#ApiKey'
+    schema/400: Invalid name, description, or scopes
+    schema/401: Unauthorized
+    schema/404: Not found
+    schema/409: Revoked
+    body/description: Fields to update (any subset)
+    body/schema: apiKeyUpdateJson()
+    parameters:
+      keyId:
+        type: string
+  methods: [PATCH]
+
+mantle2.api_keys.delete:
+  path: '/v2/users/current/api-keys/{keyId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ApiKeysController::delete'
+    _title: 'Revoke API Key'
+  requirements:
+    _access: 'TRUE'
+    keyId: '[0-9]{1,24}'
+  options:
+    tags: ApiKeys
+    description: Soft-deletes (revokes) an API key. The key cannot authenticate further requests.
+    schema/204: Revoked
+    schema/401: Unauthorized
+    schema/404: Not found or already revoked
+    parameters:
+      keyId:
+        type: string
+  methods: [DELETE]
+
+mantle2.api_keys.revoke_all:
+  path: '/v2/users/current/api-keys/revoke_all'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ApiKeysController::revokeAll'
+    _title: 'Revoke All API Keys'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: ApiKeys
+    description: Revokes every active API key the current user owns.
+    schema/200: '#ApiKeyRevokeAll'
+    schema/401: Unauthorized
+  methods: [POST]
+
+#endregion

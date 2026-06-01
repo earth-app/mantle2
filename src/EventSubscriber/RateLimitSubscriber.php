@@ -235,6 +235,15 @@ class RateLimitSubscriber implements EventSubscriberInterface
 			// Articles
 			'mantle2.articles.create' => ['limit' => 5, 'interval' => $sec(3 * 60)],
 			'mantle2.articles.update' => ['limit' => 10, 'interval' => $sec(3 * 60)],
+
+			// API Keys
+			'mantle2.api_keys.create' => ['limit' => 10, 'interval' => $sec(10 * 60)],
+			'mantle2.api_keys.patch' => ['limit' => 30, 'interval' => $sec(5 * 60)],
+			'mantle2.api_keys.delete' => ['limit' => 30, 'interval' => $sec(5 * 60)],
+			'mantle2.api_keys.revoke_all' => ['limit' => 3, 'interval' => $sec(60)],
+			'mantle2.api_keys.list' => ['limit' => 60, 'interval' => $sec(60)],
+			'mantle2.api_keys.get' => ['limit' => 60, 'interval' => $sec(60)],
+			'mantle2.api_keys.list_by_user' => ['limit' => 60, 'interval' => $sec(60)],
 		];
 
 		return $map[$routeName] ?? null;
