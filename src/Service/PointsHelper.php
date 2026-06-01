@@ -1002,19 +1002,26 @@ class PointsHelper
 	public static function getCompletedQuests(UserInterface $user): array
 	{
 		$cacheKey = 'cloud:quest:' . GeneralHelper::formatId($user->id()) . ':completed';
-		return array_map(
-			fn($questData) => Quest::fromArray($questData['quest'] ?? []),
-			RedisHelper::cache(
-				$cacheKey,
-				function () use ($user) {
-					$data = CloudHelper::sendRequest(
-						'/v1/users/quests/history/' . GeneralHelper::formatId($user->id()),
-					);
-					return is_array($data) ? $data : [];
-				},
-				120,
-			),
+		$entries = RedisHelper::cache(
+			$cacheKey,
+			function () use ($user) {
+				$data = CloudHelper::sendRequest(
+					'/v1/users/quests/history/' . GeneralHelper::formatId($user->id()),
+				);
+				return is_array($data) ? $data : [];
+			},
+			120,
 		);
+
+		// skip entries where the cloud couldn't resolve the quest body
+		$quests = [];
+		foreach ($entries as $entry) {
+			if (!is_array($entry) || empty($entry['quest']) || !isset($entry['quest']['id'])) {
+				continue;
+			}
+			$quests[] = Quest::fromArray($entry['quest']);
+		}
+		return $quests;
 	}
 
 	public static function getCompletedQuestResponses(UserInterface $user, string $questId): array
