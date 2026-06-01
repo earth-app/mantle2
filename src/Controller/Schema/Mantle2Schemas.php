@@ -2650,6 +2650,42 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function questHistoryEntry(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'quest' => [
+					'oneOf' => [['$ref' => '#/components/schemas/Quest'], ['type' => 'null']],
+				],
+				'questId' => ['type' => 'string', 'example' => 'forest_explorer'],
+				'completedAt' => [
+					'type' => 'integer',
+					'description' => 'Unix millisecond timestamp when quest was completed',
+					'examples' => [1677000000000, 1677001234567, 1677009999999],
+				],
+				'progress' => [
+					'type' => 'array',
+					'items' => [
+						'oneOf' => [
+							['$ref' => '#/components/schemas/QuestProgressEntry'],
+							[
+								'type' => 'array',
+								'items' => [
+									'$ref' => '#/components/schemas/QuestProgressEntry',
+								],
+								'minItems' => 2,
+								'description' =>
+									'For quests with OR conditions, an array of alternative progress entries where completing any one of them counts as completing this step',
+							],
+						],
+					],
+					'description' => 'Array of completed steps for this quest',
+				],
+			],
+		];
+	}
+
 	/**
 	 * Schema for quest history response (completed quests).
 	 */
@@ -2667,40 +2703,7 @@ class Mantle2Schemas
 					'type' => 'object',
 					'description' => 'Map of quest ID to array of quest step responses',
 					'additionalProperties' => [
-						'type' => 'object',
-						'properties' => [
-							'quest' => [
-								'oneOf' => [
-									['$ref' => '#/components/schemas/Quest'],
-									['type' => 'null'],
-								],
-							],
-							'questId' => ['type' => 'string', 'example' => 'forest_explorer'],
-							'completedAt' => [
-								'type' => 'integer',
-								'description' =>
-									'Unix millisecond timestamp when quest was completed',
-								'examples' => [1677000000000, 1677001234567, 1677009999999],
-							],
-							'progress' => [
-								'type' => 'array',
-								'items' => [
-									'oneOf' => [
-										['$ref' => '#/components/schemas/QuestProgressEntry'],
-										[
-											'type' => 'array',
-											'items' => [
-												'$ref' => '#/components/schemas/QuestProgressEntry',
-											],
-											'minItems' => 2,
-											'description' =>
-												'For quests with OR conditions, an array of alternative progress entries where completing any one of them counts as completing this step',
-										],
-									],
-								],
-								'description' => 'Array of completed steps for this quest',
-							],
-						],
+						'$ref' => '#/components/schemas/QuestHistoryEntry',
 					],
 				],
 			],
@@ -2748,6 +2751,201 @@ class Mantle2Schemas
 				],
 			],
 			'required' => ['token', 'platform'],
+		];
+	}
+
+	public static function apiKey(): array
+	{
+		return [
+			'type' => 'object',
+			'description' =>
+				'Metadata about an issued API key. The raw token is only ever returned in the create response and never re-fetchable.',
+			'properties' => [
+				'id' => ['$ref' => '#/components/schemas/Id'],
+				'name' => ['type' => 'string', 'minLength' => 3, 'maxLength' => 64],
+				'description' => ['type' => ['string', 'null'], 'maxLength' => 512],
+				'scopes' => [
+					'type' => 'array',
+					'items' => ['type' => 'string'],
+					'description' =>
+						'Granted scopes. May contain parent scopes which implicitly grant all children.',
+				],
+				'token_prefix' => [
+					'type' => 'string',
+					'description' =>
+						'First 14 characters of the token (EA + year + 10 random). Safe to display.',
+					'example' => 'EA26a3f8c42d9e',
+				],
+				'created_at' => ['$ref' => '#/components/schemas/Date'],
+				'expires_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'last_used_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'last_used_ip' => ['type' => ['string', 'null']],
+				'revoked' => ['type' => 'boolean'],
+				'revoked_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'expired' => ['type' => 'boolean'],
+				'never_expires' => ['type' => 'boolean'],
+			],
+			'required' => [
+				'id',
+				'name',
+				'scopes',
+				'token_prefix',
+				'created_at',
+				'revoked',
+				'expired',
+			],
+		];
+	}
+
+	public static function apiKeyCreated(): array
+	{
+		$key = self::apiKey();
+		$key['properties']['token'] = [
+			'type' => 'string',
+			'description' =>
+				'Raw bearer token. Returned exactly once. Store it now — it is not recoverable.',
+			'example' =>
+				'EA26a3f8c42d9e17b5c1d8e9a0f3b4c6dU0000000000000000001a2b3cG00000197b7a3c400',
+		];
+		$key['properties']['warning'] = [
+			'type' => 'string',
+			'description' => 'Human-readable reminder to copy the token now.',
+		];
+		$key['required'][] = 'token';
+		return $key;
+	}
+
+	public static function apiKeyList(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'items' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/ApiKey'],
+				],
+				'count' => ['type' => 'integer'],
+				'active' => ['type' => 'integer'],
+				'max' => [
+					'type' => 'integer',
+					'description' => 'Maximum active keys allowed by account tier.',
+				],
+			],
+			'required' => ['items', 'count', 'active', 'max'],
+		];
+	}
+
+	public static function apiKeyRevokeAll(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'revoked' => ['type' => 'integer', 'description' => 'Number of keys revoked.'],
+			],
+			'required' => ['revoked'],
+		];
+	}
+
+	public static function apiKeyScopeCatalog(): array
+	{
+		return [
+			'type' => 'object',
+			'description' =>
+				'Catalog of valid scopes and policy hints used by the API key picker UI.',
+			'properties' => [
+				'scopes' => [
+					'type' => 'object',
+					'additionalProperties' => true,
+					'description' => 'Hierarchical scope tree (name -> {description, children}).',
+				],
+				'leaves' => [
+					'type' => 'array',
+					'items' => ['type' => 'string'],
+					'description' => 'Flat list of leaf scopes.',
+				],
+				'tier_limits' => [
+					'type' => 'object',
+					'additionalProperties' => ['type' => 'integer'],
+					'description' => 'Maximum active keys per account tier.',
+				],
+				'expiry_presets' => [
+					'type' => 'object',
+					'additionalProperties' => [
+						'type' => 'object',
+						'properties' => [
+							'seconds' => ['type' => 'integer'],
+							'days' => ['type' => 'integer'],
+						],
+					],
+				],
+				'token' => [
+					'type' => 'object',
+					'properties' => [
+						'prefix' => ['type' => 'string'],
+						'total_length' => ['type' => 'integer'],
+						'random_hex_length' => ['type' => 'integer'],
+					],
+				],
+				'name' => [
+					'type' => 'object',
+					'properties' => [
+						'min' => ['type' => 'integer'],
+						'max' => ['type' => 'integer'],
+					],
+				],
+				'description' => [
+					'type' => 'object',
+					'properties' => [
+						'max' => ['type' => 'integer'],
+					],
+				],
+			],
+		];
+	}
+
+	public static function apiKeyCreateJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'name' => ['type' => 'string', 'minLength' => 3, 'maxLength' => 64],
+				'description' => ['type' => ['string', 'null'], 'maxLength' => 512],
+				'scopes' => [
+					'type' => 'array',
+					'items' => ['type' => 'string'],
+					'minItems' => 1,
+				],
+				'expiry_preset' => [
+					'type' => ['string', 'null'],
+					'enum' => ['never', '7d', '30d', '60d', '90d', '180d', '1y', null],
+					'description' =>
+						'Use one of the presets or pass `never` for no expiration. Mutually exclusive with `expires_at`.',
+				],
+				'expires_at' => [
+					'type' => ['integer', 'null'],
+					'description' =>
+						'Absolute unix seconds for a custom expiration. Mutually exclusive with `expiry_preset`.',
+				],
+			],
+			'required' => ['name', 'scopes'],
+		];
+	}
+
+	public static function apiKeyUpdateJson(): array
+	{
+		return [
+			'type' => 'object',
+			'description' =>
+				'Any subset of fields. Expiration cannot be changed in place; create a new key to extend.',
+			'properties' => [
+				'name' => ['type' => 'string', 'minLength' => 3, 'maxLength' => 64],
+				'description' => ['type' => ['string', 'null'], 'maxLength' => 512],
+				'scopes' => [
+					'type' => 'array',
+					'items' => ['type' => 'string'],
+					'minItems' => 1,
+				],
+			],
 		];
 	}
 
@@ -2881,7 +3079,17 @@ class Mantle2Schemas
 			'QuestsList' => self::questsList(),
 			'QuestProgressEntry' => self::questProgressEntry(),
 			'QuestData' => self::questData(),
+			'QuestHistoryEntry' => self::questHistoryEntry(),
 			'QuestHistoryResponse' => self::questHistoryResponse(),
+
+			// API Keys
+			'ApiKey' => self::apiKey(),
+			'ApiKeyCreated' => self::apiKeyCreated(),
+			'ApiKeyList' => self::apiKeyList(),
+			'ApiKeyScopeCatalog' => self::apiKeyScopeCatalog(),
+			'ApiKeyRevokeAll' => self::apiKeyRevokeAll(),
+			'ApiKeyCreateJson' => self::apiKeyCreateJson(),
+			'ApiKeyUpdateJson' => self::apiKeyUpdateJson(),
 		];
 	}
 }
