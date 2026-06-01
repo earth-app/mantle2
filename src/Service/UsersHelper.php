@@ -4105,6 +4105,12 @@ class UsersHelper
 		];
 
 		$users = User::loadMultiple();
+
+		// Build friend-graph indices once per cron pass. The live triggers in
+		// PostResponseSubscriber only fire on new friend adds; users who already
+		// had qualifying friendships before the badges were wired need a sweep.
+		[$adminIds, $friendsForward, $friendsReverse] = self::buildFriendBadgeIndex($users);
+
 		foreach ($users as $user) {
 			if ($user->id() === self::cloud()->id()) {
 				continue; // skip root user
@@ -4141,12 +4147,110 @@ class UsersHelper
 				}
 				RedisHelper::set($lastCheckKey, ['value' => true], 86400); // 24 hours
 			}
+
+			// friend-based badges (you_know_ball, outreacher)
+			self::checkFriendBasedBadges(
+				$user,
+				$adminIds,
+				$friendsForward,
+				$friendsReverse,
+				$users,
+			);
 		}
 	}
 
-	// cloud returns the catalog badge metadata even when the user has not earned it
-	// (with granted=false, progress=0), so plain getBadge() truthiness is not a grant
-	// check. always inspect the granted flag.
+	private static function buildFriendBadgeIndex(array $users): array
+	{
+		$adminIds = [];
+		$friendsForward = [];
+		$friendsReverse = [];
+
+		foreach ($users as $u) {
+			if (!$u instanceof UserInterface) {
+				continue;
+			}
+
+			$uid = (int) $u->id();
+
+			if (self::isAdmin($u)) {
+				$adminIds[$uid] = true;
+			}
+
+			$raw = (string) ($u->get('field_friends')->value ?? '[]');
+			$friends = json_decode($raw, true);
+			if (!is_array($friends)) {
+				continue;
+			}
+
+			foreach ($friends as $fid) {
+				$fidInt = (int) $fid;
+				if ($fidInt === 0 || $fidInt === $uid) {
+					continue;
+				}
+				$friendsForward[$uid][$fidInt] = true;
+				$friendsReverse[$fidInt][$uid] = true;
+			}
+		}
+
+		return [$adminIds, $friendsForward, $friendsReverse];
+	}
+
+	private static function checkFriendBasedBadges(
+		UserInterface $user,
+		array $adminIds,
+		array $friendsForward,
+		array $friendsReverse,
+		array $allUsers,
+	): void {
+		$uid = (int) $user->id();
+		$lastCheckKey = 'badge_check_friend_based_' . GeneralHelper::formatId($uid);
+		if (RedisHelper::get($lastCheckKey)) {
+			return;
+		}
+
+		$needYouKnowBall = !self::isBadgeGranted($user, 'you_know_ball');
+		$needOutreacher = !self::isBadgeGranted($user, 'outreacher');
+		if (!$needYouKnowBall && !$needOutreacher) {
+			RedisHelper::set($lastCheckKey, ['value' => true], 86400);
+			return;
+		}
+
+		$friendIds = array_keys(($friendsForward[$uid] ?? []) + ($friendsReverse[$uid] ?? []));
+
+		if (empty($friendIds)) {
+			RedisHelper::set($lastCheckKey, ['value' => true], 86400);
+			return;
+		}
+
+		$userCountry = strtoupper(trim((string) ($user->get('field_country')->value ?? '')));
+
+		foreach ($friendIds as $fid) {
+			if (!$needYouKnowBall && !$needOutreacher) {
+				break;
+			}
+
+			if ($needYouKnowBall && isset($adminIds[$fid])) {
+				self::grantBadge($user, 'you_know_ball');
+				$needYouKnowBall = false;
+			}
+
+			if ($needOutreacher && $userCountry !== '') {
+				$friend = $allUsers[$fid] ?? User::load($fid);
+				if ($friend instanceof UserInterface) {
+					$friendCountry = strtoupper(
+						trim((string) ($friend->get('field_country')->value ?? '')),
+					);
+					if ($friendCountry !== '' && $friendCountry !== $userCountry) {
+						self::grantBadge($user, 'outreacher');
+						$needOutreacher = false;
+					}
+				}
+			}
+		}
+
+		RedisHelper::set($lastCheckKey, ['value' => true], 86400);
+	}
+
 	public static function isBadgeGranted(UserInterface $user, string $badgeId): bool
 	{
 		$badge = self::getBadge($user, $badgeId);
