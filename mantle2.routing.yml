@@ -1834,12 +1834,55 @@ mantle2.users.id.quest.history:
     id: '\d+'
   options:
     tags: Users,Quests
-    description: Retrieves the list of completed quests and their responses for the user
+    description: Retrieves the paginated list of completed quests for the user
     schema/200: '#QuestHistoryResponse'
     schema/401: Unauthorized
     schema/404: User not found
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: asc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
     parameters:
       id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.quest.history.id:
+  path: '/v2/users/{id}/quest/history/{quest_id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::questHistoryEntry'
+    _title: 'Get Completed Quest Progress by Quest ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    quest_id: '[a-z0-9_-]+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the full completed progress entry (with enriched media data) for one quest. Lazy-loaded from the list view.
+    schema/200: '#QuestHistoryEntry'
+    schema/401: Unauthorized
+    schema/404: Quest history entry not found
+    parameters:
+      id:
+        type: string
+      quest_id:
         type: string
   methods: [GET]
 
@@ -3197,12 +3240,55 @@ mantle2.users.username.quest.history:
     username: '@[\w.]+'
   options:
     tags: Users,Quests
-    description: Retrieves the list of completed quests and their responses for the user
+    description: Retrieves the paginated list of completed quests for the user
     schema/200: '#QuestHistoryResponse'
     schema/401: Unauthorized
     schema/404: User not found
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: asc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
     parameters:
       username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.quest.history.id:
+  path: '/v2/users/{username}/quest/history/{quest_id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::questHistoryEntry'
+    _title: 'Get Completed Quest Progress by Username and Quest ID'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    quest_id: '[a-z0-9_-]+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the full completed progress entry for one quest.
+    schema/200: '#QuestHistoryEntry'
+    schema/401: Unauthorized
+    schema/404: Quest history entry not found
+    parameters:
+      username:
+        type: string
+      quest_id:
         type: string
   methods: [GET]
 
@@ -4361,10 +4447,50 @@ mantle2.users.current.quest.history:
     _access: 'TRUE'
   options:
     tags: Users,Quests
-    description: Retrieves the list of completed quests and their responses for the user
+    description: Retrieves the paginated list of completed quests for the user
     schema/200: '#QuestHistoryResponse'
     schema/401: Unauthorized
     schema/404: User not found
+    query:
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+        description: The number of results to return per page
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      search:
+        type: string
+        default: ''
+        description: The search term to filter results
+      sort:
+        type: string
+        enum: [asc, desc, rand]
+        default: asc
+        description: 'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)'
+  methods: [GET]
+
+mantle2.users.current.quest.history.id:
+  path: '/v2/users/current/quest/history/{quest_id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::questHistoryEntry'
+    _title: 'Get Completed Quest Progress for Current User'
+  requirements:
+    _access: 'TRUE'
+    quest_id: '[a-z0-9_-]+'
+  options:
+    tags: Users,Quests
+    description: Retrieves the full completed progress entry for one quest.
+    schema/200: '#QuestHistoryEntry'
+    schema/401: Unauthorized
+    schema/404: Quest history entry not found
+    parameters:
+      quest_id:
+        type: string
   methods: [GET]
 
 mantle2.users.current.onboarding:

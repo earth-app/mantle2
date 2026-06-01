@@ -2133,19 +2133,85 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		$quests = PointsHelper::getCompletedQuests($user);
-		$responses = [];
-		foreach ($quests as $quest) {
-			$responses[$quest->id] = PointsHelper::getCompletedQuestResponses($user, $quest->id);
+		$pagination = GeneralHelper::paginatedParameters($request);
+		if ($pagination instanceof JsonResponse) {
+			return $pagination;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/quests/history/' . GeneralHelper::formatId($user->id()),
+				'GET',
+				$pagination,
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to fetch quest history');
+		}
+
+		$items = is_array($data['items'] ?? null) ? $data['items'] : [];
+		// drop entries the cloud couldn't resolve (expired KV, deleted custom quest, etc.)
+		$items = array_values(
+			array_filter(
+				$items,
+				fn($entry) => is_array($entry) &&
+					is_array($entry['quest'] ?? null) &&
+					isset($entry['quest']['id']),
+			),
+		);
+
+		// preserve legacy `history: {questId: entry}` shape for clients that read by quest id,
+		// plus expose `items: [...]` for paginated rendering
+		$history = [];
+		foreach ($items as $entry) {
+			$history[$entry['quest']['id']] = $entry;
 		}
 
 		return new JsonResponse(
 			[
-				'total' => count($quests),
-				'history' => $responses,
+				'total' => $data['total'] ?? count($items),
+				'page' => $data['page'] ?? 1,
+				'limit' => $data['limit'] ?? count($items),
+				'items' => $items,
+				'history' => $history,
 			],
 			Response::HTTP_OK,
 		);
+	}
+
+	// GET /v2/users/current/quest/history/{quest_id}
+	// GET /v2/users/{id}/quest/history/{quest_id}
+	// GET /v2/users/{username}/quest/history/{quest_id}
+	public function questHistoryEntry(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+		?string $quest_id = null,
+	): JsonResponse {
+		if (!$quest_id) {
+			return GeneralHelper::badRequest('Missing quest_id');
+		}
+
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/quests/history/' .
+					GeneralHelper::formatId($user->id()) .
+					'/' .
+					$quest_id,
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to fetch quest history entry');
+		}
+
+		if (empty($data)) {
+			return GeneralHelper::notFound('Quest history entry not found');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
 	}
 
 	#region Email Verification
