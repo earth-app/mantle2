@@ -10,6 +10,34 @@ use Symfony\Component\Routing\Route;
 
 class OpenAPIController extends ControllerBase
 {
+	private const PAGINATED_QUERY_DEFAULTS = [
+		'limit' => [
+			'type' => 'integer',
+			'minimum' => 1,
+			'maximum' => 100,
+			'default' => 25,
+			'description' => 'The number of results to return per page',
+		],
+		'page' => [
+			'type' => 'integer',
+			'minimum' => 1,
+			'default' => 1,
+			'description' => 'The page number to retrieve',
+		],
+		'search' => [
+			'type' => 'string',
+			'default' => '',
+			'description' => 'The search term to filter results',
+		],
+		'sort' => [
+			'type' => 'string',
+			'enum' => ['asc', 'desc', 'rand'],
+			'default' => 'desc',
+			'description' =>
+				'Sort order: asc (ascending/oldest first), desc (descending/newest first), rand (random)',
+		],
+	];
+
 	/** @var RouteProviderInterface */
 	protected RouteProviderInterface $routeProvider;
 
@@ -157,36 +185,48 @@ class OpenAPIController extends ControllerBase
 					];
 				}
 
+				$queryConfigs = !empty($options['paginated']) ? self::PAGINATED_QUERY_DEFAULTS : [];
 				if (array_key_exists('query', $options) && is_array($options['query'])) {
 					foreach ($options['query'] as $queryParam => $paramConfig) {
-						$schema = [
-							'type' => $paramConfig['type'] ?? 'string',
-							'description' => $paramConfig['description'] ?? '',
-						];
-						if (isset($paramConfig['enum'])) {
-							$schema['enum'] = $paramConfig['enum'];
+						if (isset($queryConfigs[$queryParam]) && is_array($paramConfig)) {
+							$queryConfigs[$queryParam] = array_merge(
+								$queryConfigs[$queryParam],
+								$paramConfig,
+							);
+						} else {
+							$queryConfigs[$queryParam] = $paramConfig;
 						}
-
-						if (isset($paramConfig['minimum'])) {
-							$schema['minimum'] = $paramConfig['minimum'];
-						}
-
-						if (isset($paramConfig['maximum'])) {
-							$schema['maximum'] = $paramConfig['maximum'];
-						}
-
-						if (isset($paramConfig['default'])) {
-							$schema['default'] = $paramConfig['default'];
-						}
-
-						$parameters[] = [
-							'name' => $queryParam,
-							'in' => 'query',
-							'required' => $paramConfig['required'] ?? false,
-							'description' => $paramConfig['description'] ?? '',
-							'schema' => $schema,
-						];
 					}
+				}
+
+				foreach ($queryConfigs as $queryParam => $paramConfig) {
+					$schema = [
+						'type' => $paramConfig['type'] ?? 'string',
+						'description' => $paramConfig['description'] ?? '',
+					];
+					if (isset($paramConfig['enum'])) {
+						$schema['enum'] = $paramConfig['enum'];
+					}
+
+					if (isset($paramConfig['minimum'])) {
+						$schema['minimum'] = $paramConfig['minimum'];
+					}
+
+					if (isset($paramConfig['maximum'])) {
+						$schema['maximum'] = $paramConfig['maximum'];
+					}
+
+					if (isset($paramConfig['default'])) {
+						$schema['default'] = $paramConfig['default'];
+					}
+
+					$parameters[] = [
+						'name' => $queryParam,
+						'in' => 'query',
+						'required' => $paramConfig['required'] ?? false,
+						'description' => $paramConfig['description'] ?? '',
+						'schema' => $schema,
+					];
 				}
 
 				$method0 = strtolower($method);
@@ -264,7 +304,7 @@ class OpenAPIController extends ControllerBase
 		return new JsonResponse($schema);
 	}
 
-	private function resolveSchemaSpecifier($spec): array
+	private function resolveSchemaSpecifier(mixed $spec): array
 	{
 		if (!is_string($spec)) {
 			return ['type' => 'object'];
