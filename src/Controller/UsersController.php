@@ -160,7 +160,6 @@ class UsersController extends ControllerBase
 	}
 
 	// POST /v2/users/login (Basic auth expected)
-	// Accepts either a username or an email address as the Basic Auth "user" field.
 	public function login(Request $request): JsonResponse
 	{
 		$auth = $request->headers->get('Authorization');
@@ -265,15 +264,13 @@ class UsersController extends ControllerBase
 		$data = [
 			'id' => GeneralHelper::formatId($account->id()),
 			'username' => $account->getAccountName(),
+			'user' => UsersHelper::serializeUser($account, $account),
 			'session_token' => $token,
 		];
 		return new JsonResponse($data, Response::HTTP_OK);
 	}
 
 	// POST /v2/users/login/verify_new_ip
-	// Exchanges a ticket + emailed 8-digit code for a session_token. The ticket is
-	// returned by /v2/users/login when the user attempts to sign in from an IP
-	// that the account has never been seen at before.
 	public function verifyLoginNewIP(Request $request): JsonResponse
 	{
 		$ticket = $request->query->get('ticket');
@@ -319,6 +316,7 @@ class UsersController extends ControllerBase
 			[
 				'id' => GeneralHelper::formatId($account->id()),
 				'username' => $account->getAccountName(),
+				'user' => UsersHelper::serializeUser($account, $account),
 				'session_token' => $token,
 			],
 			Response::HTTP_OK,
@@ -546,6 +544,8 @@ class UsersController extends ControllerBase
 		$token = UsersHelper::issueToken($user);
 		$data = [
 			'user' => UsersHelper::serializeUser($user, $user),
+			'id' => GeneralHelper::formatId($user->id()),
+			'username' => $user->getAccountName(),
 			'session_token' => $token,
 		];
 
