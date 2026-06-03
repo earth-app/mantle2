@@ -77,6 +77,11 @@ class UsersHelper
 
 	public static function findByUsername(string $username): ?UserInterface
 	{
+		$username = strtolower(trim($username));
+		if ($username === '') {
+			return null;
+		}
+
 		try {
 			$users = Drupal::entityTypeManager()
 				->getStorage('user')
@@ -94,6 +99,11 @@ class UsersHelper
 
 	public static function findByEmail(string $email)
 	{
+		$email = strtolower(trim($email));
+		if ($email === '') {
+			return null;
+		}
+
 		try {
 			$users = Drupal::entityTypeManager()
 				->getStorage('user')
