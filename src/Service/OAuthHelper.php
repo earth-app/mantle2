@@ -129,7 +129,7 @@ class OAuthHelper
 			]);
 
 			if ($email) {
-				$user->setEmail($email);
+				$user->setEmail(strtolower($email));
 				$user->set('field_email_verified', true); // OAuth emails are pre-verified
 			}
 
@@ -172,7 +172,7 @@ class OAuthHelper
 		$user->set("field_oauth_{$provider}_sub", $sub);
 
 		if (!$user->getEmail() && !empty($userData['email'])) {
-			$user->setEmail($userData['email']);
+			$user->setEmail(strtolower($userData['email']));
 			$user->set('field_email_verified', true);
 			$autoSetEmail = $userData['email'];
 		}

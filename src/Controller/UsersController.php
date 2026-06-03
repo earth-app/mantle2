@@ -429,7 +429,7 @@ class UsersController extends ControllerBase
 		// Traditional username/password signup
 		$username = trim(strtolower($body['username'] ?? null));
 		$password = trim($body['password'] ?? null);
-		$email = trim($body['email'] ?? null);
+		$email = trim(strtolower($body['email'] ?? null));
 		$firstName = trim($body['first_name'] ?? null);
 		$lastName = trim($body['last_name'] ?? null);
 

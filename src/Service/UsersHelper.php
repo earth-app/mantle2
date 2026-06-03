@@ -3455,8 +3455,8 @@ class UsersHelper
 			return GeneralHelper::badRequest('Invalid verification code');
 		}
 
-		$newEmail = $storedData['new_email'];
-		$oldEmail = $storedData['old_email'];
+		$newEmail = strtolower($storedData['new_email']);
+		$oldEmail = strtolower($storedData['old_email']);
 
 		// Double-check that the new email is still available
 		$existingUser = self::findByEmail($newEmail);
