@@ -3629,6 +3629,152 @@ class UsersController extends ControllerBase
 
 	#endregion
 
+	#region Poll Routes
+
+	// GET /v2/users/current/poll
+	// GET /v2/users/{id}/poll
+	// GET /v2/users/{username}/poll
+	public function getUserPolls(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$polls = UsersHelper::getUserVotes((int) $user->id());
+		return new JsonResponse(['items' => $polls], Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/poll
+	// POST /v2/users/{id}/poll
+	// POST /v2/users/{username}/poll
+	public function submitVote(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$requester = UsersHelper::findByRequest($request);
+		if ($requester instanceof JsonResponse) {
+			return $requester;
+		}
+
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		// only self may submit a vote on behalf of "this user" — admins can read, not impersonate
+		if ((int) $requester->id() !== (int) $user->id()) {
+			return GeneralHelper::forbidden('You may only submit votes as yourself.');
+		}
+
+		if (UsersHelper::isRateLimited((int) $user->id())) {
+			return GeneralHelper::conflict(
+				'Too many votes in a short window. Please wait a moment.',
+			);
+		}
+
+		$body = json_decode((string) $request->getContent(), true);
+		if (json_last_error() !== JSON_ERROR_NONE || !is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
+		$pollId = UsersHelper::sanitizePollId($body['poll_id'] ?? null);
+		if (!$pollId) {
+			return GeneralHelper::badRequest(
+				'Invalid or missing poll_id (1–64 lowercase alphanum, _ or -)',
+			);
+		}
+
+		$optionIndex = $body['option_index'] ?? null;
+		if (!is_int($optionIndex) || $optionIndex < 0) {
+			return GeneralHelper::badRequest('option_index must be a non-negative integer');
+		}
+
+		$question = $body['question'] ?? '';
+		if (!is_string($question) || trim($question) === '') {
+			return GeneralHelper::badRequest('question is required');
+		}
+		$question = mb_substr(trim($question), 0, 240);
+
+		$options = $body['options'] ?? null;
+		if (!is_array($options) || count($options) < 2) {
+			return GeneralHelper::badRequest('options must be an array of at least 2 strings');
+		}
+
+		try {
+			$result = UsersHelper::recordVote(
+				(int) $user->id(),
+				$pollId,
+				$optionIndex,
+				$question,
+				$options,
+			);
+		} catch (\InvalidArgumentException $e) {
+			return GeneralHelper::badRequest($e->getMessage());
+		}
+
+		return new JsonResponse($result, Response::HTTP_OK);
+	}
+
+	// DELETE /v2/users/current/poll
+	// DELETE /v2/users/{id}/poll
+	// DELETE /v2/users/{username}/poll
+	public function retractVote(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$requester = UsersHelper::findByRequest($request);
+		if ($requester instanceof JsonResponse) {
+			return $requester;
+		}
+
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if ((int) $requester->id() !== (int) $user->id()) {
+			return GeneralHelper::forbidden('You may only retract your own votes.');
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		$pollId = UsersHelper::sanitizePollId(is_array($body) ? $body['poll_id'] ?? null : null);
+		if (!$pollId) {
+			$pollId = UsersHelper::sanitizePollId($request->query->get('poll_id'));
+		}
+		if (!$pollId) {
+			return GeneralHelper::badRequest('poll_id is required');
+		}
+
+		$removed = UsersHelper::retractVote((int) $user->id(), $pollId);
+		if (!$removed) {
+			return GeneralHelper::notFound('No vote on this poll to retract.');
+		}
+
+		return new JsonResponse(['removed' => true, 'poll_id' => $pollId], Response::HTTP_OK);
+	}
+
+	// GET /v2/admin/polls
+	public function getGlobalPolls(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+		if (!UsersHelper::isAdmin($user)) {
+			return GeneralHelper::forbidden('Admin only.');
+		}
+
+		return new JsonResponse(['items' => UsersHelper::getGlobalAggregates()], Response::HTTP_OK);
+	}
+
+	#endregion
+
 	#region Utility Functions
 
 	// Utility Functions

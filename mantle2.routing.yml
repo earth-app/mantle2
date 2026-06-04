@@ -1762,7 +1762,7 @@ mantle2.users.id.poll.get:
     _access: 'TRUE'
     id: '\d+'
   options:
-    tags: Polls
+    tags: Users,Polls
     description: Returns poll votes recorded for the user (self or admin only).
   methods: [GET]
 
@@ -1775,7 +1775,7 @@ mantle2.users.id.poll.post:
     _access: 'TRUE'
     id: '\d+'
   options:
-    tags: Polls
+    tags: Users,Polls
     description: Records a vote for a poll on behalf of the user (self only).
   methods: [POST]
 
@@ -1788,7 +1788,7 @@ mantle2.users.id.poll.delete:
     _access: 'TRUE'
     id: '\d+'
   options:
-    tags: Polls
+    tags: Users,Polls
     description: Retracts the user's vote on a poll (self only).
   methods: [DELETE]
 
@@ -4386,7 +4386,7 @@ mantle2.admin.polls.get:
   requirements:
     _access: 'TRUE'
   options:
-    tags: Polls
+    tags: Admin,Polls
     description: Admin-only. Returns aggregate counts across every poll that has at least one vote.
   methods: [GET]
 

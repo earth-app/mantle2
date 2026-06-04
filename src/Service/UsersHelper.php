@@ -4311,4 +4311,270 @@ class UsersHelper
 	}
 
 	#endregion
+
+	#region User Polls
+
+	private const TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, refreshed on each write
+	private const POLL_ID_PATTERN = '/^[a-z0-9_-]{1,64}$/';
+	private const MAX_OPTIONS = 8;
+	private const RATE_LIMIT_SECONDS = 3;
+
+	public static function sanitizePollId(?string $input): ?string
+	{
+		if (!is_string($input)) {
+			return null;
+		}
+		$trimmed = strtolower(trim($input));
+		if (!preg_match(self::POLL_ID_PATTERN, $trimmed)) {
+			return null;
+		}
+		return $trimmed;
+	}
+
+	private static function voteKey(int $userId, string $pollId): string
+	{
+		return "poll:vote:{$userId}:{$pollId}";
+	}
+
+	private static function userIndexKey(int $userId): string
+	{
+		return "poll:userlist:{$userId}";
+	}
+
+	private static function aggregateKey(string $pollId): string
+	{
+		return "poll:agg:{$pollId}";
+	}
+
+	private static function rateLimitKey(int $userId): string
+	{
+		return "poll:rate:{$userId}";
+	}
+
+	private static function globalIndexKey(): string
+	{
+		return 'poll:global_index';
+	}
+
+	public static function isRateLimited(int $userId): bool
+	{
+		return RedisHelper::exists(self::rateLimitKey($userId));
+	}
+
+	private static function markRateLimited(int $userId): void
+	{
+		RedisHelper::set(self::rateLimitKey($userId), ['t' => time()], self::RATE_LIMIT_SECONDS);
+	}
+
+	// returns the user's prior vote so callers can decrement the matching option from aggregates
+	public static function getUserVote(int $userId, string $pollId): ?array
+	{
+		return RedisHelper::get(self::voteKey($userId, $pollId));
+	}
+
+	public static function getUserVotes(int $userId): array
+	{
+		$index = RedisHelper::get(self::userIndexKey($userId));
+		$pollIds = is_array($index['polls'] ?? null) ? $index['polls'] : [];
+
+		$out = [];
+		foreach ($pollIds as $pollId) {
+			$vote = RedisHelper::get(self::voteKey($userId, (string) $pollId));
+			if (!$vote) {
+				continue;
+			}
+			$out[] = [
+				'poll_id' => $pollId,
+				'option_index' => $vote['option_index'] ?? null,
+				'option_text' => $vote['option_text'] ?? null,
+				'question' => $vote['question'] ?? null,
+				'options' => $vote['options'] ?? [],
+				'voted_at' => $vote['voted_at'] ?? null,
+				'aggregate' => self::getAggregate((string) $pollId),
+			];
+		}
+		return $out;
+	}
+
+	public static function getAggregate(string $pollId): array
+	{
+		$agg = RedisHelper::get(self::aggregateKey($pollId));
+		if (!$agg) {
+			return [
+				'counts' => [],
+				'total' => 0,
+				'question' => null,
+				'options' => [],
+				'updated_at' => 0,
+			];
+		}
+		return [
+			'counts' => $agg['counts'] ?? [],
+			'total' => $agg['total'] ?? 0,
+			'question' => $agg['question'] ?? null,
+			'options' => $agg['options'] ?? [],
+			'updated_at' => $agg['updated_at'] ?? 0,
+		];
+	}
+
+	public static function recordVote(
+		int $userId,
+		string $pollId,
+		int $optionIndex,
+		string $question,
+		array $options,
+	): array {
+		// clamp + sanitize options so a malformed client can't blow up redis
+		$cleanOptions = [];
+		foreach (array_slice($options, 0, self::MAX_OPTIONS) as $opt) {
+			if (!is_string($opt) || trim($opt) === '') {
+				continue;
+			}
+			$cleanOptions[] = mb_substr(trim($opt), 0, 80);
+		}
+		if (count($cleanOptions) < 2 || $optionIndex < 0 || $optionIndex >= count($cleanOptions)) {
+			throw new \InvalidArgumentException('Invalid options or option_index');
+		}
+
+		$existing = self::getUserVote($userId, $pollId);
+		$agg = RedisHelper::get(self::aggregateKey($pollId)) ?? [
+			'counts' => array_fill(0, count($cleanOptions), 0),
+			'total' => 0,
+			'question' => $question,
+			'options' => $cleanOptions,
+			'updated_at' => 0,
+		];
+
+		$counts = $agg['counts'] ?? array_fill(0, count($cleanOptions), 0);
+		// normalize counts length to match options
+		while (count($counts) < count($cleanOptions)) {
+			$counts[] = 0;
+		}
+
+		// if updating an existing vote, decrement the prior option
+		if ($existing && isset($existing['option_index'])) {
+			$prior = (int) $existing['option_index'];
+			if (isset($counts[$prior]) && $counts[$prior] > 0) {
+				$counts[$prior] = $counts[$prior] - 1;
+			}
+		} else {
+			$agg['total'] = (int) ($agg['total'] ?? 0) + 1;
+		}
+		$counts[$optionIndex] = (int) ($counts[$optionIndex] ?? 0) + 1;
+
+		$now = time();
+		RedisHelper::set(
+			self::aggregateKey($pollId),
+			[
+				'counts' => $counts,
+				'total' => $agg['total'] ?? 0,
+				'question' => $question,
+				'options' => $cleanOptions,
+				'updated_at' => $now,
+			],
+			self::TTL_SECONDS,
+		);
+
+		RedisHelper::set(
+			self::voteKey($userId, $pollId),
+			[
+				'option_index' => $optionIndex,
+				'option_text' => $cleanOptions[$optionIndex] ?? null,
+				'question' => $question,
+				'options' => $cleanOptions,
+				'voted_at' => $now,
+			],
+			self::TTL_SECONDS,
+		);
+
+		// per-user index so we can list voted polls without redis SCAN
+		$userIndex = RedisHelper::get(self::userIndexKey($userId)) ?? ['polls' => []];
+		$polls = is_array($userIndex['polls'] ?? null) ? $userIndex['polls'] : [];
+		if (!in_array($pollId, $polls, true)) {
+			$polls[] = $pollId;
+		}
+		RedisHelper::set(self::userIndexKey($userId), ['polls' => $polls], self::TTL_SECONDS);
+
+		// global index for admin aggregation
+		$globalIndex = RedisHelper::get(self::globalIndexKey()) ?? ['polls' => []];
+		$gpolls = is_array($globalIndex['polls'] ?? null) ? $globalIndex['polls'] : [];
+		if (!in_array($pollId, $gpolls, true)) {
+			$gpolls[] = $pollId;
+			RedisHelper::set(self::globalIndexKey(), ['polls' => $gpolls], self::TTL_SECONDS);
+		} else {
+			// extend ttl without rewriting (no-op for cache fallback; redis path will refresh on next write)
+		}
+
+		self::markRateLimited($userId);
+
+		return [
+			'poll_id' => $pollId,
+			'option_index' => $optionIndex,
+			'option_text' => $cleanOptions[$optionIndex] ?? null,
+			'aggregate' => [
+				'counts' => $counts,
+				'total' => $agg['total'] ?? 0,
+				'question' => $question,
+				'options' => $cleanOptions,
+				'updated_at' => $now,
+			],
+		];
+	}
+
+	public static function retractVote(int $userId, string $pollId): bool
+	{
+		$existing = self::getUserVote($userId, $pollId);
+		if (!$existing) {
+			return false;
+		}
+
+		$agg = RedisHelper::get(self::aggregateKey($pollId));
+		if ($agg && isset($existing['option_index'])) {
+			$counts = $agg['counts'] ?? [];
+			$prior = (int) $existing['option_index'];
+			if (isset($counts[$prior]) && $counts[$prior] > 0) {
+				$counts[$prior] = $counts[$prior] - 1;
+			}
+			$total = max(0, (int) ($agg['total'] ?? 0) - 1);
+			RedisHelper::set(
+				self::aggregateKey($pollId),
+				[
+					'counts' => $counts,
+					'total' => $total,
+					'question' => $agg['question'] ?? null,
+					'options' => $agg['options'] ?? [],
+					'updated_at' => time(),
+				],
+				self::TTL_SECONDS,
+			);
+		}
+
+		RedisHelper::delete(self::voteKey($userId, $pollId));
+
+		$userIndex = RedisHelper::get(self::userIndexKey($userId)) ?? ['polls' => []];
+		$polls = is_array($userIndex['polls'] ?? null)
+			? array_values(array_filter($userIndex['polls'], fn($p) => $p !== $pollId))
+			: [];
+		RedisHelper::set(self::userIndexKey($userId), ['polls' => $polls], self::TTL_SECONDS);
+
+		return true;
+	}
+
+	public static function getGlobalAggregates(): array
+	{
+		$globalIndex = RedisHelper::get(self::globalIndexKey()) ?? ['polls' => []];
+		$pollIds = is_array($globalIndex['polls'] ?? null) ? $globalIndex['polls'] : [];
+
+		$out = [];
+		foreach ($pollIds as $pollId) {
+			$agg = self::getAggregate((string) $pollId);
+			if (($agg['total'] ?? 0) <= 0) {
+				continue;
+			}
+			$out[] = array_merge(['poll_id' => $pollId], $agg);
+		}
+		return $out;
+	}
+
+	#endregion
 }
