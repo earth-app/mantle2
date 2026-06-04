@@ -173,6 +173,22 @@ class Mantle2Schemas
 		'required' => ['name', 'title', 'version', 'description', 'date'],
 	];
 
+	public static array $reauthState = [
+		'type' => 'object',
+		'properties' => [
+			'recently_authenticated' => ['type' => 'boolean', 'example' => true],
+			'expires_at' => [
+				'type' => 'integer',
+				'nullable' => true,
+				'example' => 1717003200000,
+				'description' =>
+					'Epoch milliseconds when the reauthentication window expires, or null if not authenticated',
+			],
+			'window_seconds' => ['type' => 'integer', 'example' => 300],
+		],
+		'required' => ['recently_authenticated', 'window_seconds'],
+	];
+
 	public static function paginated(mixed $itemSchema): array
 	{
 		return [
@@ -2970,6 +2986,7 @@ class Mantle2Schemas
 
 			// Core types
 			'Info' => self::$info,
+			'ReauthState' => self::$reauthState,
 			'Text' => self::$text,
 			'Number' => self::$number,
 			'Id' => self::$id,

@@ -1753,6 +1753,45 @@ mantle2.users.id.quest.history.id:
         type: string
   methods: [GET]
 
+mantle2.users.id.poll.get:
+  path: '/v2/users/{id}/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserPolls'
+    _title: 'List User Polls by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Polls
+    description: Returns poll votes recorded for the user (self or admin only).
+  methods: [GET]
+
+mantle2.users.id.poll.post:
+  path: '/v2/users/{id}/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::submitVote'
+    _title: 'Submit Poll Vote by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Polls
+    description: Records a vote for a poll on behalf of the user (self only).
+  methods: [POST]
+
+mantle2.users.id.poll.delete:
+  path: '/v2/users/{id}/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::retractVote'
+    _title: 'Retract Poll Vote by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Polls
+    description: Retracts the user's vote on a poll (self only).
+  methods: [DELETE]
+
 #endregion
 #region User - By Username
 
@@ -3039,6 +3078,45 @@ mantle2.users.username.quest.history.id:
         type: string
   methods: [GET]
 
+mantle2.users.username.poll.get:
+  path: '/v2/users/{username}/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserPolls'
+    _title: 'List User Polls by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Polls
+    description: Returns poll votes recorded for the user (self or admin only).
+  methods: [GET]
+
+mantle2.users.username.poll.post:
+  path: '/v2/users/{username}/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::submitVote'
+    _title: 'Submit Poll Vote by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Polls
+    description: Records a vote for a poll on behalf of the user (self only).
+  methods: [POST]
+
+mantle2.users.username.poll.delete:
+  path: '/v2/users/{username}/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::retractVote'
+    _title: 'Retract Poll Vote by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Polls
+    description: Retracts the user's vote on a poll (self only).
+  methods: [DELETE]
+
 #endregion
 #region User - Current User
 
@@ -3098,7 +3176,7 @@ mantle2.users.current.reauth_state:
   options:
     tags: Users
     description: Returns whether the current user is within the recently-authenticated window
-    schema/200: Reauth state
+    schema/200: '#ReauthState'
     schema/401: Unauthorized
   methods: [GET]
 
@@ -3112,7 +3190,7 @@ mantle2.users.current.reauth_password:
   options:
     tags: Users
     description: Marks the user as recently authenticated by re-checking their password
-    schema/200: Reauth state
+    schema/200: '#ReauthState'
     schema/401: Unauthorized
     body/description: Password reauthentication body
     body/schema: '{"type":"object","properties":{"password":{"type":"string"}},"required":["password"]}'
@@ -3128,7 +3206,7 @@ mantle2.users.current.reauth_oauth:
   options:
     tags: Users
     description: Marks the user as recently authenticated by verifying an OAuth token against the linked provider
-    schema/200: Reauth state
+    schema/200: '#ReauthState'
     schema/400: Bad Request
     schema/401: Unauthorized
     body/description: OAuth reauthentication body
@@ -4213,6 +4291,45 @@ mantle2.users.current.onboarding.dismiss:
     description: Stops the onboarding checklist from being prompted on this account
   methods: [POST]
 
+mantle2.users.current.poll.get:
+  path: '/v2/users/current/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getUserPolls'
+    _title: 'List Current User Polls'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Polls
+    description: Returns all poll votes recorded for the authenticated user with current aggregate counts.
+  methods: [GET]
+
+mantle2.users.current.poll.post:
+  path: '/v2/users/current/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::submitVote'
+    _title: 'Submit Poll Vote'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Polls
+    description: Records a vote for a poll. Body { poll_id, option_index, question, options[] }. Replaces any prior vote on the same poll. Only the user themselves may submit a vote on their own behalf.
+  methods: [POST]
+
+mantle2.users.current.poll.delete:
+  path: '/v2/users/current/poll'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::retractVote'
+    _title: 'Retract Poll Vote'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Polls
+    description: Retracts the authenticated user's vote on a poll. Body or ?poll_id query.
+  methods: [DELETE]
+
+# endregion
+# region Admin
+
 mantle2.admin.blacklist:
   path: '/v2/admin/blacklist'
   defaults:
@@ -4261,9 +4378,21 @@ mantle2.admin.analytics:
     description: Returns a Cloudflare + content analytics snapshot for the admin panel
   methods: [GET]
 
+mantle2.admin.polls.get:
+  path: '/v2/admin/polls'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getGlobalPolls'
+    _title: 'List Global Poll Aggregates'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Polls
+    description: Admin-only. Returns aggregate counts across every poll that has at least one vote.
+  methods: [GET]
+
 #endregion
 
-## Activity Routes
+# region Activity Routes
 mantle2.activities:
   path: '/v2/activities'
   defaults:
@@ -4406,7 +4535,8 @@ mantle2.activities.list:
     schema/404: Activities not found
   methods: [GET]
 
-## Event Routes
+# endregion
+# region Event Routes
 
 mantle2.events:
   path: '/v2/events'
@@ -4837,7 +4967,9 @@ mantle2.events.images.delete:
         description: The UUID of the image to delete
   methods: [DELETE]
 
-## Prompt Routes
+# #endregion
+# #region Prompt Routes
+
 mantle2.prompts:
   path: '/v2/prompts'
   defaults:
@@ -5083,7 +5215,9 @@ mantle2.prompts.check_expired:
     schema/404: Not Found
   methods: [POST]
 
-## Articles Routes
+# #endregion
+# #region Articles Routes
+
 mantle2.articles:
   path: '/v2/articles'
   defaults:
@@ -5285,6 +5419,7 @@ mantle2.articles.check_expired:
     schema/404: Not Found
   methods: [POST]
 
+# endregion
 #region API Keys
 
 mantle2.api_keys.scopes:
