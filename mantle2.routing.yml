@@ -3050,6 +3050,53 @@ mantle2.users.current.delete:
     schema/204: User deleted successfully
   methods: [DELETE]
 
+mantle2.users.current.reauth_state:
+  path: '/v2/users/current/reauth_state'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getReauthState'
+    _title: 'Get Reauth Window State'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Returns whether the current user is within the recently-authenticated window
+    schema/200: Reauth state
+    schema/401: Unauthorized
+  methods: [GET]
+
+mantle2.users.current.reauth_password:
+  path: '/v2/users/current/reauth/password'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::reauthWithPassword'
+    _title: 'Reauthenticate via Password'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Marks the user as recently authenticated by re-checking their password
+    schema/200: Reauth state
+    schema/401: Unauthorized
+    body/description: Password reauthentication body
+    body/schema: '{"type":"object","properties":{"password":{"type":"string"}},"required":["password"]}'
+  methods: [POST]
+
+mantle2.users.current.reauth_oauth:
+  path: '/v2/users/current/reauth/oauth'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::reauthWithOAuth'
+    _title: 'Reauthenticate via OAuth'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Marks the user as recently authenticated by verifying an OAuth token against the linked provider
+    schema/200: Reauth state
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    body/description: OAuth reauthentication body
+    body/schema: '{"type":"object","properties":{"provider":{"type":"string"},"id_token":{"type":"string"},"access_token":{"type":"string"}},"required":["provider"]}'
+  methods: [POST]
+
 mantle2.users.current.patch_field_privacy:
   path: '/v2/users/current/field_privacy'
   defaults:

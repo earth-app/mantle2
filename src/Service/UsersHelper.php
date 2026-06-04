@@ -1476,24 +1476,30 @@ class UsersHelper
 		];
 	}
 
+	/**
+	 * @throws Exception
+	 */
 	public static function regenerateProfilePhoto(UserInterface $user): string
 	{
-		try {
-			$res = CloudHelper::sendRequest(
-				'/v1/users/profile_photo/' . $user->id(),
-				'PUT',
-				self::buildUserProfilePromptData($user),
-			);
+		// sdxl-lightning can take 15-30s; default 10s timeout silently returns []
+		$res = CloudHelper::sendRequest(
+			'/v1/users/profile_photo/' . $user->id(),
+			'PUT',
+			self::buildUserProfilePromptData($user),
+			60,
+		);
 
-			$data = $res['data'] ?? null;
-			return $data ?: '';
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->error('Failed to regenerate profile photo: %message', [
-				'%message' => $e->getMessage(),
-			]);
+		// empty array means cloud timeout or 204/404; treat all as user-actionable failure
+		if (
+			empty($res) ||
+			!isset($res['data']) ||
+			!is_string($res['data']) ||
+			$res['data'] === ''
+		) {
+			throw new Exception('Avatar generation timed out - please try again in a moment.');
 		}
 
-		return '';
+		return $res['data'];
 	}
 
 	#endregion
@@ -3667,6 +3673,60 @@ class UsersHelper
 	{
 		$auth = Drupal::service('user.auth');
 		return $auth->authenticate($user->getAccountName(), $password) === $user->id();
+	}
+
+	// window during which a recent password/oauth login lets the user delete without re-typing
+	public const REAUTH_WINDOW_SECONDS = 300;
+
+	public static function markReauthenticated(UserInterface $user): void
+	{
+		try {
+			CloudHelper::sendRequest('/v1/auth/reauth/' . $user->id(), 'POST', [
+				'at' => (int) (microtime(true) * 1000),
+			]);
+		} catch (Exception $e) {
+			// best-effort - delete still works via password fallback
+			Drupal::logger('mantle2')->warning('Failed to mark reauth for %uid: %message', [
+				'%uid' => $user->id(),
+				'%message' => $e->getMessage(),
+			]);
+		}
+	}
+
+	public static function clearReauthenticated(UserInterface $user): void
+	{
+		try {
+			CloudHelper::sendRequest('/v1/auth/reauth/' . $user->id(), 'DELETE');
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning('Failed to clear reauth for %uid: %message', [
+				'%uid' => $user->id(),
+				'%message' => $e->getMessage(),
+			]);
+		}
+	}
+
+	// returns [bool $recent, ?int $atMs]
+	public static function getReauthState(UserInterface $user): array
+	{
+		try {
+			$res = CloudHelper::sendRequest('/v1/auth/reauth/' . $user->id(), 'GET');
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning('Failed to read reauth for %uid: %message', [
+				'%uid' => $user->id(),
+				'%message' => $e->getMessage(),
+			]);
+			return [false, null];
+		}
+
+		$atMs = isset($res['at']) && is_numeric($res['at']) ? (int) $res['at'] : null;
+		if (!$atMs) {
+			return [false, null];
+		}
+
+		$nowMs = (int) (microtime(true) * 1000);
+		$ageSeconds = ($nowMs - $atMs) / 1000;
+		$recent = $ageSeconds >= 0 && $ageSeconds <= self::REAUTH_WINDOW_SECONDS;
+		return [$recent, $atMs];
 	}
 
 	#endregion

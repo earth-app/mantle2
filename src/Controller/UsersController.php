@@ -252,6 +252,7 @@ class UsersController extends ControllerBase
 		// log the user in for bookkeeping then issue API token
 		$this->finalizeLogin($account, $request);
 		$token = UsersHelper::issueToken($account);
+		UsersHelper::markReauthenticated($account);
 		RedisHelper::set(
 			$rateLimitKey,
 			[
@@ -301,6 +302,7 @@ class UsersController extends ControllerBase
 		// finalizeLogin records the new IP and emits the standard "New Login" email/notification.
 		$this->finalizeLogin($account, $request);
 		$token = UsersHelper::issueToken($account);
+		UsersHelper::markReauthenticated($account);
 
 		$rateLimitKey = 'login_success_rate_limit_' . $account->id();
 		RedisHelper::set(
@@ -351,6 +353,7 @@ class UsersController extends ControllerBase
 			$uid = (int) $tokenUser->id();
 			$payloadUser = UsersHelper::serializeUser($tokenUser, $tokenUser);
 			UsersHelper::revokeToken($sessionId);
+			UsersHelper::clearReauthenticated($tokenUser);
 		} else {
 			$payloadUser = UsersHelper::withSessionId($sessionId, function ($session) use (&$uid) {
 				$sessUid = $session->get('uid');
@@ -542,6 +545,7 @@ class UsersController extends ControllerBase
 		// Immediately log user in (hooks/metadata) and return persistent API token
 		$this->finalizeLogin($user, $request);
 		$token = UsersHelper::issueToken($user);
+		UsersHelper::markReauthenticated($user);
 		$data = [
 			'user' => UsersHelper::serializeUser($user, $user),
 			'id' => GeneralHelper::formatId($user->id()),
@@ -654,23 +658,39 @@ class UsersController extends ControllerBase
 		}
 
 		if ($requester->id() === $user->id()) {
-			// Require password for self deletion
-			$body = json_decode((string) $request->getContent(), true) ?: [];
-			if (!$body) {
-				return GeneralHelper::badRequest('Invalid JSON');
-			}
+			// recently-authenticated window bypasses password reprompt
+			[$recent, $atMs] = UsersHelper::getReauthState($user);
 
-			if (json_last_error() !== JSON_ERROR_NONE) {
-				return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
-			}
+			if (!$recent) {
+				$rawBody = (string) $request->getContent();
+				$body = $rawBody !== '' ? json_decode($rawBody, true) : [];
+				if ($rawBody !== '' && json_last_error() !== JSON_ERROR_NONE) {
+					return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+				}
+				if (!is_array($body)) {
+					$body = [];
+				}
 
-			$password = $body['password'] ?? null;
-			if (!$password || !is_string($password)) {
-				return GeneralHelper::badRequest('Missing or invalid password');
-			}
+				$password = $body['password'] ?? null;
+				$hasPassword = UsersHelper::hasPassword($user);
 
-			if (!UsersHelper::validatePassword($user, $password)) {
-				return GeneralHelper::badRequest('Password is incorrect');
+				if (!$password || !is_string($password)) {
+					if (!$hasPassword) {
+						return new JsonResponse(
+							[
+								'code' => 403,
+								'reason' => 'REAUTH_REQUIRED',
+								'message' => 'Reauthentication required',
+							],
+							Response::HTTP_FORBIDDEN,
+						);
+					}
+					return GeneralHelper::badRequest('Missing or invalid password');
+				}
+
+				if (!$hasPassword || !UsersHelper::validatePassword($user, $password)) {
+					return GeneralHelper::badRequest('Password is incorrect');
+				}
 			}
 		}
 
@@ -700,6 +720,113 @@ class UsersController extends ControllerBase
 		}
 
 		return new JsonResponse(null, Response::HTTP_NO_CONTENT);
+	}
+
+	// GET /v2/users/current/reauth_state
+	public function getReauthState(Request $request): JsonResponse
+	{
+		$user = UsersHelper::getOwnerOfRequest($request);
+		if (!$user) {
+			return GeneralHelper::unauthorized();
+		}
+
+		[$recent, $atMs] = UsersHelper::getReauthState($user);
+		$expiresAt = $atMs !== null ? $atMs + UsersHelper::REAUTH_WINDOW_SECONDS * 1000 : null;
+		return new JsonResponse(
+			[
+				'recently_authenticated' => $recent,
+				'expires_at' => $recent ? $expiresAt : null,
+				'window_seconds' => UsersHelper::REAUTH_WINDOW_SECONDS,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// POST /v2/users/current/reauth/password
+	public function reauthWithPassword(Request $request): JsonResponse
+	{
+		$user = UsersHelper::getOwnerOfRequest($request);
+		if (!$user) {
+			return GeneralHelper::unauthorized();
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		$password = $body['password'] ?? null;
+		if (!$password || !is_string($password)) {
+			return GeneralHelper::badRequest('Missing or invalid password');
+		}
+
+		if (!UsersHelper::hasPassword($user) || !UsersHelper::validatePassword($user, $password)) {
+			return GeneralHelper::unauthorized('Password is incorrect');
+		}
+
+		UsersHelper::markReauthenticated($user);
+		return new JsonResponse(
+			[
+				'recently_authenticated' => true,
+				'expires_at' =>
+					(int) (microtime(true) * 1000) + UsersHelper::REAUTH_WINDOW_SECONDS * 1000,
+				'window_seconds' => UsersHelper::REAUTH_WINDOW_SECONDS,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// POST /v2/users/current/reauth/oauth
+	public function reauthWithOAuth(Request $request): JsonResponse
+	{
+		$user = UsersHelper::getOwnerOfRequest($request);
+		if (!$user) {
+			return GeneralHelper::unauthorized();
+		}
+
+		$body = json_decode((string) $request->getContent(), true) ?: [];
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
+		}
+
+		$provider = $body['provider'] ?? null;
+		if (
+			!$provider ||
+			!is_string($provider) ||
+			!in_array($provider, OAuthHelper::$providers, true)
+		) {
+			return GeneralHelper::badRequest('Unsupported OAuth provider');
+		}
+
+		$token = $body['id_token'] ?? ($body['access_token'] ?? null);
+		if (!$token || !is_string($token)) {
+			return GeneralHelper::badRequest('Missing OAuth token');
+		}
+
+		$userData = OAuthHelper::validateToken($provider, $token);
+		if (!$userData || empty($userData['sub'])) {
+			return GeneralHelper::unauthorized('Invalid OAuth token');
+		}
+
+		// the verified sub must match this account's linked provider sub
+		$linkedSub = $user->hasField("field_oauth_{$provider}_sub")
+			? $user->get("field_oauth_{$provider}_sub")->value
+			: null;
+		if (!$linkedSub || $linkedSub !== $userData['sub']) {
+			return GeneralHelper::unauthorized('OAuth identity does not match linked account');
+		}
+
+		UsersHelper::markReauthenticated($user);
+		return new JsonResponse(
+			[
+				'recently_authenticated' => true,
+				'expires_at' =>
+					(int) (microtime(true) * 1000) + UsersHelper::REAUTH_WINDOW_SECONDS * 1000,
+				'window_seconds' => UsersHelper::REAUTH_WINDOW_SECONDS,
+				'provider' => $provider,
+			],
+			Response::HTTP_OK,
+		);
 	}
 
 	// PATCH /v2/users/current/field_privacy
@@ -785,7 +912,19 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		$dataUrl = UsersHelper::regenerateProfilePhoto($user);
+		try {
+			$dataUrl = UsersHelper::regenerateProfilePhoto($user);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to regenerate profile photo: %message', [
+				'%message' => $e->getMessage(),
+			]);
+
+			// prefer the cloud-surfaced message when present, otherwise the local exception text
+			$cloudMessage = CloudHelper::extractCloudMessage($e);
+			$message = $cloudMessage !== '' ? $cloudMessage : $e->getMessage();
+			return GeneralHelper::internalError($message);
+		}
+
 		return GeneralHelper::fromDataURL($dataUrl);
 	}
 
@@ -3166,6 +3305,7 @@ class UsersController extends ControllerBase
 
 		$this->finalizeLogin($user, $request, true);
 		$token = UsersHelper::issueToken($user);
+		UsersHelper::markReauthenticated($user);
 
 		$data = [
 			'user' => UsersHelper::serializeUser($user, $user),
@@ -3283,6 +3423,7 @@ class UsersController extends ControllerBase
 
 		$this->finalizeLogin($user, $request);
 		$token = UsersHelper::issueToken($user);
+		UsersHelper::markReauthenticated($user);
 
 		$data = [
 			'user' => UsersHelper::serializeUser($user, $user),
