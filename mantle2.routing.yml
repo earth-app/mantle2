@@ -5429,4 +5429,30 @@ mantle2.api_keys.revoke_all:
     schema/401: Unauthorized
   methods: [POST]
 
+# MoodSpark - anonymous emoji vote aggregator
+
+mantle2.mood.get:
+  path: '/v2/mood/{topic}/{date}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\MoodController::getMood'
+    _title: 'Get MoodSpark Snapshot'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Mood
+    description: Returns the aggregated mood distribution for a topic on a specific date (YYYY-MM-DD).
+  methods: [GET]
+
+mantle2.mood.post:
+  path: '/v2/mood/{topic}/{date}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\MoodController::postMood'
+    _title: 'Record MoodSpark Vote'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Mood
+    description: Records an anonymous emoji vote for a topic on a specific date. Rate limited to one vote per IP per topic per day.
+  methods: [POST]
+
 #endregion
