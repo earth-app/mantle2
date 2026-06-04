@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 // MoodSpark — anonymous emoji-vote aggregator. routes are public; rate limits are by IP+topic+date
 class MoodController extends ControllerBase
 {
-	private const TOPIC_PATTERN = '/^[a-zA-Z0-9-]{1,64}$/';
+	private const TOPIC_PATTERN = '/^[a-zA-Z0-9_-]{1,64}$/';
 	private const DATE_PATTERN = '/^\d{4}-\d{2}-\d{2}$/';
 	private const ALLOWED_EMOJIS = ['😍', '😊', '🤔', '😐', '😟', '😤'];
 
