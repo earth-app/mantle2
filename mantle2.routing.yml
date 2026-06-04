@@ -242,7 +242,7 @@ mantle2.users.cosmetics.preview:
     _access: 'TRUE'
   options:
     tags: Users
-    description: Preview a cosmetic filter applied to the cloud user profile photo
+    description: Preview a cosmetic filter applied to the cloud user profile photo, or the authenticated user's own photo when withSelf=true
     schema/200/type: image/png
     schema/parameters:
       cosmetic:
@@ -254,6 +254,10 @@ mantle2.users.cosmetics.preview:
         enum: [32, 128, 1024]
         default: 1024
         description: The size of the preview image. Must be one of 32, 128, or 1024.
+      withSelf:
+        type: boolean
+        default: false
+        description: When true and the request is authenticated, the preview is rendered against the requester's own profile photo.
   methods: [GET]
 
 # Quests
@@ -647,6 +651,23 @@ mantle2.users.id.profile_photo.purchase_cosmetic:
         type: string
         description: The key of the cosmetic to purchase
   methods: [POST]
+
+mantle2.users.id.profile_photo.cache.clear:
+  path: '/v2/users/{id}/profile_photo/cache'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::clearProfilePhotoCache'
+    _title: 'Clear Profile Photo Cache by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users
+    description: Flush cached profile photo entries (base + every cosmetic variant) for the user.
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+  methods: [DELETE]
 
 mantle2.users.id.set_account_type:
   path: '/v2/users/{id}/account_type'
@@ -1916,6 +1937,23 @@ mantle2.users.username.profile_photo.purchase_cosmetic:
         type: string
         description: The key of the cosmetic to purchase
   methods: [POST]
+
+mantle2.users.username.profile_photo.cache.clear:
+  path: '/v2/users/{username}/profile_photo/cache'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::clearProfilePhotoCache'
+    _title: 'Clear Profile Photo Cache by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users
+    description: Flush cached profile photo entries (base + every cosmetic variant) for the user.
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+  methods: [DELETE]
 
 mantle2.users.username.set_account_type:
   path: '/v2/users/{username}/account_type'
@@ -3203,6 +3241,21 @@ mantle2.users.current.profile_photo.purchase_cosmetic:
         description: The key of the cosmetic to purchase
         required: true
   methods: [POST]
+
+mantle2.users.current.profile_photo.cache.clear:
+  path: '/v2/users/current/profile_photo/cache'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::clearProfilePhotoCache'
+    _title: 'Clear Profile Photo Cache for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users
+    description: Flush cached profile photo entries (base + every cosmetic variant) for the authenticated user.
+    schema/200: '#MessageResponse'
+    schema/401: Unauthorized
+    schema/403: 403
+  methods: [DELETE]
 
 mantle2.users.current.set_account_type:
   path: '/v2/users/current/account_type'

@@ -1869,6 +1869,9 @@ class UsersController extends ControllerBase
 	}
 
 	// GET /v2/users/cosmetics/preview
+	// when withSelf=true, the authenticated user's own photo is used as the base
+	// instead of the placeholder cloud user photo (cosmetic GD output is identical
+	// either way; only the underlying photo differs)
 	public function previewCosmetic(Request $request): Response
 	{
 		$cosmeticKey = $request->query->get('cosmetic');
@@ -1886,14 +1889,54 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Size must be one of: 32, 128, or 1024');
 		}
 
-		$cloudUser = UsersHelper::cloud();
-		$dataUrl = PointsHelper::getAvatar($cloudUser, $cosmeticKey, $size);
+		$withSelf = filter_var($request->query->get('withSelf', 'false'), FILTER_VALIDATE_BOOLEAN);
+
+		$baseUser = UsersHelper::cloud();
+		if ($withSelf) {
+			$owner = UsersHelper::getOwnerOfRequest($request);
+			if ($owner instanceof UserInterface) {
+				$baseUser = $owner;
+			}
+		}
+
+		$dataUrl = PointsHelper::getAvatar($baseUser, $cosmeticKey, $size);
 
 		if (!$dataUrl) {
 			return GeneralHelper::internalError('Failed to generate cosmetic preview');
 		}
 
 		return GeneralHelper::fromDataURL($dataUrl);
+	}
+
+	// DELETE /v2/users/current/profile_photo/cache
+	// DELETE /v2/users/{id}/profile_photo/cache
+	// DELETE /v2/users/{username}/profile_photo/cache
+	// belt-and-suspenders: lets the client flush cosmetic-applied photo entries
+	// without triggering a full user cache rebuild
+	public function clearProfilePhotoCache(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			PointsHelper::clearUserPhotoCache((string) $user->id());
+		} catch (\Throwable $e) {
+			\Drupal::logger('mantle2')->warning(
+				'Failed to clear profile photo cache for user %uid: %message',
+				[
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+			return GeneralHelper::internalError('Failed to clear profile photo cache');
+		}
+
+		return new JsonResponse(['success' => true], Response::HTTP_OK);
 	}
 
 	// GET /v2/users/current/profile_photo/cosmetic

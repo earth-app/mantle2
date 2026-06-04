@@ -2144,6 +2144,12 @@ class Mantle2Schemas
 					'description' => 'Rarity tier of the cosmetic',
 					'example' => 'normal',
 				],
+				'animated' => [
+					'type' => 'boolean',
+					'description' =>
+						'Whether clients should apply a slow CSS rotation overlay when rendering this cosmetic. GD output is unchanged.',
+					'example' => false,
+				],
 			],
 			'required' => ['key', 'price', 'rarity'],
 		];

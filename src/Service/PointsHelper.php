@@ -150,15 +150,16 @@ class PointsHelper
 		RedisHelper::delete('user:' . $userId . ':public');
 		RedisHelper::delete('user:' . $userId . ':private');
 
-		$cosmetics = array_keys(self::cosmetics());
-		foreach ([32, 128, 1024] as $size) {
-			RedisHelper::delete('cloud:user:photo:' . $userId . ':' . $size);
-			foreach ($cosmetics as $cosmeticKey) {
-				RedisHelper::delete(
-					'cloud:user:photo:' . $userId . ':' . $size . ':' . $cosmeticKey,
-				);
-			}
-		}
+		// glob-delete every cosmetic-keyed and base photo cache entry for the user
+		// covers both the size-only key and the size-with-cosmetic key shape
+		self::clearUserPhotoCache((string) $userId);
+	}
+
+	// public so controllers can flush the photo cache after avatar mutations
+	// without needing to know the key shape; glob delete is supported by RedisHelper
+	public static function clearUserPhotoCache(string $userId): void
+	{
+		RedisHelper::delete('cloud:user:photo:' . $userId . ':*');
 	}
 
 	// Drawing Utilities
@@ -609,6 +610,24 @@ class PointsHelper
 					return self::overlay($image, 0xcccccc, 0.3);
 				},
 			],
+			// animated variants - bake the same GD output but mark client-side as animated
+			// so crust + sky can apply a CSS rotation overlay; PHP-GD output is untouched
+			'animated_gold_ring' => [
+				'price' => 155,
+				'rarity' => 'amazing',
+				'animated' => true,
+				'apply' => function (GdImage $image) {
+					return self::ring($image, 0xffd700);
+				},
+			],
+			'animated_green_spiral' => [
+				'price' => 275,
+				'rarity' => 'green',
+				'animated' => true,
+				'apply' => function (GdImage $image) {
+					return self::spiral($image, 0x00ff00, 5, 15);
+				},
+			],
 		];
 	}
 
@@ -781,6 +800,8 @@ class PointsHelper
 				'discount' => $user ? self::getPriceDiscount($user) : 0.0,
 				'full_price' => $data['price'],
 				'rarity' => $data['rarity'],
+				// animated flag drives client-side CSS rotation; absent = false
+				'animated' => !empty($data['animated']),
 			];
 		}
 		return $catalog;
