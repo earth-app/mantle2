@@ -3678,47 +3678,30 @@ class UsersHelper
 	// window during which a recent password/oauth login lets the user delete without re-typing
 	public const REAUTH_WINDOW_SECONDS = 300;
 
+	// ephemeral session metadata - lives in mantle2 redis, no cross-service hop
+	private const REAUTH_KEY_PREFIX = 'auth:last_auth:';
+	private const REAUTH_TTL_SECONDS = 3600;
+
 	public static function markReauthenticated(UserInterface $user): void
 	{
-		try {
-			CloudHelper::sendRequest('/v1/auth/reauth/' . $user->id(), 'POST', [
-				'at' => (int) (microtime(true) * 1000),
-			]);
-		} catch (Exception $e) {
-			// best-effort - delete still works via password fallback
-			Drupal::logger('mantle2')->warning('Failed to mark reauth for %uid: %message', [
-				'%uid' => $user->id(),
-				'%message' => $e->getMessage(),
-			]);
-		}
+		$atMs = (int) (microtime(true) * 1000);
+		RedisHelper::set(
+			self::REAUTH_KEY_PREFIX . $user->id(),
+			['at' => $atMs],
+			self::REAUTH_TTL_SECONDS,
+		);
 	}
 
 	public static function clearReauthenticated(UserInterface $user): void
 	{
-		try {
-			CloudHelper::sendRequest('/v1/auth/reauth/' . $user->id(), 'DELETE');
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->warning('Failed to clear reauth for %uid: %message', [
-				'%uid' => $user->id(),
-				'%message' => $e->getMessage(),
-			]);
-		}
+		RedisHelper::delete(self::REAUTH_KEY_PREFIX . $user->id());
 	}
 
 	// returns [bool $recent, ?int $atMs]
 	public static function getReauthState(UserInterface $user): array
 	{
-		try {
-			$res = CloudHelper::sendRequest('/v1/auth/reauth/' . $user->id(), 'GET');
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->warning('Failed to read reauth for %uid: %message', [
-				'%uid' => $user->id(),
-				'%message' => $e->getMessage(),
-			]);
-			return [false, null];
-		}
-
-		$atMs = isset($res['at']) && is_numeric($res['at']) ? (int) $res['at'] : null;
+		$record = RedisHelper::get(self::REAUTH_KEY_PREFIX . $user->id());
+		$atMs = isset($record['at']) && is_numeric($record['at']) ? (int) $record['at'] : null;
 		if (!$atMs) {
 			return [false, null];
 		}
