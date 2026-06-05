@@ -361,23 +361,22 @@ class ArticlesHelper
 		}
 
 		$count = count($data);
-		$multipleChoiceCount = count(
-			array_filter($data, function ($item) {
-				return $item['type'] === 'multiple_choice';
-			}),
-		);
-		$trueFalseCount = count(
-			array_filter($data, function ($item) {
-				return $item['type'] === 'true_false';
-			}),
-		);
+		$countOfType = function (string $type) use ($data): int {
+			return count(
+				array_filter($data, function ($item) use ($type) {
+					return ($item['type'] ?? null) === $type;
+				}),
+			);
+		};
 
 		return [
 			'questions' => $data,
 			'summary' => [
 				'total' => $count,
-				'multiple_choice_count' => $multipleChoiceCount,
-				'true_false_count' => $trueFalseCount,
+				'multiple_choice_count' => $countOfType('multiple_choice'),
+				'multi_select_count' => $countOfType('multi_select'),
+				'true_false_count' => $countOfType('true_false'),
+				'order_count' => $countOfType('order'),
 			],
 		];
 	}

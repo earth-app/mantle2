@@ -2018,33 +2018,55 @@ class Mantle2Schemas
 				'question' => self::text(150, 1, 'What is the capital of France?'),
 				'type' => [
 					'type' => 'string',
-					'enum' => ['true_false', 'multiple_choice'],
+					'enum' => ['true_false', 'multiple_choice', 'multi_select', 'order'],
 					'description' => 'Type of quiz question',
 					'example' => 'multiple_choice',
 				],
+				// multiple_choice / multi_select / true_false
 				'options' => [
 					'type' => 'array',
 					'items' => self::text(100),
 					'example' => ['Paris', 'London', 'Berlin', 'Madrid'],
 					'description' =>
-						'Answer options for multiple choice questions. Not required for true/false questions.',
+						'Answer options for multiple_choice, multi_select and true_false questions.',
 				],
 				'correct_answer' => self::text(
 					150,
 					1,
 					'Paris',
-					'The correct answer to the quiz question',
+					'The correct answer (multiple_choice / true_false).',
 				),
 				'correct_answer_index' => [
 					'type' => 'integer',
 					'example' => 0,
 					'description' =>
-						'Index of the correct answer in the options array for multiple choice questions. Not required for true/false questions.',
+						'Index of the correct answer in options[] (multiple_choice / true_false).',
 				],
+				// multi_select
+				'correct_answers' => [
+					'type' => 'array',
+					'items' => self::text(100),
+					'description' => 'Correct answer strings for multi_select questions.',
+				],
+				'correct_answer_indices' => [
+					'type' => 'array',
+					'items' => ['type' => 'integer'],
+					'description' => 'Indices of correct options for multi_select questions.',
+				],
+				// true_false convenience flags
 				'is_true' => self::$bool,
 				'is_false' => self::$bool,
+				// order — items shown to the client (server shuffles before sending)
+				'items' => [
+					'type' => 'array',
+					'items' => self::text(100),
+					'minItems' => 3,
+					'maxItems' => 6,
+					'description' =>
+						'Items to be ordered (3-6). Cloud serves a shuffled copy; canonical order is kept server-side.',
+				],
 			],
-			'required' => ['question', 'type', 'options', 'correct_answer', 'correct_answer_index'],
+			'required' => ['question', 'type'],
 		];
 	}
 
@@ -2061,7 +2083,7 @@ class Mantle2Schemas
 				),
 				'type' => [
 					'type' => 'string',
-					'enum' => ['true_false', 'multiple_choice'],
+					'enum' => ['true_false', 'multiple_choice', 'multi_select', 'order'],
 					'description' => 'Type of quiz question',
 					'example' => 'multiple_choice',
 				],
@@ -2072,16 +2094,30 @@ class Mantle2Schemas
 					'maxItems' => 6,
 					'example' => ['Paris', 'London', 'Berlin', 'Madrid'],
 					'description' =>
-						'Answer options. For multiple choice: 2-6 options. For true/false: 2 options (True/False).',
+						'Options for multiple_choice (2-6), multi_select (3-6), or true_false (always [True, False]).',
 				],
 				'correct_answer' => self::text(
 					100,
 					1,
 					'Paris',
-					'The correct answer - must match one of the options exactly',
+					'Single correct answer (multiple_choice / true_false) - must match one option exactly.',
 				),
+				'correct_answers' => [
+					'type' => 'array',
+					'items' => self::text(100),
+					'description' =>
+						'Correct answer strings for multi_select. Each must match one of the options.',
+				],
+				'items' => [
+					'type' => 'array',
+					'items' => self::text(100),
+					'minItems' => 3,
+					'maxItems' => 6,
+					'description' =>
+						'Canonical (correct) order of items for "order" questions. Cloud shuffles before serving.',
+				],
 			],
-			'required' => ['question', 'type', 'options', 'correct_answer'],
+			'required' => ['question', 'type'],
 		];
 	}
 
