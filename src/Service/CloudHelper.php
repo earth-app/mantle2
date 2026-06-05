@@ -178,12 +178,24 @@ class CloudHelper
 		if (preg_match('/Response:\s*(.*)$/s', $raw, $matches)) {
 			$body = trim($matches[1]);
 			$decoded = json_decode($body, true);
-			if (
-				is_array($decoded) &&
-				isset($decoded['message']) &&
-				is_string($decoded['message'])
-			) {
-				return $decoded['message'];
+			if (is_array($decoded)) {
+				// cloud uses { message } most often, { error } on ws routes
+				$primary =
+					self::cloudStringField($decoded, 'message') ??
+					self::cloudStringField($decoded, 'error');
+				if ($primary !== null) {
+					// fold any human-relevant context attached alongside the message; skip `code`
+					// (mirrors the http status) and `availableAt` (already stated in the message)
+					$extras = array_filter(
+						[
+							self::cloudStringField($decoded, 'details'),
+							self::cloudStringField($decoded, 'reason'),
+						],
+						fn($v) => $v !== null && !str_contains($primary, $v),
+					);
+
+					return $extras ? $primary . ' (' . implode('; ', $extras) . ')' : $primary;
+				}
 			}
 
 			// return plain text if provided as well
@@ -193,5 +205,17 @@ class CloudHelper
 		}
 
 		return '';
+	}
+
+	private static function cloudStringField(array $data, string $key): ?string
+	{
+		if (isset($data[$key]) && is_string($data[$key])) {
+			$trimmed = trim($data[$key]);
+			if ($trimmed !== '' && strlen($trimmed) <= 500) {
+				return $trimmed;
+			}
+		}
+
+		return null;
 	}
 }
