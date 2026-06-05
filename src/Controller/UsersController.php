@@ -3705,6 +3705,21 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('options must be an array of at least 2 strings');
 		}
 
+		// pre-validate non-empty option strings BEFORE handing to recordVote so we can return the
+		// specific error rather than the generic "Invalid options or option_index" path
+		$nonEmptyOptions = array_filter($options, fn($o) => is_string($o) && trim($o) !== '');
+		if (count($nonEmptyOptions) < 2) {
+			return GeneralHelper::badRequest('options must contain at least 2 non-empty strings');
+		}
+
+		// option_index bounds check — without this a malformed payload can write a sparse counts
+		// array to Redis, which breaks the frontend percentage math on the subsequent aggregate read
+		if ($optionIndex >= count($options)) {
+			return GeneralHelper::badRequest(
+				'option_index must be less than the number of options',
+			);
+		}
+
 		try {
 			$result = UsersHelper::recordVote(
 				(int) $user->id(),
@@ -3740,6 +3755,14 @@ class UsersController extends ControllerBase
 
 		if ((int) $requester->id() !== (int) $user->id()) {
 			return GeneralHelper::forbidden('You may only retract your own votes.');
+		}
+
+		// same rate-limit window as submitVote — otherwise users could spam vote-flips by
+		// retracting and resubmitting in rapid succession
+		if (UsersHelper::isRateLimited((int) $user->id())) {
+			return GeneralHelper::conflict(
+				'Too many vote changes in a short window. Please wait a moment.',
+			);
 		}
 
 		$body = json_decode((string) $request->getContent(), true) ?: [];

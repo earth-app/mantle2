@@ -3121,8 +3121,8 @@ class UsersHelper
 		}
 
 		// Rate-limit per user: at most one challenge issued every 60 seconds.
-		$rateLimitKey = 'login_2fa_rate_limit_' . $user->id();
-		$lastSentData = RedisHelper::get($rateLimitKey);
+		$pollRateLimitKey = 'login_2fa_rate_limit_' . $user->id();
+		$lastSentData = RedisHelper::get($pollRateLimitKey);
 		if ($lastSentData && isset($lastSentData['timestamp'])) {
 			$timeSinceLast = time() - (int) $lastSentData['timestamp'];
 			if ($timeSinceLast < 60) {
@@ -3162,7 +3162,7 @@ class UsersHelper
 		}
 
 		RedisHelper::set(
-			$rateLimitKey,
+			$pollRateLimitKey,
 			['timestamp' => time(), 'user_id' => (int) $user->id()],
 			60,
 		);
@@ -3350,9 +3350,9 @@ class UsersHelper
 		}
 
 		// Check rate limit (5 minutes = 300 seconds)
-		$rateLimitKey = 'email_change_rate_limit_' . $user->id();
+		$pollRateLimitKey = 'email_change_rate_limit_' . $user->id();
 
-		$lastSentData = RedisHelper::get($rateLimitKey);
+		$lastSentData = RedisHelper::get($pollRateLimitKey);
 		if ($lastSentData) {
 			$timeSinceLastSent = time() - $lastSentData['timestamp'];
 			if ($timeSinceLastSent < 300) {
@@ -3375,7 +3375,7 @@ class UsersHelper
 
 		// Store current timestamp for rate limiting (300 seconds TTL)
 		RedisHelper::set(
-			$rateLimitKey,
+			$pollRateLimitKey,
 			[
 				'timestamp' => time(),
 				'user_id' => $user->id(),
@@ -4331,55 +4331,54 @@ class UsersHelper
 		return $trimmed;
 	}
 
-	private static function voteKey(int $userId, string $pollId): string
+	private static function pollVoteKey(int $userId, string $pollId): string
 	{
 		return "poll:vote:{$userId}:{$pollId}";
 	}
 
-	private static function userIndexKey(int $userId): string
+	private static function pollUserIndexKey(int $userId): string
 	{
 		return "poll:userlist:{$userId}";
 	}
 
-	private static function aggregateKey(string $pollId): string
+	private static function pollAggregateKey(string $pollId): string
 	{
 		return "poll:agg:{$pollId}";
 	}
 
-	private static function rateLimitKey(int $userId): string
+	private static function pollRateLimitKey(int $userId): string
 	{
 		return "poll:rate:{$userId}";
 	}
 
-	private static function globalIndexKey(): string
+	public static function isPollRateLimited(int $userId): bool
 	{
-		return 'poll:global_index';
+		return RedisHelper::exists(self::pollRateLimitKey($userId));
 	}
 
-	public static function isRateLimited(int $userId): bool
+	private static function markPollRateLimited(int $userId): void
 	{
-		return RedisHelper::exists(self::rateLimitKey($userId));
-	}
-
-	private static function markRateLimited(int $userId): void
-	{
-		RedisHelper::set(self::rateLimitKey($userId), ['t' => time()], self::RATE_LIMIT_SECONDS);
+		RedisHelper::set(
+			self::pollRateLimitKey($userId),
+			['t' => time()],
+			self::RATE_LIMIT_SECONDS,
+		);
 	}
 
 	// returns the user's prior vote so callers can decrement the matching option from aggregates
 	public static function getUserVote(int $userId, string $pollId): ?array
 	{
-		return RedisHelper::get(self::voteKey($userId, $pollId));
+		return RedisHelper::get(self::pollVoteKey($userId, $pollId));
 	}
 
 	public static function getUserVotes(int $userId): array
 	{
-		$index = RedisHelper::get(self::userIndexKey($userId));
+		$index = RedisHelper::get(self::pollUserIndexKey($userId));
 		$pollIds = is_array($index['polls'] ?? null) ? $index['polls'] : [];
 
 		$out = [];
 		foreach ($pollIds as $pollId) {
-			$vote = RedisHelper::get(self::voteKey($userId, (string) $pollId));
+			$vote = RedisHelper::get(self::pollVoteKey($userId, (string) $pollId));
 			if (!$vote) {
 				continue;
 			}
@@ -4398,7 +4397,7 @@ class UsersHelper
 
 	public static function getAggregate(string $pollId): array
 	{
-		$agg = RedisHelper::get(self::aggregateKey($pollId));
+		$agg = RedisHelper::get(self::pollAggregateKey($pollId));
 		if (!$agg) {
 			return [
 				'counts' => [],
@@ -4437,7 +4436,7 @@ class UsersHelper
 		}
 
 		$existing = self::getUserVote($userId, $pollId);
-		$agg = RedisHelper::get(self::aggregateKey($pollId)) ?? [
+		$agg = RedisHelper::get(self::pollAggregateKey($pollId)) ?? [
 			'counts' => array_fill(0, count($cleanOptions), 0),
 			'total' => 0,
 			'question' => $question,
@@ -4464,7 +4463,7 @@ class UsersHelper
 
 		$now = time();
 		RedisHelper::set(
-			self::aggregateKey($pollId),
+			self::pollAggregateKey($pollId),
 			[
 				'counts' => $counts,
 				'total' => $agg['total'] ?? 0,
@@ -4476,7 +4475,7 @@ class UsersHelper
 		);
 
 		RedisHelper::set(
-			self::voteKey($userId, $pollId),
+			self::pollVoteKey($userId, $pollId),
 			[
 				'option_index' => $optionIndex,
 				'option_text' => $cleanOptions[$optionIndex] ?? null,
@@ -4488,24 +4487,21 @@ class UsersHelper
 		);
 
 		// per-user index so we can list voted polls without redis SCAN
-		$userIndex = RedisHelper::get(self::userIndexKey($userId)) ?? ['polls' => []];
+		$userIndex = RedisHelper::get(self::pollUserIndexKey($userId)) ?? ['polls' => []];
 		$polls = is_array($userIndex['polls'] ?? null) ? $userIndex['polls'] : [];
 		if (!in_array($pollId, $polls, true)) {
 			$polls[] = $pollId;
 		}
-		RedisHelper::set(self::userIndexKey($userId), ['polls' => $polls], self::TTL_SECONDS);
+		RedisHelper::set(self::pollUserIndexKey($userId), ['polls' => $polls], self::TTL_SECONDS);
 
-		// global index for admin aggregation
-		$globalIndex = RedisHelper::get(self::globalIndexKey()) ?? ['polls' => []];
+		$globalIndex = RedisHelper::get('poll:global_index') ?? ['polls' => []];
 		$gpolls = is_array($globalIndex['polls'] ?? null) ? $globalIndex['polls'] : [];
 		if (!in_array($pollId, $gpolls, true)) {
 			$gpolls[] = $pollId;
-			RedisHelper::set(self::globalIndexKey(), ['polls' => $gpolls], self::TTL_SECONDS);
-		} else {
-			// extend ttl without rewriting (no-op for cache fallback; redis path will refresh on next write)
 		}
+		RedisHelper::set('poll:global_index', ['polls' => $gpolls], self::TTL_SECONDS);
 
-		self::markRateLimited($userId);
+		self::markPollRateLimited($userId);
 
 		return [
 			'poll_id' => $pollId,
@@ -4528,7 +4524,7 @@ class UsersHelper
 			return false;
 		}
 
-		$agg = RedisHelper::get(self::aggregateKey($pollId));
+		$agg = RedisHelper::get(self::pollAggregateKey($pollId));
 		if ($agg && isset($existing['option_index'])) {
 			$counts = $agg['counts'] ?? [];
 			$prior = (int) $existing['option_index'];
@@ -4537,7 +4533,7 @@ class UsersHelper
 			}
 			$total = max(0, (int) ($agg['total'] ?? 0) - 1);
 			RedisHelper::set(
-				self::aggregateKey($pollId),
+				self::pollAggregateKey($pollId),
 				[
 					'counts' => $counts,
 					'total' => $total,
@@ -4549,20 +4545,20 @@ class UsersHelper
 			);
 		}
 
-		RedisHelper::delete(self::voteKey($userId, $pollId));
+		RedisHelper::delete(self::pollVoteKey($userId, $pollId));
 
-		$userIndex = RedisHelper::get(self::userIndexKey($userId)) ?? ['polls' => []];
+		$userIndex = RedisHelper::get(self::pollUserIndexKey($userId)) ?? ['polls' => []];
 		$polls = is_array($userIndex['polls'] ?? null)
 			? array_values(array_filter($userIndex['polls'], fn($p) => $p !== $pollId))
 			: [];
-		RedisHelper::set(self::userIndexKey($userId), ['polls' => $polls], self::TTL_SECONDS);
+		RedisHelper::set(self::pollUserIndexKey($userId), ['polls' => $polls], self::TTL_SECONDS);
 
 		return true;
 	}
 
 	public static function getGlobalAggregates(): array
 	{
-		$globalIndex = RedisHelper::get(self::globalIndexKey()) ?? ['polls' => []];
+		$globalIndex = RedisHelper::get('poll:global_index') ?? ['polls' => []];
 		$pollIds = is_array($globalIndex['polls'] ?? null) ? $globalIndex['polls'] : [];
 
 		$out = [];
