@@ -189,6 +189,39 @@ class Mantle2Schemas
 		'required' => ['recently_authenticated', 'window_seconds'],
 	];
 
+	public static array $reauthPassword = [
+		'type' => 'object',
+		'properties' => [
+			'password' => [
+				'type' => 'string',
+				'format' => 'password',
+				'description' => "The current user's password, used to re-verify identity.",
+			],
+		],
+		'required' => ['password'],
+	];
+
+	public static array $reauthOAuth = [
+		'type' => 'object',
+		'properties' => [
+			'provider' => [
+				'type' => 'string',
+				'description' =>
+					'Linked OAuth provider to verify against (e.g. google, microsoft, github, discord).',
+			],
+			'id_token' => [
+				'type' => 'string',
+				'description' => 'JWT id_token issued by the provider for this user.',
+			],
+			'access_token' => [
+				'type' => 'string',
+				'description' =>
+					'Access token issued by the provider; used when id_token is not available.',
+			],
+		],
+		'required' => ['provider'],
+	];
+
 	public static function paginated(mixed $itemSchema): array
 	{
 		return [
@@ -3023,6 +3056,8 @@ class Mantle2Schemas
 			// Core types
 			'Info' => self::$info,
 			'ReauthState' => self::$reauthState,
+			'ReauthPassword' => self::$reauthPassword,
+			'ReauthOAuth' => self::$reauthOAuth,
 			'Text' => self::$text,
 			'Number' => self::$number,
 			'Id' => self::$id,

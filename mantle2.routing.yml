@@ -3193,7 +3193,7 @@ mantle2.users.current.reauth_password:
     schema/200: '#ReauthState'
     schema/401: Unauthorized
     body/description: Password reauthentication body
-    body/schema: '{"type":"object","properties":{"password":{"type":"string"}},"required":["password"]}'
+    body/schema: '#ReauthPassword'
   methods: [POST]
 
 mantle2.users.current.reauth_oauth:
@@ -3210,7 +3210,7 @@ mantle2.users.current.reauth_oauth:
     schema/400: Bad Request
     schema/401: Unauthorized
     body/description: OAuth reauthentication body
-    body/schema: '{"type":"object","properties":{"provider":{"type":"string"},"id_token":{"type":"string"},"access_token":{"type":"string"}},"required":["provider"]}'
+    body/schema: '#ReauthOAuth'
   methods: [POST]
 
 mantle2.users.current.patch_field_privacy:
