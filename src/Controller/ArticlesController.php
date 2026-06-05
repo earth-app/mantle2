@@ -665,71 +665,157 @@ class ArticlesController extends ControllerBase
 			}
 
 			$qType = $question['type'] ?? null;
-			if (!in_array($qType, ['multiple_choice', 'true_false'], true)) {
+			if (
+				!in_array($qType, ['multiple_choice', 'multi_select', 'true_false', 'order'], true)
+			) {
 				return GeneralHelper::badRequest("Invalid question type at index $index");
 			}
 
-			$options = $question['options'] ?? null;
-			if (!is_array($options) || empty($options)) {
-				return GeneralHelper::badRequest(
-					"Field options for question at index $index must be a non-empty array",
-				);
-			}
-
-			$correctAnswer = $question['correct_answer'] ?? null;
-			if ($correctAnswer === null) {
-				return GeneralHelper::badRequest(
-					"Field correct_answer is required for question at index $index",
-				);
-			}
-
-			// verify and set correct_answer_index
-			$correctAnswerIndex = array_search($correctAnswer, $options, true);
-			if ($correctAnswerIndex === false) {
-				return GeneralHelper::badRequest(
-					"Correct answer for question at index $index must be one of the options",
-				);
-			}
-			$question['correct_answer_index'] = $correctAnswerIndex;
-
-			if ($qType === 'multiple_choice') {
-				if (count($options) < 2 || count($options) > 6) {
+			// per-type validation. multiple_choice + true_false share the single-correct_answer
+			// path; multi_select uses correct_answers (array); order uses items (no options).
+			if ($qType === 'order') {
+				$items = $question['items'] ?? null;
+				if (!is_array($items) || count($items) < 3 || count($items) > 6) {
 					return GeneralHelper::badRequest(
-						"Field options for multiple choice question at index $index must have between 2 and 6 items",
+						"Field items for order question at index $index must be an array of 3-6 strings",
+					);
+				}
+				foreach ($items as $itemIndex => $item) {
+					if (!is_string($item) || strlen($item) < 1 || strlen($item) > 64) {
+						return GeneralHelper::badRequest(
+							"Each item for order question at index $index must be a string between 1 and 64 characters",
+						);
+					}
+					$validatedItem = GeneralHelper::validateUserContent(
+						$item,
+						false,
+						"quiz question $index item $itemIndex",
+						$uid,
+					);
+					if ($validatedItem instanceof JsonResponse) {
+						return $validatedItem;
+					}
+				}
+				// strip option/answer fields that don't belong on the order shape so storage stays clean
+				unset(
+					$question['options'],
+					$question['correct_answer'],
+					$question['correct_answer_index'],
+				);
+			} else {
+				$options = $question['options'] ?? null;
+				if (!is_array($options) || empty($options)) {
+					return GeneralHelper::badRequest(
+						"Field options for question at index $index must be a non-empty array",
 					);
 				}
 
-				foreach ($options as $optIndex => $option) {
-					if (!is_string($option) || strlen($option) < 1 || strlen($option) > 64) {
+				if ($qType === 'multi_select') {
+					if (count($options) < 3 || count($options) > 6) {
 						return GeneralHelper::badRequest(
-							"Each option for question at index $index must be a string between 1 and 64 characters",
+							"Field options for multi_select question at index $index must have between 3 and 6 items",
+						);
+					}
+					$correctAnswers = $question['correct_answers'] ?? null;
+					if (!is_array($correctAnswers) || count($correctAnswers) < 1) {
+						return GeneralHelper::badRequest(
+							"Field correct_answers for multi_select question at index $index must be a non-empty array",
+						);
+					}
+					if (count($correctAnswers) >= count($options)) {
+						return GeneralHelper::badRequest(
+							"multi_select question at index $index must have at least one INCORRECT option",
+						);
+					}
+					$correctIndices = [];
+					foreach ($correctAnswers as $answer) {
+						$idx = array_search($answer, $options, true);
+						if ($idx === false) {
+							return GeneralHelper::badRequest(
+								"Each correct_answers entry for question at index $index must match one of the options",
+							);
+						}
+						$correctIndices[] = $idx;
+					}
+					sort($correctIndices);
+					$question['correct_answer_indices'] = array_values(
+						array_unique($correctIndices),
+					);
+					unset($question['correct_answer'], $question['correct_answer_index']);
+
+					foreach ($options as $optIndex => $option) {
+						if (!is_string($option) || strlen($option) < 1 || strlen($option) > 64) {
+							return GeneralHelper::badRequest(
+								"Each option for question at index $index must be a string between 1 and 64 characters",
+							);
+						}
+						$validatedOpt = GeneralHelper::validateUserContent(
+							$option,
+							false,
+							"quiz question $index option $optIndex",
+							$uid,
+						);
+						if ($validatedOpt instanceof JsonResponse) {
+							return $validatedOpt;
+						}
+					}
+				} else {
+					// multiple_choice + true_false: single correct_answer string
+					$correctAnswer = $question['correct_answer'] ?? null;
+					if ($correctAnswer === null) {
+						return GeneralHelper::badRequest(
+							"Field correct_answer is required for question at index $index",
 						);
 					}
 
-					$validatedOpt = GeneralHelper::validateUserContent(
-						$option,
-						false,
-						"quiz question $index option $optIndex",
-						$uid,
-					);
-					if ($validatedOpt instanceof JsonResponse) {
-						return $validatedOpt;
+					$correctAnswerIndex = array_search($correctAnswer, $options, true);
+					if ($correctAnswerIndex === false) {
+						return GeneralHelper::badRequest(
+							"Correct answer for question at index $index must be one of the options",
+						);
+					}
+					$question['correct_answer_index'] = $correctAnswerIndex;
+
+					if ($qType === 'multiple_choice') {
+						if (count($options) < 2 || count($options) > 6) {
+							return GeneralHelper::badRequest(
+								"Field options for multiple choice question at index $index must have between 2 and 6 items",
+							);
+						}
+						foreach ($options as $optIndex => $option) {
+							if (
+								!is_string($option) ||
+								strlen($option) < 1 ||
+								strlen($option) > 64
+							) {
+								return GeneralHelper::badRequest(
+									"Each option for question at index $index must be a string between 1 and 64 characters",
+								);
+							}
+							$validatedOpt = GeneralHelper::validateUserContent(
+								$option,
+								false,
+								"quiz question $index option $optIndex",
+								$uid,
+							);
+							if ($validatedOpt instanceof JsonResponse) {
+								return $validatedOpt;
+							}
+						}
+					} elseif ($qType === 'true_false') {
+						if (
+							count($options) !== 2 &&
+							!in_array('True', $options, true) &&
+							!in_array('False', $options, true)
+						) {
+							return GeneralHelper::badRequest(
+								"Field options for true/false question at index $index must have exactly 2 items",
+							);
+						}
+						$question['is_true'] = $correctAnswer === 'True';
+						$question['is_false'] = $correctAnswer === 'False';
 					}
 				}
-			} elseif ($qType === 'true_false') {
-				if (
-					count($options) !== 2 &&
-					!in_array('True', $options, true) &&
-					!in_array('False', $options, true)
-				) {
-					return GeneralHelper::badRequest(
-						"Field options for true/false question at index $index must have exactly 2 items",
-					);
-				}
-
-				// verify and set is_true and is_false
-				$question['is_true'] = $correctAnswer === 'True';
-				$question['is_false'] = $correctAnswer === 'False';
 			}
 		}
 
