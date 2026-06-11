@@ -492,6 +492,11 @@ function mantle2_install(): void
 	/// Email Verified
 	createField('user', 'field_email_verified', 'boolean', 'Email Verified', false, false);
 
+	/// Referrer ID (pending referral code until verified)
+	createField('user', 'field_referrer_id', 'string', 'Referrer ID', false, '', [
+		'max_length' => 32,
+	]);
+
 	/// OAuth Provider IDs
 	createField('user', 'field_oauth_google_sub', 'string', 'Google OAuth Sub', false, '', [
 		'max_length' => 255,

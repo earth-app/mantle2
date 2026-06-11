@@ -24,6 +24,7 @@ use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\OAuthHelper;
 use Drupal\mantle2\Service\PointsHelper;
+use Drupal\mantle2\Service\ReferralHelper;
 use Exception;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
@@ -433,6 +434,7 @@ class UsersController extends ControllerBase
 		$email = trim(strtolower($body['email'] ?? null));
 		$firstName = trim($body['first_name'] ?? null);
 		$lastName = trim($body['last_name'] ?? null);
+		$referralCode = trim($body['referral_code'] ?? '');
 
 		if (!$username || !$password) {
 			return GeneralHelper::badRequest('Username and Password are required');
@@ -541,6 +543,9 @@ class UsersController extends ControllerBase
 		} catch (EntityStorageException $e) {
 			return GeneralHelper::internalError('Failed to create user: ' . $e->getMessage());
 		}
+
+		// store referral code as a pending marker; convert only after email verification
+		$this->storePendingReferral($user, $referralCode);
 
 		// Immediately log user in (hooks/metadata) and return persistent API token
 		$this->finalizeLogin($user, $request);
@@ -1210,6 +1215,54 @@ class UsersController extends ControllerBase
 		);
 	}
 
+	// GET /v2/users/current/leaderboard
+	// GET /v2/users/{id}/leaderboard
+	// GET /v2/users/{username}/leaderboard
+	public function userLeaderboard(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		$resolved = $this->resolveUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+		if (!$resolved) {
+			return GeneralHelper::notFound('User not found');
+		}
+		$visible = UsersHelper::checkVisibility($resolved, $request);
+		if ($visible instanceof JsonResponse) {
+			return $visible;
+		}
+
+		if (!$requester) {
+			return GeneralHelper::unauthorized('Authentication required');
+		}
+
+		$type = $request->query->get('type', 'points');
+		if (!in_array($type, ['points', 'article', 'prompt', 'event'], true)) {
+			return GeneralHelper::badRequest(
+				"Invalid type '$type'; Must be one of 'points', 'article', 'prompt', or 'event'",
+			);
+		}
+
+		$scope = $request->query->get('scope', 'friends');
+		if (!in_array($scope, ['global', 'friends', 'circle'], true)) {
+			return GeneralHelper::badRequest(
+				"Invalid scope '$scope'; Must be one of 'global', 'friends', or 'circle'",
+			);
+		}
+
+		$limit = $request->query->getInt('limit', 25);
+		if ($limit < 1 || $limit > 250) {
+			return GeneralHelper::badRequest('Limit must be between 1 and 250');
+		}
+
+		$result = UsersHelper::getScopedLeaderboard($visible, $requester, $type, $scope, $limit);
+		return new JsonResponse($result, Response::HTTP_OK);
+	}
+
 	// PUT /v2/users/current/friends
 	// PUT /v2/users/{id}/friends
 	// PUT /v2/users/{username}/friends
@@ -1860,6 +1913,38 @@ class UsersController extends ControllerBase
 		return new JsonResponse(['points' => $data[0], 'history' => $data[1]], Response::HTTP_OK);
 	}
 
+	// GET /v2/users/current/referral
+	// GET /v2/users/{id}/referral
+	// GET /v2/users/{username}/referral
+	public function referral(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		return new JsonResponse(['code' => ReferralHelper::getCode($user)], Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/referral/stats
+	// GET /v2/users/{id}/referral/stats
+	// GET /v2/users/{username}/referral/stats
+	public function referralStats(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		return new JsonResponse(ReferralHelper::getStats($user), Response::HTTP_OK);
+	}
+
 	// GET /v2/users/cosmetics
 	public function getCosmeticsCatalog(Request $request): JsonResponse
 	{
@@ -2159,6 +2244,92 @@ class UsersController extends ControllerBase
 			['message' => 'Quest started successfully'],
 			Response::HTTP_CREATED,
 		);
+	}
+
+	// POST /v2/users/current/quest/challenge
+	// POST /v2/users/{id}/quest/challenge
+	// POST /v2/users/{username}/quest/challenge
+	public function challengeFriendToQuest(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$friendId = $request->query->get('friend');
+		if (!$friendId) {
+			return GeneralHelper::badRequest('Missing friend ID or Username');
+		}
+
+		$friend = UsersHelper::findBy($friendId);
+		if (!$friend) {
+			return GeneralHelper::notFound('Friend not found');
+		}
+
+		// challenges are friends-only
+		if (!UsersHelper::isAddedFriend($user, $friend)) {
+			return GeneralHelper::forbidden('You can only challenge friends');
+		}
+
+		$questId = $request->query->get('quest');
+		if (!$questId) {
+			return GeneralHelper::badRequest('Missing quest parameter');
+		}
+
+		$quest = PointsHelper::getQuest($questId);
+		if (!$quest) {
+			return GeneralHelper::badRequest('Invalid quest');
+		}
+
+		// rate-limit: max 10 challenges per hour per challenger
+		$throttleKey = 'challenge:throttle:' . $user->id();
+		$throttle = RedisHelper::get($throttleKey);
+		$count = (int) ($throttle['count'] ?? 0);
+		if ($count >= 10) {
+			return GeneralHelper::conflict(
+				'You have sent too many quest challenges; please try again later.',
+			);
+		}
+
+		// dedupe: one challenge per friend+quest pair per 24h
+		$dedupeKey = 'challenge:dedupe:' . $user->id() . ':' . $friend->id() . ':' . $questId;
+		if (RedisHelper::exists($dedupeKey)) {
+			return GeneralHelper::conflict(
+				'You have already challenged this friend to this quest recently.',
+			);
+		}
+
+		// server-templated message — no free text
+		$title = 'Quest Challenge';
+		$message = sprintf(
+			'%s challenged you to the "%s" quest!',
+			$user->getAccountName(),
+			$quest->title,
+		);
+		$link = '/profile/quests?open=' . $questId;
+		$source = '@' . $user->getAccountName();
+
+		$notification = UsersHelper::addNotification(
+			$friend,
+			$title,
+			$message,
+			$link,
+			'info',
+			$source,
+		);
+		if ($notification === null) {
+			return GeneralHelper::internalError('Failed to send quest challenge');
+		}
+
+		// record dedupe marker and bump the hourly throttle counter
+		RedisHelper::set($dedupeKey, ['sent_at' => time()], 86400);
+		$ttl = $count > 0 ? max(1, RedisHelper::ttl($throttleKey)) : 3600;
+		RedisHelper::set($throttleKey, ['count' => $count + 1], $ttl);
+
+		return new JsonResponse($notification->jsonSerialize(), Response::HTTP_CREATED);
 	}
 
 	// <updating quests is handled on the frontend server endpoints for more security>
@@ -2523,6 +2694,9 @@ class UsersController extends ControllerBase
 
 		// badges: 'verified'
 		UsersHelper::grantBadge($user, 'verified');
+
+		// attribute any pending referral now that the user is a verified human
+		$this->attributePendingReferral($user);
 
 		// fire-and-forget funnel bump for the admin analytics dashboard
 		try {
@@ -3464,6 +3638,15 @@ class UsersController extends ControllerBase
 			return GeneralHelper::internalError('Failed to create user');
 		}
 
+		// store referral code as a pending marker; convert only after email verification
+		$this->storePendingReferral($user, trim($body['referral_code'] ?? ''));
+
+		// OAuth emails are pre-verified at creation, so attribute now rather than waiting
+		// on a verify_email flow that never fires for these users
+		if (UsersHelper::isEmailVerified($user)) {
+			$this->attributePendingReferral($user);
+		}
+
 		$this->finalizeLogin($user, $request);
 		$token = UsersHelper::issueToken($user);
 		UsersHelper::markReauthenticated($user);
@@ -3671,7 +3854,7 @@ class UsersController extends ControllerBase
 			return GeneralHelper::forbidden('You may only submit votes as yourself.');
 		}
 
-		if (UsersHelper::isRateLimited((int) $user->id())) {
+		if (UsersHelper::isPollRateLimited((int) $user->id())) {
 			return GeneralHelper::conflict(
 				'Too many votes in a short window. Please wait a moment.',
 			);
@@ -3757,9 +3940,7 @@ class UsersController extends ControllerBase
 			return GeneralHelper::forbidden('You may only retract your own votes.');
 		}
 
-		// same rate-limit window as submitVote — otherwise users could spam vote-flips by
-		// retracting and resubmitting in rapid succession
-		if (UsersHelper::isRateLimited((int) $user->id())) {
+		if (UsersHelper::isPollRateLimited((int) $user->id())) {
 			return GeneralHelper::conflict(
 				'Too many vote changes in a short window. Please wait a moment.',
 			);
@@ -3952,6 +4133,55 @@ class UsersController extends ControllerBase
 			return UsersHelper::findByAuthorized($identifier, $request);
 		}
 		return UsersHelper::findByRequest($request);
+	}
+
+	// store a referral code as a pending marker; cloud convert is deferred until verification
+	private function storePendingReferral(UserInterface $user, string $referralCode): void
+	{
+		if ($referralCode === '') {
+			return;
+		}
+
+		try {
+			$user->set('field_referrer_id', $referralCode);
+			$user->save();
+		} catch (Exception $e) {
+			// referral attribution is non-critical — never block signup on it
+			Drupal::logger('mantle2')->warning(
+				'Failed to store pending referral for user %uid: %message',
+				[
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
+	}
+
+	private function attributePendingReferral(UserInterface $user): void
+	{
+		$pending = trim($user->get('field_referrer_id')->value ?? '');
+		// already a numeric referrer id (or empty) means nothing to attribute
+		if ($pending === '' || ctype_digit($pending)) {
+			return;
+		}
+
+		$referrerId = ReferralHelper::attributeReferral($user, $pending);
+		if ($referrerId === null) {
+			return;
+		}
+
+		try {
+			$user->set('field_referrer_id', $referrerId);
+			$user->save();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to persist attributed referrer for user %uid: %message',
+				[
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
 	}
 
 	private function notifyOAuthEmailAutoSet(

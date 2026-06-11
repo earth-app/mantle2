@@ -1616,6 +1616,83 @@ mantle2.users.id.impact_points:
         type: string
   methods: [GET]
 
+mantle2.users.id.referral:
+  path: '/v2/users/{id}/referral'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::referral'
+    _title: 'Get User Referral Code by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Referral
+    description: Retrieves the referral code for the user (self or admin only)
+    schema/200: '#ReferralCode'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.referral.stats:
+  path: '/v2/users/{id}/referral/stats'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::referralStats'
+    _title: 'Get User Referral Stats by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Referral
+    description: Retrieves referral stats (clicks, conversions) for the user (self or admin only)
+    schema/200: '#ReferralStats'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.leaderboard:
+  path: '/v2/users/{id}/leaderboard'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userLeaderboard'
+    _title: 'Get User Leaderboard by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Leaderboards
+    description: Retrieves a friendly-competition leaderboard scoped to global, friends, or circle
+    schema/200: '#Leaderboard'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      type:
+        type: enum
+        default: points
+        description: The metric to rank by
+        enum: [points, article, prompt, event]
+      scope:
+        type: enum
+        default: friends
+        description: The set of users to rank
+        enum: [global, friends, circle]
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 250
+        default: 25
+        description: The number of results to return
+  methods: [GET]
+
 mantle2.users.id.quest:
   path: '/v2/users/{id}/quest'
   defaults:
@@ -1686,6 +1763,37 @@ mantle2.users.id.quest.start:
         type: boolean
         default: false
         description: If true, discard any ongoing quest and start this one instead
+  methods: [POST]
+
+mantle2.users.id.quest.challenge:
+  path: '/v2/users/{id}/quest/challenge'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::challengeFriendToQuest'
+    _title: 'Challenge Friend to Quest by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Quests
+    description: Challenge a friend to a quest; sends a templated notification (friends only)
+    schema/201: '#Notification'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: You can only challenge friends
+    schema/404: Friend not found
+    schema/409: Already challenged or rate limited
+    parameters:
+      id:
+        type: string
+    query:
+      friend:
+        type: string
+        required: true
+        description: The ID or Username of the friend to challenge
+      quest:
+        type: string
+        required: true
+        description: The ID of the quest to challenge the friend to
   methods: [POST]
 
 mantle2.users.id.quest.cancel:
@@ -2941,6 +3049,83 @@ mantle2.users.username.impact_points:
         type: string
   methods: [GET]
 
+mantle2.users.username.referral:
+  path: '/v2/users/{username}/referral'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::referral'
+    _title: 'Get User Referral Code by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Referral
+    description: Retrieves the referral code for the user (self or admin only)
+    schema/200: '#ReferralCode'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.referral.stats:
+  path: '/v2/users/{username}/referral/stats'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::referralStats'
+    _title: 'Get User Referral Stats by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Referral
+    description: Retrieves referral stats (clicks, conversions) for the user (self or admin only)
+    schema/200: '#ReferralStats'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.leaderboard:
+  path: '/v2/users/{username}/leaderboard'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userLeaderboard'
+    _title: 'Get User Leaderboard by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Leaderboards
+    description: Retrieves a friendly-competition leaderboard scoped to global, friends, or circle
+    schema/200: '#Leaderboard'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      type:
+        type: enum
+        default: points
+        description: The metric to rank by
+        enum: [points, article, prompt, event]
+      scope:
+        type: enum
+        default: friends
+        description: The set of users to rank
+        enum: [global, friends, circle]
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 250
+        default: 25
+        description: The number of results to return
+  methods: [GET]
+
 mantle2.users.username.quest:
   path: '/v2/users/{username}/quest'
   defaults:
@@ -3011,6 +3196,37 @@ mantle2.users.username.quest.start:
         type: boolean
         default: false
         description: If true, discard any ongoing quest and start this one instead
+  methods: [POST]
+
+mantle2.users.username.quest.challenge:
+  path: '/v2/users/{username}/quest/challenge'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::challengeFriendToQuest'
+    _title: 'Challenge Friend to Quest by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Quests
+    description: Challenge a friend to a quest; sends a templated notification (friends only)
+    schema/201: '#Notification'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: You can only challenge friends
+    schema/404: Friend not found
+    schema/409: Already challenged or rate limited
+    parameters:
+      username:
+        type: string
+    query:
+      friend:
+        type: string
+        required: true
+        description: The ID or Username of the friend to challenge
+      quest:
+        type: string
+        required: true
+        description: The ID of the quest to challenge the friend to
   methods: [POST]
 
 mantle2.users.username.quest.cancel:
@@ -4128,6 +4344,69 @@ mantle2.users.current.impact_points:
     schema/404: User not found
   methods: [GET]
 
+mantle2.users.current.referral:
+  path: '/v2/users/current/referral'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::referral'
+    _title: 'Get User Referral Code by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Referral
+    description: Retrieves the referral code for the user (self or admin only)
+    schema/200: '#ReferralCode'
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.current.referral.stats:
+  path: '/v2/users/current/referral/stats'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::referralStats'
+    _title: 'Get User Referral Stats by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Referral
+    description: Retrieves referral stats (clicks, conversions) for the user (self or admin only)
+    schema/200: '#ReferralStats'
+    schema/401: Unauthorized
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.current.leaderboard:
+  path: '/v2/users/current/leaderboard'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userLeaderboard'
+    _title: 'Get User Leaderboard by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Leaderboards
+    description: Retrieves a friendly-competition leaderboard scoped to global, friends, or circle
+    schema/200: '#Leaderboard'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      type:
+        type: enum
+        default: points
+        description: The metric to rank by
+        enum: [points, article, prompt, event]
+      scope:
+        type: enum
+        default: friends
+        description: The set of users to rank
+        enum: [global, friends, circle]
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 250
+        default: 25
+        description: The number of results to return
+  methods: [GET]
+
 mantle2.users.current.quest:
   path: '/v2/users/current/quest'
   defaults:
@@ -4187,6 +4466,33 @@ mantle2.users.current.quest.start:
         type: boolean
         default: false
         description: If true, discard any ongoing quest and start this one instead
+  methods: [POST]
+
+mantle2.users.current.quest.challenge:
+  path: '/v2/users/current/quest/challenge'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::challengeFriendToQuest'
+    _title: 'Challenge Friend to Quest by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Challenge a friend to a quest; sends a templated notification (friends only)
+    schema/201: '#Notification'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: You can only challenge friends
+    schema/404: Friend not found
+    schema/409: Already challenged or rate limited
+    query:
+      friend:
+        type: string
+        required: true
+        description: The ID or Username of the friend to challenge
+      quest:
+        type: string
+        required: true
+        description: The ID of the quest to challenge the friend to
   methods: [POST]
 
 mantle2.users.current.quest.cancel:
