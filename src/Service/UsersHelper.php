@@ -2258,6 +2258,131 @@ class UsersHelper
 
 	#endregion
 
+	#region User Leaderboards
+
+	// metric for a single member: impact points or a journey streak
+	private static function leaderboardMetric(UserInterface $member, string $type): int
+	{
+		if ($type === 'points') {
+			return (int) (PointsHelper::getPoints($member)[0] ?? 0);
+		}
+
+		$data = CloudHelper::sendRequest(
+			'/v1/users/journey/' . $type . '/' . GeneralHelper::formatId($member->id()),
+		);
+		return is_array($data) ? (int) ($data[0] ?? 0) : 0;
+	}
+
+	// friendly-competition leaderboard scoped to global, friends, or circle
+	public static function getScopedLeaderboard(
+		UserInterface $user,
+		UserInterface $requester,
+		string $type,
+		string $scope,
+		int $limit,
+	): array {
+		if ($scope === 'global') {
+			$path =
+				$type === 'points'
+					? '/v1/users/impact_points/leaderboard?limit=' . $limit
+					: '/v1/users/journey/' . $type . '/leaderboard?limit=' . $limit;
+			$rows = CloudHelper::sendRequest($path);
+			$rows = is_array($rows) ? $rows : [];
+
+			$items = [];
+			$rank = 0;
+			foreach ($rows as $row) {
+				if (!is_array($row) || !isset($row['id'])) {
+					continue;
+				}
+				$member = self::findById((int) $row['id']);
+				if (!$member) {
+					continue;
+				}
+				$value = $type === 'points' ? $row['points'] ?? 0 : $row['streak'] ?? 0;
+				$items[] = [
+					'rank' => ++$rank,
+					'value' => (int) $value,
+					'user' => self::serializeUser($member, $requester),
+				];
+			}
+
+			return [
+				'scope' => $scope,
+				'type' => $type,
+				'items' => $items,
+				'total' => count($items),
+			];
+		}
+
+		// friends/circle: compute the ranked set over the friend graph and cache briefly
+		$cacheKey = 'helper:leaderboard:' . $user->id() . ':' . $scope . ':' . $type . ':' . $limit;
+		return RedisHelper::cache(
+			$cacheKey,
+			function () use ($user, $requester, $type, $scope, $limit) {
+				$members =
+					$scope === 'circle'
+						? self::getCircle($user, 250, 1)
+						: self::getAddedFriends($user, 250, 1);
+
+				// always include the viewer so they see their own row
+				$members[] = $user;
+				$seen = [];
+				$unique = [];
+				foreach ($members as $member) {
+					if (!$member || isset($seen[$member->id()])) {
+						continue;
+					}
+					$seen[$member->id()] = true;
+					$unique[] = $member;
+				}
+
+				$ranked = [];
+				foreach ($unique as $member) {
+					$metric = self::leaderboardMetric($member, $type);
+
+					// points respect the member's impact_points privacy; default PUBLIC includes
+					$value = $metric;
+					if ($type === 'points') {
+						$privacy = self::getFieldPrivacy($member)['impact_points'] ?? 'PUBLIC';
+						if (!self::isVisible($member, $requester, $privacy)) {
+							$value = null;
+						}
+					}
+
+					$ranked[] = [
+						'metric' => $metric,
+						'value' => $value,
+						'member' => $member,
+					];
+				}
+
+				usort($ranked, fn($a, $b) => $b['metric'] <=> $a['metric']);
+				$ranked = array_slice($ranked, 0, $limit);
+
+				$items = [];
+				$rank = 0;
+				foreach ($ranked as $entry) {
+					$items[] = [
+						'rank' => ++$rank,
+						'value' => $entry['value'],
+						'user' => self::serializeUser($entry['member'], $requester),
+					];
+				}
+
+				return [
+					'scope' => $scope,
+					'type' => $type,
+					'items' => $items,
+					'total' => count($items),
+				];
+			},
+			60,
+		);
+	}
+
+	#endregion
+
 	#region User Activities
 
 	public const MAX_ACTIVITIES = 10;
