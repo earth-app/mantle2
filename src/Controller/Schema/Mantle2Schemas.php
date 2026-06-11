@@ -502,6 +502,12 @@ class Mantle2Schemas
 						'email' => self::$email,
 						'first_name' => self::text(50),
 						'last_name' => self::text(50),
+						'referral_code' => [
+							'type' => 'string',
+							'maxLength' => 32,
+							'description' =>
+								'Optional referral code; attributed once the email is verified',
+						],
 					],
 					'required' => ['username', 'password'],
 				],
@@ -521,6 +527,12 @@ class Mantle2Schemas
 							'description' =>
 								'Optional custom username (auto-generated if not provided)',
 						]),
+						'referral_code' => [
+							'type' => 'string',
+							'maxLength' => 32,
+							'description' =>
+								'Optional referral code; attributed once the email is verified',
+						],
 					],
 					'required' => ['oauth_provider', 'id_token'],
 				],
