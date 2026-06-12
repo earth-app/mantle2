@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use UnexpectedValueException;
 
-class ActivityController extends ControllerBase
+final class ActivityController extends ControllerBase
 {
 	public static function create(ContainerInterface $container): ActivityController|static
 	{

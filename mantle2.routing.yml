@@ -5897,3 +5897,16 @@ mantle2.mood.post:
   methods: [POST]
 
 #endregion
+
+mantle2.users.id.share.quest:
+  path: '/v2/users/{id}/share/quest/{questId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::shareQuestCard'
+    _title: 'Quest Share Card'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    questId: '[A-Za-z0-9_\-]+'
+  methods: [GET]
+  options:
+    tags: Users,Share

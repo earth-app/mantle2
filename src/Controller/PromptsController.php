@@ -20,7 +20,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class PromptsController extends ControllerBase
+final class PromptsController extends ControllerBase
 {
 	public static function create(ContainerInterface $container): PromptsController|static
 	{
@@ -269,9 +269,6 @@ class PromptsController extends ControllerBase
 		// temporary id (0) for new prompt
 		$obj = new Prompt(0, $data, $user->id(), Visibility::from($visibility));
 		$node = PromptsHelper::createPrompt($obj, $user);
-		if (!$node) {
-			return GeneralHelper::internalError('Failed to create prompt');
-		}
 
 		$result = PromptsHelper::serializePrompt($obj, $node, $user);
 		$result['id'] = GeneralHelper::formatId($node->id()); // set real id
@@ -541,15 +538,13 @@ class PromptsController extends ControllerBase
 			'total' => $total,
 			'limit' => $limit,
 			'items' => array_values(
-				array_filter(
-					array_map(function ($r) use ($user) {
-						$result = PromptsHelper::serializePromptResponse($r, $user);
-						$result['created_at'] = GeneralHelper::dateToIso($r->getCreatedAt());
-						$result['updated_at'] = GeneralHelper::dateToIso($r->getUpdatedAt());
+				array_map(function ($r) use ($user) {
+					$result = PromptsHelper::serializePromptResponse($r, $user);
+					$result['created_at'] = GeneralHelper::dateToIso($r->getCreatedAt());
+					$result['updated_at'] = GeneralHelper::dateToIso($r->getUpdatedAt());
 
-						return $result;
-					}, $responses),
-				),
+					return $result;
+				}, $responses),
 			),
 		]);
 	}
@@ -610,9 +605,6 @@ class PromptsController extends ControllerBase
 		}
 
 		$response = PromptsHelper::addComment($user, $node, $content);
-		if (!$response) {
-			return GeneralHelper::internalError('Failed to create response');
-		}
 
 		$result = PromptsHelper::entityToPromptResponse($response);
 		if (!$result) {

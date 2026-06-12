@@ -19,6 +19,8 @@ jobs:
           extensions: mbstring libxml gd dom curl date hash bcmath pcov random xml zlib standard
       - name: Install Composer Dependencies
         run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Run PHP Lint
+        run: ./vendor/bin/phpstan analyse -c phpstan.neon --no-progress --error-format=github --memory-limit=512M
       - name: Run Tests
         run: ./vendor/bin/phpunit --colors=never
       - name: Archive Test Output

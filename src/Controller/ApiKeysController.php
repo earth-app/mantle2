@@ -20,7 +20,7 @@ use Symfony\Component\HttpFoundation\Response;
  * session-only (see [[ApiKeysHelper::sessionOnly]]) — API keys cannot
  * manage other API keys.
  */
-class ApiKeysController extends ControllerBase
+final class ApiKeysController extends ControllerBase
 {
 	public static function create(ContainerInterface $container): static
 	{
@@ -279,7 +279,7 @@ class ApiKeysController extends ControllerBase
 	private function jsonBody(Request $request): array|JsonResponse
 	{
 		$raw = $request->getContent();
-		if ($raw === '' || $raw === null) {
+		if ($raw === '') {
 			return GeneralHelper::badRequest('Request body required');
 		}
 		$decoded = json_decode((string) $raw, true);

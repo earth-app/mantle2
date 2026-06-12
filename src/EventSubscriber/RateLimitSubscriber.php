@@ -44,7 +44,7 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		$request = $event->getRequest();
 
 		// Only rate limit API routes under /v2 and /openapi or /swagger-ui are excluded.
-		$path = $request->getPathInfo() ?? '';
+		$path = $request->getPathInfo();
 		if (!str_starts_with($path, '/v2/')) {
 			return;
 		}

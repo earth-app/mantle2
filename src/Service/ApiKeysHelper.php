@@ -498,7 +498,7 @@ class ApiKeysHelper
 	 *
 	 * The raw token is returned exactly once; storage is hashed.
 	 *
-	 * @param int[]|null $expiresAtUnix Absolute expiry as a unix timestamp, or null for no expiry.
+	 * @param int|null $expiresAtUnix Absolute expiry as a unix timestamp, or null for no expiry.
 	 * @return array{token:string,key:ApiKey}|string
 	 */
 	public static function issue(

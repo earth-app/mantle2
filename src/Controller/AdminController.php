@@ -41,7 +41,7 @@ class AdminController extends ControllerBase
 
 		try {
 			$data = CloudHelper::sendRequest('/v1/admin/blacklist' . $query);
-			if (!is_array($data) || !isset($data['entries']) || !is_array($data['entries'])) {
+			if (!isset($data['entries']) || !is_array($data['entries'])) {
 				$data = ['entries' => []];
 			}
 			return new JsonResponse($data, Response::HTTP_OK);

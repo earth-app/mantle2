@@ -22,7 +22,7 @@ class ReferralHelper
 		$data = CloudHelper::sendRequest(
 			'/v1/users/referral/' . GeneralHelper::formatId($user->id()) . '/stats',
 		);
-		return is_array($data) ? $data : [];
+		return $data;
 	}
 
 	public static function recordClick(string $code): void

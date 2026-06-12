@@ -45,7 +45,7 @@ class ApiKeyScopeSubscriber implements EventSubscriberInterface
 		}
 
 		$request = $event->getRequest();
-		$path = $request->getPathInfo() ?? '';
+		$path = $request->getPathInfo();
 		if (!str_starts_with($path, '/v2/')) {
 			return;
 		}

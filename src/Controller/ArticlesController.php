@@ -19,7 +19,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class ArticlesController extends ControllerBase
+final class ArticlesController extends ControllerBase
 {
 	public static function create(ContainerInterface $container): ArticlesController|static
 	{
@@ -159,10 +159,8 @@ class ArticlesController extends ControllerBase
 			$data = [];
 			foreach ($nodes as $node) {
 				$article = ArticlesHelper::nodeToArticle($node);
-				if ($article) {
-					$item = ArticlesHelper::serializeArticle($article, $requester);
-					$data[] = $item;
-				}
+				$item = ArticlesHelper::serializeArticle($article, $requester);
+				$data[] = $item;
 			}
 
 			return new JsonResponse([
@@ -215,9 +213,6 @@ class ArticlesController extends ControllerBase
 				}
 
 				$article = ArticlesHelper::nodeToArticle($node);
-				if (!$article) {
-					return GeneralHelper::internalError('Failed to convert node to article');
-				}
 
 				$results[] = ArticlesHelper::serializeArticle($article, $requester);
 			}
@@ -346,10 +341,6 @@ class ArticlesController extends ControllerBase
 
 		// Load the created article
 		$article = ArticlesHelper::nodeToArticle($node);
-		if (!$article) {
-			return GeneralHelper::internalError('Failed to load created article');
-		}
-
 		$item = ArticlesHelper::serializeArticle($article, $user);
 		return new JsonResponse($item, Response::HTTP_CREATED);
 	}
@@ -369,10 +360,6 @@ class ArticlesController extends ControllerBase
 		}
 
 		$article = ArticlesHelper::nodeToArticle($node);
-		if (!$article) {
-			return GeneralHelper::internalError('Failed to load article');
-		}
-
 		$item = ArticlesHelper::serializeArticle($article, $requester);
 		return new JsonResponse($item, Response::HTTP_OK);
 	}
@@ -389,13 +376,8 @@ class ArticlesController extends ControllerBase
 			return GeneralHelper::badRequest('ID does not point to an article');
 		}
 
-		$article = ArticlesHelper::nodeToArticle($node);
-		if (!$article) {
-			return GeneralHelper::internalError('Failed to load article');
-		}
-
 		$quiz = ArticlesHelper::getArticleQuiz($articleId);
-		if ($quiz === null || empty($quiz) || empty($quiz['questions'])) {
+		if (empty($quiz) || empty($quiz['questions'])) {
 			return GeneralHelper::notFound('Quiz not found for this article');
 		}
 
@@ -543,9 +525,6 @@ class ArticlesController extends ControllerBase
 
 		// Load the updated article
 		$article = ArticlesHelper::nodeToArticle($node);
-		if (!$article) {
-			return GeneralHelper::internalError('Failed to load updated article');
-		}
 
 		$item = ArticlesHelper::serializeArticle($article, $user);
 		return new JsonResponse($item, Response::HTTP_OK);
@@ -859,7 +838,7 @@ class ArticlesController extends ControllerBase
 		}
 
 		$existingQuiz = ArticlesHelper::getArticleQuiz($articleId);
-		if ($existingQuiz === null || empty($existingQuiz) || empty($existingQuiz['questions'])) {
+		if (empty($existingQuiz) || empty($existingQuiz['questions'])) {
 			return GeneralHelper::notFound('Quiz not found for this article');
 		}
 

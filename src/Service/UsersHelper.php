@@ -97,7 +97,7 @@ class UsersHelper
 		return null;
 	}
 
-	public static function findByEmail(string $email)
+	public static function findByEmail(string $email): ?UserInterface
 	{
 		$email = strtolower(trim($email));
 		if ($email === '') {
@@ -175,24 +175,19 @@ class UsersHelper
 		$currentSessionId = null;
 
 		// Get current session ID if session is started
-		if (method_exists($session, 'isStarted') && $session->isStarted()) {
-			$currentSessionId = method_exists($session, 'getId') ? $session->getId() : null;
+		if ($session->isStarted()) {
+			$currentSessionId = $session->getId();
 			// Save current session if it's different
-			if ($currentSessionId !== $sid && method_exists($session, 'save')) {
+			if ($currentSessionId !== $sid) {
 				$session->save();
 			}
 		}
 
 		// Set the session ID we want to work with
-		if (method_exists($session, 'setId')) {
-			$session->setId($sid);
-		}
+		$session->setId($sid);
 
 		// Start session if not started
-		if (
-			method_exists($session, 'start') &&
-			(!method_exists($session, 'isStarted') || !$session->isStarted())
-		) {
+		if (!$session->isStarted()) {
 			try {
 				$session->start();
 			} catch (\Exception $e) {
@@ -205,15 +200,11 @@ class UsersHelper
 
 		// Restore original session ID if it was different
 		if ($currentSessionId && $currentSessionId !== $sid) {
-			if (method_exists($session, 'setId')) {
-				$session->setId($currentSessionId);
-			}
-			if (method_exists($session, 'start')) {
-				try {
-					$session->start();
-				} catch (\Exception $e) {
-					// Ignore restore errors
-				}
+			$session->setId($currentSessionId);
+			try {
+				$session->start();
+			} catch (\Exception $e) {
+				// Ignore restore errors
 			}
 		}
 
@@ -222,7 +213,7 @@ class UsersHelper
 
 	private static ?string $lastTokenFailureReason = null;
 
-	public static function findByRequest(Request $request)
+	public static function findByRequest(Request $request): UserInterface|JsonResponse
 	{
 		// cache resolved user since called multiple times per request
 		$cached = $request->attributes->get('_mantle2_resolved_user', false);
@@ -419,7 +410,7 @@ class UsersHelper
 	}
 
 	public static function tryVisible(
-		$value,
+		mixed $value,
 		UserInterface $user,
 		?UserInterface $user2,
 		string $required,
@@ -738,15 +729,12 @@ class UsersHelper
 				return;
 			}
 
+			/** @var UserInterface[] $users */
 			$users = $storage->loadMultiple($uids);
 			$processedUsers = 0;
 			$revokedTokens = 0;
 
 			foreach ($users as $user) {
-				if (!$user instanceof UserInterface) {
-					continue;
-				}
-
 				// Hard guard: root/admin accounts must never remain disabled.
 				if ($user->id() === 1 || self::isAdmin($user)) {
 					if ($user->isBlocked()) {
@@ -1048,9 +1036,9 @@ class UsersHelper
 						'field_privacy' => $privacy,
 					],
 					'activities' => self::getActivities($user),
-					'is_friend' => $requester ? self::isAddedFriend($requester, $user) : false,
-					'is_my_friend' => $requester ? self::isAddedFriend($user, $requester) : false,
-					'is_mutual' => $requester ? self::isMutualFriend($user, $requester) : false,
+					'is_friend' => self::isAddedFriend($requester, $user),
+					'is_my_friend' => self::isAddedFriend($user, $requester),
+					'is_mutual' => self::isMutualFriend($user, $requester),
 					'friends' => self::tryVisible(
 						json_decode($user->get('field_friends')->value ?? '[]', true),
 						$user,
@@ -1070,8 +1058,8 @@ class UsersHelper
 						$requester,
 						'PRIVATE',
 					),
-					'is_in_circle' => $requester && self::isInCircle($user, $requester),
-					'is_in_my_circle' => $requester && self::isInCircle($requester, $user),
+					'is_in_circle' => self::isInCircle($user, $requester),
+					'is_in_my_circle' => self::isInCircle($requester, $user),
 					'circle' => self::tryVisible(
 						json_decode($user->get('field_circle')->value ?? '[]', true),
 						$user,
@@ -1516,10 +1504,6 @@ class UsersHelper
 		string $search = '',
 		string $sort = 'desc',
 	): array {
-		if ($user === null) {
-			return [];
-		}
-
 		if ($sort === 'rand') {
 			$friendsValue = $user->get('field_friends')->value ?? '[]';
 			$friends = $friendsValue ? json_decode($friendsValue, true) : [];
@@ -1937,11 +1921,11 @@ class UsersHelper
 				$targetId = (int) $user->id();
 				$addedBy = [];
 
+				/**
+				 * @var UserInterface $candidate
+				 */
 				foreach ($users as $candidate) {
-					if (
-						!$candidate instanceof UserInterface ||
-						(int) $candidate->id() === $targetId
-					) {
+					if ((int) $candidate->id() === $targetId) {
 						continue;
 					}
 
@@ -1971,7 +1955,7 @@ class UsersHelper
 			120,
 		);
 
-		return is_array($addedByIndex) ? $addedByIndex : [];
+		return $addedByIndex;
 	}
 
 	public static function getAddedByCount(UserInterface $user, string $search = ''): int
@@ -2270,7 +2254,7 @@ class UsersHelper
 		$data = CloudHelper::sendRequest(
 			'/v1/users/journey/' . $type . '/' . GeneralHelper::formatId($member->id()),
 		);
-		return is_array($data) ? (int) ($data[0] ?? 0) : 0;
+		return (int) ($data[0] ?? 0);
 	}
 
 	// friendly-competition leaderboard scoped to global, friends, or circle
@@ -2287,7 +2271,6 @@ class UsersHelper
 					? '/v1/users/impact_points/leaderboard?limit=' . $limit
 					: '/v1/users/journey/' . $type . '/leaderboard?limit=' . $limit;
 			$rows = CloudHelper::sendRequest($path);
-			$rows = is_array($rows) ? $rows : [];
 
 			$items = [];
 			$rank = 0;
@@ -2330,7 +2313,7 @@ class UsersHelper
 				$seen = [];
 				$unique = [];
 				foreach ($members as $member) {
-					if (!$member || isset($seen[$member->id()])) {
+					if (isset($seen[$member->id()])) {
 						continue;
 					}
 					$seen[$member->id()] = true;
@@ -2567,13 +2550,21 @@ class UsersHelper
 		return $token;
 	}
 
+	private static function failTokenLookup(string $reason): null
+	{
+		self::$lastTokenFailureReason = $reason;
+		Drupal::logger('mantle2')->debug('Bearer token rejected: @reason', [
+			'@reason' => self::$lastTokenFailureReason,
+		]);
+		return null;
+	}
+
 	public static function getUserByToken(string $token): ?UserInterface
 	{
 		self::$lastTokenFailureReason = null;
 
 		if ($token === '') {
-			self::$lastTokenFailureReason = 'empty token';
-			return null;
+			return self::failTokenLookup('empty token');
 		}
 
 		// admin key points to root user
@@ -2586,18 +2577,11 @@ class UsersHelper
 		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
 		$data = $store->get($token);
 		if (!$data || !is_array($data)) {
-			self::$lastTokenFailureReason = 'token not found in keyvalue';
-			return null;
+			return self::failTokenLookup('token not found in keyvalue');
 		}
 		$exp = (int) ($data['exp'] ?? 0);
 		$now = time();
 		if ($exp < $now) {
-			self::$lastTokenFailureReason = sprintf(
-				'token expired (exp %d, now %d, diff %ds)',
-				$exp,
-				$now,
-				$now - $exp,
-			);
 			// Expired: cleanup and reject.
 			$store->delete($token);
 			$uid = (int) ($data['uid'] ?? 0);
@@ -2606,7 +2590,9 @@ class UsersHelper
 				$tokens = array_values(array_filter($tokens, fn($t) => $t !== $token));
 				$indexStore->set((string) $uid, $tokens);
 			}
-			return null;
+			return self::failTokenLookup(
+				sprintf('token expired (exp %d, now %d, diff %ds)', $exp, $now, $now - $exp),
+			);
 		}
 		// Sliding expiration: extend when half-life passed.
 		if ($exp - $now < self::TOKEN_TTL / 2) {
@@ -2615,8 +2601,7 @@ class UsersHelper
 		}
 		$uid = (int) ($data['uid'] ?? 0);
 		if ($uid <= 0) {
-			self::$lastTokenFailureReason = 'token data missing uid';
-			return null;
+			return self::failTokenLookup('token data missing uid');
 		}
 
 		// Ensure index consistency.
@@ -2628,8 +2613,7 @@ class UsersHelper
 
 		$user = User::load($uid);
 		if (!$user instanceof UserInterface) {
-			self::$lastTokenFailureReason = sprintf('user uid %d not loadable', $uid);
-			return null;
+			return self::failTokenLookup(sprintf('user uid %d not loadable', $uid));
 		}
 
 		return $user;
@@ -2769,7 +2753,7 @@ class UsersHelper
 			$toKeep = array_keys($valid);
 		}
 
-		$indexStore->set((string) $uid, array_values($toKeep));
+		$indexStore->set((string) $uid, $toKeep);
 	}
 
 	#endregion
@@ -2964,7 +2948,7 @@ class UsersHelper
 		UserInterface $user,
 		Notification $notification,
 	): bool {
-		if ($notification === null || $notification->isRead()) {
+		if ($notification->isRead()) {
 			return false;
 		}
 
@@ -2984,7 +2968,7 @@ class UsersHelper
 		UserInterface $user,
 		Notification $notification,
 	): bool {
-		if ($notification === null || !$notification->isRead()) {
+		if (!$notification->isRead()) {
 			return false;
 		}
 
@@ -3319,7 +3303,7 @@ class UsersHelper
 	): UserInterface|JsonResponse {
 		$key = 'login_2fa:' . $ticket;
 		$payload = RedisHelper::get($key);
-		if (!$payload || !is_array($payload) || !isset($payload['code'], $payload['user_id'])) {
+		if (!$payload || !isset($payload['code'], $payload['user_id'])) {
 			return GeneralHelper::badRequest('Ticket expired or invalid');
 		}
 
@@ -3889,24 +3873,18 @@ class UsersHelper
 
 			return [
 				'prompts' => array_values(
-					array_filter(
-						array_map(function (Node $node) use ($user) {
-							if (!$node) {
-								return null;
-							}
+					array_map(function (Node $node) use ($user) {
+						$nid = $node->id();
+						$obj = PromptsHelper::nodeToPrompt($node);
 
-							$nid = $node->id();
-							$obj = PromptsHelper::nodeToPrompt($node);
-
-							return array_merge($obj->jsonSerialize(), [
-								'id' => GeneralHelper::formatId($nid),
-								'owner' => UsersHelper::serializeUser($obj->getOwner(), $user),
-								'responses_count' => PromptsHelper::getCommentsCount($node),
-								'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
-								'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
-							]);
-						}, $nodes),
-					),
+						return array_merge($obj->jsonSerialize(), [
+							'id' => GeneralHelper::formatId($nid),
+							'owner' => UsersHelper::serializeUser($obj->getOwner(), $user),
+							'responses_count' => PromptsHelper::getCommentsCount($node),
+							'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
+							'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
+						]);
+					}, $nodes),
 				),
 				'total' => $count,
 			];
@@ -3967,20 +3945,14 @@ class UsersHelper
 
 			return [
 				'articles' => array_values(
-					array_filter(
-						array_map(function (Node $node) use ($user) {
-							if (!$node) {
-								return null;
-							}
-
-							$obj = ArticlesHelper::nodeToArticle($node);
-							return array_merge($obj->jsonSerialize(), [
-								'author' => UsersHelper::serializeUser($obj->getAuthor(), $user),
-								'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
-								'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
-							]);
-						}, $nodes),
-					),
+					array_map(function (Node $node) use ($user) {
+						$obj = ArticlesHelper::nodeToArticle($node);
+						return array_merge($obj->jsonSerialize(), [
+							'author' => UsersHelper::serializeUser($obj->getAuthor(), $user),
+							'created_at' => GeneralHelper::dateToIso($node->getCreatedTime()),
+							'updated_at' => GeneralHelper::dateToIso($node->getChangedTime()),
+						]);
+					}, $nodes),
 				),
 				'total' => $count,
 			];
@@ -4116,10 +4088,8 @@ class UsersHelper
 				shuffle($nodes);
 			} else {
 				$sortDirection = $sort === 'desc' ? -1 : 1;
+				/** @var \Drupal\node\NodeInterface[] $nodes */
 				usort($nodes, function ($a, $b) use ($sortDirection) {
-					if (!$a instanceof Node || !$b instanceof Node) {
-						return 0;
-					}
 					return ($a->getCreatedTime() - $b->getCreatedTime()) * $sortDirection;
 				});
 			}
@@ -4128,7 +4098,7 @@ class UsersHelper
 			$nodes = array_slice($nodes, $page * $limit, $limit);
 
 			return [
-				'nodes' => array_values($nodes),
+				'nodes' => $nodes,
 				'total' => $count,
 			];
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
@@ -4603,7 +4573,7 @@ class UsersHelper
 			self::pollVoteKey($userId, $pollId),
 			[
 				'option_index' => $optionIndex,
-				'option_text' => $cleanOptions[$optionIndex] ?? null,
+				'option_text' => $cleanOptions[$optionIndex],
 				'question' => $question,
 				'options' => $cleanOptions,
 				'voted_at' => $now,
@@ -4631,7 +4601,7 @@ class UsersHelper
 		return [
 			'poll_id' => $pollId,
 			'option_index' => $optionIndex,
-			'option_text' => $cleanOptions[$optionIndex] ?? null,
+			'option_text' => $cleanOptions[$optionIndex],
 			'aggregate' => [
 				'counts' => $counts,
 				'total' => $agg['total'] ?? 0,

@@ -3057,6 +3057,85 @@ class Mantle2Schemas
 	 * This method returns all reusable schema definitions that can be
 	 * referenced via $ref in the OpenAPI spec.
 	 */
+	public static function referralCode(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'code' => [
+					'type' => 'string',
+					'example' => 'K3F9Q2',
+					'description' => 'The user\'s 6-character referral code',
+				],
+			],
+			'required' => ['code'],
+		];
+	}
+
+	public static function referralStats(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'code' => ['type' => 'string', 'example' => 'K3F9Q2'],
+				'clicks' => [
+					'type' => 'integer',
+					'example' => 42,
+					'description' => 'Number of times the invite link was opened',
+				],
+				'conversions' => [
+					'type' => 'integer',
+					'example' => 7,
+					'description' => 'Number of referred users who joined',
+				],
+				'converted_ids' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/Id'],
+					'description' => 'IDs of users this user has referred',
+				],
+			],
+			'required' => ['code', 'clicks', 'conversions', 'converted_ids'],
+		];
+	}
+
+	public static function leaderboard(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'scope' => [
+					'type' => 'string',
+					'example' => 'friends',
+					'description' => 'global, friends, or circle',
+				],
+				'type' => [
+					'type' => 'string',
+					'example' => 'points',
+					'description' => 'points, article, prompt, or event',
+				],
+				'items' => [
+					'type' => 'array',
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'rank' => ['type' => 'integer', 'example' => 1],
+							'value' => [
+								'type' => 'integer',
+								'example' => 1500,
+								'nullable' => true,
+								'description' => 'Points or streak; null when hidden by privacy',
+							],
+							'user' => ['$ref' => '#/components/schemas/User'],
+						],
+						'required' => ['rank', 'user'],
+					],
+				],
+				'total' => ['type' => 'integer', 'example' => 12],
+			],
+			'required' => ['scope', 'type', 'items', 'total'],
+		];
+	}
+
 	public static function getAllSchemas(): array
 	{
 		return [
@@ -3145,6 +3224,9 @@ class Mantle2Schemas
 			'BadgeMastery' => self::badgeMastery(),
 			'MasteryList' => self::masteryList(),
 			'ImpactPoints' => self::impactPoints(),
+			'ReferralCode' => self::referralCode(),
+			'ReferralStats' => self::referralStats(),
+			'Leaderboard' => self::leaderboard(),
 			'Users' => self::users(),
 			'Event' => self::event(),
 			'Events' => self::events(),

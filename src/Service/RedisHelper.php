@@ -35,6 +35,24 @@ class RedisHelper
 	}
 
 	/**
+	 * Runs a single phpredis SCAN pass.
+	 *
+	 * Wraps the call so the by-reference cursor type is visible to static
+	 * analysis: phpredis updates $cursor in place, and the redis client is not
+	 * strongly typed here.
+	 *
+	 * @param int|string|null $cursor
+	 */
+	private static function scanBatch(
+		mixed $redis,
+		mixed &$cursor,
+		string $pattern,
+		int $count,
+	): mixed {
+		return $redis->scan($cursor, $pattern, $count);
+	}
+
+	/**
 	 * Store data in Redis with TTL
 	 */
 	public static function set(string $key, array $data, int $ttl = 900): bool
@@ -133,7 +151,7 @@ class RedisHelper
 
 					do {
 						// phpredis: scan(&$iterator, $pattern = null, $count = 0)
-						$batch = $redis->scan($it, $k, $scanCount);
+						$batch = self::scanBatch($redis, $it, $k, $scanCount);
 
 						if ($batch === false || empty($batch)) {
 							continue;

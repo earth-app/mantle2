@@ -193,7 +193,7 @@ class ActivityHelper
 			return [];
 		}
 
-		return array_map(fn($nid) => self::getActivityByNid($nid), $nids);
+		return array_map(fn($nid) => self::getActivityByNid((int) $nid), $nids);
 	}
 
 	public static function getActivitiesCreatedInLastDays(int $days): array
@@ -211,6 +211,6 @@ class ActivityHelper
 			return [];
 		}
 
-		return array_map(fn($nid) => self::getActivityByNid($nid), $nids);
+		return array_map(fn($nid) => self::getActivityByNid((int) $nid), $nids);
 	}
 }

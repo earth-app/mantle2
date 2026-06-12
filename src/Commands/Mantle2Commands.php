@@ -45,9 +45,9 @@ class Mantle2Commands extends DrushCommands
 		}
 
 		$this->output()->writeln("Sending email verification to user '$identifier'...");
-		$success = UsersHelper::sendEmailVerification($user);
+		$response = UsersHelper::sendEmailVerification($user);
 
-		if (!$success) {
+		if ($response->getStatusCode() >= 400) {
 			$this->stderr()->writeln("Failed to send email verification to user '$identifier'.");
 			return;
 		}

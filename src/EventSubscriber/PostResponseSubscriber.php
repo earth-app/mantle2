@@ -271,13 +271,13 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				}
 
 				// night_owl: signed up between 12 AM and 4 AM local time
-				if ($hour >= 0 && $hour < 4) {
+				if ($hour < 4) {
 					UsersHelper::grantBadge($user, 'night_owl');
 					return;
 				}
 
 				// early_bird: signed up between 4 AM and 9 AM local time
-				if ($hour >= 4 && $hour < 9) {
+				if ($hour < 9) {
 					UsersHelper::grantBadge($user, 'early_bird');
 				}
 			},

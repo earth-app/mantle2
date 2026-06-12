@@ -3,7 +3,7 @@
 namespace Drupal\mantle2\Service;
 
 use Drupal;
-use Drupal\Core\Serialization\Yaml;
+use Drupal\Component\Serialization\Yaml;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\Article;
 use Drupal\mantle2\Custom\Event;
@@ -407,10 +407,7 @@ class CampaignHelper
 	private static function getRecommendedActivity(UserInterface $user): ?Activity
 	{
 		$activities = UsersHelper::recommendActivities($user, 100);
-		$filtered = array_filter(
-			$activities,
-			fn($activity) => $activity != null && $activity instanceof Activity,
-		);
+		$filtered = array_filter($activities, fn($activity) => $activity != null);
 		return $filtered ? reset($filtered) : null;
 	}
 

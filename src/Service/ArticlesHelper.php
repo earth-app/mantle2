@@ -35,7 +35,7 @@ class ArticlesHelper
 		}
 
 		$content = $node->get('field_article_content')->value;
-		$authorId = $node->get('field_author_id')->target_id;
+		$authorId = (int) $node->get('field_author_id')->target_id;
 		$color = (int) ($node->get('field_article_color')->value ?? 0);
 
 		$oceanRaw = $node->get('field_ocean_article')->value;
@@ -78,10 +78,6 @@ class ArticlesHelper
 		// Only root user (UsersHelper::cloud) can create ocean articles
 		if ($user && $user->id() !== UsersHelper::cloud()->id()) {
 			return GeneralHelper::forbidden('Only the root user can create ocean articles');
-		}
-
-		if (!is_array($ocean)) {
-			return GeneralHelper::badRequest('Field ocean must be an array');
 		}
 
 		// Validate key and value lengths
@@ -353,7 +349,7 @@ class ArticlesHelper
 		return array_map([self::class, 'nodeToArticle'], $nodes);
 	}
 
-	public static function getArticleQuiz(string $articleId): array
+	public static function getArticleQuiz(int $articleId): array
 	{
 		$data = CloudHelper::sendRequest('/v1/articles/quiz?articleId=' . $articleId);
 		if (empty($data)) {
@@ -381,7 +377,7 @@ class ArticlesHelper
 		];
 	}
 
-	public static function saveArticleQuiz(string $articleId, array $quizData): bool
+	public static function saveArticleQuiz(int $articleId, array $quizData): bool
 	{
 		$response = CloudHelper::sendRequest('/v1/articles/quiz/create_manual', 'POST', [
 			'articleId' => $articleId,
@@ -391,7 +387,7 @@ class ArticlesHelper
 		return !empty($response) && isset($response['success']) && $response['success'] === true;
 	}
 
-	public static function deleteArticleQuiz(string $articleId): bool
+	public static function deleteArticleQuiz(int $articleId): bool
 	{
 		$response = CloudHelper::sendRequest('/v1/articles/quiz/delete', 'DELETE', [
 			'articleId' => $articleId,

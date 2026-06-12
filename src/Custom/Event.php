@@ -85,13 +85,12 @@ class Event implements JsonSerializable
 			'activities' => array_map(function ($activity) {
 				if ($activity instanceof Activity) {
 					return array_merge(['type' => 'activity'], $activity->jsonSerialize());
-				} elseif ($activity instanceof ActivityType) {
+				} else {
 					return [
 						'type' => 'activity_type',
 						'value' => $activity->value,
 					];
 				}
-				return null;
 			}, $this->activities),
 			'location' => [
 				'latitude' => $this->latitude,

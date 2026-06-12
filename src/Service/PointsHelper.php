@@ -28,7 +28,7 @@ class PointsHelper
 		$data = CloudHelper::sendRequest(
 			'/v1/users/impact_points/' . GeneralHelper::formatId($user->id()),
 		);
-		if (empty($data) || !is_array($data)) {
+		if (empty($data)) {
 			return [0, []];
 		}
 
@@ -835,7 +835,7 @@ class PointsHelper
 		// Additional safety: check image dimensions
 		$width = imagesx($image);
 		$height = imagesy($image);
-		if ($width === false || $height === false || $width > 4096 || $height > 4096) {
+		if ($width > 4096 || $height > 4096) {
 			return null;
 		}
 
@@ -907,7 +907,7 @@ class PointsHelper
 				$cacheKey,
 				function () {
 					$data = CloudHelper::sendRequest('/v1/users/quests');
-					return is_array($data) ? $data : [];
+					return $data;
 				},
 				3600,
 			),
@@ -934,10 +934,9 @@ class PointsHelper
 			return new QuestData(null, null, null);
 		}
 
-		$data =
-			CloudHelper::sendRequest(
-				'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
-			) ?? [];
+		$data = CloudHelper::sendRequest(
+			'/v1/users/quests/progress/' . GeneralHelper::formatId($user->id()),
+		);
 
 		// avoid caching since updating is not handled over mantle2
 		return QuestData::fromArray($data);
@@ -956,7 +955,7 @@ class PointsHelper
 						$index,
 				);
 
-				return is_array($data) ? $data : [];
+				return $data;
 			},
 			60,
 		);
@@ -1029,7 +1028,7 @@ class PointsHelper
 				$data = CloudHelper::sendRequest(
 					'/v1/users/quests/history/' . GeneralHelper::formatId($user->id()),
 				);
-				return is_array($data) ? $data : [];
+				return $data;
 			},
 			120,
 		);
@@ -1057,7 +1056,7 @@ class PointsHelper
 						'/' .
 						$questId,
 				);
-				return is_array($data) ? $data : [];
+				return $data;
 			},
 			3600,
 		);
@@ -1104,7 +1103,7 @@ class PointsHelper
 			return;
 		}
 
-		$parameters = $step->parameters ?? [];
+		$parameters = $step->parameters;
 		$requiredType = $parameters[0] ?? null;
 		$minAttendees = is_numeric($parameters[1] ?? null) ? (int) $parameters[1] : 0;
 		$event = $event ?? EventsHelper::getLastAttendedEvent($user);
@@ -1183,7 +1182,7 @@ class PointsHelper
 			return;
 		}
 
-		$parameters = $step->parameters ?? [];
+		$parameters = $step->parameters;
 		$keyword = $parameters[0] ?? null;
 		$authorId = $parameters[1] ?? null;
 		$responseText = $data['text'] ?? ($data['response'] ?? ($data['content'] ?? ''));
@@ -1236,7 +1235,7 @@ class PointsHelper
 				return;
 			}
 
-			$currentStepIndex = $currentQuest->currentStepIndex ?? 0;
+			$currentStepIndex = $currentQuest->currentStepIndex;
 
 			if ($currentStep instanceof QuestStep) {
 				if ($checkAttendEvent) {
@@ -1261,31 +1260,25 @@ class PointsHelper
 				return;
 			}
 
-			if (is_array($currentStep)) {
-				foreach ($currentStep as $altIndex => $altStep) {
-					if (!$altStep instanceof QuestStep) {
-						continue;
-					}
+			foreach ($currentStep as $altIndex => $altStep) {
+				if ($checkAttendEvent) {
+					self::runAttendEventCheck(
+						$user,
+						$altStep,
+						$currentStepIndex,
+						$altIndex,
+						$attendedEvent,
+					);
+				}
 
-					if ($checkAttendEvent) {
-						self::runAttendEventCheck(
-							$user,
-							$altStep,
-							$currentStepIndex,
-							$altIndex,
-							$attendedEvent,
-						);
-					}
-
-					if ($checkRespondToPrompt) {
-						self::runRespondToPromptCheck(
-							$user,
-							$altStep,
-							$data ?? [],
-							$currentStepIndex,
-							$altIndex,
-						);
-					}
+				if ($checkRespondToPrompt) {
+					self::runRespondToPromptCheck(
+						$user,
+						$altStep,
+						$data ?? [],
+						$currentStepIndex,
+						$altIndex,
+					);
 				}
 			}
 		} catch (Exception $e) {
@@ -1300,4 +1293,152 @@ class PointsHelper
 			return;
 		}
 	}
+
+	// #region Quest Share Cards
+
+	private const SHARE_CARD_WIDTH = 1200;
+	private const SHARE_CARD_HEIGHT = 630;
+
+	private static function shareFontPath(string $file): string
+	{
+		return dirname(__DIR__) . '/Resources/fonts/' . $file;
+	}
+
+	// rarity -> [r,g,b] accent, mirroring the app's rarity palette
+	private static function rarityAccent(string $rarity): array
+	{
+		return match ($rarity) {
+			'rare' => [124, 58, 237],
+			'amazing' => [245, 158, 11],
+			'green' => [16, 185, 129],
+			default => [75, 156, 211],
+		};
+	}
+
+	// wraps text to a max pixel width for the given truetype font/size
+	private static function wrapText(string $text, string $font, int $size, int $maxWidth): array
+	{
+		$words = preg_split('/\\s+/', trim($text)) ?: [];
+		$lines = [];
+		$current = '';
+		foreach ($words as $word) {
+			$candidate = $current === '' ? $word : $current . ' ' . $word;
+			$box = imagettfbbox($size, 0, $font, $candidate);
+			$width = $box ? abs($box[2] - $box[0]) : 0;
+			if ($width > $maxWidth && $current !== '') {
+				$lines[] = $current;
+				$current = $word;
+			} else {
+				$current = $candidate;
+			}
+		}
+		if ($current !== '') {
+			$lines[] = $current;
+		}
+		return $lines;
+	}
+
+	// renders a 1200x630 quest-completion share card as a PNG data url; the footer
+	// carries the user's referral code so the shared image doubles as an invite
+	public static function renderQuestShareCard(UserInterface $user, Quest $quest): string
+	{
+		$bold = self::shareFontPath('DejaVuSans-Bold.ttf');
+		$regular = self::shareFontPath('DejaVuSans.ttf');
+		if (!is_file($bold) || !is_file($regular)) {
+			throw new Exception('Share card fonts are missing');
+		}
+
+		$w = self::SHARE_CARD_WIDTH;
+		$h = self::SHARE_CARD_HEIGHT;
+		$img = imagecreatetruecolor($w, $h);
+
+		[$ar, $ag, $ab] = self::rarityAccent($quest->rarity);
+
+		// dark base with a subtle rarity-tinted vertical gradient
+		for ($y = 0; $y < $h; $y++) {
+			$t = $y / $h;
+			$line = imagecolorallocate(
+				$img,
+				(int) (15 + $ar * 0.05 * $t),
+				(int) (30 + $ag * 0.05 * $t),
+				(int) (24 + $ab * 0.05 * $t),
+			);
+			imagefilledrectangle($img, 0, $y, $w, $y, $line);
+		}
+
+		// rarity accent bar down the left edge
+		$accent = imagecolorallocate($img, $ar, $ag, $ab);
+		imagefilledrectangle($img, 0, 0, 16, $h, $accent);
+
+		$white = imagecolorallocate($img, 255, 255, 255);
+		$muted = imagecolorallocate($img, 170, 185, 178);
+		$padX = 80;
+
+		imagettftext($img, 24, 0, $padX, 88, $muted, $bold, 'THE EARTH APP');
+		imagettftext(
+			$img,
+			20,
+			0,
+			$padX,
+			146,
+			$accent,
+			$bold,
+			strtoupper($quest->rarity) . ' QUEST',
+		);
+
+		// quest title, wrapped, capped at two lines
+		$lines = self::wrapText($quest->title, $bold, 56, $w - $padX * 2);
+		if (count($lines) > 2) {
+			$lines = array_slice($lines, 0, 2);
+			$lines[1] .= '…';
+		}
+		$baseline = 250;
+		foreach ($lines as $line) {
+			imagettftext($img, 56, 0, $padX, $baseline, $white, $bold, $line);
+			$baseline += 76;
+		}
+
+		imagettftext(
+			$img,
+			28,
+			0,
+			$padX,
+			$baseline + 30,
+			$muted,
+			$regular,
+			'@' . $user->getAccountName() . ' completed this quest',
+		);
+
+		if ($quest->reward > 0) {
+			imagettftext(
+				$img,
+				28,
+				0,
+				$padX,
+				$baseline + 90,
+				$accent,
+				$bold,
+				'+' . number_format($quest->reward) . ' Impact Points',
+			);
+		}
+
+		$code = '';
+		try {
+			$code = ReferralHelper::getCode($user) ?: '';
+		} catch (Exception $e) {
+			$code = '';
+		}
+		$footer = $code
+			? 'Join the adventure  ·  earth-app.com/invite/' . $code
+			: 'Join the adventure  ·  earth-app.com';
+		imagettftext($img, 24, 0, $padX, $h - 48, $white, $bold, $footer);
+
+		ob_start();
+		imagepng($img);
+		$png = ob_get_clean();
+
+		return 'data:image/png;base64,' . base64_encode($png !== false ? $png : '');
+	}
+
+	// #endregion
 }

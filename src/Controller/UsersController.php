@@ -32,7 +32,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class UsersController extends ControllerBase
+final class UsersController extends ControllerBase
 {
 	public static function create(ContainerInterface $container): UsersController|static
 	{
@@ -177,7 +177,6 @@ class UsersController extends ControllerBase
 		}
 
 		// Allow login with either username or email; resolve to a canonical username for user.auth.
-		/** @var UserInterface $account */
 		$account = UsersHelper::findByUsername($name) ?? UsersHelper::findByEmail($name);
 
 		if (!$account) {
@@ -438,18 +437,6 @@ class UsersController extends ControllerBase
 
 		if (!$username || !$password) {
 			return GeneralHelper::badRequest('Username and Password are required');
-		}
-
-		if (
-			!is_string($username) ||
-			!is_string($password) ||
-			($email && !is_string($email)) ||
-			($firstName && !is_string($firstName)) ||
-			($lastName && !is_string($lastName))
-		) {
-			return GeneralHelper::badRequest(
-				'Invalid data types for username, password, email, first_name, or last_name',
-			);
 		}
 
 		if (!preg_match('/' . Mantle2Schemas::$username['pattern'] . '/', $username)) {
@@ -1018,10 +1005,6 @@ class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		if (empty($activityIds)) {
-			return GeneralHelper::badRequest('No activity IDs provided');
-		}
-
 		if (count($activityIds) > 10) {
 			return GeneralHelper::badRequest('Cannot set more than 10 activities');
 		}
@@ -1117,10 +1100,6 @@ class UsersController extends ControllerBase
 		$resolved = $this->resolveAuthorizedUser($request, $id, $username);
 		if ($resolved instanceof JsonResponse) {
 			return $resolved;
-		}
-
-		if (!$resolved) {
-			return GeneralHelper::notFound('User not found');
 		}
 
 		try {
@@ -1954,9 +1933,6 @@ class UsersController extends ControllerBase
 	}
 
 	// GET /v2/users/cosmetics/preview
-	// when withSelf=true, the authenticated user's own photo is used as the base
-	// instead of the placeholder cloud user photo (cosmetic GD output is identical
-	// either way; only the underlying photo differs)
 	public function previewCosmetic(Request $request): Response
 	{
 		$cosmeticKey = $request->query->get('cosmetic');
@@ -2203,7 +2179,7 @@ class UsersController extends ControllerBase
 			return $user;
 		}
 
-		$questStep = PointsHelper::getCurrentQuestStepProgress($user, $step);
+		$questStep = PointsHelper::getCurrentQuestStepProgress($user, (int) $step);
 		return new JsonResponse($questStep, Response::HTTP_OK);
 	}
 
@@ -4011,17 +3987,13 @@ class UsersController extends ControllerBase
 
 		$session = Drupal::service('session');
 		// Ensure session is started before migrating to get/keep a valid ID.
-		if (method_exists($session, 'start') && !$session->isStarted()) {
+		if (!$session->isStarted()) {
 			$session->start();
 		}
-		if (method_exists($session, 'migrate')) {
-			$session->migrate();
-		}
+		$session->migrate();
 		$session->set('uid', $account->id());
 		$session->set('check_logged_in', true);
-		if (method_exists($session, 'save')) {
-			$session->save();
-		}
+		$session->save();
 		Drupal::moduleHandler()->invokeAll('user_login', [$account]);
 	}
 
@@ -4217,4 +4189,23 @@ class UsersController extends ControllerBase
 	}
 
 	#endregion
+
+	// GET /v2/users/{id}/share/quest/{questId}
+	// public share card (PNG) for a completed quest; cacheable, no auth so social
+	// crawlers can fetch it for link previews
+	public function shareQuestCard(Request $request, string $id, string $questId): Response
+	{
+		$user = UsersHelper::findById((int) $id);
+		if (!$user || UsersHelper::isDisabled($user)) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$quest = PointsHelper::getQuest($questId);
+		if (!$quest) {
+			return GeneralHelper::notFound('Quest not found');
+		}
+
+		$dataUrl = PointsHelper::renderQuestShareCard($user, $quest);
+		return GeneralHelper::fromDataURL($dataUrl);
+	}
 }

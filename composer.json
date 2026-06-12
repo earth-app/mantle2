@@ -27,7 +27,8 @@
 	"require-dev": {
 		"drush/drush": "^13.7",
 		"phpunit/phpunit": "^11.5",
-		"drupal/core-dev": "^11.3"
+		"drupal/core-dev": "^11.3",
+		"phpstan/phpstan": "^2.2"
 	},
 	"autoload-dev": {
 		"psr-4": {

@@ -7,6 +7,7 @@ Backend module for The Earth App, built on Drupal 11 and PHP 8.4.
 - Keep changes small and local to the owning controller, helper, or YAML config file.
 - Before editing routes, services, caching rules, or Drush definitions, check the matching unit test file and keep them aligned.
 - Prefer existing helpers and services over adding new controller-local utility code.
+- Consolidate related logic into the owning helper/controller rather than spreading it across new files — e.g. nearly all user logic lives in `UsersHelper` (~3000 lines); add new user helpers there as a clearly-commented section. Organize large files with section comments instead of splitting them up.
 - Do not edit generated output in `coverage/` or dependencies in `vendor/`.
 - Avoid secrets or credential changes unless the task explicitly requires them.
 

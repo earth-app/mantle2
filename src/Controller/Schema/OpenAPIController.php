@@ -8,7 +8,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Route;
 
-class OpenAPIController extends ControllerBase
+final class OpenAPIController extends ControllerBase
 {
 	private const PAGINATED_QUERY_DEFAULTS = [
 		'limit' => [
@@ -316,7 +316,7 @@ class OpenAPIController extends ControllerBase
 		}
 
 		$schemaName = $this->getSchemaNameFromSpec($spec);
-		if ($schemaName !== null && $this->schemaExistsInComponents($schemaName)) {
+		if ($this->schemaExistsInComponents($schemaName)) {
 			return ['$ref' => '#/components/schemas/' . $schemaName];
 		}
 
@@ -341,7 +341,7 @@ class OpenAPIController extends ControllerBase
 		return ['type' => 'object'];
 	}
 
-	private function getSchemaNameFromSpec(string $spec): ?string
+	private function getSchemaNameFromSpec(string $spec): string
 	{
 		// Hash reference: "#SchemaName"
 		if ($spec[0] === '#') {

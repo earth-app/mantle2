@@ -15,7 +15,6 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 class XmlContentNegotiationSubscriber implements EventSubscriberInterface
 {
-	private const REQUEST_ROOT = 'request';
 	private const RESPONSE_ROOT = 'response';
 
 	public static function getSubscribedEvents(): array

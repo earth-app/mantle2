@@ -19,7 +19,7 @@ use Symfony\Component\HttpFoundation\Response;
 use UnexpectedValueException;
 use Throwable;
 
-class EventsController extends ControllerBase
+final class EventsController extends ControllerBase
 {
 	public static function create(ContainerInterface $container): EventsController|static
 	{
@@ -277,10 +277,8 @@ class EventsController extends ControllerBase
 			$data = [];
 			foreach ($nodes as $node) {
 				$event = EventsHelper::nodeToEvent($node);
-				if ($event) {
-					$item = EventsHelper::serializeEvent($event, $node, $requester);
-					$data[] = $item;
-				}
+				$item = EventsHelper::serializeEvent($event, $node, $requester);
+				$data[] = $item;
 			}
 
 			return new JsonResponse([
@@ -334,9 +332,6 @@ class EventsController extends ControllerBase
 				}
 
 				$event = EventsHelper::nodeToEvent($node);
-				if (!$event) {
-					return GeneralHelper::internalError('Failed to load random event');
-				}
 
 				$results[] = EventsHelper::serializeEvent($event, $node, $requester);
 			}
@@ -884,9 +879,6 @@ class EventsController extends ControllerBase
 		$identifier = $id ?? $username;
 		if ($identifier !== null) {
 			$user = UsersHelper::findByAuthorized($identifier, $request);
-			if (!$user) {
-				return GeneralHelper::notFound('User not found');
-			}
 		} else {
 			$user = UsersHelper::findByRequest($request);
 			if (!$user) {
@@ -899,9 +891,8 @@ class EventsController extends ControllerBase
 		}
 
 		try {
-			$result = EventsHelper::deleteImageSubmission(null, $user->id(), null);
-			if ($result instanceof JsonResponse) {
-				return $result;
+			if (!EventsHelper::deleteImageSubmission(null, $user->id(), null)) {
+				return GeneralHelper::internalError('Failed to delete image submission');
 			}
 
 			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
@@ -969,7 +960,7 @@ class EventsController extends ControllerBase
 			return new JsonResponse(
 				[
 					'items' => $data,
-					'total' => count($data ?? []),
+					'total' => count($data),
 					'page' => $page,
 					'limit' => $limit,
 					'sort' => $sort,
@@ -997,9 +988,6 @@ class EventsController extends ControllerBase
 		$identifier = $id ?? $username;
 		if ($identifier !== null) {
 			$user = UsersHelper::findByAuthorized($identifier, $request);
-			if (!$user) {
-				return GeneralHelper::notFound('User not found');
-			}
 		} else {
 			$user = UsersHelper::findByRequest($request);
 			if (!$user) {
@@ -1012,9 +1000,8 @@ class EventsController extends ControllerBase
 		}
 
 		try {
-			$result = EventsHelper::deleteImageSubmission(null, $user->id(), $eventId);
-			if ($result instanceof JsonResponse) {
-				return $result;
+			if (!EventsHelper::deleteImageSubmission(null, $user->id(), $eventId)) {
+				return GeneralHelper::internalError('Failed to delete image submission');
 			}
 
 			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
@@ -1103,7 +1090,6 @@ class EventsController extends ControllerBase
 		}
 
 		try {
-			/** @var Drupal\mantle2\Custom\EventImageSubmission $data */
 			$data = EventsHelper::retrieveImageSubmission(
 				null,
 				$eventId,
@@ -1206,9 +1192,8 @@ class EventsController extends ControllerBase
 		}
 
 		try {
-			$result = EventsHelper::deleteImageSubmission($eventId, null, null);
-			if ($result instanceof JsonResponse) {
-				return $result;
+			if (!EventsHelper::deleteImageSubmission($eventId, null, null)) {
+				return GeneralHelper::internalError('Failed to delete image submission');
 			}
 
 			return new JsonResponse(null, Response::HTTP_NO_CONTENT);
@@ -1238,7 +1223,6 @@ class EventsController extends ControllerBase
 			return GeneralHelper::notFound('Event not found');
 		}
 
-		/** @var Drupal\mantle2\Custom\EventImageSubmission $submission */
 		$submission = EventsHelper::retrieveImageSubmission(null, null, $imageId);
 		if (!$submission) {
 			return GeneralHelper::notFound('Image not found');

@@ -139,10 +139,6 @@ class EventsHelper
 		array $fields,
 		?UserInterface $user = null,
 	): JsonResponse|array {
-		if (!is_array($fields)) {
-			return GeneralHelper::badRequest('Field "fields" must be an object');
-		}
-
 		foreach ($fields as $key => $value) {
 			if (!is_string($key)) {
 				return GeneralHelper::badRequest('Field keys must be strings');
@@ -181,7 +177,7 @@ class EventsHelper
 			}
 
 			if ($key === 'max_in_person') {
-				if (!is_numeric($value) && !is_int($value)) {
+				if (!is_numeric($value)) {
 					return GeneralHelper::badRequest('Field max_in_person must be a number');
 				}
 				$maxValue = is_string($value) ? (int) $value : $value;
@@ -201,7 +197,7 @@ class EventsHelper
 			}
 
 			if ($key === 'max_online') {
-				if (!is_numeric($value) && !is_int($value)) {
+				if (!is_numeric($value)) {
 					return GeneralHelper::badRequest('Field max_online must be a number');
 				}
 				$maxValue = is_string($value) ? (int) $value : $value;
@@ -682,10 +678,6 @@ class EventsHelper
 
 	public static function updateEvent(Node $node, Event $event): Node
 	{
-		if (!$node) {
-			throw new InvalidArgumentException('Node is null');
-		}
-
 		if ($node->getType() !== 'event') {
 			throw new InvalidArgumentException('Node is not an event');
 		}
@@ -693,7 +685,7 @@ class EventsHelper
 		$node->setTitle($event->getName());
 		$node->set('field_host_id', $event->getHostId());
 		$node->set('field_event_name', $event->getName());
-		$node->set('field_event_description', $event->getDescription() ?? '');
+		$node->set('field_event_description', $event->getDescription());
 		$node->set(
 			'field_event_type',
 			GeneralHelper::findOrdinal(EventType::cases(), $event->getType()),
@@ -703,18 +695,17 @@ class EventsHelper
 		$activitiesData = array_map(function ($activity) {
 			if ($activity instanceof Activity) {
 				return array_merge(['type' => 'activity'], $activity->jsonSerialize());
-			} elseif ($activity instanceof ActivityType) {
+			} else {
 				return [
 					'type' => 'activity_type',
 					'value' => $activity->value,
 				];
 			}
-			return null;
 		}, $event->getActivities());
-		$node->set('field_event_activity_types', json_encode(array_filter($activitiesData)));
+		$node->set('field_event_activity_types', json_encode($activitiesData));
 
-		$node->set('field_event_location_latitude', $event->getLatitude() ?? 0.0);
-		$node->set('field_event_location_longitude', $event->getLongitude() ?? 0.0);
+		$node->set('field_event_location_latitude', $event->getLatitude());
+		$node->set('field_event_location_longitude', $event->getLongitude());
 		$node->set('field_event_date', $event->getDate());
 		$node->set('field_event_enddate', $event->getEndDate());
 		$node->set(
@@ -1101,7 +1092,7 @@ class EventsHelper
 	}
 
 	/**
-	 * @var array<int, Drupal\mantle2\Custom\EventImageSubmission>|Drupal\mantle2\Custom\EventImageSubmission|null
+	 * @return array<int, EventImageSubmission>|EventImageSubmission|null
 	 */
 	public static function retrieveImageSubmission(
 		mixed $userId = null,

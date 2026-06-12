@@ -22,7 +22,7 @@ class PromptsHelper
 			$node->bundle(),
 		);
 		foreach ($definitions as $name => $definition) {
-			if (method_exists($definition, 'getType') && $definition->getType() === 'comment') {
+			if ($definition->getType() === 'comment') {
 				return $name;
 			}
 		}
@@ -39,10 +39,7 @@ class PromptsHelper
 			'node',
 			$node->bundle(),
 		);
-		if (
-			isset($definitions[$fieldName]) &&
-			method_exists($definitions[$fieldName], 'getSetting')
-		) {
+		if (isset($definitions[$fieldName])) {
 			return $definitions[$fieldName]->getSetting('comment_type') ?: null;
 		}
 		return null;
@@ -131,10 +128,6 @@ class PromptsHelper
 
 	public static function updatePrompt(Node $node, Prompt $prompt): Node
 	{
-		if (!$node) {
-			throw new InvalidArgumentException('Node is null');
-		}
-
 		if ($node->getType() !== 'prompt') {
 			throw new InvalidArgumentException('Node is not a prompt');
 		}

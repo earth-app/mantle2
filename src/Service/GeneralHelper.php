@@ -159,7 +159,7 @@ class GeneralHelper
 			return GeneralHelper::badRequest('Invalid data');
 		}
 		$matches = [];
-		if (!preg_match('/data:(.*?);base64/', $meta, $matches) || count($matches) < 2) {
+		if (!preg_match('/data:(.*?);base64/', $meta, $matches)) {
 			return GeneralHelper::badRequest('Invalid data URL');
 		}
 		$mime = $matches[1];
@@ -317,7 +317,6 @@ class GeneralHelper
 
 		// common bracket-like separators that people insert between letters
 		'·' => [''],
-		'•' => [''],
 		'—' => [''],
 		'–' => [''],
 		'´' => [''],
@@ -732,7 +731,7 @@ class GeneralHelper
 			Drupal::logger('mantle2')->info(
 				'[cron] skipping motd cycle because it was set manually by user ID @uid',
 				[
-					'@uid' => $setBy['value'] ?? 'unknown',
+					'@uid' => $setBy['value'],
 				],
 			);
 			return;
