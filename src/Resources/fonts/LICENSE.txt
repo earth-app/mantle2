@@ -1,0 +1,2 @@
+DejaVu fonts (Bitstream Vera derivative) — free, redistributable.
+Source: https://dejavu-fonts.github.io/  License: https://dejavu-fonts.github.io/License.html
