@@ -26,6 +26,7 @@ use Drupal\mantle2\Service\OAuthHelper;
 use Drupal\mantle2\Service\PointsHelper;
 use Drupal\mantle2\Service\ReferralHelper;
 use Exception;
+use Throwable;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -2298,6 +2299,15 @@ final class UsersController extends ControllerBase
 		);
 		if ($notification === null) {
 			return GeneralHelper::internalError('Failed to send quest challenge');
+		}
+
+		try {
+			UsersHelper::sendChallengeEmail($friend, $user, $quest);
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to send quest challenge email to user %uid: %message',
+				['%uid' => $friend->id(), '%message' => $e->getMessage()],
+			);
 		}
 
 		// record dedupe marker and bump the hourly throttle counter

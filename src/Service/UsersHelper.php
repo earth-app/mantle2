@@ -12,6 +12,7 @@ use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Notification;
+use Drupal\mantle2\Custom\Quest;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ApiKeysHelper;
 use Drupal\mantle2\Service\CampaignHelper;
@@ -2946,6 +2947,22 @@ class UsersHelper
 
 		self::setNotifications($user, $notifications);
 		return $notification;
+	}
+
+	public static function sendChallengeEmail(
+		UserInterface $friend,
+		UserInterface $challenger,
+		Quest $quest,
+	): void {
+		if (!self::isEmailVerified($friend)) {
+			return;
+		}
+
+		self::sendEmail($friend, 'quest_challenge', [
+			'challenger' => $challenger->getAccountName(),
+			'quest_title' => $quest->title,
+			'quest_id' => $quest->id,
+		]);
 	}
 
 	public static function markNotificationAsRead(
