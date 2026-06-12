@@ -2122,8 +2122,12 @@ class UsersHelper
 		};
 	}
 
-	public static function isInCircle(UserInterface $user1, UserInterface $user2): bool
+	public static function isInCircle(?UserInterface $user1, ?UserInterface $user2): bool
 	{
+		if (!$user1 || !$user2) {
+			return false;
+		}
+
 		if ($user1->id() === $user2->id()) {
 			return false; // cannot be in own circle
 		}

@@ -14,8 +14,8 @@ class QuestProgressEntry implements JsonSerializable
 
 	// photo submission types (take_photo_classification, take_photo_location, draw_picture, etc.) + audio (transcribe_audio)
 	public string $r2Key = '';
-	public int $lat = 0;
-	public int $lng = 0;
+	public float $lat = 0.0;
+	public float $lng = 0.0;
 
 	// attend_event
 	public string $eventId = '';
@@ -37,8 +37,8 @@ class QuestProgressEntry implements JsonSerializable
 		int $altIndex = 0,
 		int $submittedAt = 0,
 		string $r2Key = '',
-		int $lat = 0,
-		int $lng = 0,
+		float $lat = 0.0,
+		float $lng = 0.0,
 		string $eventId = '',
 		int $timestamp = 0,
 		string $scoreKey = '',
@@ -83,8 +83,8 @@ class QuestProgressEntry implements JsonSerializable
 	public static function photo(
 		string $type,
 		string $r2Key,
-		int $lat,
-		int $lng,
+		float $lat,
+		float $lng,
 		int $index = 0,
 		int $altIndex = 0,
 		int $submittedAt = 0,
