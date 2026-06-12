@@ -1775,8 +1775,8 @@ mantle2.users.id.quest.challenge:
     id: '\d+'
   options:
     tags: Users,Quests
-    description: Challenge a friend to a quest; sends a templated notification (friends only)
-    schema/201: '#Notification'
+    description: Challenge a friend to a quest; sends a templated notification (friends only) and creates a co-op challenge record
+    schema/201: '#ChallengeView'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: You can only challenge friends
@@ -1794,6 +1794,77 @@ mantle2.users.id.quest.challenge:
         type: string
         required: true
         description: The ID of the quest to challenge the friend to
+  methods: [POST]
+
+mantle2.users.id.quest.challenge.get:
+  path: '/v2/users/{id}/quest/challenge'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getQuestChallenge'
+    _title: 'Get Quest Challenge by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Quests
+    description: Get the active or pending co-op challenge for the user on a quest, enriched with the other participant's progress
+    schema/200: '#ChallengeView'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+    query:
+      quest:
+        type: string
+        required: true
+        description: The ID of the quest to look up the challenge for
+  methods: [GET]
+
+mantle2.users.id.quest.challenge.accept:
+  path: '/v2/users/{id}/quest/challenge/{challengeId}/accept'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::acceptQuestChallenge'
+    _title: 'Accept Quest Challenge by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Quests
+    description: Accept a co-op quest challenge as the recipient
+    schema/200: '#Challenge'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Challenge not found
+    schema/409: Challenge already resolved
+    parameters:
+      id:
+        type: string
+      challengeId:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.quest.challenge.decline:
+  path: '/v2/users/{id}/quest/challenge/{challengeId}/decline'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::declineQuestChallenge'
+    _title: 'Decline Quest Challenge by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Quests
+    description: Decline a co-op quest challenge as the recipient
+    schema/200: '#Challenge'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Challenge not found
+    schema/409: Challenge already resolved
+    parameters:
+      id:
+        type: string
+      challengeId:
+        type: string
   methods: [POST]
 
 mantle2.users.id.quest.cancel:
@@ -3208,8 +3279,8 @@ mantle2.users.username.quest.challenge:
     username: '@[\w.]+'
   options:
     tags: Users,Quests
-    description: Challenge a friend to a quest; sends a templated notification (friends only)
-    schema/201: '#Notification'
+    description: Challenge a friend to a quest; sends a templated notification (friends only) and creates a co-op challenge record
+    schema/201: '#ChallengeView'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: You can only challenge friends
@@ -3227,6 +3298,77 @@ mantle2.users.username.quest.challenge:
         type: string
         required: true
         description: The ID of the quest to challenge the friend to
+  methods: [POST]
+
+mantle2.users.username.quest.challenge.get:
+  path: '/v2/users/{username}/quest/challenge'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getQuestChallenge'
+    _title: 'Get Quest Challenge by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Quests
+    description: Get the active or pending co-op challenge for the user on a quest, enriched with the other participant's progress
+    schema/200: '#ChallengeView'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+    query:
+      quest:
+        type: string
+        required: true
+        description: The ID of the quest to look up the challenge for
+  methods: [GET]
+
+mantle2.users.username.quest.challenge.accept:
+  path: '/v2/users/{username}/quest/challenge/{challengeId}/accept'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::acceptQuestChallenge'
+    _title: 'Accept Quest Challenge by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Quests
+    description: Accept a co-op quest challenge as the recipient
+    schema/200: '#Challenge'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Challenge not found
+    schema/409: Challenge already resolved
+    parameters:
+      username:
+        type: string
+      challengeId:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.quest.challenge.decline:
+  path: '/v2/users/{username}/quest/challenge/{challengeId}/decline'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::declineQuestChallenge'
+    _title: 'Decline Quest Challenge by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Quests
+    description: Decline a co-op quest challenge as the recipient
+    schema/200: '#Challenge'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Challenge not found
+    schema/409: Challenge already resolved
+    parameters:
+      username:
+        type: string
+      challengeId:
+        type: string
   methods: [POST]
 
 mantle2.users.username.quest.cancel:
@@ -4477,8 +4619,8 @@ mantle2.users.current.quest.challenge:
     _access: 'TRUE'
   options:
     tags: Users,Quests
-    description: Challenge a friend to a quest; sends a templated notification (friends only)
-    schema/201: '#Notification'
+    description: Challenge a friend to a quest; sends a templated notification (friends only) and creates a co-op challenge record
+    schema/201: '#ChallengeView'
     schema/400: Bad Request
     schema/401: Unauthorized
     schema/403: You can only challenge friends
@@ -4493,6 +4635,67 @@ mantle2.users.current.quest.challenge:
         type: string
         required: true
         description: The ID of the quest to challenge the friend to
+  methods: [POST]
+
+mantle2.users.current.quest.challenge.get:
+  path: '/v2/users/current/quest/challenge'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getQuestChallenge'
+    _title: 'Get Quest Challenge by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Get the active or pending co-op challenge for the user on a quest, enriched with the other participant's progress
+    schema/200: '#ChallengeView'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/404: User not found
+    query:
+      quest:
+        type: string
+        required: true
+        description: The ID of the quest to look up the challenge for
+  methods: [GET]
+
+mantle2.users.current.quest.challenge.accept:
+  path: '/v2/users/current/quest/challenge/{challengeId}/accept'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::acceptQuestChallenge'
+    _title: 'Accept Quest Challenge by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Accept a co-op quest challenge as the recipient
+    schema/200: '#Challenge'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Challenge not found
+    schema/409: Challenge already resolved
+    parameters:
+      challengeId:
+        type: string
+  methods: [POST]
+
+mantle2.users.current.quest.challenge.decline:
+  path: '/v2/users/current/quest/challenge/{challengeId}/decline'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::declineQuestChallenge'
+    _title: 'Decline Quest Challenge by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Quests
+    description: Decline a co-op quest challenge as the recipient
+    schema/200: '#Challenge'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Challenge not found
+    schema/409: Challenge already resolved
+    parameters:
+      challengeId:
+        type: string
   methods: [POST]
 
 mantle2.users.current.quest.cancel:

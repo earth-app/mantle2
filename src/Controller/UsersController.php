@@ -2310,12 +2310,164 @@ final class UsersController extends ControllerBase
 			);
 		}
 
+		// create the co-op challenge record in cloud
+		$challenge = null;
+		try {
+			$challenge = CloudHelper::sendRequest('/v1/users/challenge', 'POST', [
+				'quest_id' => $questId,
+				'quest_title' => $quest->title,
+				'challenger_id' => GeneralHelper::formatId($user->id()),
+				'challenger_name' => $user->getAccountName(),
+				'recipient_id' => GeneralHelper::formatId($friend->id()),
+				'recipient_name' => $friend->getAccountName(),
+			]);
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to create cloud challenge record for user %uid: %message',
+				['%uid' => $friend->id(), '%message' => $e->getMessage()],
+			);
+		}
+
 		// record dedupe marker and bump the hourly throttle counter
 		RedisHelper::set($dedupeKey, ['sent_at' => time()], 86400);
 		$ttl = $count > 0 ? max(1, RedisHelper::ttl($throttleKey)) : 3600;
 		RedisHelper::set($throttleKey, ['count' => $count + 1], $ttl);
 
-		return new JsonResponse($notification->jsonSerialize(), Response::HTTP_CREATED);
+		return new JsonResponse(
+			[
+				'notification' => $notification->jsonSerialize(),
+				'challenge' => $challenge ?: null,
+			],
+			Response::HTTP_CREATED,
+		);
+	}
+
+	// POST /v2/users/current/quest/challenge/{challengeId}/accept
+	// POST /v2/users/{id}/quest/challenge/{challengeId}/accept
+	// POST /v2/users/{username}/quest/challenge/{challengeId}/accept
+	public function acceptQuestChallenge(
+		Request $request,
+		string $challengeId,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		return $this->respondToQuestChallenge($request, $challengeId, 'accept', $id, $username);
+	}
+
+	// POST /v2/users/current/quest/challenge/{challengeId}/decline
+	// POST /v2/users/{id}/quest/challenge/{challengeId}/decline
+	// POST /v2/users/{username}/quest/challenge/{challengeId}/decline
+	public function declineQuestChallenge(
+		Request $request,
+		string $challengeId,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		return $this->respondToQuestChallenge($request, $challengeId, 'decline', $id, $username);
+	}
+
+	// proxy an accept/decline to cloud; only the recipient (self) may respond
+	private function respondToQuestChallenge(
+		Request $request,
+		string $challengeId,
+		string $action,
+		?string $id,
+		?string $username,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$result = CloudHelper::sendRequest(
+				'/v1/users/challenge/' . $challengeId . '/' . $action,
+				'POST',
+				['user_id' => GeneralHelper::formatId($user->id())],
+			);
+		} catch (Exception $e) {
+			// cloud returns 404/409 as http status; map them to a clean response
+			$code = (int) $e->getCode();
+			$message = CloudHelper::extractCloudMessage($e);
+			return match ($code) {
+				404 => GeneralHelper::notFound($message ?: 'Challenge not found'),
+				409 => GeneralHelper::conflict($message ?: 'Challenge already resolved'),
+				default => GeneralHelper::internalError('Failed to respond to quest challenge'),
+			};
+		}
+
+		// 404 is swallowed into [] by sendRequest
+		if (empty($result)) {
+			return GeneralHelper::notFound('Challenge not found');
+		}
+
+		// cloud may report a soft failure via { ok: false, reason }
+		if (($result['ok'] ?? false) !== true) {
+			return new JsonResponse($result, Response::HTTP_CONFLICT);
+		}
+
+		return new JsonResponse($result, Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/quest/challenge?quest={questId}
+	// GET /v2/users/{id}/quest/challenge?quest={questId}
+	// GET /v2/users/{username}/quest/challenge?quest={questId}
+	public function getQuestChallenge(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$questId = $request->query->get('quest');
+		if (!$questId) {
+			return GeneralHelper::badRequest('Missing quest parameter');
+		}
+
+		try {
+			$challenge = CloudHelper::sendRequest('/v1/users/challenge/for', 'GET', [
+				'user_id' => GeneralHelper::formatId($user->id()),
+				'quest_id' => $questId,
+			]);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to fetch quest challenge');
+		}
+
+		// no active or pending challenge for this quest
+		if (empty($challenge) || !isset($challenge['id'])) {
+			return new JsonResponse(['challenge' => null]);
+		}
+
+		// the other participant is the challenger when we're the recipient, else the recipient
+		$selfId = GeneralHelper::formatId($user->id());
+		$otherIdRaw =
+			($challenge['recipient_id'] ?? null) === $selfId
+				? $challenge['challenger_id'] ?? null
+				: $challenge['recipient_id'] ?? null;
+		$otherUser = $otherIdRaw ? UsersHelper::findById((int) ltrim($otherIdRaw, '0')) : null;
+
+		$questDef = PointsHelper::getQuest($questId);
+		$totalSteps = $questDef ? count($questDef->steps) : 0;
+		$otherProgress = ['current_step' => 0, 'total_steps' => $totalSteps, 'completed' => false];
+		if ($otherUser) {
+			$otherQuest = PointsHelper::getCurrentQuest($otherUser);
+			if ($otherQuest->questId === $questId) {
+				$otherProgress = [
+					'current_step' => $otherQuest->currentStepIndex,
+					'total_steps' => $totalSteps,
+					'completed' => $otherQuest->completed,
+				];
+			}
+		}
+
+		return new JsonResponse([
+			'challenge' => $challenge,
+			'other_user' => $otherUser ? UsersHelper::serializeUser($otherUser, $user) : null,
+			'other_progress' => $otherProgress,
+		]);
 	}
 
 	// <updating quests is handled on the frontend server endpoints for more security>

@@ -2753,6 +2753,76 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function challenge(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'string', 'example' => 'chl_012345678987654321012345'],
+				'quest_id' => ['type' => 'string', 'example' => 'forest_explorer'],
+				'quest_title' => self::text(100, 1, 'Forest Explorer'),
+				'challenger_id' => ['$ref' => '#/components/schemas/Id'],
+				'challenger_name' => ['$ref' => '#/components/schemas/Name'],
+				'recipient_id' => ['$ref' => '#/components/schemas/Id'],
+				'recipient_name' => ['$ref' => '#/components/schemas/Name'],
+				'status' => [
+					'type' => 'string',
+					'enum' => ['pending', 'active', 'declined', 'completed', 'expired'],
+					'example' => 'pending',
+				],
+				'created_at' => ['$ref' => '#/components/schemas/Date'],
+				'accepted_at' => [
+					'oneOf' => [['$ref' => '#/components/schemas/Date'], ['type' => 'null']],
+					'description' => 'When the recipient accepted, or null while pending/declined',
+				],
+			],
+			'required' => [
+				'id',
+				'quest_id',
+				'quest_title',
+				'challenger_id',
+				'challenger_name',
+				'recipient_id',
+				'recipient_name',
+				'status',
+				'created_at',
+			],
+		];
+	}
+
+	public static function challengeView(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'challenge' => [
+					'oneOf' => [['$ref' => '#/components/schemas/Challenge'], ['type' => 'null']],
+					'description' => 'The active or pending challenge, or null if none',
+				],
+				'other_user' => [
+					'oneOf' => [['$ref' => '#/components/schemas/User'], ['type' => 'null']],
+					'description' => 'The other participant in the challenge, or null',
+				],
+				'other_progress' => [
+					'oneOf' => [
+						[
+							'type' => 'object',
+							'properties' => [
+								'current_step' => ['type' => 'integer', 'example' => 2],
+								'total_steps' => ['type' => 'integer', 'example' => 5],
+								'completed' => ['type' => 'boolean', 'example' => false],
+							],
+							'required' => ['current_step', 'total_steps', 'completed'],
+						],
+						['type' => 'null'],
+					],
+					'description' => "The other participant's progress on the challenged quest",
+				],
+			],
+			'required' => ['challenge'],
+		];
+	}
+
 	public static function questHistoryEntry(): array
 	{
 		return [
@@ -3267,6 +3337,8 @@ class Mantle2Schemas
 			'QuestsList' => self::questsList(),
 			'QuestProgressEntry' => self::questProgressEntry(),
 			'QuestData' => self::questData(),
+			'Challenge' => self::challenge(),
+			'ChallengeView' => self::challengeView(),
 			'QuestHistoryEntry' => self::questHistoryEntry(),
 			'QuestHistoryResponse' => self::questHistoryResponse(),
 
