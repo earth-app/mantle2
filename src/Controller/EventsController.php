@@ -657,8 +657,8 @@ final class EventsController extends ControllerBase
 			}
 		} else {
 			$user = UsersHelper::findByRequest($request);
-			if (!$user) {
-				return GeneralHelper::unauthorized();
+			if ($user instanceof JsonResponse) {
+				return $user;
 			}
 		}
 
@@ -814,8 +814,8 @@ final class EventsController extends ControllerBase
 			}
 		} else {
 			$user = UsersHelper::findByRequest($request);
-			if (!$user) {
-				return GeneralHelper::unauthorized();
+			if ($user instanceof JsonResponse) {
+				return $user;
 			}
 		}
 
@@ -881,8 +881,8 @@ final class EventsController extends ControllerBase
 			$user = UsersHelper::findByAuthorized($identifier, $request);
 		} else {
 			$user = UsersHelper::findByRequest($request);
-			if (!$user) {
-				return GeneralHelper::unauthorized();
+			if ($user instanceof JsonResponse) {
+				return $user;
 			}
 		}
 
@@ -921,8 +921,8 @@ final class EventsController extends ControllerBase
 			}
 		} else {
 			$user = UsersHelper::findByRequest($request);
-			if (!$user) {
-				return GeneralHelper::unauthorized();
+			if ($user instanceof JsonResponse) {
+				return $user;
 			}
 		}
 
@@ -990,8 +990,8 @@ final class EventsController extends ControllerBase
 			$user = UsersHelper::findByAuthorized($identifier, $request);
 		} else {
 			$user = UsersHelper::findByRequest($request);
-			if (!$user) {
-				return GeneralHelper::unauthorized();
+			if ($user instanceof JsonResponse) {
+				return $user;
 			}
 		}
 
