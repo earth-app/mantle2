@@ -189,6 +189,28 @@ final class ArticlesController extends ControllerBase
 				return GeneralHelper::badRequest('Count must be between 1 and 15');
 			}
 
+			$filter_tags = $request->query->get('tags');
+			if ($filter_tags) {
+				$filter_tags = explode(',', $filter_tags);
+				$filter_tags = array_map('trim', $filter_tags);
+				$filter_tags = array_filter($filter_tags, fn($tag) => !empty($tag));
+				$filter_tags = array_map(
+					fn($tag) => strtolower(str_replace('_', ' ', $tag)),
+					$filter_tags,
+				);
+			}
+
+			$filter_author = $request->query->getInt('author');
+			if ($filter_author) {
+				if ($filter_author <= 0) {
+					return GeneralHelper::badRequest('Invalid author ID');
+				}
+
+				if (!User::load($filter_author)) {
+					return GeneralHelper::badRequest('Author not found');
+				}
+			}
+
 			$connection = Drupal::database();
 			$query = $connection
 				->select('node_field_data', 'n')
@@ -196,24 +218,55 @@ final class ArticlesController extends ControllerBase
 				->condition('n.status', 1)
 				->condition('n.type', 'article');
 
-			$query->orderRandom()->range(0, $count);
-			$nids = $query->execute()->fetchCol();
+			if ($filter_author) {
+				$query->condition('n.field_author_id', $filter_author);
+			}
+
+			if ($filter_tags) {
+				// tags live as a JSON blob, so filter them in PHP: pull all matching
+				// nids, keep those carrying a requested tag, then randomly sample $count
+				$nids = $query->execute()->fetchCol();
+			} else {
+				$query->orderRandom()->range(0, $count);
+				$nids = $query->execute()->fetchCol();
+			}
 
 			if (empty($nids)) {
 				return GeneralHelper::notFound('No articles found');
 			}
 
+			$storage = Drupal::entityTypeManager()->getStorage('node');
+			/** @var Node[] $nodes */
+			$nodes = array_values($storage->loadMultiple($nids));
+
+			if ($filter_tags) {
+				$normalize_tag = fn($tag) => strtolower(str_replace('_', ' ', $tag));
+				$nodes = array_values(
+					array_filter($nodes, function ($node) use ($filter_tags, $normalize_tag) {
+						$stored_tags = (array) json_decode(
+							$node->get('field_article_tags')->value ?? '[]',
+							true,
+						);
+						$normalized_stored = array_map($normalize_tag, $stored_tags);
+						return !empty(array_intersect($filter_tags, $normalized_stored));
+					}),
+				);
+
+				shuffle($nodes);
+				$nodes = array_slice($nodes, 0, $count);
+			}
+
+			if (empty($nodes)) {
+				return GeneralHelper::notFound('No articles found');
+			}
+
 			$results = [];
-
-			foreach ($nids as $randomNid) {
-				$node = Node::load($randomNid);
-
+			foreach ($nodes as $node) {
 				if (!$node) {
 					return GeneralHelper::internalError('Failed to load random article');
 				}
 
 				$article = ArticlesHelper::nodeToArticle($node);
-
 				$results[] = ArticlesHelper::serializeArticle($article, $requester);
 			}
 
