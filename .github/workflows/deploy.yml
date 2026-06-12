@@ -20,9 +20,9 @@ jobs:
       - name: Install Composer Dependencies
         run: composer install --no-progress --no-suggest --prefer-dist
       - name: Run PHP Lint
-        run: ./vendor/bin/phpstan analyse -c phpstan.neon --no-progress --error-format=github --memory-limit=512M
+        run: bun run analyze -- --no-progress --error-format=github
       - name: Run Tests
-        run: ./vendor/bin/phpunit --colors=never
+        run: bun run test -- --colors=never
       - name: Archive Test Output
         if: success() || failure()
         uses: actions/upload-artifact@v7

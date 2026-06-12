@@ -5,7 +5,7 @@
 		"prettier": "bunx prettier --write .",
 		"prettier:check": "bunx prettier --check",
 		"test": "./vendor/bin/phpunit",
-		"analyze": "./vendor/bin/phpstan",
+		"analyze": "./vendor/bin/phpstan --memory-limit=2G",
 		"prepare": "husky install"
 	},
 	"devDependencies": {

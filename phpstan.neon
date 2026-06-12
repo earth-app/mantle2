@@ -2,17 +2,8 @@ parameters:
     level: 5
     paths:
         - src
-    # Library PHPDocs (notably Symfony's InputBag::get(): ?string) are more
-    # optimistic than the native types and actual runtime values, which produced
-    # false "always true" reports on legitimate runtime guards. Only treat native
-    # types as certain so those guards are kept.
     treatPhpDocTypesAsCertain: false
-    # Contrib modules are installed under vendor/drupal/ rather than a standard
-    # modules/contrib directory, so phpstan-drupal's ExtensionDiscovery does not
-    # find them. Scan their source so their classes resolve during analysis.
     scanDirectories:
         - vendor/drupal/openid_connect/src
     ignoreErrors:
-        # The module deliberately uses static helpers and \Drupal:: accessors;
-        # converting every call site to constructor injection is out of scope.
         - identifier: globalDrupalDependencyInjection.useDependencyInjection
