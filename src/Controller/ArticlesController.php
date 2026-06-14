@@ -106,7 +106,9 @@ final class ArticlesController extends ControllerBase
 				}
 
 				if ($filter_author) {
-					$query->condition('n.field_author_id', $filter_author);
+					// field_author_id is an entity reference stored in its own field table
+					$fa = $query->leftJoin('node__field_author_id', 'fa', 'fa.entity_id = n.nid');
+					$query->condition("$fa.field_author_id_target_id", $filter_author);
 				}
 
 				// Get total count for random
@@ -220,7 +222,9 @@ final class ArticlesController extends ControllerBase
 				->condition('n.type', 'article');
 
 			if ($filter_author) {
-				$query->condition('n.field_author_id', $filter_author);
+				// field_author_id is an entity reference stored in its own field table
+				$fa = $query->leftJoin('node__field_author_id', 'fa', 'fa.entity_id = n.nid');
+				$query->condition("$fa.field_author_id_target_id", $filter_author);
 			}
 
 			if ($filter_tags) {

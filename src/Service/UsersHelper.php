@@ -212,8 +212,6 @@ class UsersHelper
 		return $result;
 	}
 
-	private static ?string $lastTokenFailureReason = null;
-
 	public static function findByRequest(Request $request): UserInterface|JsonResponse
 	{
 		// cache resolved user since called multiple times per request
@@ -2555,18 +2553,10 @@ class UsersHelper
 		return $token;
 	}
 
-	private static function failTokenLookup(string $reason): null
-	{
-		self::$lastTokenFailureReason = $reason;
-		return null;
-	}
-
 	public static function getUserByToken(string $token): ?UserInterface
 	{
-		self::$lastTokenFailureReason = null;
-
 		if ($token === '') {
-			return self::failTokenLookup('empty token');
+			return null; // empty token
 		}
 
 		// admin key points to root user
@@ -2579,7 +2569,7 @@ class UsersHelper
 		$indexStore = Drupal::service('keyvalue')->get('mantle2_tokens_by_user');
 		$data = $store->get($token);
 		if (!$data || !is_array($data)) {
-			return self::failTokenLookup('token not found in keyvalue');
+			return null; // token not found in keyvalue
 		}
 		$exp = (int) ($data['exp'] ?? 0);
 		$now = time();
@@ -2592,9 +2582,7 @@ class UsersHelper
 				$tokens = array_values(array_filter($tokens, fn($t) => $t !== $token));
 				$indexStore->set((string) $uid, $tokens);
 			}
-			return self::failTokenLookup(
-				sprintf('token expired (exp %d, now %d, diff %ds)', $exp, $now, $now - $exp),
-			);
+			return null; // token expired
 		}
 		// Sliding expiration: extend when half-life passed.
 		if ($exp - $now < self::TOKEN_TTL / 2) {
@@ -2603,7 +2591,7 @@ class UsersHelper
 		}
 		$uid = (int) ($data['uid'] ?? 0);
 		if ($uid <= 0) {
-			return self::failTokenLookup('token data missing uid');
+			return null; // token data missing uid
 		}
 
 		// Ensure index consistency.
@@ -2615,7 +2603,7 @@ class UsersHelper
 
 		$user = User::load($uid);
 		if (!$user instanceof UserInterface) {
-			return self::failTokenLookup(sprintf('user uid %d not loadable', $uid));
+			return null; // user uid not loadable
 		}
 
 		return $user;
