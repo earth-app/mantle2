@@ -83,7 +83,7 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		}
 
 		// Per-endpoint limiter (if configured for this route)
-		$endpointConfig = $this->getEndpointConfig($routeName);
+		$endpointConfig = $this->getEndpointConfig($routeName, $isAuthenticated);
 		if ($endpointConfig) {
 			$endpointCheck = $this->checkLimit(
 				'route:' . $routeName,
@@ -195,9 +195,16 @@ class RateLimitSubscriber implements EventSubscriberInterface
 	/**
 	 * Map route names to per-endpoint rate limit configurations.
 	 */
-	private function getEndpointConfig(string $routeName): ?array
+	private function getEndpointConfig(string $routeName, bool $authenticated = false): ?array
 	{
 		$sec = fn(int $s) => new DateInterval('PT' . $s . 'S');
+
+		// reports: anon 3 / 10min, auth 10 / hour (both keyed by IP)
+		if ($routeName === 'mantle2.reports.create') {
+			return $authenticated
+				? ['limit' => 10, 'interval' => $sec(60 * 60)]
+				: ['limit' => 3, 'interval' => $sec(10 * 60)];
+		}
 
 		$map = [
 			// Users
