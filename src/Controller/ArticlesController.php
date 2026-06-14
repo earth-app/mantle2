@@ -430,6 +430,7 @@ final class ArticlesController extends ControllerBase
 		}
 
 		// hide from a requester in a block relationship with the author
+		/** @var Drupal\user\UserInterface $author */
 		$author = $node->get('field_author_id')->entity;
 		if (
 			$requester &&
