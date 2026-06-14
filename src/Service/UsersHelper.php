@@ -2558,9 +2558,6 @@ class UsersHelper
 	private static function failTokenLookup(string $reason): null
 	{
 		self::$lastTokenFailureReason = $reason;
-		Drupal::logger('mantle2')->debug('Bearer token rejected: @reason', [
-			'@reason' => self::$lastTokenFailureReason,
-		]);
 		return null;
 	}
 
