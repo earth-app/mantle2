@@ -1024,13 +1024,18 @@ class EventsHelper
 			$relevantDate = $event->getRawEndDate() ?? $event->getRawDate();
 			if ($relevantDate < $expirationThreshold) {
 				$host = $event->getHost();
-				if ($host instanceof User) {
+				if ($host) {
 					UsersHelper::addNotification(
 						$host,
 						Drupal::translation()->translate('Event Expired'),
 						Drupal::translation()->translate(
 							"Your event \"{$event->getName()}\" has expired and been deleted.",
 						),
+					);
+				} else {
+					Drupal::logger('mantle2')->warning(
+						'Event ID @eventId has no host and is being deleted due to expiration.',
+						['@eventId' => $node->id()],
 					);
 				}
 

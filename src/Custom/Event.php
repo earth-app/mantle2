@@ -111,7 +111,7 @@ class Event implements JsonSerializable
 		return $this->id;
 	}
 
-	public function getHost(): UserInterface
+	public function getHost(): ?UserInterface
 	{
 		return User::load($this->hostId);
 	}

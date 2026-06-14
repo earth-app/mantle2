@@ -457,8 +457,13 @@ final class EventsController extends ControllerBase
 		}
 
 		$event = EventsHelper::nodeToEvent($node);
+		$host = $event->getHost();
 
-		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if (!$host) {
+			return GeneralHelper::internalError('Event host not found');
+		}
+
+		if ($host->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to edit this event');
 		}
 
@@ -497,8 +502,13 @@ final class EventsController extends ControllerBase
 		}
 
 		$event = EventsHelper::nodeToEvent($node);
+		$host = $event->getHost();
 
-		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if (!$host) {
+			return GeneralHelper::internalError('Event host not found');
+		}
+
+		if ($host->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to delete this event');
 		}
 
@@ -650,7 +660,12 @@ final class EventsController extends ControllerBase
 			return GeneralHelper::badRequest('You are not signed up for this event');
 		}
 
-		if ($event->getHost()->id() === $user->id()) {
+		$host = $event->getHost();
+		if (!$host) {
+			return GeneralHelper::internalError('Event host not found');
+		}
+
+		if ($host->id() === $user->id()) {
 			return GeneralHelper::badRequest('You are the host of this event and cannot leave it');
 		}
 
@@ -742,8 +757,12 @@ final class EventsController extends ControllerBase
 		}
 
 		$event = EventsHelper::nodeToEvent($node);
+		$host = $event->getHost();
+		if (!$host) {
+			return GeneralHelper::internalError('Event host not found');
+		}
 
-		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($host->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to cancel this event');
 		}
 
@@ -788,8 +807,12 @@ final class EventsController extends ControllerBase
 		}
 
 		$event = EventsHelper::nodeToEvent($node);
+		$host = $event->getHost();
 
-		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if (!$host) {
+			return GeneralHelper::internalError('Event host not found');
+		}
+		if ($host->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to uncancel this event');
 		}
 
@@ -1213,7 +1236,12 @@ final class EventsController extends ControllerBase
 		}
 
 		// only delete if admin or host
-		if ($event->getHost()->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		$host = $event->getHost();
+		if (!$host) {
+			return GeneralHelper::internalError('Event host not found');
+		}
+
+		if ($host->id() !== $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to delete these images');
 		}
 
@@ -1247,6 +1275,11 @@ final class EventsController extends ControllerBase
 
 		if (!EventsHelper::isVisible($event, $user)) {
 			return GeneralHelper::notFound('Event not found');
+		}
+
+		$host = $event->getHost();
+		if (!$host) {
+			return GeneralHelper::internalError('Event host not found');
 		}
 
 		$submission = EventsHelper::retrieveImageSubmission(null, null, $imageId);
