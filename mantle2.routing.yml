@@ -924,6 +924,98 @@ mantle2.users.id.friends.remove:
         description: "The ID or Username of the friend to remove for the user. Example: '1', '@friend'"
   methods: [DELETE]
 
+mantle2.users.id.blocked:
+  path: '/v2/users/{id}/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userBlocked'
+    _title: 'Get Blocked Users by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Blocking
+    description: Retrieves the list of users blocked by this user (self or admin only)
+    schema/200: '#Users'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.blocked.add:
+  path: '/v2/users/{id}/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::blockUser'
+    _title: 'Block User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Blocking
+    description: Blocks a user for this user by their identifier (self or admin only)
+    schema/200: '#BlockResponse'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    schema/409: User already blocked
+    parameters:
+      id:
+        type: string
+    query:
+      user:
+        type: string
+        description: "The ID or Username of the user to block. Example: '1', '@user'"
+  methods: [PUT]
+
+mantle2.users.id.blocked.remove:
+  path: '/v2/users/{id}/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unblockUser'
+    _title: 'Unblock User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Blocking
+    description: Unblocks a user for this user by their identifier (self or admin only)
+    schema/200: '#BlockResponse'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    schema/409: User is not blocked
+    parameters:
+      id:
+        type: string
+    query:
+      user:
+        type: string
+        description: "The ID or Username of the user to unblock. Example: '1', '@user'"
+  methods: [DELETE]
+
+mantle2.users.id.moderation:
+  path: '/v2/users/{id}/moderation'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userModeration'
+    _title: 'Get Moderation Status by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Moderation
+    description: Retrieves the account moderation status and strike history (self or admin only)
+    schema/200: '#ModerationStatus'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
 mantle2.users.id.circle:
   path: '/v2/users/{id}/circle'
   defaults:
@@ -2428,6 +2520,98 @@ mantle2.users.username.friends.remove:
         description: "The ID or Username of the friend to remove for the user. Example: '1', '@friend'"
   methods: [DELETE]
 
+mantle2.users.username.blocked:
+  path: '/v2/users/{username}/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userBlocked'
+    _title: 'Get Blocked Users by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Blocking
+    description: Retrieves the list of users blocked by this user (self or admin only)
+    schema/200: '#Users'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.blocked.add:
+  path: '/v2/users/{username}/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::blockUser'
+    _title: 'Block User by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Blocking
+    description: Blocks a user for this user by their username (self or admin only)
+    schema/200: '#BlockResponse'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    schema/409: User already blocked
+    parameters:
+      username:
+        type: string
+    query:
+      user:
+        type: string
+        description: "The ID or Username of the user to block. Example: '1', '@user'"
+  methods: [PUT]
+
+mantle2.users.username.blocked.remove:
+  path: '/v2/users/{username}/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unblockUser'
+    _title: 'Unblock User by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Blocking
+    description: Unblocks a user for this user by their username (self or admin only)
+    schema/200: '#BlockResponse'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    schema/409: User is not blocked
+    parameters:
+      username:
+        type: string
+    query:
+      user:
+        type: string
+        description: "The ID or Username of the user to unblock. Example: '1', '@user'"
+  methods: [DELETE]
+
+mantle2.users.username.moderation:
+  path: '/v2/users/{username}/moderation'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userModeration'
+    _title: 'Get Moderation Status by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Users,Moderation
+    description: Retrieves the account moderation status and strike history (self or admin only)
+    schema/200: '#ModerationStatus'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
 mantle2.users.username.circle:
   path: '/v2/users/{username}/circle'
   defaults:
@@ -3918,6 +4102,82 @@ mantle2.users.current.friends.remove:
         type: string
         description: "The ID or Username of the friend to remove for the user. Example: '1', '@friend'"
   methods: [DELETE]
+
+mantle2.users.current.blocked:
+  path: '/v2/users/current/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userBlocked'
+    _title: 'Get Current User Blocked Users'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Blocking
+    description: Retrieves the list of users blocked by the current user
+    schema/200: '#Users'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.users.current.blocked.add:
+  path: '/v2/users/current/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::blockUser'
+    _title: 'Block User for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Blocking
+    description: Blocks a user for the current user based on the session ID
+    schema/200: '#BlockResponse'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    schema/409: User already blocked
+    query:
+      user:
+        type: string
+        description: "The ID or Username of the user to block. Example: '1', '@user'"
+  methods: [PUT]
+
+mantle2.users.current.blocked.remove:
+  path: '/v2/users/current/blocked'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::unblockUser'
+    _title: 'Unblock User for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Blocking
+    description: Unblocks a user for the current user based on the session ID
+    schema/200: '#BlockResponse'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    schema/409: User is not blocked
+    query:
+      user:
+        type: string
+        description: "The ID or Username of the user to unblock. Example: '1', '@user'"
+  methods: [DELETE]
+
+mantle2.users.current.moderation:
+  path: '/v2/users/current/moderation'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userModeration'
+    _title: 'Get Current User Moderation Status'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Moderation
+    description: Retrieves the account moderation status and strike history for the current user
+    schema/200: '#ModerationStatus'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+  methods: [GET]
 
 mantle2.users.current.circle:
   path: '/v2/users/current/circle'

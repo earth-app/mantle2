@@ -484,6 +484,30 @@ function mantle2_install(): void
 		],
 	]);
 
+	/// Blocked Users
+	createField('user', 'field_blocked_users', 'json', 'Blocked Users', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'format' => 'number',
+			],
+		],
+	]);
+
+	/// Blocked By (reverse index of users who have blocked this user)
+	createField('user', 'field_blocked_by', 'json', 'Blocked By', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'format' => 'number',
+			],
+		],
+	]);
+
 	/// Account Type
 	createField('user', 'field_account_type', 'list_string', 'Account Type', true, 'FREE', [
 		'allowed_values' => array_map(fn($case) => $case->value, AccountType::cases()),
@@ -1304,4 +1328,34 @@ function mantle2_update_9003(): string
 		return 'Created mantle2_api_keys table for user-issued API keys';
 	}
 	return 'mantle2_api_keys table already exists';
+}
+
+/**
+ * Install: Add field_blocked_users + field_blocked_by user fields for blocking.
+ */
+function mantle2_update_9004(): string
+{
+	createField('user', 'field_blocked_users', 'json', 'Blocked Users', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'format' => 'number',
+			],
+		],
+	]);
+
+	createField('user', 'field_blocked_by', 'json', 'Blocked By', false, json_encode([]), [
+		'schema' => [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'array',
+			'items' => [
+				'type' => 'string',
+				'format' => 'number',
+			],
+		],
+	]);
+
+	return 'Created field_blocked_users and field_blocked_by user fields';
 }
