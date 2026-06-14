@@ -3206,6 +3206,106 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function report(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'string', 'example' => 'a1b2c3d4e5f6'],
+				'content_type' => [
+					'type' => 'string',
+					'enum' => [
+						'prompt',
+						'prompt_response',
+						'article',
+						'event',
+						'event_image',
+						'user',
+					],
+				],
+				'content_id' => ['type' => 'string', 'example' => '1234'],
+				'parent_id' => ['type' => 'string', 'nullable' => true],
+				'content_owner_id' => ['type' => 'string', 'nullable' => true],
+				'reason' => [
+					'type' => 'string',
+					'enum' => [
+						'hate_speech',
+						'harassment',
+						'sexual',
+						'violence',
+						'spam',
+						'misinformation',
+						'self_harm',
+						'illegal',
+						'other',
+					],
+				],
+				'description' => ['type' => 'string', 'maxLength' => 1024, 'nullable' => true],
+				'reporter_id' => ['type' => 'string', 'nullable' => true],
+				'source' => ['type' => 'string', 'enum' => ['user', 'ai']],
+				'status' => [
+					'type' => 'string',
+					'enum' => ['pending', 'dismissed', 'actioned', 'auto_removed', 'expired'],
+				],
+				'report_count' => ['type' => 'integer', 'example' => 1],
+				'created_at' => ['type' => 'integer', 'example' => 1736400000000],
+				'updated_at' => ['type' => 'integer', 'example' => 1736400000000],
+				'reviewed_by' => ['type' => 'string', 'nullable' => true],
+				'reviewed_at' => ['type' => 'integer', 'nullable' => true],
+				'action_notes' => ['type' => 'string', 'nullable' => true],
+				'content_preview' => [
+					'type' => 'string',
+					'description' => 'Short snippet of the reported content (admin hydration)',
+				],
+				'reporter_username' => ['type' => 'string', 'nullable' => true],
+				'author_username' => ['type' => 'string', 'nullable' => true],
+				'enforced_action' => [
+					'type' => 'string',
+					'enum' => ['none', 'disable_1_month', 'permanent_ban'],
+					'description' => 'Account action enforced by a moderation decision, if any',
+				],
+			],
+			'required' => ['id', 'content_type', 'content_id', 'reason', 'status', 'report_count'],
+		];
+	}
+
+	public static function reportCreateResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'report' => ['$ref' => '#/components/schemas/Report'],
+				'deduped' => [
+					'$ref' => '#/components/schemas/Bool',
+					'description' => 'True when this report folded into an existing pending report',
+				],
+			],
+			'required' => ['report', 'deduped'],
+		];
+	}
+
+	public static function reportList(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'reports' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/Report'],
+				],
+				'page' => ['type' => 'integer', 'minimum' => 1, 'example' => 1],
+				'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'example' => 50],
+				'total' => ['type' => 'integer', 'minimum' => 0, 'example' => 12],
+				'cursor' => [
+					'type' => 'string',
+					'nullable' => true,
+					'description' => 'Opaque cursor for the next page, when more results exist',
+				],
+			],
+			'required' => ['reports', 'page', 'limit'],
+		];
+	}
+
 	public static function getAllSchemas(): array
 	{
 		return [
@@ -3350,6 +3450,11 @@ class Mantle2Schemas
 			'ApiKeyRevokeAll' => self::apiKeyRevokeAll(),
 			'ApiKeyCreateJson' => self::apiKeyCreateJson(),
 			'ApiKeyUpdateJson' => self::apiKeyUpdateJson(),
+
+			// Reports + Moderation
+			'Report' => self::report(),
+			'ReportCreateResponse' => self::reportCreateResponse(),
+			'ReportList' => self::reportList(),
 		];
 	}
 }

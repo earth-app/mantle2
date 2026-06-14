@@ -6113,3 +6113,94 @@ mantle2.users.id.share.quest:
   methods: [GET]
   options:
     tags: Users,Share
+
+# #region Report Routes
+
+mantle2.reports.create:
+  path: '/v2/reports'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ReportsController::createReport'
+    _title: 'Submit Report'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Reports
+    description: Submits a content report. Anonymous reports are allowed.
+    schema/201: '#ReportCreateResponse'
+    schema/400: Bad Request
+    schema/404: Reported content not found
+    body/description: Report data to submit
+  methods: [POST]
+
+mantle2.reports.list:
+  path: '/v2/reports'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ReportsController::listReports'
+    _title: 'List Reports [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Reports,Admin
+    description: Retrieves a list of content reports for moderation
+    schema/200: '#ReportList'
+    schema/403: 403
+    query:
+      status:
+        type: string
+        description: Filter by report status
+      page:
+        type: integer
+        minimum: 1
+        default: 1
+        description: The page number to retrieve
+      limit:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+        description: The number of results to return per page
+  methods: [GET]
+
+mantle2.reports.get:
+  path: '/v2/reports/{id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ReportsController::getReport'
+    _title: 'Get Report [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    id: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Reports,Admin
+    description: Retrieves a single hydrated report
+    schema/200: '#Report'
+    schema/403: 403
+    schema/404: Report not found
+    parameters:
+      id:
+        type: string
+        description: The ID of the report to retrieve
+  methods: [GET]
+
+mantle2.reports.patch:
+  path: '/v2/reports/{id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\ReportsController::patchReport'
+    _title: 'Action Report [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    id: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Reports,Admin
+    description: Resolves a report by dismissing, deleting content, or banning the author
+    schema/200: '#Report'
+    schema/400: Bad Request
+    schema/403: 403
+    schema/404: Report not found
+    body/description: Moderation action to take
+    parameters:
+      id:
+        type: string
+        description: The ID of the report to action
+  methods: [PATCH]
+
+# #endregion
