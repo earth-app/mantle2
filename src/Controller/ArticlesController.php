@@ -63,6 +63,9 @@ final class ArticlesController extends ControllerBase
 			}
 		}
 
+		// hide content owned by users in a block relationship with the requester
+		$blockedIds = $requester ? UsersHelper::getBlockRelatedIds($requester) : [];
+
 		try {
 			$storage = Drupal::entityTypeManager()->getStorage('node');
 
@@ -105,10 +108,15 @@ final class ArticlesController extends ControllerBase
 					$query->condition($group);
 				}
 
-				if ($filter_author) {
+				if ($filter_author || !empty($blockedIds)) {
 					// field_author_id is an entity reference stored in its own field table
 					$fa = $query->leftJoin('node__field_author_id', 'fa', 'fa.entity_id = n.nid');
-					$query->condition("$fa.field_author_id_target_id", $filter_author);
+					if ($filter_author) {
+						$query->condition("$fa.field_author_id_target_id", $filter_author);
+					}
+					if (!empty($blockedIds)) {
+						$query->condition("$fa.field_author_id_target_id", $blockedIds, 'NOT IN');
+					}
 				}
 
 				// Get total count for random
@@ -131,6 +139,10 @@ final class ArticlesController extends ControllerBase
 
 				if ($filter_author) {
 					$query->condition('field_author_id', $filter_author);
+				}
+
+				if (!empty($blockedIds)) {
+					$query->condition('field_author_id', $blockedIds, 'NOT IN');
 				}
 
 				$countQuery = clone $query;
@@ -415,6 +427,18 @@ final class ArticlesController extends ControllerBase
 
 		if ($node->getType() !== 'article') {
 			return GeneralHelper::badRequest('ID does not point to an article');
+		}
+
+		// hide from a requester in a block relationship with the author
+		$author = $node->get('field_author_id')->entity;
+		if (
+			$requester &&
+			$author &&
+			$requester->id() !== $author->id() &&
+			!UsersHelper::isAdmin($requester) &&
+			UsersHelper::hasBlockRelationship($requester, $author)
+		) {
+			return GeneralHelper::notFound('Article not found');
 		}
 
 		$article = ArticlesHelper::nodeToArticle($node);

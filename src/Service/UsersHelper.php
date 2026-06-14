@@ -141,6 +141,18 @@ class UsersHelper
 		UserInterface $user,
 		Request $request,
 	): UserInterface|JsonResponse {
+		$requester = self::getOwnerOfRequest($request);
+
+		// blocked-by → 404: hide target from a requester the target has blocked
+		if (
+			$requester &&
+			$requester->id() !== $user->id() &&
+			!self::isAdmin($requester) &&
+			self::isBlocking($user, $requester)
+		) {
+			return GeneralHelper::notFound('User not found');
+		}
+
 		$visibility = self::getVisibility($user);
 		// PUBLIC is visible to everyone
 		if ($visibility === Visibility::PUBLIC) {
@@ -148,7 +160,7 @@ class UsersHelper
 		}
 
 		// UNLISTED (and PRIVATE, see below) requires login
-		$user2 = self::getOwnerOfRequest($request);
+		$user2 = $requester;
 		if (!$user2) {
 			return GeneralHelper::notFound('User not found');
 		}
@@ -2038,6 +2050,123 @@ class UsersHelper
 			return true;
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Failed to remove friend: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return false;
+		}
+	}
+
+	#endregion
+
+	#region User Blocking
+
+	/**
+	 * @return int[]
+	 */
+	public static function getBlockedUsers(UserInterface $user): array
+	{
+		$value = $user->get('field_blocked_users')->value ?? '[]';
+		$ids = $value ? json_decode($value, true) : [];
+		return is_array($ids) ? array_values(array_map('intval', $ids)) : [];
+	}
+
+	/**
+	 * @return int[]
+	 */
+	public static function getBlockedByIds(UserInterface $user): array
+	{
+		$value = $user->get('field_blocked_by')->value ?? '[]';
+		$ids = $value ? json_decode($value, true) : [];
+		return is_array($ids) ? array_values(array_map('intval', $ids)) : [];
+	}
+
+	/**
+	 * blocked ∪ blocked_by; used by content filters
+	 * @return int[]
+	 */
+	public static function getBlockRelatedIds(UserInterface $user): array
+	{
+		return array_values(
+			array_unique(array_merge(self::getBlockedUsers($user), self::getBlockedByIds($user))),
+		);
+	}
+
+	public static function isBlocking(?UserInterface $a, ?UserInterface $b): bool
+	{
+		if (!$a || !$b) {
+			return false;
+		}
+		return in_array((int) $b->id(), self::getBlockedUsers($a), true);
+	}
+
+	public static function isBlockedBy(?UserInterface $a, ?UserInterface $b): bool
+	{
+		if (!$a || !$b) {
+			return false;
+		}
+		return in_array((int) $b->id(), self::getBlockedByIds($a), true);
+	}
+
+	public static function hasBlockRelationship(?UserInterface $a, ?UserInterface $b): bool
+	{
+		return self::isBlocking($a, $b) || self::isBlockedBy($a, $b);
+	}
+
+	public static function blockUser(UserInterface $user, UserInterface $target): bool
+	{
+		if ($user->id() === $target->id()) {
+			return false;
+		}
+
+		try {
+			$blocked = self::getBlockedUsers($user);
+			if (in_array((int) $target->id(), $blocked, true)) {
+				return false;
+			}
+
+			$blocked[] = (int) $target->id();
+			$user->set('field_blocked_users', json_encode(array_values($blocked)));
+			$user->save();
+
+			// maintain the reverse index on the target
+			$blockedBy = self::getBlockedByIds($target);
+			if (!in_array((int) $user->id(), $blockedBy, true)) {
+				$blockedBy[] = (int) $user->id();
+				$target->set('field_blocked_by', json_encode(array_values($blockedBy)));
+				$target->save();
+			}
+
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to block user: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return false;
+		}
+	}
+
+	public static function unblockUser(UserInterface $user, UserInterface $target): bool
+	{
+		try {
+			$blocked = self::getBlockedUsers($user);
+			if (!in_array((int) $target->id(), $blocked, true)) {
+				return false;
+			}
+
+			$blocked = array_values(array_filter($blocked, fn($id) => $id !== (int) $target->id()));
+			$user->set('field_blocked_users', json_encode($blocked));
+			$user->save();
+
+			$blockedBy = self::getBlockedByIds($target);
+			$blockedBy = array_values(
+				array_filter($blockedBy, fn($id) => $id !== (int) $user->id()),
+			);
+			$target->set('field_blocked_by', json_encode($blockedBy));
+			$target->save();
+
+			return true;
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to unblock user: %message', [
 				'%message' => $e->getMessage(),
 			]);
 			return false;

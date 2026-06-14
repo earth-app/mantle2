@@ -319,6 +319,12 @@ class PromptsHelper
 			);
 		}
 
+		// exclude responses authored by users the prompt owner has blocked (hidden globally)
+		$blockedByOwner = self::getOwnerBlockedSet($node);
+		if (!empty($blockedByOwner)) {
+			$query->condition('uid', $blockedByOwner, 'NOT IN');
+		}
+
 		return (int) $query->count()->execute();
 	}
 
@@ -333,9 +339,15 @@ class PromptsHelper
 		string $sort = 'desc',
 	): array {
 		$comments = self::getComments($node, $page, $limit, $search, $sort);
+		$blockedByOwner = self::getOwnerBlockedSet($node);
 		$responses = [];
 
 		foreach ($comments as $comment) {
+			// globally hide responses authored by users the prompt owner has blocked
+			if (in_array((int) $comment->getOwnerId(), $blockedByOwner, true)) {
+				continue;
+			}
+
 			$response = self::entityToPromptResponse($comment);
 			if ($response) {
 				$responses[] = $response;
@@ -343,6 +355,13 @@ class PromptsHelper
 		}
 
 		return $responses;
+	}
+
+	// uids the prompt owner has blocked; their responses are hidden from everyone
+	private static function getOwnerBlockedSet(Node $node): array
+	{
+		$owner = User::load((int) $node->get('field_owner_id')->value);
+		return $owner ? UsersHelper::getBlockedUsers($owner) : [];
 	}
 
 	public const EXPIRED_PROMPTS_TTL = 172800; // 2 days

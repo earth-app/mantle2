@@ -225,6 +225,11 @@ class RateLimitSubscriber implements EventSubscriberInterface
 			'mantle2.users.username.patch_field_privacy' => ['limit' => 30, 'interval' => $sec(60)],
 			'mantle2.users.current.patch_field_privacy' => ['limit' => 30, 'interval' => $sec(60)],
 
+			// Blocking
+			'mantle2.users.id.blocked.add' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.username.blocked.add' => ['limit' => 30, 'interval' => $sec(60)],
+			'mantle2.users.current.blocked.add' => ['limit' => 30, 'interval' => $sec(60)],
+
 			// Events
 			'mantle2.events.create' => ['limit' => 10, 'interval' => $sec(2 * 60)],
 			'mantle2.events.update' => ['limit' => 20, 'interval' => $sec(2 * 60)],

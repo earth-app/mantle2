@@ -51,6 +51,10 @@ final class PromptsController extends ControllerBase
 			}
 		}
 
+		// hide content owned by users in a block relationship with the requester
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		$blockedIds = $requester ? UsersHelper::getBlockRelatedIds($requester) : [];
+
 		try {
 			// Handle random sorting separately using database query
 			if ($sort === 'rand') {
@@ -114,6 +118,11 @@ final class PromptsController extends ControllerBase
 					$query->condition("$foa.field_owner_id_value", $filter_author);
 				}
 
+				if (!empty($blockedIds)) {
+					$fob = $query->leftJoin('node__field_owner_id', 'fob', 'fob.entity_id = n.nid');
+					$query->condition("$fob.field_owner_id_value", $blockedIds, 'NOT IN');
+				}
+
 				// Get total count for random
 				$countQuery = clone $query;
 				$total = (int) $countQuery->countQuery()->execute()->fetchField();
@@ -161,6 +170,10 @@ final class PromptsController extends ControllerBase
 
 				if ($filter_author) {
 					$query->condition('field_owner_id', $filter_author);
+				}
+
+				if (!empty($blockedIds)) {
+					$query->condition('field_owner_id', $blockedIds, 'NOT IN');
 				}
 
 				$countQuery = clone $query;
@@ -385,6 +398,18 @@ final class PromptsController extends ControllerBase
 			return GeneralHelper::notFound('Prompt not found');
 		}
 
+		// hide from a requester in a block relationship with the owner
+		$owner = UsersHelper::findById($data->getOwnerId());
+		if (
+			$user &&
+			$owner &&
+			$user->id() !== $owner->id() &&
+			!UsersHelper::isAdmin($user) &&
+			UsersHelper::hasBlockRelationship($user, $owner)
+		) {
+			return GeneralHelper::notFound('Prompt not found');
+		}
+
 		$result = PromptsHelper::serializePrompt($data, $node, $user);
 		return new JsonResponse($result);
 	}
@@ -573,6 +598,12 @@ final class PromptsController extends ControllerBase
 
 		if (!PromptsHelper::isVisible($data, $user)) {
 			return GeneralHelper::notFound('Prompt not found');
+		}
+
+		// cannot respond when a block relationship exists with the prompt owner
+		$owner = UsersHelper::findById($data->getOwnerId());
+		if ($owner && UsersHelper::hasBlockRelationship($owner, $user)) {
+			return GeneralHelper::forbidden('You cannot respond to this prompt');
 		}
 
 		$body = json_decode($request->getContent(), true);

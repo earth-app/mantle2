@@ -1353,6 +1353,172 @@ final class UsersController extends ControllerBase
 		);
 	}
 
+	// GET /v2/users/current/blocked
+	// GET /v2/users/{id}/blocked
+	// GET /v2/users/{username}/blocked
+	public function userBlocked(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$blocked = array_values(
+			array_filter(
+				array_map(
+					fn($uid) => UsersHelper::findById($uid),
+					UsersHelper::getBlockedUsers($user),
+				),
+			),
+		);
+		$items = array_values(
+			array_filter(array_map(fn($u) => UsersHelper::serializeUser($u, $requester), $blocked)),
+		);
+
+		return new JsonResponse(['items' => $items, 'total' => count($items)], Response::HTTP_OK);
+	}
+
+	// PUT /v2/users/current/blocked
+	// PUT /v2/users/{id}/blocked
+	// PUT /v2/users/{username}/blocked
+	public function blockUser(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$targetId = $request->query->get('user');
+		if (!$targetId) {
+			return GeneralHelper::badRequest('Missing user ID or Username');
+		}
+
+		$target = UsersHelper::findBy($targetId);
+		if (!$target) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		if ($target->id() === $user->id()) {
+			return GeneralHelper::badRequest('Cannot block yourself');
+		}
+
+		if ($target->id() <= 1) {
+			return GeneralHelper::forbidden('You cannot block this user');
+		}
+
+		if (UsersHelper::isAdmin($target)) {
+			return GeneralHelper::forbidden('You cannot block administrators');
+		}
+
+		$result = UsersHelper::blockUser($user, $target);
+		if (!$result) {
+			return GeneralHelper::conflict('User is already blocked');
+		}
+
+		return new JsonResponse(
+			[
+				'user' => UsersHelper::serializeUser($user, $requester),
+				'blocked' => UsersHelper::serializeUser($target, $requester),
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// DELETE /v2/users/current/blocked
+	// DELETE /v2/users/{id}/blocked
+	// DELETE /v2/users/{username}/blocked
+	public function unblockUser(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$requester = UsersHelper::getOwnerOfRequest($request);
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$targetId = $request->query->get('user');
+		if (!$targetId) {
+			return GeneralHelper::badRequest('Missing user ID or Username');
+		}
+
+		$target = UsersHelper::findBy($targetId);
+		if (!$target) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$result = UsersHelper::unblockUser($user, $target);
+		if (!$result) {
+			return GeneralHelper::conflict('User is not blocked');
+		}
+
+		return new JsonResponse(
+			[
+				'user' => UsersHelper::serializeUser($user, $requester),
+				'unblocked' => UsersHelper::serializeUser($target, $requester),
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// GET /v2/users/current/moderation
+	// GET /v2/users/{id}/moderation
+	// GET /v2/users/{username}/moderation
+	public function userModeration(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest('/v1/users/' . $user->id() . '/strikes', 'GET');
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to fetch moderation status');
+		}
+
+		$count = (int) ($data['count'] ?? 0);
+		$banned = (bool) ($data['banned'] ?? false);
+		$disabledUntil = isset($data['disabled_until']) ? (int) $data['disabled_until'] : null;
+
+		$standing = 'ok';
+		if ($banned) {
+			$standing = 'banned';
+		} elseif ($disabledUntil !== null && $disabledUntil > time() * 1000) {
+			$standing = 'disabled';
+		}
+
+		$history = is_array($data['history'] ?? null) ? $data['history'] : [];
+		// newest-first
+		usort($history, fn($a, $b) => ($b['at'] ?? 0) <=> ($a['at'] ?? 0));
+
+		return new JsonResponse(
+			[
+				'count' => $count,
+				'cycles' => (int) ($data['cycles'] ?? 0),
+				'banned' => $banned,
+				'disabled_until' => $disabledUntil,
+				'updated_at' => (int) ($data['updated_at'] ?? 0),
+				'strikes_remaining' => max(0, 3 - $count),
+				'standing' => $standing,
+				'history' => $history,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
 	// GET /v2/users/current/circle
 	// GET /v2/users/{id}/circle
 	// GET /v2/users/{username}/circle

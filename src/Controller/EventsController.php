@@ -47,6 +47,9 @@ final class EventsController extends ControllerBase
 		$filter_is_upcoming = $request->query->get('filter_is_upcoming');
 		$storage = Drupal::entityTypeManager()->getStorage('node');
 
+		// hide content owned by users in a block relationship with the requester
+		$blockedIds = $requester ? UsersHelper::getBlockRelatedIds($requester) : [];
+
 		try {
 			// Handle random sorting separately using database query
 			if ($sort === 'rand') {
@@ -180,6 +183,13 @@ final class EventsController extends ControllerBase
 					$query->condition("$fe.field_event_date_value", $now, '>=');
 				}
 
+				if (!empty($blockedIds)) {
+					if (!isset($fh)) {
+						$fh = $query->leftJoin('node__field_host_id', 'fh', 'fh.entity_id = n.nid');
+					}
+					$query->condition("$fh.field_host_id_value", $blockedIds, 'NOT IN');
+				}
+
 				// Get total count for random
 				$countQuery = clone $query;
 				$total = (int) $countQuery->countQuery()->execute()->fetchField();
@@ -259,6 +269,10 @@ final class EventsController extends ControllerBase
 				if ($filter_is_upcoming === '1' || $filter_is_upcoming === 'true') {
 					$now = date('Y-m-d\TH:i:s');
 					$query->condition('field_event_date', $now, '>=');
+				}
+
+				if (!empty($blockedIds)) {
+					$query->condition('field_host_id', $blockedIds, 'NOT IN');
 				}
 
 				$countQuery = clone $query;
@@ -402,6 +416,18 @@ final class EventsController extends ControllerBase
 			$event = EventsHelper::nodeToEvent($node);
 
 			if (!EventsHelper::isVisible($event, $user)) {
+				return GeneralHelper::notFound('Event not found');
+			}
+
+			// hide from a requester in a block relationship with the host
+			$host = $event->getHost();
+			if (
+				$user &&
+				$host &&
+				$user->id() !== $host->id() &&
+				!UsersHelper::isAdmin($user) &&
+				UsersHelper::hasBlockRelationship($user, $host)
+			) {
 				return GeneralHelper::notFound('Event not found');
 			}
 
