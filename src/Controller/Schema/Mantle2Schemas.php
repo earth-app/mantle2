@@ -3306,6 +3306,83 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function blockResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'user' => ['$ref' => '#/components/schemas/User'],
+				'blocked' => ['$ref' => '#/components/schemas/User'],
+				'unblocked' => ['$ref' => '#/components/schemas/User'],
+			],
+			'required' => ['user'],
+		];
+	}
+
+	public static function moderationStatus(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'count' => ['type' => 'integer', 'example' => 1],
+				'cycles' => ['type' => 'integer', 'example' => 0],
+				'banned' => ['type' => 'boolean', 'example' => false],
+				'disabled_until' => [
+					'type' => 'integer',
+					'nullable' => true,
+					'example' => 1736400000000,
+				],
+				'updated_at' => ['type' => 'integer', 'example' => 1736400000000],
+				'strikes_remaining' => ['type' => 'integer', 'example' => 2],
+				'standing' => [
+					'type' => 'string',
+					'enum' => ['ok', 'disabled', 'banned'],
+				],
+				'history' => [
+					'type' => 'array',
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'content_type' => [
+								'type' => 'string',
+								'enum' => [
+									'prompt',
+									'prompt_response',
+									'article',
+									'event',
+									'event_image',
+									'user',
+								],
+							],
+							'content_id' => ['type' => 'string', 'example' => '1234'],
+							'reason' => [
+								'type' => 'string',
+								'enum' => [
+									'hate_speech',
+									'harassment',
+									'sexual',
+									'violence',
+									'spam',
+									'misinformation',
+									'self_harm',
+									'illegal',
+									'other',
+								],
+							],
+							'source' => ['type' => 'string', 'enum' => ['user', 'ai']],
+							'at' => ['type' => 'integer', 'example' => 1736400000000],
+							'report_id' => ['type' => 'string', 'nullable' => true],
+							'action_notes' => ['type' => 'string', 'nullable' => true],
+							'preview' => ['type' => 'string', 'nullable' => true],
+						],
+						'required' => ['content_type', 'content_id', 'reason', 'source', 'at'],
+					],
+				],
+			],
+			'required' => ['count', 'cycles', 'banned', 'standing', 'strikes_remaining', 'history'],
+		];
+	}
+
 	public static function getAllSchemas(): array
 	{
 		return [
@@ -3455,6 +3532,8 @@ class Mantle2Schemas
 			'Report' => self::report(),
 			'ReportCreateResponse' => self::reportCreateResponse(),
 			'ReportList' => self::reportList(),
+			'BlockResponse' => self::blockResponse(),
+			'ModerationStatus' => self::moderationStatus(),
 		];
 	}
 }
