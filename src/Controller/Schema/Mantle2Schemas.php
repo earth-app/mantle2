@@ -997,6 +997,11 @@ class Mantle2Schemas
 						'Indicates if the user is a mutual friend with the requesting user',
 					'example' => false,
 				],
+				'is_blocking' => [
+					'type' => 'boolean',
+					'description' => 'Indicates if the requesting user has blocked this user',
+					'example' => false,
+				],
 				'friends' => ['$ref' => '#/components/schemas/IdArray'],
 				'added_count' => [
 					'type' => 'integer',
