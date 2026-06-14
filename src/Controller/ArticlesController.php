@@ -51,7 +51,8 @@ final class ArticlesController extends ControllerBase
 			);
 		}
 
-		$filter_author = $request->query->getInt('author');
+		// a blank/absent author (?author=) means "no author filter"
+		$filter_author = GeneralHelper::queryInt($request, 'author');
 		if ($filter_author) {
 			if ($filter_author <= 0) {
 				return GeneralHelper::badRequest('Invalid author ID');
@@ -184,7 +185,7 @@ final class ArticlesController extends ControllerBase
 		$requester = UsersHelper::getOwnerOfRequest($request);
 
 		try {
-			$count = $request->query->getInt('count', 3);
+			$count = GeneralHelper::queryInt($request, 'count', 3);
 			if ($count < 1 || $count > 15) {
 				return GeneralHelper::badRequest('Count must be between 1 and 15');
 			}
@@ -200,7 +201,7 @@ final class ArticlesController extends ControllerBase
 				);
 			}
 
-			$filter_author = $request->query->getInt('author');
+			$filter_author = GeneralHelper::queryInt($request, 'author');
 			if ($filter_author) {
 				if ($filter_author <= 0) {
 					return GeneralHelper::badRequest('Invalid author ID');

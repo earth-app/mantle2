@@ -100,12 +100,12 @@ class GeneralHelper
 		int $maxLimit = 100,
 	): array|JsonResponse {
 		try {
-			$limit = $request->query->getInt('limit', 25);
+			$limit = self::queryInt($request, 'limit', 25);
 			if ($limit < 1 || $limit > $maxLimit) {
 				return self::badRequest("Invalid limit '$limit': must be between 1 and $maxLimit");
 			}
 
-			$page = $request->query->getInt('page', 1);
+			$page = self::queryInt($request, 'page', 1);
 			if ($page < 1) {
 				return self::badRequest("Invalid page '$page'");
 			}
@@ -138,6 +138,17 @@ class GeneralHelper
 		} catch (UnexpectedValueException $e) {
 			return self::badRequest('Invalid pagination parameters: ' . $e->getMessage());
 		}
+	}
+
+	public static function queryInt(Request $request, string $key, ?int $default = null): ?int
+	{
+		$raw = $request->query->all()[$key] ?? null;
+		if (!is_string($raw) || trim($raw) === '') {
+			return $default;
+		}
+
+		$parsed = filter_var(trim($raw), FILTER_VALIDATE_INT);
+		return $parsed === false ? $default : $parsed;
 	}
 
 	public static function fromDataURL(string $dataUrl): Response

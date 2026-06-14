@@ -40,7 +40,7 @@ final class PromptsController extends ControllerBase
 		$search = $pagination['search'];
 		$sort = $pagination['sort'];
 
-		$filter_author = $request->query->getInt('author');
+		$filter_author = GeneralHelper::queryInt($request, 'author');
 		if ($filter_author) {
 			if ($filter_author <= 0) {
 				return GeneralHelper::badRequest('Invalid author ID');
@@ -280,12 +280,12 @@ final class PromptsController extends ControllerBase
 	public function randomPrompt(Request $request)
 	{
 		try {
-			$count = $request->query->getInt('count', 10);
+			$count = GeneralHelper::queryInt($request, 'count', 10);
 			if ($count < 1 || $count > 25) {
 				return GeneralHelper::badRequest('Count must be between 1 and 25');
 			}
 
-			$author = $request->query->getInt('author');
+			$author = GeneralHelper::queryInt($request, 'author', 0);
 			if ($author < 0) {
 				return GeneralHelper::badRequest('Author must be a positive integer');
 			}

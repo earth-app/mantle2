@@ -159,7 +159,7 @@ final class ActivityController extends ControllerBase
 	public function randomActivity(Request $request): JsonResponse
 	{
 		try {
-			$count = $request->query->getInt('count', 3);
+			$count = GeneralHelper::queryInt($request, 'count', 3);
 
 			$connection = Drupal::database();
 			$query = $connection

@@ -303,7 +303,7 @@ final class EventsController extends ControllerBase
 		$requester = UsersHelper::getOwnerOfRequest($request);
 
 		try {
-			$count = $request->query->getInt('count', 5);
+			$count = GeneralHelper::queryInt($request, 'count', 5);
 			if ($count < 1 || $count > 25) {
 				return GeneralHelper::badRequest('Count must be between 1 and 25');
 			}
