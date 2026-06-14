@@ -277,11 +277,22 @@ final class ReportsController extends ControllerBase
 						// deleting a user as moderation is a permanent ban (see ReportsHelper::deleteContent)
 						$enforcedAction = 'permanent_ban';
 					} elseif ($ownerId > 0) {
+						// capture a preview before deletion for strike history context
+						$resolved = ReportsHelper::resolveContent(
+							$contentType,
+							$contentId,
+							$parentId,
+						);
+						$preview = is_array($resolved) ? $resolved['preview'] ?? null : null;
+
 						$enforcedAction = ReportsHelper::recordStrikeAndEnforce(
 							$ownerId,
 							$contentType,
 							$contentId,
 							$reason,
+							$notes,
+							$preview,
+							$id,
 						);
 					}
 

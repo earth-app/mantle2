@@ -203,15 +203,14 @@ class ReportsHelper
 		}
 	}
 
-	/**
-	 * Record a strike with cloud for $ownerId and enforce the returned account action.
-	 * Returns the cloud action string ('none'|'disable_1_month'|'permanent_ban').
-	 */
 	public static function recordStrikeAndEnforce(
 		int $ownerId,
 		string $contentType,
 		string $contentId,
 		string $reason,
+		?string $notes = null,
+		?string $preview = null,
+		?string $reportId = null,
 	): string {
 		// system content (uid 1) and administrators never accrue strikes; content may still be removed
 		if ($ownerId <= 1) {
@@ -224,12 +223,27 @@ class ReportsHelper
 
 		$action = 'none';
 		try {
-			$result = CloudHelper::sendRequest('/v1/users/' . $ownerId . '/strikes', 'POST', [
+			$payload = [
 				'content_type' => $contentType,
 				'content_id' => $contentId,
 				'reason' => $reason,
 				'source' => 'user',
-			]);
+			];
+			if ($notes !== null) {
+				$payload['action_notes'] = $notes;
+			}
+			if ($preview !== null) {
+				$payload['preview'] = $preview;
+			}
+			if ($reportId !== null) {
+				$payload['report_id'] = $reportId;
+			}
+
+			$result = CloudHelper::sendRequest(
+				'/v1/users/' . $ownerId . '/strikes',
+				'POST',
+				$payload,
+			);
 			$action = is_string($result['action'] ?? null) ? $result['action'] : 'none';
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Failed to record strike for user %uid: %message', [
