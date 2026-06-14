@@ -86,6 +86,9 @@ services:
   mantle2.helper.fcm:
     class: Drupal\mantle2\Service\FCMHelper
 
+  mantle2.helper.reports:
+    class: Drupal\mantle2\Service\ReportsHelper
+
   # Email Verification Tempstore (deprecated - use Redis instead)
   mantle2.tempstore.email_verification:
     class: Drupal\Core\TempStore\PrivateTempStoreFactory

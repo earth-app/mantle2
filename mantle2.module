@@ -8,6 +8,7 @@ use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\PromptsHelper;
+use Drupal\mantle2\Service\ReportsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 
 function mantle2_help($route_name, RouteMatchInterface $route_match)
@@ -298,6 +299,43 @@ function mantle2_mail($key, &$message, $params)
 
 			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
+		case 'content_moderation':
+			$role = $params['role'] ?? 'author';
+			$contentType = $params['content_type'] ?? 'content';
+			$action = $params['action'] ?? '';
+			$notes = $params['notes'] ?? '';
+
+			if ($role === 'reporter') {
+				$message['subject'] = 'The Earth App - Your Report Was Reviewed';
+				$markdown = "@$username, thank you for your report. Our moderation team reviewed the $contentType you reported and has taken appropriate action.\n\n";
+			} else {
+				$message['subject'] = 'The Earth App - Content Moderation Notice';
+				if ($action === 'ban_user') {
+					$markdown = "@$username, your account has been suspended for violating our community guidelines.\n\n";
+				} elseif ($action === 'delete_content') {
+					$markdown = "@$username, your $contentType was removed for violating our community guidelines.\n\n";
+				} else {
+					$markdown = "@$username, a moderation decision was made regarding your $contentType.\n\n";
+				}
+			}
+
+			if ($notes) {
+				$markdown .= "**Note from moderators:** $notes\n\n";
+			}
+			$markdown .= 'If you believe this is a mistake, please contact support.';
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'moderation_digest':
+			$count = (int) ($params['count'] ?? 0);
+			$message['subject'] = "The Earth App - $count Reports Awaiting Moderation";
+
+			$markdown = "@$username, there are **$count** content report(s) awaiting moderation on The Earth App.\n\n
+			Review them in the admin dashboard:\n
+			https://app.earth-app.com/admin?tab=reports";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 		case 'plan_trial':
 			$type = $params['type'] ?? 'Pro';
 			$message['subject'] = "The Earth App - $type Trial Activated";
@@ -527,6 +565,8 @@ function mantle2_cron()
 			'User Badges' => fn() => UsersHelper::checkBadges(),
 			'Account Trials' => fn() => UsersHelper::checkAccountTrials(),
 			'Disabled Account Restrictions' => fn() => UsersHelper::enforceDisabledAccountRestrictions(),
+			'Moderation Digest' => fn() => ReportsHelper::runDailyDigest(),
+			'Reenable Disabled Accounts' => fn() => ReportsHelper::reenableExpiredDisables(),
 			'Unread Notifications' => fn() => UsersHelper::checkUnreadNotifications(),
 			'Stale Push Tokens' => fn() => UsersHelper::pruneStalePushTokens(),
 			'API Key Expirations' => fn() => ApiKeysHelper::checkExpirations(),
