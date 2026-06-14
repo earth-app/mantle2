@@ -1050,6 +1050,7 @@ class UsersHelper
 					'is_friend' => self::isAddedFriend($requester, $user),
 					'is_my_friend' => self::isAddedFriend($user, $requester),
 					'is_mutual' => self::isMutualFriend($user, $requester),
+					'is_blocking' => self::isBlocking($requester, $user),
 					'friends' => self::tryVisible(
 						json_decode($user->get('field_friends')->value ?? '[]', true),
 						$user,
@@ -2124,17 +2125,20 @@ class UsersHelper
 				return false;
 			}
 
+			// blocking severs any friendship/circle membership both ways (silent)
 			$blocked[] = (int) $target->id();
 			$user->set('field_blocked_users', json_encode(array_values($blocked)));
+			self::severFriendship($user, $target);
 			$user->save();
 
-			// maintain the reverse index on the target
+			// maintain the reverse index on the target + sever from their side
 			$blockedBy = self::getBlockedByIds($target);
 			if (!in_array((int) $user->id(), $blockedBy, true)) {
 				$blockedBy[] = (int) $user->id();
 				$target->set('field_blocked_by', json_encode(array_values($blockedBy)));
-				$target->save();
 			}
+			self::severFriendship($target, $user);
+			$target->save();
 
 			return true;
 		} catch (Exception $e) {
@@ -2142,6 +2146,30 @@ class UsersHelper
 				'%message' => $e->getMessage(),
 			]);
 			return false;
+		}
+	}
+
+	// drop $b from $a's friends + circle in-memory, no notification; caller saves $a
+	private static function severFriendship(UserInterface $a, UserInterface $b): void
+	{
+		$bid = $b->id();
+
+		$friends = $a->get('field_friends')->value ?? '[]';
+		$friends = $friends ? json_decode($friends, true) : [];
+		if (is_array($friends) && in_array($bid, $friends, true)) {
+			$a->set(
+				'field_friends',
+				json_encode(array_values(array_filter($friends, fn($id) => $id !== $bid))),
+			);
+		}
+
+		$circle = $a->get('field_circle')->value ?? '[]';
+		$circle = $circle ? json_decode($circle, true) : [];
+		if (is_array($circle) && in_array($bid, $circle, true)) {
+			$a->set(
+				'field_circle',
+				json_encode(array_values(array_filter($circle, fn($id) => $id !== $bid))),
+			);
 		}
 	}
 
