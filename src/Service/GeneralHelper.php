@@ -714,12 +714,13 @@ class GeneralHelper
 			'type' => 'secondary',
 			'link' => '/profile/@cloud',
 		],
-		[
-			'motd' => 'Support @gmitch215 by becoming a patron!',
-			'icon' => 'mdi:heart',
-			'type' => 'error',
-			'link' => 'https://patreon.com/gmitch215',
-		],
+		// patreon donation motd disabled pending app store review (guideline 3.1.1)
+		// [
+		// 	'motd' => 'Support @gmitch215 by becoming a patron!',
+		// 	'icon' => 'mdi:heart',
+		// 	'type' => 'error',
+		// 	'link' => 'https://patreon.com/gmitch215',
+		// ],
 		[
 			'motd' => 'Make sure your privacy settings are up to date in your profile.',
 			'icon' => 'mdi:shield-account',
