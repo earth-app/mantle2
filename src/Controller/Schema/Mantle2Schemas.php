@@ -818,57 +818,6 @@ class Mantle2Schemas
 		'required' => ['title', 'description', 'content'],
 	];
 
-	public static array $articleQuizCreateUpdate = [
-		'type' => 'object',
-		'properties' => [
-			'questions' => [
-				'type' => 'array',
-				'items' => [
-					'type' => 'object',
-					'properties' => [
-						'question' => [
-							'type' => 'string',
-							'minLength' => 5,
-							'maxLength' => 500,
-							'example' => 'What is the capital of France?',
-							'description' => 'The quiz question text',
-						],
-						'type' => [
-							'type' => 'string',
-							'enum' => ['true_false', 'multiple_choice'],
-							'example' => 'multiple_choice',
-							'description' => 'Type of quiz question',
-						],
-						'options' => [
-							'type' => 'array',
-							'items' => [
-								'type' => 'string',
-								'maxLength' => 100,
-							],
-							'minItems' => 2,
-							'maxItems' => 6,
-							'example' => ['Paris', 'London', 'Berlin', 'Madrid'],
-							'description' =>
-								'Answer options. For multiple choice: 2-6 options. For true/false: 2 options (True/False).',
-						],
-						'correct_answer' => [
-							'type' => 'string',
-							'maxLength' => 100,
-							'example' => 'Paris',
-							'description' =>
-								'The correct answer - must match one of the options exactly',
-						],
-					],
-					'required' => ['question', 'type', 'options', 'correct_answer'],
-				],
-				'minItems' => 1,
-				'maxItems' => 10,
-				'description' => 'Array of quiz questions to create or update (1-10 questions)',
-			],
-		],
-		'required' => ['questions'],
-	];
-
 	public static function activityCreate(): array
 	{
 		return [

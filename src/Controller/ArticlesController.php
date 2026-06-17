@@ -743,9 +743,9 @@ final class ArticlesController extends ControllerBase
 					);
 				}
 				foreach ($items as $itemIndex => $item) {
-					if (!is_string($item) || strlen($item) < 1 || strlen($item) > 64) {
+					if (!is_string($item) || strlen($item) < 1 || strlen($item) > 128) {
 						return GeneralHelper::badRequest(
-							"Each item for order question at index $index must be a string between 1 and 64 characters",
+							"Each item for order question at index $index must be a string between 1 and 128 characters",
 						);
 					}
 					$validatedItem = GeneralHelper::validateUserContent(
@@ -806,9 +806,9 @@ final class ArticlesController extends ControllerBase
 					unset($question['correct_answer'], $question['correct_answer_index']);
 
 					foreach ($options as $optIndex => $option) {
-						if (!is_string($option) || strlen($option) < 1 || strlen($option) > 64) {
+						if (!is_string($option) || strlen($option) < 1 || strlen($option) > 128) {
 							return GeneralHelper::badRequest(
-								"Each option for question at index $index must be a string between 1 and 64 characters",
+								"Each option for question at index $index must be a string between 1 and 128 characters",
 							);
 						}
 						$validatedOpt = GeneralHelper::validateUserContent(
@@ -848,10 +848,10 @@ final class ArticlesController extends ControllerBase
 							if (
 								!is_string($option) ||
 								strlen($option) < 1 ||
-								strlen($option) > 64
+								strlen($option) > 128
 							) {
 								return GeneralHelper::badRequest(
-									"Each option for question at index $index must be a string between 1 and 64 characters",
+									"Each option for question at index $index must be a string between 1 and 128 characters",
 								);
 							}
 							$validatedOpt = GeneralHelper::validateUserContent(
