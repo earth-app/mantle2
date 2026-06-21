@@ -14,7 +14,7 @@
 		"symfony/cache": "^7.3",
 		"drupal/smtp": "^1.4",
 		"drupal/redis": "^1.10",
-		"sebastian/diff": "^6",
+		"sebastian/diff": "^9",
 		"drupal/openid_connect": "^3.0@alpha",
 		"google/auth": "^1.50",
 		"firebase/php-jwt": "^7.0.5"
