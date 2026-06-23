@@ -481,10 +481,10 @@ final class UsersController extends ControllerBase
 		}
 
 		if (UsersHelper::findByUsername($username) !== null) {
-			return GeneralHelper::badRequest('Username already exists');
+			return GeneralHelper::conflict('Username already exists');
 		}
 		if ($email && UsersHelper::findByEmail($email) !== null) {
-			return GeneralHelper::badRequest('Email already in use');
+			return GeneralHelper::conflict('Email already in use');
 		}
 
 		// admin blacklist gate — block known-bad usernames/emails before persisting
