@@ -257,6 +257,8 @@ class GeneralHelper
 		'masturbation',
 	];
 
+	private static array $boundaryRequiredWords = ['coon', 'crap', 'arse', 'cuck', 'cunt'];
+
 	// Cache for normalized bad words to avoid repeated normalization
 	private static ?array $normalizedBadWords = null;
 
@@ -627,14 +629,14 @@ class GeneralHelper
 			return false;
 		}
 
-		// For very short bad words (2-3 chars), be more strict to avoid false positives
-		if (strlen($badWord) <= 3) {
-			// Use word boundaries for short words to avoid matching parts of longer words
+		// short words and known innocent-substring words must match as whole tokens
+		// (with optional plural/verb suffix) to avoid false positives like raccoon/scrape/sparse
+		if (strlen($badWord) <= 3 || in_array($badWord, self::$boundaryRequiredWords, true)) {
 			$pattern = '/\b' . preg_quote($badWord, '/') . '(?:s|es|ed|ing|y)?\b/u';
 			return preg_match($pattern, $normalized);
 		}
 
-		// For longer bad words (4+ chars), simple substring matching is usually safe
+		// For longer, unambiguous bad words, substring matching catches concatenation
 		// But also check for common suffixes
 		$pattern = '/' . preg_quote($badWord, '/') . '(?:s|es|ed|ing|y)?/u';
 		return preg_match($pattern, $normalized);

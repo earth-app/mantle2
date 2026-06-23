@@ -207,6 +207,23 @@ class GeneralUnitTest extends TestCase
 			'case 25' => [false, 'i think the question fundamentally asks the wrong things'],
 			'case 26' => [true, '$    h 1 7 7 3  7'],
 			'case 27' => [false, 'n0rm@l t3xt th4t 1sn\'t fl@g73d'],
+			// scunthorpe problem: legit words that merely contain a slur as a substring
+			'case 28' => [false, 'cocoon'],
+			'case 29' => [false, 'raccoon'],
+			'case 30' => [false, 'tycoon'],
+			'case 31' => [false, 'scrape'],
+			'case 32' => [false, 'scrappy'],
+			'case 33' => [false, 'sparse'],
+			'case 34' => [false, 'parse'],
+			'case 35' => [false, 'arsenal'],
+			'case 36' => [false, 'cuckoo'],
+			'case 37' => [false, 'scunthorpe'],
+			'case 38' => [false, 'samevans'],
+			// but the bare slurs still flag as whole words
+			'case 39' => [true, 'coon'],
+			'case 40' => [true, 'crap'],
+			'case 41' => [true, 'arse'],
+			'case 42' => [true, 'cuck'],
 		];
 	}
 
