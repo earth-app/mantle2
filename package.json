@@ -17,7 +17,7 @@
 		"prettier": "^3.8.2"
 	},
 	"peerDependencies": {
-		"typescript": "^5.9.2"
+		"typescript": "^5.9.2 || ^6.0.0"
 	},
 	"lint-staged": {
 		"*.{php,xml,dist,json,install,module,yml,md}": "prettier --write"
