@@ -452,8 +452,15 @@ final class UsersController extends ControllerBase
 			);
 		}
 
-		if (GeneralHelper::isFlagged($username)) {
-			return GeneralHelper::badRequest('Username contains inappropriate content');
+		$usernameFlag = GeneralHelper::isFlagged($username);
+		if ($usernameFlag['flagged']) {
+			return GeneralHelper::badRequest(
+				'Username contains inappropriate content: "' .
+					$usernameFlag['flagged'] .
+					'" matched "' .
+					$usernameFlag['matched_word'] .
+					'"',
+			);
 		}
 
 		if ($firstName) {
@@ -461,8 +468,15 @@ final class UsersController extends ControllerBase
 				return GeneralHelper::badRequest('First name must be between 2 and 50 characters');
 			}
 
-			if (GeneralHelper::isFlagged($firstName)) {
-				return GeneralHelper::badRequest('First name contains inappropriate content');
+			$firstNameFlag = GeneralHelper::isFlagged($firstName);
+			if ($firstNameFlag['flagged']) {
+				return GeneralHelper::badRequest(
+					'First name contains inappropriate content: "' .
+						$firstNameFlag['flagged'] .
+						'" matched "' .
+						$firstNameFlag['matched_word'] .
+						'"',
+				);
 			}
 		}
 
@@ -471,8 +485,15 @@ final class UsersController extends ControllerBase
 				return GeneralHelper::badRequest('Last name must be between 2 and 50 characters');
 			}
 
-			if (GeneralHelper::isFlagged($lastName)) {
-				return GeneralHelper::badRequest('Last name contains inappropriate content');
+			$lastNameFlag = GeneralHelper::isFlagged($lastName);
+			if ($lastNameFlag['flagged']) {
+				return GeneralHelper::badRequest(
+					'Last name contains inappropriate content: "' .
+						$lastNameFlag['flagged'] .
+						'" matched "' .
+						$lastNameFlag['matched_word'] .
+						'"',
+				);
 			}
 		}
 

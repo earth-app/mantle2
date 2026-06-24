@@ -1148,8 +1148,15 @@ class UsersHelper
 				return GeneralHelper::badRequest('Invalid username length');
 			}
 
-			if (GeneralHelper::isFlagged($username)) {
-				return GeneralHelper::badRequest('Username contains inappropriate content');
+			$usernameFlag = GeneralHelper::isFlagged($username);
+			if ($usernameFlag['flagged']) {
+				return GeneralHelper::badRequest(
+					'Username contains inappropriate content: "' .
+						$usernameFlag['flagged'] .
+						'" matched "' .
+						$usernameFlag['matched_word'] .
+						'"',
+				);
 			}
 
 			$existing = self::findByUsername($username);
