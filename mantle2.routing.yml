@@ -6098,7 +6098,7 @@ mantle2.articles.create.quiz:
     schema/403: Forbidden
     schema/404: Not Found
     schema/500: Internal Server Error
-    body/schema: $articleQuizCreateUpdate
+    body/schema: articleQuizCreateUpdate()
     body/description: Quiz questions to create or update
     parameters:
       articleId:
