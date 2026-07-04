@@ -145,6 +145,18 @@ final class OpenAPIController extends ControllerBase
 				fn($v) => $v !== null,
 			);
 
+			// every operation needs at least one response; routes that only declare a
+			// success content type (e.g. text/plain, image/png) still get a valid 200
+			if (empty($responses)) {
+				$successType = $options['schema/200/type'] ?? 'application/json';
+				$responses['200'] = str_contains($successType, 'json')
+					? Mantle2Schemas::responseBody(['type' => 'object'])
+					: [
+						'description' => 'Successful response',
+						'content' => [$successType => ['schema' => ['type' => 'string']]],
+					];
+			}
+
 			$pathItem = $paths[$path] ?? [];
 			foreach ($methods as $method) {
 				$parameters = [];
