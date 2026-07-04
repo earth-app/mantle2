@@ -15,6 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ActivityControllerTest extends IntegrationTestBase
 {
+	protected bool $installContentTypes = true;
+
 	protected function setUp(): void
 	{
 		parent::setUp();

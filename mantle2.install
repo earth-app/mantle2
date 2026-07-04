@@ -369,6 +369,13 @@ function getWidgetType(string $field_type): string
 /** @noinspection PhpUnused */
 function mantle2_install(): void
 {
+	mantle2_install_user_fields();
+	mantle2_install_content();
+}
+
+// user-entity fields; cheap and needed by nearly everything (also used lean by tests)
+function mantle2_install_user_fields(): void
+{
 	// User Fields
 
 	/// Visibility
@@ -607,7 +614,12 @@ function mantle2_install(): void
 
 	// Make sure the user form display shows all custom fields on fresh install.
 	mantle2_ensure_form_display('user', 'user');
+}
 
+// node content types (activity/event/prompt/article) + comment system + form displays;
+// the expensive half of install, only needed by tests that create nodes/comments
+function mantle2_install_content(): void
+{
 	// Activities
 
 	createContentType('activity', 'Activity', 'Activity content type', [

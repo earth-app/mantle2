@@ -12,6 +12,8 @@ use PHPUnit\Framework\Attributes\TestDox;
 
 class EngagementHelperTest extends IntegrationTestBase
 {
+	protected bool $installContentTypes = true;
+
 	protected function setUp(): void
 	{
 		parent::setUp();

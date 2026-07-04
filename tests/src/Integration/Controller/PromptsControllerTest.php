@@ -19,6 +19,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PromptsControllerTest extends IntegrationTestBase
 {
+	protected bool $installContentTypes = true;
+
 	protected function setUp(): void
 	{
 		parent::setUp();

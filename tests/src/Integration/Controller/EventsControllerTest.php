@@ -18,6 +18,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EventsControllerTest extends IntegrationTestBase
 {
+	protected bool $installContentTypes = true;
+
 	protected function setUp(): void
 	{
 		parent::setUp();

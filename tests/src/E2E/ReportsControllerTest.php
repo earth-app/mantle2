@@ -181,7 +181,9 @@ class ReportsControllerTest extends E2ETestBase
 				$this->request('POST', '/v2/reports', [], $this->reportUserBody($target)),
 			),
 		);
-		$reportId = $created['report']['id'];
+		$this->assertArrayHasKey('report', $created, 'report create returned no report');
+		$reportId = $created['report']['id'] ?? null;
+		$this->assertNotEmpty($reportId, 'report create returned no id to patch');
 
 		$response = $this->controller()->patchReport(
 			$reportId,

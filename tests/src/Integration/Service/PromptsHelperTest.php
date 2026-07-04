@@ -14,6 +14,8 @@ use PHPUnit\Framework\Attributes\TestDox;
 
 class PromptsHelperTest extends IntegrationTestBase
 {
+	protected bool $installContentTypes = true;
+
 	protected function setUp(): void
 	{
 		parent::setUp();

@@ -20,6 +20,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class SocialTest extends IntegrationTestBase
 {
+	protected bool $installContentTypes = true;
+
 	protected function setUp(): void
 	{
 		parent::setUp();

@@ -15,6 +15,8 @@ use PHPUnit\Framework\Attributes\TestDox;
 
 class SocialHelperTest extends IntegrationTestBase
 {
+	protected bool $installContentTypes = true;
+
 	protected function setUp(): void
 	{
 		parent::setUp();

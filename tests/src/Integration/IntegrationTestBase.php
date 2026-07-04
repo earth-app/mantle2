@@ -16,6 +16,9 @@ abstract class IntegrationTestBase extends KernelTestBase
 	// API/kernel tests never render config forms; skipping per-save config-schema
 	protected $strictConfigSchema = false;
 
+	// disable node content types (activity/event/prompt/article) + comment system installation
+	protected bool $installContentTypes = false;
+
 	protected static $modules = [
 		'system',
 		'user',
@@ -52,9 +55,13 @@ abstract class IntegrationTestBase extends KernelTestBase
 		// capture mail instead of sending it
 		$this->config('system.mail')->set('interface.default', 'test_mail_collector')->save();
 
-		// run the module install hook to create user fields + content types
+		// user fields are always needed; content types are installed only when a test
+		// opts in (see $installContentTypes) since they are the expensive half of install
 		$this->container->get('module_handler')->loadInclude('mantle2', 'install');
-		mantle2_install();
+		mantle2_install_user_fields();
+		if ($this->installContentTypes) {
+			mantle2_install_content();
+		}
 
 		// burn uid 0 (anonymous) + uid 1 (root superuser) so createUser() yields
 		// unprivileged users; uid 1 bypasses every permission check in drupal

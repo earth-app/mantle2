@@ -11,6 +11,8 @@ use PHPUnit\Framework\Attributes\TestDox;
 
 class ActivityHelperTest extends IntegrationTestBase
 {
+	protected bool $installContentTypes = true;
+
 	protected function setUp(): void
 	{
 		parent::setUp();
