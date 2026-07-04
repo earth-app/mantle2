@@ -141,7 +141,8 @@ class ApiKey implements JsonSerializable
 
 	public function isRevoked(): bool
 	{
-		return $this->revokedAt !== null;
+		// treat 0 as not-revoked to stay consistent with jsonSerialize truthiness
+		return !empty($this->revokedAt);
 	}
 
 	public function isExpired(int $now = 0): bool

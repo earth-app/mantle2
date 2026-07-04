@@ -12,7 +12,8 @@ class ActivityHelper
 {
 	public static function getActivity(string $id): ?Activity
 	{
-		return self::nodeToActivity(self::getNodeByActivityId($id));
+		$node = self::getNodeByActivityId($id);
+		return $node ? self::nodeToActivity($node) : null;
 	}
 
 	public static function getNodeByActivityId(string $id): ?Node

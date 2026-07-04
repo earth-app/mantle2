@@ -96,7 +96,11 @@ class XmlContentNegotiationSubscriber implements EventSubscriberInterface
 
 	public static function xmlToArray(string $xml): array
 	{
+		// buffer libxml errors so malformed client XML doesn't emit PHP warnings
+		$previous = libxml_use_internal_errors(true);
 		$element = simplexml_load_string($xml, SimpleXMLElement::class, LIBXML_NOCDATA);
+		libxml_clear_errors();
+		libxml_use_internal_errors($previous);
 		if ($element === false) {
 			return [];
 		}

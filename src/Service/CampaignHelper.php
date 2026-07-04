@@ -36,13 +36,15 @@ class CampaignHelper
 	{
 		$campaigns = self::getCampaigns();
 
-		// Try to find by ID or by index
+		// Try to find by ID or by numeric index
+		$indexKey = ctype_digit($key) ? (int) $key : null;
 		foreach ($campaigns as $i => $campaign) {
 			if (isset($campaign['id']) && $campaign['id'] === $key) {
 				return $campaign;
 			}
 
-			if ($i === $key) {
+			// $key is always a string but $i is an int index, so match numeric keys explicitly
+			if ($indexKey !== null && $i === $indexKey) {
 				return $campaign;
 			}
 		}
