@@ -24,6 +24,7 @@ use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class UsersHelper
 {
@@ -242,7 +243,7 @@ class UsersHelper
 			}
 		}
 
-		$authHeader = $request->headers->get('Authorization');
+		$authHeader = $request->headers->get('Authorization') ?? '';
 		if (stripos($authHeader, 'Bearer ') !== 0) {
 			$scheme = strtok($authHeader, ' ') ?: '?';
 			$resolved = GeneralHelper::unauthorized('Authentication required');
@@ -786,6 +787,154 @@ class UsersHelper
 				['%message' => $e->getMessage()],
 			);
 		}
+	}
+
+	#endregion
+
+	#region Inactive Account Deletion
+
+	// no-login window after which an account is permanently deleted by cron
+	public const INACTIVE_DELETION_SECONDS = 365 * 86400; // 1 year
+
+	private const DELETION_WARNING_WINDOWS = [
+		['1_hour', 3600, '1 hour'],
+		['1_day', 86400, '1 day'],
+		['3_days', 259200, '3 days'],
+		['1_week', 604800, '1 week'],
+		['2_weeks', 1209600, '2 weeks'],
+	];
+
+	public static function inactivityReference(UserInterface $user): int
+	{
+		return max((int) $user->getLastLoginTime(), (int) $user->getCreatedTime());
+	}
+
+	public static function resolveDeletionWarningWindow(int $secondsUntilDeletion): ?array
+	{
+		if ($secondsUntilDeletion <= 0) {
+			return null; // at/after the deletion moment, not a warning
+		}
+
+		foreach (self::DELETION_WARNING_WINDOWS as [$key, $seconds, $label]) {
+			if ($secondsUntilDeletion <= $seconds) {
+				return ['key' => $key, 'seconds' => $seconds, 'label' => $label];
+			}
+		}
+
+		return null; // further out than the widest window
+	}
+
+	public static function checkInactiveAccounts(): void
+	{
+		$now = time();
+		$users = User::loadMultiple();
+
+		$warned = 0;
+		$deleted = 0;
+
+		foreach ($users as $user) {
+			// never touch anonymous, root/cloud, or admin accounts
+			if ((int) $user->id() <= 1 || $user->id() === self::cloud()->id()) {
+				continue;
+			}
+			if (self::isAdmin($user)) {
+				continue;
+			}
+
+			$reference = self::inactivityReference($user);
+			if ($reference <= 0) {
+				continue; // cannot determine activity, leave it alone
+			}
+
+			$deleteAt = $reference + self::INACTIVE_DELETION_SECONDS;
+			$secondsUntil = $deleteAt - $now;
+
+			if ($secondsUntil <= 0) {
+				if (self::deleteInactiveUser($user)) {
+					$deleted++;
+				}
+				continue;
+			}
+
+			$window = self::resolveDeletionWarningWindow($secondsUntil);
+			if ($window === null) {
+				continue; // too early to warn
+			}
+
+			$dedupKey = 'user:inactive_deletion_warning:' . $user->id() . ':' . $window['key'];
+			if (RedisHelper::exists($dedupKey)) {
+				continue; // this window was already sent
+			}
+
+			$label = $window['label'];
+			$deleteAtAtom = date(DATE_ATOM, $deleteAt);
+
+			self::addNotification(
+				$user,
+				'Account Scheduled for Deletion',
+				"Your account has been inactive and will be permanently deleted in $label. Sign in to keep it.",
+				'/profile',
+				'warning',
+			);
+
+			// account-critical: send regardless of subscription state
+			self::sendEmail(
+				$user,
+				'account_deletion_warning',
+				[
+					'window' => $label,
+					'delete_at' => $deleteAtAtom,
+				],
+				false,
+			);
+
+			// keep the dedup marker until just past the deletion moment
+			RedisHelper::set(
+				$dedupKey,
+				['sent_at' => $now, 'delete_at' => $deleteAt],
+				max(3600, $secondsUntil + 86400),
+			);
+
+			$warned++;
+		}
+
+		if ($warned > 0 || $deleted > 0) {
+			Drupal::logger('mantle2')->notice(
+				'[cron] Inactive accounts: warned %warned, deleted %deleted.',
+				['%warned' => $warned, '%deleted' => $deleted],
+			);
+		}
+	}
+
+	private static function deleteInactiveUser(UserInterface $user): bool
+	{
+		$uid = (int) $user->id();
+		$username = $user->getAccountName();
+
+		// final notice before removal, while the entity is still valid
+		self::sendEmail($user, 'account_deleted', ['username' => $username], false);
+
+		try {
+			$user->delete();
+			CloudHelper::sendRequest('/v1/users/' . $uid, 'DELETE');
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->error(
+				'[cron] Failed to delete inactive user %uid: %message',
+				['%uid' => $uid, '%message' => $e->getMessage()],
+			);
+			return false;
+		}
+
+		try {
+			Drupal::database()->delete('push_tokens')->condition('user_id', $uid)->execute();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'[cron] Failed to remove push tokens for deleted user %uid: %message',
+				['%uid' => $uid, '%message' => $e->getMessage()],
+			);
+		}
+
+		return true;
 	}
 
 	#endregion
@@ -2600,7 +2749,8 @@ class UsersHelper
 	public static function removeActivity(UserInterface $user, Activity $activity): void
 	{
 		$activities = self::getActivities($user);
-		$activities = array_filter($activities, fn($a) => $a !== $activity);
+		// compare by id; activities are rebuilt objects so !== identity never matches
+		$activities = array_filter($activities, fn($a) => $a->getId() !== $activity->getId());
 		self::setActivities($user, $activities);
 	}
 
