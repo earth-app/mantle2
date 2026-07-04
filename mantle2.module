@@ -299,6 +299,28 @@ function mantle2_mail($key, &$message, $params)
 
 			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
+		case 'account_deletion_warning':
+			$window = $params['window'] ?? 'soon';
+			$deleteAt = $params['delete_at'] ?? null;
+			$message['subject'] = "The Earth App - Account Deletion in $window";
+
+			$whenLine = $deleteAt ? "**Scheduled Deletion:** {$deleteAt}\n\n" : '';
+			$markdown = "@$username, Your account has been inactive for nearly a year and is scheduled for permanent deletion in **{$window}**.\n\n
+			{$whenLine}To keep your account and all of your data, simply sign in before then:\n
+			https://app.earth-app.com\n\n
+			If you do nothing, your account and all associated data will be permanently deleted. This cannot be undone.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'account_deleted':
+			$message['subject'] = 'The Earth App - Account Deleted';
+
+			$markdown = "@$username, Your account has been permanently deleted after a prolonged period of inactivity.\n\n
+			All associated data has been removed. If this was a mistake or you would like to come back, you're always welcome to create a new account at https://app.earth-app.com.\n\n
+			Thank you for having been part of The Earth App.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 		case 'content_moderation':
 			$role = $params['role'] ?? 'author';
 			$contentType = $params['content_type'] ?? 'content';
@@ -474,6 +496,8 @@ function mantle2_mail_alter(&$message)
 		'mantle2_oauth_provider_unlinked',
 		'mantle2_account_disabled',
 		'mantle2_account_enabled',
+		'mantle2_account_deletion_warning',
+		'mantle2_account_deleted',
 		'mantle2_plan_trial',
 		'mantle2_plan_trial_warning',
 		'mantle2_plan_trial_expired',
@@ -564,6 +588,7 @@ function mantle2_cron()
 			'Fix Event Dates' => fn() => mantle2_fix_event_dates(),
 			'User Badges' => fn() => UsersHelper::checkBadges(),
 			'Account Trials' => fn() => UsersHelper::checkAccountTrials(),
+			'Inactive Accounts' => fn() => UsersHelper::checkInactiveAccounts(),
 			'Disabled Account Restrictions' => fn() => UsersHelper::enforceDisabledAccountRestrictions(),
 			'Moderation Digest' => fn() => ReportsHelper::runDailyDigest(),
 			'Reenable Disabled Accounts' => fn() => ReportsHelper::reenableExpiredDisables(),
