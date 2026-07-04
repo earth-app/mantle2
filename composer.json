@@ -32,7 +32,11 @@
 	},
 	"autoload-dev": {
 		"psr-4": {
-			"Drupal\\Tests\\mantle2\\": "tests/src/"
+			"Drupal\\Tests\\mantle2\\": "tests/src/",
+			"Drupal\\Tests\\": "vendor/drupal/core/tests/Drupal/Tests/",
+			"Drupal\\KernelTests\\": "vendor/drupal/core/tests/Drupal/KernelTests/",
+			"Drupal\\FunctionalTests\\": "vendor/drupal/core/tests/Drupal/FunctionalTests/",
+			"Drupal\\TestTools\\": "vendor/drupal/core/tests/Drupal/TestTools/"
 		}
 	},
 	"repositories": [

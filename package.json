@@ -5,6 +5,12 @@
 		"prettier": "bunx prettier --write .",
 		"prettier:check": "bunx prettier --check",
 		"test": "./vendor/bin/phpunit",
+		"test:unit": "./vendor/bin/phpunit --testsuite Unit",
+		"test:integration": "./vendor/bin/phpunit --testsuite Integration",
+		"test:e2e": "./vendor/bin/phpunit --testsuite E2E",
+		"test:coverage:unit": "./vendor/bin/phpunit --testsuite Unit --coverage-clover coverage/unit.clover.xml --coverage-text=coverage/mantle2.coverage.txt --log-junit coverage/unit.junit.xml",
+		"test:coverage:integration": "./vendor/bin/phpunit --testsuite Integration --coverage-clover coverage/integration.clover.xml --log-junit coverage/integration.junit.xml --coverage-text=coverage/integration.coverage.txt",
+		"test:coverage:e2e": "./vendor/bin/phpunit --testsuite E2E --coverage-clover coverage/e2e.clover.xml --log-junit coverage/e2e.junit.xml --coverage-text=coverage/e2e.coverage.txt",
 		"analyze": "./vendor/bin/phpstan --memory-limit=2G",
 		"prepare": "husky install"
 	},

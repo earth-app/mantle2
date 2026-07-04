@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <phpunit
-	bootstrap="vendor/autoload.php"
+	bootstrap="tests/bootstrap.php"
 	colors="true"
 	failOnRisky="true"
 	failOnWarning="true"
@@ -18,32 +18,25 @@
 		/>
 		<ini
 			name="max_execution_time"
-			value="300"
+			value="0"
+		/>
+		<env
+			name="SIMPLETEST_DB"
+			value="sqlite://localhost//tmp/mantle2-test.sqlite"
 		/>
 	</php>
 
-  	<testsuites>
-    	<testsuite name="Unit">
-      		<directory>tests/src/Unit</directory>
-    	</testsuite>
-  	</testsuites>
-
-  	<coverage>
-    	<report>
-			<html
-				outputDirectory="coverage/html"
-				lowUpperBound="35"
-				highLowerBound="70"
-			/>
-			<text
-				showUncoveredFiles="true"
-				showOnlySummary="false"
-				outputFile="coverage/mantle2.coverage.txt"
-			/>
-			<php outputFile="coverage/mantle2.coverage.php" />
-			<xml outputDirectory="coverage/xml" />
-		</report>
-  	</coverage>
+	<testsuites>
+		<testsuite name="Unit">
+			<directory>tests/src/Unit</directory>
+		</testsuite>
+		<testsuite name="Integration">
+			<directory>tests/src/Integration</directory>
+		</testsuite>
+		<testsuite name="E2E">
+			<directory>tests/src/E2E</directory>
+		</testsuite>
+	</testsuites>
 
 	<source>
 		<include>
