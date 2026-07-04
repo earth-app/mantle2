@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\mantle2\Unit;
 
+use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
@@ -13,6 +14,7 @@ use Symfony\Component\Yaml\Exception\ParseException;
 class RoutingValidationTest extends TestCase
 {
 	private static array $routes;
+	private static array $schemas;
 	private static string $routingFilePath;
 
 	public static function setUpBeforeClass(): void
@@ -28,6 +30,8 @@ class RoutingValidationTest extends TestCase
 		} catch (ParseException $e) {
 			self::fail('Failed to parse routing YAML: ' . $e->getMessage());
 		}
+
+		self::$schemas = Mantle2Schemas::getAllSchemas();
 	}
 
 	public static function routeProvider(): array
@@ -372,6 +376,20 @@ class RoutingValidationTest extends TestCase
 			}
 		}
 
+		if (isset($route['options']['schema/202'])) {
+			$schemaRef = $route['options']['schema/202'];
+
+			if (is_string($schemaRef) && !str_contains($schemaRef, '/')) {
+				$error = $this->validateSchemaReference(
+					$schemasClass,
+					$schemaRef,
+					$routeName,
+					'schema/202',
+				);
+				$this->assertNull($error, $error ?? '');
+			}
+		}
+
 		// Check body/schema reference
 		if (isset($route['options']['body/schema'])) {
 			$schemaRef = $route['options']['body/schema'];
@@ -476,6 +494,94 @@ class RoutingValidationTest extends TestCase
 		}
 
 		return null;
+	}
+
+	#[Test]
+	#[TestDox('getAllSchemas returns a non-empty map of PascalCase-keyed array definitions')]
+	#[Group('mantle2/schema')]
+	public function testGetAllSchemasShape(): void
+	{
+		$this->assertNotEmpty(self::$schemas);
+		foreach (self::$schemas as $name => $def) {
+			$this->assertMatchesRegularExpression(
+				'/^[A-Z][a-zA-Z0-9]*$/',
+				$name,
+				"Schema key not PascalCase: $name",
+			);
+			$this->assertIsArray($def, "Schema '$name' is not an array");
+		}
+	}
+
+	public static function schemaProvider(): array
+	{
+		$data = [];
+		foreach (Mantle2Schemas::getAllSchemas() as $name => $def) {
+			$data[$name] = [$name, $def];
+		}
+		return $data;
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'Every internal $ref inside schema $_dataName resolves to a defined schema or local $defs',
+		),
+	]
+	#[Group('mantle2/schema')]
+	#[DataProvider('schemaProvider')]
+	public function testSchemaInternalRefsResolve(string $name, array $def): void
+	{
+		$refs = [];
+		$this->collectRefs($def, $refs);
+
+		if (empty($refs)) {
+			$this->assertTrue(true);
+			return;
+		}
+
+		$localDefs = is_array($def['$defs'] ?? null) ? $def['$defs'] : [];
+
+		foreach ($refs as $ref) {
+			// local JSON-Schema pointer into this schema's own $defs block
+			if (str_starts_with($ref, '#/$defs/')) {
+				$target = substr($ref, strlen('#/$defs/'));
+				$this->assertArrayHasKey(
+					$target,
+					$localDefs,
+					"Schema '$name' references undefined local \$defs entry via \$ref: $ref",
+				);
+				continue;
+			}
+
+			// global component pointer into getAllSchemas()
+			$this->assertStringStartsWith(
+				'#/components/schemas/',
+				$ref,
+				"Schema '$name' has a non-internal or malformed \$ref: $ref",
+			);
+			$target = substr($ref, strlen('#/components/schemas/'));
+			$this->assertArrayHasKey(
+				$target,
+				self::$schemas,
+				"Schema '$name' references undefined schema via \$ref: $ref",
+			);
+		}
+	}
+
+	private function collectRefs(mixed $node, array &$out): void
+	{
+		if (!is_array($node)) {
+			return;
+		}
+		foreach ($node as $key => $value) {
+			if ($key === '$ref' && is_string($value)) {
+				$out[] = $value;
+				continue;
+			}
+			if (is_array($value)) {
+				$this->collectRefs($value, $out);
+			}
+		}
 	}
 
 	#[Test]
