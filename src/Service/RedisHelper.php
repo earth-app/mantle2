@@ -12,6 +12,13 @@ class RedisHelper
 	private static $redis_client = null;
 	private static $use_cache_fallback = false;
 
+	// resets memoized client state so tests can switch between real redis and cache fallback
+	public static function reset(): void
+	{
+		self::$redis_client = null;
+		self::$use_cache_fallback = false;
+	}
+
 	private static function getRedisClient()
 	{
 		if (self::$redis_client !== null) {
