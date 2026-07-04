@@ -263,8 +263,8 @@ class EventsHelper
 		// - mutual friend with host
 		if (
 			UsersHelper::isAdmin($user) ||
-			$user->id() === $event->getHostId() ||
-			in_array($user->id(), $event->getAttendeeIds()) ||
+			(int) $user->id() === $event->getHostId() ||
+			in_array((int) $user->id(), $event->getAttendeeIds()) ||
 			UsersHelper::isMutualFriend($event->getHost(), $user)
 		) {
 			return true;
@@ -737,7 +737,8 @@ class EventsHelper
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());
 		$result['is_attending'] = $user ? in_array($user->id(), $event->getAttendeeIds()) : false;
-		$result['can_edit'] = $event->getHostId() === $user?->id() || UsersHelper::isAdmin($user);
+		$result['can_edit'] =
+			$event->getHostId() === (int) $user?->id() || UsersHelper::isAdmin($user);
 
 		// filter out internal fields (those starting with _)
 		if (isset($result['fields']) && is_array($result['fields'])) {

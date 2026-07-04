@@ -66,7 +66,7 @@ class ArticlesHelper
 		$result['created_at'] = GeneralHelper::dateToIso($article->getCreatedAt());
 		$result['updated_at'] = GeneralHelper::dateToIso($article->getUpdatedAt());
 		$result['can_edit'] =
-			$article->getAuthorId() === $user?->id() || UsersHelper::isAdmin($user);
+			$article->getAuthorId() === (int) $user?->id() || UsersHelper::isAdmin($user);
 
 		return $result;
 	}

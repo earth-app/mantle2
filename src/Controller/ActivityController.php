@@ -39,10 +39,14 @@ final class ActivityController extends ControllerBase
 		$sort = $pagination['sort'];
 
 		$filter_type = $request->query->get('type');
+		$filter_type_ordinal = null;
 		if ($filter_type) {
-			if (!ActivityType::tryFrom($filter_type)) {
+			$typeCase = ActivityType::tryFrom($filter_type);
+			if (!$typeCase) {
 				return GeneralHelper::badRequest('Invalid activity type filter');
 			}
+			// field stores the ordinal (list_string key), not the enum label
+			$filter_type_ordinal = GeneralHelper::findOrdinal(ActivityType::cases(), $typeCase);
 		}
 
 		try {
@@ -87,7 +91,7 @@ final class ActivityController extends ControllerBase
 						'ft',
 						'ft.entity_id = n.nid',
 					);
-					$query->condition("$ft.field_activity_types_value", $filter_type);
+					$query->condition("$ft.field_activity_types_value", $filter_type_ordinal);
 				}
 
 				// Get total count for random
@@ -113,7 +117,7 @@ final class ActivityController extends ControllerBase
 				}
 
 				if ($filter_type) {
-					$query->condition('field_activity_types', $filter_type);
+					$query->condition('field_activity_types', $filter_type_ordinal);
 				}
 
 				$countQuery = clone $query;

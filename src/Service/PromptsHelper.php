@@ -80,9 +80,9 @@ class PromptsHelper
 			return false;
 		}
 
-		// PRIVATE requires ownership
+		// PRIVATE requires ownership (id() is a string, ownerId is an int)
 		if ($visibility === Visibility::PRIVATE) {
-			return $user->id() === $prompt->getOwnerId();
+			return (int) $user->id() === $prompt->getOwnerId();
 		}
 
 		return true;

@@ -432,7 +432,7 @@ final class PromptsController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
 
-		if ($data->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($data->getOwnerId() !== (int) $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to update this prompt');
 		}
 
@@ -518,7 +518,7 @@ final class PromptsController extends ControllerBase
 			return GeneralHelper::internalError('Failed to load prompt');
 		}
 
-		if ($data->getOwnerId() !== $user->id() && !UsersHelper::isAdmin($user)) {
+		if ($data->getOwnerId() !== (int) $user->id() && !UsersHelper::isAdmin($user)) {
 			return GeneralHelper::forbidden('You are not allowed to delete this prompt');
 		}
 
