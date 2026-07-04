@@ -1,0 +1,344 @@
+name: Build Module for mantle2
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  repository_dispatch:
+    types: [cloud-update]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring libxml gd dom curl date hash bcmath pcov random xml zlib standard
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 'latest'
+      - name: Install Composer Dependencies
+        run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Run PHP Lint
+        run: bun run analyze -- --no-progress --error-format=github
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring libxml gd dom curl date hash bcmath pcov random xml zlib standard
+          coverage: pcov
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 'latest'
+      - name: Install Composer Dependencies
+        run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Run Unit Tests with Coverage
+        run: bun run test:coverage:unit
+      - name: Upload Unit Coverage to Codecov
+        if: success() || failure()
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: earth-app/mantle2
+          fail_ci_if_error: false
+          report_type: coverage
+          flags: unit
+          files: coverage/unit.clover.xml
+      - name: Upload Unit Test Results to Codecov
+        if: success() || failure()
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: earth-app/mantle2
+          fail_ci_if_error: false
+          report_type: test_results
+          flags: unit
+          files: coverage/unit.junit.xml
+      - name: Archive Unit Coverage
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-unit
+          path: coverage/
+          retention-days: 30
+      - name: Unit Coverage to Job Summary
+        if: success() || failure()
+        run: |
+          echo "## Unit Coverage" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage/mantle2.coverage.txt ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat coverage/mantle2.coverage.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+      - name: Add Unit Coverage as PR Comment
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: unit-coverage
+          recreate: true
+          path: coverage/mantle2.coverage.txt
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring libxml gd dom curl date hash bcmath pcov random xml zlib standard
+          coverage: pcov
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 'latest'
+      - name: Install Composer Dependencies
+        run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Run Integration Tests with Coverage
+        run: bun run test:coverage:integration
+      - name: Upload Integration Coverage to Codecov
+        if: success() || failure()
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: earth-app/mantle2
+          fail_ci_if_error: false
+          report_type: coverage
+          flags: e2e-mocked
+          files: coverage/integration.clover.xml
+      - name: Upload Integration Test Results to Codecov
+        if: success() || failure()
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: earth-app/mantle2
+          fail_ci_if_error: false
+          report_type: test_results
+          flags: e2e-mocked
+          files: coverage/integration.junit.xml
+      - name: Archive Integration Coverage
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-integration
+          path: coverage/
+          retention-days: 30
+      - name: Integration Coverage to Job Summary
+        if: success() || failure()
+        run: |
+          echo "## Integration Coverage" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage/integration.coverage.txt ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat coverage/integration.coverage.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - '6379:6379'
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring libxml gd dom curl date hash bcmath pcov random xml zlib standard redis
+          coverage: pcov
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 'latest'
+      - name: Install Composer Dependencies
+        run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Checkout cloud
+        uses: actions/checkout@v7
+        with:
+          repository: earth-app/cloud
+          path: cloud
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Boot earth-app/cloud
+        run: |
+          cd cloud
+          bun install
+          bun run dev > /tmp/cloud.log 2>&1 &
+          echo $! > /tmp/cloud.pid
+          for i in $(seq 1 15); do
+            if curl -sf http://127.0.0.1:9898/; then
+              echo "cloud is up"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:9898/ || (cat /tmp/cloud.log && exit 1)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ADMIN_API_KEY: test-admin-key
+          MANTLE_URL: http://127.0.0.1:8787
+      - name: Run E2E Tests with Coverage
+        run: bun run test:coverage:e2e
+        env:
+          CI: true
+          MANTLE2_CLOUD_ENDPOINT: http://127.0.0.1:9898
+          MANTLE2_ADMIN_KEY: test-admin-key
+          MANTLE2_REDIS_HOST: 127.0.0.1
+          MANTLE2_REDIS_PORT: 6379
+      - name: Upload E2E Coverage to Codecov
+        if: success() || failure()
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: earth-app/mantle2
+          fail_ci_if_error: false
+          report_type: coverage
+          flags: e2e-integration
+          files: coverage/e2e.clover.xml
+      - name: Upload E2E Test Results to Codecov
+        if: success() || failure()
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: earth-app/mantle2
+          fail_ci_if_error: false
+          report_type: test_results
+          flags: e2e-integration
+          files: coverage/e2e.junit.xml
+      - name: Archive E2E Artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-artifacts-${{ github.run_id }}
+          path: |
+            /tmp/*.log
+            coverage/
+          retention-days: 30
+      - name: E2E Coverage to Job Summary
+        if: success() || failure()
+        run: |
+          echo "## E2E Coverage" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage/e2e.coverage.txt ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat coverage/e2e.coverage.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+      - name: Tear-Down Servers
+        if: always()
+        run: |
+          if [ -f /tmp/cloud.pid ]; then kill "$(cat /tmp/cloud.pid)" || true; fi
+
+  notify-failure:
+    runs-on: ubuntu-latest
+    needs: [build, test, integration, e2e]
+    if: ${{ failure() && github.event_name == 'push' }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Comment Build Failure on Commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const results = {
+              build: '${{ needs.build.result }}',
+              test: '${{ needs.test.result }}',
+              integration: '${{ needs.integration.result }}',
+              e2e: '${{ needs.e2e.result }}',
+            };
+            const failed = Object.entries(results)
+              .filter(([, r]) => r === 'failure')
+              .map(([j]) => j);
+            const jobs = failed.length ? failed.join(', ') : 'unknown';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `Build failed on job(s): **${jobs}**.`,
+              '',
+              `Deployment is blocked until this is fixed.`,
+              '',
+              `Run: ${runUrl}`,
+            ].join('\n');
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body,
+            });
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, test, integration, e2e]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring
+      - name: Upload via SSH
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.MANTLE2_IP }}
+          username: ${{ secrets.MANTLE2_USERNAME }}
+          key: ${{ secrets.MANTLE2_SSH_KEY }}
+          passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
+          source: .,!vendor,!.git,!tests,!coverage
+          target: /var/www/drupal/web/modules/mantle2
+      - name: Restart Drupal Service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.MANTLE2_IP }}
+          username: ${{ secrets.MANTLE2_USERNAME }}
+          key: ${{ secrets.MANTLE2_SSH_KEY }}
+          passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
+          script: |
+            cd /var/www/drupal
+            ./vendor/bin/drush un mantle2 -y
+            cd /var/www/drupal
+            ./vendor/bin/drush en mantle2 -y
+            ./vendor/bin/drush updb -y
+            ./vendor/bin/drush cr
+            sudo /usr/bin/systemctl restart apache2
