@@ -248,6 +248,7 @@ jobs:
           ADMIN_API_KEY: test-admin-key
           MANTLE_URL: http://127.0.0.1:8787
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       - name: Run E2E Tests with Coverage
         run: bun run test:coverage:e2e
         env:
