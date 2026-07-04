@@ -84,6 +84,11 @@ foreach (glob($drupalRoot . '/*', GLOB_ONLYDIR) as $pkgDir) {
 	}
 }
 
+$testToken = getenv('TEST_TOKEN');
+if ($testToken !== false && $testToken !== '') {
+	putenv('SIMPLETEST_DB=sqlite://localhost//tmp/mantle2-test-' . $testToken . '.sqlite');
+}
+
 setlocale(LC_ALL, 'C.UTF-8', 'C');
 mb_internal_encoding('utf-8');
 date_default_timezone_set('America/Chicago');

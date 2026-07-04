@@ -6,6 +6,10 @@ on:
   repository_dispatch:
     types: [cloud-update]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,6 +29,12 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 'latest'
+      - name: Cache Composer Downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
       - name: Install Composer Dependencies
         run: composer install --no-progress --no-suggest --prefer-dist
       - name: Run PHP Lint
@@ -33,6 +43,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: build
 
     permissions:
       contents: read
@@ -50,6 +61,12 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 'latest'
+      - name: Cache Composer Downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
       - name: Install Composer Dependencies
         run: composer install --no-progress --no-suggest --prefer-dist
       - name: Run Unit Tests with Coverage
@@ -100,7 +117,8 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 40
+    needs: [build, test]
 
     permissions:
       contents: read
@@ -118,6 +136,12 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 'latest'
+      - name: Cache Composer Downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
       - name: Install Composer Dependencies
         run: composer install --no-progress --no-suggest --prefer-dist
       - name: Run Integration Tests with Coverage
@@ -162,6 +186,7 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    needs: [build, test]
 
     services:
       redis:
@@ -190,6 +215,12 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 'latest'
+      - name: Cache Composer Downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
       - name: Install Composer Dependencies
         run: composer install --no-progress --no-suggest --prefer-dist
       - name: Checkout cloud
