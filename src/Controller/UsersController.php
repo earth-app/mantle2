@@ -2358,7 +2358,8 @@ final class UsersController extends ControllerBase
 		?string $username = null,
 		?string $step = null,
 	): JsonResponse {
-		if (!$step) {
+		// step "0" is a valid index; only null/empty is "missing"
+		if ($step === null || $step === '') {
 			return GeneralHelper::badRequest('Missing step parameter');
 		}
 
