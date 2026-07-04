@@ -7,6 +7,7 @@ use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\redis\ClientFactory;
 use Exception;
+use Throwable;
 use Drupal\user\UserInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -36,7 +37,18 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 			return self::$config;
 		}
 
-		$configPath = dirname(__DIR__, 3) . '/mantle2.caching.yml';
+		// module root is two levels up from src/EventSubscriber; fall back to the
+		// resolved module path so a symlinked module still finds its config
+		$configPath = dirname(__DIR__, 2) . '/mantle2.caching.yml';
+		if (!file_exists($configPath)) {
+			try {
+				$modulePath = Drupal::service('extension.list.module')->getPath('mantle2');
+				$configPath = $modulePath . '/mantle2.caching.yml';
+			} catch (Throwable $e) {
+				// leave $configPath as-is; handled by the file_exists check below
+			}
+		}
+
 		if (!file_exists($configPath)) {
 			self::$config = ['cache' => []];
 			return self::$config;
