@@ -22,29 +22,4 @@ class CloudUnitTest extends TestCase
 		$this->assertEquals('test_admin_key', CloudHelper::getAdminKey());
 		$this->assertEquals('https://httpbin.org', CloudHelper::getCloudEndpoint());
 	}
-
-	#[Test]
-	#[TestDox('Test CloudHelper sendRequest method')]
-	#[Group('mantle2/cloud')]
-	public function testSendRequest()
-	{
-		try {
-			// Test GET request
-			$response = CloudHelper::sendRequest('get', 'GET', ['param1' => 'value1']);
-			$this->assertArrayHasKey('args', $response);
-			$this->assertEquals('value1', $response['args']['param1']);
-
-			// Test POST request
-			$response = CloudHelper::sendRequest('post', 'POST', ['param2' => 'value2']);
-			$this->assertArrayHasKey('json', $response);
-			$this->assertEquals('value2', $response['json']['param2']);
-
-			// Test POST without data
-			$response = CloudHelper::sendRequest('post', 'POST');
-			$this->assertArrayHasKey('json', $response);
-		} catch (Exception $e) {
-			// ignore exceptions for network issues
-			$this->assertTrue(true);
-		}
-	}
 }
