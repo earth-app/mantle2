@@ -367,7 +367,7 @@ class Mantle2Schemas
 		'type' => 'string',
 		'minLength' => 8,
 		'maxLength' => 100,
-		'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]+$", // At least 8 characters, letters, numbers, special chars
+		'pattern' => "^[a-zA-Z0-9!@#$%^&*()_+={}\[\]:;\"'<>.,?\/\\|-]{8,100}$", // 8-100 chars: letters, numbers, special chars
 		'example' => 'password123',
 	];
 	public static array $email = [
@@ -3456,6 +3456,7 @@ class Mantle2Schemas
 			'ArticleUpdate' => self::articleUpdate(),
 			'ArticleQuiz' => self::articleQuiz(),
 			'ArticleQuizQuestion' => self::articleQuizQuestion(),
+			'ArticleQuizCreateUpdateQuestion' => self::articleQuizCreateUpdateQuestion(),
 			'ArticleQuizCreateUpdateResponse' => self::articleQuizCreateUpdateResponse(),
 			'Cosmetic' => self::cosmetic(),
 			'CosmeticsCatalog' => self::cosmeticsCatalog(),
