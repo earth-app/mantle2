@@ -232,6 +232,7 @@ jobs:
       - name: Boot earth-app/cloud
         run: |
           cd cloud
+          printf 'ADMIN_API_KEY=test-admin-key\nMANTLE_URL=http://127.0.0.1:8787\nENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" > .dev.vars
           bun install
           bun run dev > /tmp/cloud.log 2>&1 &
           echo $! > /tmp/cloud.pid
