@@ -3,52 +3,20 @@
 namespace Drupal\Tests\mantle2;
 
 use Drupal;
-use Drupal\Component\DependencyInjection\ContainerInterface;
-use Drupal\Core\Cache\Cache;
+use Drupal\Core\Cache\CacheBackendInterface;
+use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
+use Drupal\Core\Logger\LoggerChannelInterface;
+use Drupal\Core\Site\Settings;
+use Drupal\key\KeyInterface;
+use Drupal\key\KeyRepositoryInterface;
 use PHPUnit\Framework\TestCase;
-
-// Mock Interfaces
-
-interface KeyRepositoryInterface
-{
-	public function getKey(string $key_id);
-}
-
-interface KeyInterface
-{
-	public function getKeyValue();
-}
-
-interface SettingsInterface
-{
-	public function get(string $name);
-}
-
-interface LoggerFactoryInterface
-{
-	public function get(string $channel): LoggerInterface;
-}
-
-interface LoggerInterface
-{
-	public function warning(string $message);
-	public function info(string $message);
-	public function error(string $message);
-}
-
-interface CacheInterface
-{
-	public function get($cid);
-	public function set($cid, $data, $expire = Cache::PERMANENT, array $tags = []);
-}
-
-// Mocks Class
 
 class Mocks extends TestCase
 {
-	public static $mocks = null;
+	public static ?Mocks $mocks = null;
 
-	public static function instance()
+	public static function instance(): Mocks
 	{
 		if (self::$mocks === null) {
 			self::$mocks = new Mocks('Mocks');
@@ -57,76 +25,33 @@ class Mocks extends TestCase
 		return self::$mocks;
 	}
 
-	public function mockDrupalContainer()
+	public function mockDrupalContainer(string $adminKey = 'test_admin_key'): void
 	{
-		$container = $this->createMock(ContainerInterface::class);
+		$container = new ContainerBuilder();
 
-		// Key Repository Mock
+		$key = $this->createMock(KeyInterface::class);
+		$key->method('getKeyValue')->willReturn($adminKey);
+
 		$keyRepository = $this->createMock(KeyRepositoryInterface::class);
-
-		$key1 = $this->createMock(KeyInterface::class);
-		$key1->expects($this->any())->method('getKeyValue')->willReturn('test_admin_key');
-
 		$keyRepository
-			->expects($this->any())
 			->method('getKey')
-			->with('mantle2_api_key')
-			->willReturn($key1);
+			->willReturnCallback(fn($id) => $id === 'mantle2_api_key' ? $key : null);
 
-		// Settings Mock
-		$settings = [
-			'mantle2.cloud_endpoint' => 'https://httpbin.org', // safe test endpoint for real requests
-		];
+		$logger = $this->createMock(LoggerChannelInterface::class);
+		$loggerFactory = $this->createMock(LoggerChannelFactoryInterface::class);
+		$loggerFactory->method('get')->willReturn($logger);
 
-		$settingsMock = $this->createMock(SettingsInterface::class);
-		$settingsMock
-			->expects($this->any())
-			->method('get')
-			->willReturnCallback(fn($name) => $settings[$name] ?? null);
+		$cache = $this->createMock(CacheBackendInterface::class);
+		$cache->method('get')->willReturn(false);
 
-		// Logger Mock
-		$loggerMock = $this->createMock(LoggerInterface::class);
-		$loggerMock
-			->expects($this->any())
-			->method('info')
-			->willReturnCallback(fn($message) => print "LOG INFO: $message\n");
+		$container->set('key.repository', $keyRepository);
+		$container->set(
+			'settings',
+			new Settings(['mantle2.cloud_endpoint' => 'https://httpbin.org']),
+		);
+		$container->set('logger.factory', $loggerFactory);
+		$container->set('cache.mantle2', $cache);
 
-		$loggerMock
-			->expects($this->any())
-			->method('warning')
-			->willReturnCallback(fn($message) => print "LOG WARNING: $message\n");
-
-		$loggerMock
-			->expects($this->any())
-			->method('error')
-			->willReturnCallback(fn($message) => print "LOG ERROR: $message\n");
-
-		$loggerFactoryMock = $this->createMock(LoggerFactoryInterface::class);
-		$loggerFactoryMock
-			->expects($this->any())
-			->method('get')
-			->with('mantle2')
-			->willReturnCallback(fn($channel) => $loggerMock);
-
-		// Cache Mock
-		$cacheMock = $this->createMock(CacheInterface::class);
-		$cacheMock->expects($this->any())->method('get')->willReturn(null); // Always return cache miss for simplicity
-
-		$cacheMock
-			->expects($this->any())
-			->method('set')
-			->willReturnCallback(fn($cid, $data, $expire, $tags) => print "CACHE SET: $cid\n");
-
-		$container
-			->expects($this->any())
-			->method('get')
-			->willReturnMap([
-				['key.repository', $keyRepository],
-				['settings', $settingsMock],
-				['logger.factory', $loggerFactoryMock],
-				['cache.mantle2', $cacheMock],
-			]);
-
-		return Drupal::setContainer($container);
+		Drupal::setContainer($container);
 	}
 }
