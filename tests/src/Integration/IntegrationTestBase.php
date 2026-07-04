@@ -13,6 +13,9 @@ use Symfony\Component\HttpFoundation\Request;
 
 abstract class IntegrationTestBase extends KernelTestBase
 {
+	// API/kernel tests never render config forms; skipping per-save config-schema
+	protected $strictConfigSchema = false;
+
 	protected static $modules = [
 		'system',
 		'user',
