@@ -517,6 +517,10 @@ class EventsHelper
 			}
 			$description = $validatedDesc;
 
+			$event->setDescription($description);
+		}
+
+		if ($type !== null) {
 			if (!is_string($type)) {
 				return GeneralHelper::badRequest('Invalid type');
 			}
@@ -1140,9 +1144,13 @@ class EventsHelper
 		$data = CloudHelper::sendRequest('/v1/events/retrieve_image', 'GET', $queryParams);
 		$total = $data['total'] ?? 0;
 
-		// return single object (submission_id provided)
+		// return single object (submission_id provided); cloud returns the flat
+		// submission object here, older/list responses wrap it in items[0]
 		if ($submissionId !== null) {
-			if (isset($data['items'][0]) && $submissionId) {
+			if (isset($data['submission_id'])) {
+				return EventImageSubmission::fromArray($data);
+			}
+			if (isset($data['items'][0])) {
 				return EventImageSubmission::fromArray($data['items'][0]);
 			}
 
