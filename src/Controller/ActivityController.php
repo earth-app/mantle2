@@ -441,10 +441,9 @@ final class ActivityController extends ControllerBase
 				->condition('n.status', 1);
 
 			if ($search) {
-				$group = $query
-					->orConditionGroup()
-					->condition('f.field_activity_id_value', $search, 'CONTAINS');
-				$query->condition($group);
+				// raw dynamic-select query: CONTAINS is entity-query only, use LIKE with escaped wildcards
+				$escaped = $connection->escapeLike($search);
+				$query->condition('f.field_activity_id_value', "%$escaped%", 'LIKE');
 			}
 
 			$countQuery = clone $query;
