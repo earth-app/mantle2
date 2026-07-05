@@ -73,13 +73,6 @@ final class PromptsController extends ControllerBase
 				if ($user) {
 					if (!UsersHelper::isAdmin($user)) {
 						// Non-private prompts for logged-in users OR prompts owned by the user.
-						$fo = $query->leftJoin(
-							'node__field_owner_id',
-							'fo',
-							'fo.entity_id = n.nid',
-						);
-						$query->condition("$fo.delta", 0);
-
 						$group = $query
 							->orConditionGroup()
 							->condition(
@@ -96,7 +89,7 @@ final class PromptsController extends ControllerBase
 								],
 								'IN',
 							)
-							->condition("$fo.field_owner_id_value", $user->id());
+							->condition('n.uid', $user->id());
 						$query->condition($group);
 					}
 				} else {
@@ -114,13 +107,11 @@ final class PromptsController extends ControllerBase
 				}
 
 				if ($filter_author) {
-					$foa = $query->leftJoin('node__field_owner_id', 'foa', 'foa.entity_id = n.nid');
-					$query->condition("$foa.field_owner_id_value", $filter_author);
+					$query->condition('n.uid', $filter_author);
 				}
 
 				if (!empty($blockedIds)) {
-					$fob = $query->leftJoin('node__field_owner_id', 'fob', 'fob.entity_id = n.nid');
-					$query->condition("$fob.field_owner_id_value", $blockedIds, 'NOT IN');
+					$query->condition('n.uid', $blockedIds, 'NOT IN');
 				}
 
 				// Get total count for random
@@ -152,8 +143,8 @@ final class PromptsController extends ControllerBase
 							'IN',
 						);
 
-						// is owner
-						$group->condition('field_owner_id', $user->id());
+						// is owner (uid, consistent with randomPrompt author filter)
+						$group->condition('uid', $user->id());
 						$query->condition($group);
 					}
 				} else {
@@ -169,11 +160,11 @@ final class PromptsController extends ControllerBase
 				}
 
 				if ($filter_author) {
-					$query->condition('field_owner_id', $filter_author);
+					$query->condition('uid', $filter_author);
 				}
 
 				if (!empty($blockedIds)) {
-					$query->condition('field_owner_id', $blockedIds, 'NOT IN');
+					$query->condition('uid', $blockedIds, 'NOT IN');
 				}
 
 				$countQuery = clone $query;
@@ -322,9 +313,6 @@ final class PromptsController extends ControllerBase
 			if ($user) {
 				if (!UsersHelper::isAdmin($user)) {
 					// Non-private prompts for logged-in users OR prompts owned by the user.
-					$fo = $query->leftJoin('node__field_owner_id', 'fo', 'fo.entity_id = n.nid');
-					$query->condition("$fo.delta", 0);
-
 					$group = $query
 						->orConditionGroup()
 						->condition(
@@ -338,7 +326,7 @@ final class PromptsController extends ControllerBase
 							],
 							'IN',
 						)
-						->condition("$fo.field_owner_id_value", $user->id());
+						->condition('n.uid', $user->id());
 					$query->condition($group);
 				}
 			} else {
