@@ -67,7 +67,8 @@ class PromptsControllerTest extends IntegrationTestBase
 		Visibility $visibility = Visibility::PUBLIC,
 	): Node {
 		$obj = new Prompt(0, $text, (int) $owner->id(), $visibility);
-		return PromptsHelper::createPrompt($obj, null);
+		// pass the owner as author so node uid matches field_owner_id, as production does
+		return PromptsHelper::createPrompt($obj, $owner);
 	}
 
 	#[Test]
@@ -572,15 +573,15 @@ class PromptsControllerTest extends IntegrationTestBase
 		);
 		$this->assertCount(2, $this->decode($asOwner));
 
-		// the author filter matches on node uid; seeded prompts default to uid 1 (root)
+		// the author filter matches on node uid; seeded prompts are owned by $owner
 		$byAuthor = $this->controller()->randomPrompt(
-			$this->request('GET', '/v2/prompts/random?count=10&author=1'),
+			$this->request('GET', '/v2/prompts/random?count=10&author=' . $owner->id()),
 		);
 		$this->assertSame(Response::HTTP_OK, $byAuthor->getStatusCode());
 
-		// a uid that owns none yields a 404 (author branch still exercised)
+		// a uid that owns none (root) yields a 404 (author branch still exercised)
 		$noneForAuthor = $this->controller()->randomPrompt(
-			$this->request('GET', '/v2/prompts/random?count=10&author=' . $owner->id()),
+			$this->request('GET', '/v2/prompts/random?count=10&author=1'),
 		);
 		$this->assertSame(Response::HTTP_NOT_FOUND, $noneForAuthor->getStatusCode());
 	}
