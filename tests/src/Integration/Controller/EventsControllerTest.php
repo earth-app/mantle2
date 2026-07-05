@@ -666,7 +666,736 @@ class EventsControllerTest extends IntegrationTestBase
 
 	#endregion
 
-	// cloud-backed flows deferred to E2E: the success paths of submitEventImage,
-	// getEventImages, getEventImage, deleteEventImage(s), getUserEventImage(s),
-	// deleteUserEventImage(s) all call EventsHelper image methods -> CloudHelper::sendRequest
+	#region list (rand path, filters, admin)
+
+	#[Test]
+	#[TestDox('GET /v2/events?sort=rand honors visibility for anon, member, and admin')]
+	#[Group('mantle2/events')]
+	public function eventsRandVisibility(): void
+	{
+		$host = $this->verifiedUser(AccountType::PRO);
+		$this->makeEventNode($host, Visibility::PUBLIC);
+		$this->makeEventNode($host, Visibility::UNLISTED);
+		$this->makeEventNode($host, Visibility::PRIVATE);
+
+		$anon = $this->controller()->events($this->request('GET', '/v2/events?sort=rand'));
+		$this->assertSame(Response::HTTP_OK, $anon->getStatusCode());
+		$this->assertSame(1, $this->decode($anon)['total']);
+
+		// a logged-in non-admin sees PUBLIC + UNLISTED (not PRIVATE)
+		$member = $this->verifiedUser();
+		$memberView = $this->controller()->events(
+			$this->authRequest($member, 'GET', '/v2/events?sort=rand'),
+		);
+		$this->assertSame(2, $this->decode($memberView)['total']);
+
+		$hostView = $this->controller()->events(
+			$this->authRequest($host, 'GET', '/v2/events?sort=rand'),
+		);
+		$this->assertSame(3, $this->decode($hostView)['total']);
+
+		$admin = $this->admin();
+		$adminView = $this->controller()->events(
+			$this->authRequest($admin, 'GET', '/v2/events?sort=rand'),
+		);
+		$this->assertSame(3, $this->decode($adminView)['total']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/events?sort=rand supports search and date filters')]
+	#[Group('mantle2/events')]
+	public function eventsRandSearchAndFilters(): void
+	{
+		$host = $this->verifiedUser(AccountType::PRO);
+		$this->makeEventNode($host, Visibility::PUBLIC);
+
+		$search = $this->controller()->events(
+			$this->request('GET', '/v2/events?sort=rand&search=Cleanup'),
+		);
+		$this->assertSame(1, $this->decode($search)['total']);
+
+		$after = (time() - 86400) * 1000;
+		$before = (time() + 86400) * 1000;
+		$filtered = $this->controller()->events(
+			$this->request(
+				'GET',
+				'/v2/events?sort=rand&filter_after=' .
+					$after .
+					'&filter_before=' .
+					$before .
+					'&filter_is_upcoming=true',
+			),
+		);
+		$this->assertSame(Response::HTTP_OK, $filtered->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/events applies date filters on the entity-query path')]
+	#[Group('mantle2/events')]
+	public function eventsEntityQueryFilters(): void
+	{
+		$host = $this->verifiedUser(AccountType::PRO);
+		// event with both a start and an end so the ends_* filters have something to match
+		$start = time() + 30 * 86400;
+		$event = new \Drupal\mantle2\Custom\Event(
+			(int) $host->id(),
+			'Community Cleanup',
+			'A neighborhood event',
+			EventType::HYBRID,
+			[\Drupal\mantle2\Custom\ActivityType::HOBBY],
+			0.0,
+			0.0,
+			$start * 1000,
+			($start + 3600) * 1000,
+			Visibility::PUBLIC,
+			[],
+			[],
+		);
+		EventsHelper::createEvent($event, $host);
+
+		// window ±10 years absorbs the UTC-vs-runner-tz skew in stored datetime strings
+		$after = (time() - 3650 * 86400) * 1000;
+		$before = (time() + 3650 * 86400) * 1000;
+		$res = $this->controller()->events(
+			$this->request(
+				'GET',
+				'/v2/events?filter_after=' .
+					$after .
+					'&filter_before=' .
+					$before .
+					'&filter_ends_after=' .
+					$after .
+					'&filter_ends_before=' .
+					$before .
+					'&filter_is_upcoming=1',
+			),
+		);
+		$this->assertSame(Response::HTTP_OK, $res->getStatusCode());
+		$this->assertSame(1, $this->decode($res)['total']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/events supports desc sort and empty listing')]
+	#[Group('mantle2/events')]
+	public function eventsDescSortAndEmpty(): void
+	{
+		$empty = $this->controller()->events($this->request('GET', '/v2/events'));
+		$this->assertSame(0, $this->decode($empty)['total']);
+
+		$host = $this->verifiedUser(AccountType::PRO);
+		$this->makeEventNode($host, Visibility::PUBLIC);
+		$this->makeEventNode($host, Visibility::PUBLIC);
+
+		$desc = $this->controller()->events($this->request('GET', '/v2/events?sort=desc'));
+		$this->assertSame(2, $this->decode($desc)['total']);
+	}
+
+	#endregion
+
+	#region random (empty)
+
+	#[Test]
+	#[TestDox('GET /v2/events/random returns 404 when there are no events')]
+	#[Group('mantle2/events')]
+	public function randomEventEmpty(): void
+	{
+		$res = $this->controller()->randomEvent($this->request('GET', '/v2/events/random?count=1'));
+		$this->assertSame(Response::HTTP_NOT_FOUND, $res->getStatusCode());
+
+		$low = $this->controller()->randomEvent($this->request('GET', '/v2/events/random?count=0'));
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $low->getStatusCode());
+	}
+
+	#endregion
+
+	#region create (event limit)
+
+	#[Test]
+	#[TestDox('POST /v2/events blocks a free user who has hit their event limit')]
+	#[Group('mantle2/events')]
+	public function createEventAtLimit(): void
+	{
+		$user = $this->verifiedUser();
+		for ($i = 0; $i < 20; $i++) {
+			$this->makeEventNode($user);
+		}
+		$res = $this->controller()->createEvent(
+			$this->authRequest($user, 'POST', '/v2/events', [], $this->eventBody()),
+		);
+		$this->assertSame(Response::HTTP_PAYMENT_REQUIRED, $res->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/events rejects a JSON array body')]
+	#[Group('mantle2/events')]
+	public function createEventRejectsArrayBody(): void
+	{
+		$user = $this->verifiedUser();
+		$res = $this->controller()->createEvent(
+			$this->authRequest($user, 'POST', '/v2/events', [], '[1,2,3]'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $res->getStatusCode());
+		$this->assertSame('Invalid JSON', $this->decode($res)['message']);
+	}
+
+	#endregion
+
+	#region get (wrong type, admin visibility)
+
+	#[Test]
+	#[TestDox('GET /v2/events/{eventId} returns 400 when the id is not an event')]
+	#[Group('mantle2/events')]
+	public function getEventWrongType(): void
+	{
+		$host = $this->verifiedUser();
+		$article = Node::create(['type' => 'article', 'title' => 'x', 'uid' => $host->id()]);
+		$article->set('field_author_id', $host->id());
+		$article->save();
+
+		$res = $this->controller()->getEvent(
+			(int) $article->id(),
+			$this->authRequest($host, 'GET', '/v2/events/' . $article->id()),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $res->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/events/{eventId} lets an admin view a private event')]
+	#[Group('mantle2/events')]
+	public function getPrivateEventAsAdmin(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host, Visibility::PRIVATE);
+		$admin = $this->admin();
+
+		$res = $this->controller()->getEvent(
+			(int) $node->id(),
+			$this->authRequest($admin, 'GET', '/v2/events/' . $node->id()),
+		);
+		$this->assertSame(Response::HTTP_OK, $res->getStatusCode());
+	}
+
+	#endregion
+
+	#region patch (404, admin, invalid body, validation error)
+
+	#[Test]
+	#[TestDox('PATCH /v2/events/{eventId} handles 404, admin edit, and validation errors')]
+	#[Group('mantle2/events')]
+	public function updateEventEdges(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$missing = $this->controller()->updateEvent(
+			999999,
+			$this->authRequest($host, 'PATCH', '/v2/events/999999', [], '{"name":"x"}'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		$badJson = $this->controller()->updateEvent(
+			(int) $node->id(),
+			$this->authRequest($host, 'PATCH', '/v2/events/' . $node->id(), [], 'not json'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+
+		$arrayBody = $this->controller()->updateEvent(
+			(int) $node->id(),
+			$this->authRequest($host, 'PATCH', '/v2/events/' . $node->id(), [], '[1,2]'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $arrayBody->getStatusCode());
+
+		$badField = $this->controller()->updateEvent(
+			(int) $node->id(),
+			$this->authRequest(
+				$host,
+				'PATCH',
+				'/v2/events/' . $node->id(),
+				[],
+				'{"name":"' . str_repeat('a', 51) . '"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badField->getStatusCode());
+
+		$admin = $this->admin();
+		$adminOk = $this->controller()->updateEvent(
+			(int) $node->id(),
+			$this->authRequest(
+				$admin,
+				'PATCH',
+				'/v2/events/' . $node->id(),
+				[],
+				'{"name":"AdminRenamed"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_OK, $adminOk->getStatusCode());
+		$this->assertSame('AdminRenamed', $this->decode($adminOk)['name']);
+	}
+
+	#endregion
+
+	#region delete (404)
+
+	#[Test]
+	#[
+		TestDox(
+			'DELETE /v2/events/{eventId} returns 404 for a missing event and lets an admin delete',
+		),
+	]
+	#[Group('mantle2/events')]
+	public function deleteEventEdges(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$missing = $this->controller()->deleteEvent(
+			999999,
+			$this->authRequest($host, 'DELETE', '/v2/events/999999'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		$admin = $this->admin();
+		$ok = $this->controller()->deleteEvent(
+			(int) $node->id(),
+			$this->authRequest($admin, 'DELETE', '/v2/events/' . $node->id()),
+		);
+		$this->assertSame(Response::HTTP_NO_CONTENT, $ok->getStatusCode());
+		$this->assertNull(Node::load($node->id()));
+	}
+
+	#endregion
+
+	#region signup / leave / attendees (guards)
+
+	#[Test]
+	#[TestDox('POST signup enforces max attendee limit and visibility')]
+	#[Group('mantle2/events')]
+	public function signUpGuards(): void
+	{
+		$host = $this->verifiedUser();
+		$private = $this->makeEventNode($host, Visibility::PRIVATE);
+		$stranger = $this->verifiedUser();
+
+		$hidden = $this->controller()->signUpForEvent(
+			(int) $private->id(),
+			$this->authRequest($stranger, 'POST', '/v2/events/' . $private->id() . '/signup'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $hidden->getStatusCode());
+
+		$missing = $this->controller()->signUpForEvent(
+			999999,
+			$this->authRequest($stranger, 'POST', '/v2/events/999999/signup'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST leave and GET attendees return 404 for a missing event')]
+	#[Group('mantle2/events')]
+	public function leaveAndAttendeesMissing(): void
+	{
+		$user = $this->verifiedUser();
+
+		$leave = $this->controller()->leaveEvent(
+			999999,
+			$this->authRequest($user, 'POST', '/v2/events/999999/leave'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $leave->getStatusCode());
+
+		$attendees = $this->controller()->getEventAttendees(
+			999999,
+			$this->authRequest($user, 'GET', '/v2/events/999999/attendees'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $attendees->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET attendees supports search and rand sort')]
+	#[Group('mantle2/events')]
+	public function getEventAttendeesSearchAndSort(): void
+	{
+		$host = $this->verifiedUser();
+		$attendee = $this->verifiedUser();
+		$node = $this->makeEventNode($host, Visibility::UNLISTED, [(int) $attendee->id()]);
+
+		$rand = $this->controller()->getEventAttendees(
+			(int) $node->id(),
+			$this->authRequest($host, 'GET', '/v2/events/' . $node->id() . '/attendees?sort=rand'),
+		);
+		$this->assertSame(Response::HTTP_OK, $rand->getStatusCode());
+		$this->assertSame(2, $this->decode($rand)['total']);
+
+		$search = $this->controller()->getEventAttendees(
+			(int) $node->id(),
+			$this->authRequest(
+				$host,
+				'GET',
+				'/v2/events/' . $node->id() . '/attendees?search=' . $attendee->getAccountName(),
+			),
+		);
+		$this->assertSame(1, $this->decode($search)['total']);
+	}
+
+	#endregion
+
+	#region cancel / uncancel (404 + notifications)
+
+	#[Test]
+	#[TestDox('POST cancel notifies attendees and returns 404 for a missing event')]
+	#[Group('mantle2/events')]
+	public function cancelEventNotifiesAndMissing(): void
+	{
+		$host = $this->verifiedUser();
+		$attendee = $this->verifiedUser();
+		$node = $this->makeEventNode($host, Visibility::UNLISTED, [(int) $attendee->id()]);
+
+		$cancel = $this->controller()->cancelEvent(
+			(int) $node->id(),
+			$this->authRequest($host, 'POST', '/v2/events/' . $node->id() . '/cancel'),
+		);
+		$this->assertSame(Response::HTTP_OK, $cancel->getStatusCode());
+
+		$titles = array_map(
+			fn($n) => $n->getTitle(),
+			\Drupal\mantle2\Service\UsersHelper::getNotifications(
+				\Drupal\user\Entity\User::load($attendee->id()),
+			),
+		);
+		$this->assertContains('Event Cancelled', $titles);
+
+		$missing = $this->controller()->cancelEvent(
+			999999,
+			$this->authRequest($host, 'POST', '/v2/events/999999/cancel'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		$uncancel = $this->controller()->uncancelEvent(
+			(int) $node->id(),
+			$this->authRequest($host, 'POST', '/v2/events/' . $node->id() . '/uncancel'),
+		);
+		$this->assertSame(Response::HTTP_OK, $uncancel->getStatusCode());
+
+		$reinstateTitles = array_map(
+			fn($n) => $n->getTitle(),
+			\Drupal\mantle2\Service\UsersHelper::getNotifications(
+				\Drupal\user\Entity\User::load($attendee->id()),
+			),
+		);
+		$this->assertContains('Event Reinstated', $reinstateTitles);
+
+		$missingUncancel = $this->controller()->uncancelEvent(
+			999999,
+			$this->authRequest($host, 'POST', '/v2/events/999999/uncancel'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missingUncancel->getStatusCode());
+
+		$other = $this->verifiedUser();
+		$forbidden = $this->controller()->uncancelEvent(
+			(int) $node->id(),
+			$this->authRequest($other, 'POST', '/v2/events/' . $node->id() . '/uncancel'),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
+	#endregion
+
+	#region getUserEvents (id lookup + sort/search)
+
+	#[Test]
+	#[TestDox('GET user events looks up by id and honors search and sort')]
+	#[Group('mantle2/events')]
+	public function getUserEventsById(): void
+	{
+		$host = $this->verifiedUser();
+		$this->makeEventNode($host);
+
+		$byId = $this->controller()->getUserEvents(
+			$this->authRequest($host, 'GET', '/v2/users/' . $host->id() . '/events/attending'),
+			(string) $host->id(),
+		);
+		$this->assertSame(Response::HTTP_OK, $byId->getStatusCode());
+		$this->assertSame(1, $this->decode($byId)['total']);
+
+		$search = $this->controller()->getUserEvents(
+			$this->authRequest($host, 'GET', '/v2/events/current?search=Community&sort=rand'),
+		);
+		$this->assertSame(Response::HTTP_OK, $search->getStatusCode());
+	}
+
+	#endregion
+
+	#region image submission local guards (get/delete before cloud)
+
+	#[Test]
+	#[TestDox('GET /v2/events/{eventId}/images enforces auth, 404, and visibility before cloud')]
+	#[Group('mantle2/events')]
+	public function getEventImagesLocalGuards(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$anon = $this->controller()->getEventImages(
+			(int) $node->id(),
+			$this->request('GET', '/v2/events/' . $node->id() . '/images'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$missing = $this->controller()->getEventImages(
+			999999,
+			$this->authRequest($host, 'GET', '/v2/events/999999/images'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		$private = $this->makeEventNode($host, Visibility::PRIVATE);
+		$stranger = $this->verifiedUser();
+		$hidden = $this->controller()->getEventImages(
+			(int) $private->id(),
+			$this->authRequest($stranger, 'GET', '/v2/events/' . $private->id() . '/images'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $hidden->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/events/{eventId}/images/{imageId} enforces auth and 404 before cloud')]
+	#[Group('mantle2/events')]
+	public function getEventImageLocalGuards(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$anon = $this->controller()->getEventImage(
+			(int) $node->id(),
+			5,
+			$this->request('GET', '/v2/events/' . $node->id() . '/images/5'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$missing = $this->controller()->getEventImage(
+			999999,
+			5,
+			$this->authRequest($host, 'GET', '/v2/events/999999/images/5'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		// dead cloud -> retrieve returns empty -> image not found
+		$notFound = $this->controller()->getEventImage(
+			(int) $node->id(),
+			5,
+			$this->authRequest($host, 'GET', '/v2/events/' . $node->id() . '/images/5'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $notFound->getStatusCode());
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'DELETE /v2/events/{eventId}/images/{imageId} enforces auth, 404, and image-not-found',
+		),
+	]
+	#[Group('mantle2/events')]
+	public function deleteEventImageLocalGuards(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$anon = $this->controller()->deleteEventImage(
+			(int) $node->id(),
+			5,
+			$this->request('DELETE', '/v2/events/' . $node->id() . '/images/5'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$missing = $this->controller()->deleteEventImage(
+			999999,
+			5,
+			$this->authRequest($host, 'DELETE', '/v2/events/999999/images/5'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		// dead cloud -> submission lookup null -> image not found
+		$notFound = $this->controller()->deleteEventImage(
+			(int) $node->id(),
+			5,
+			$this->authRequest($host, 'DELETE', '/v2/events/' . $node->id() . '/images/5'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $notFound->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('DELETE user event images enforces auth before the cloud call')]
+	#[Group('mantle2/events')]
+	public function deleteUserEventImagesLocalGuards(): void
+	{
+		$anon = $this->controller()->deleteUserEventImages(
+			$this->request('DELETE', '/v2/events/current/images'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$anonOne = $this->controller()->deleteUserEventImage(
+			5,
+			$this->request('DELETE', '/v2/events/current/images/5'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anonOne->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET user event images returns 404 for a missing user id')]
+	#[Group('mantle2/events')]
+	public function getUserEventImagesMissingUser(): void
+	{
+		$missing = $this->controller()->getUserEventImages(
+			$this->request('GET', '/v2/users/999999/events/images'),
+			'999999',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		$missingOne = $this->controller()->getUserEventImage(
+			5,
+			$this->request('GET', '/v2/users/999999/events/images/5'),
+			'999999',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missingOne->getStatusCode());
+	}
+
+	#endregion
+
+	#region image submission bodies (degraded-cloud contract)
+
+	// with the integration dead endpoint a cloud read degrades to [] (no throw), so the
+	// controller body past the guards runs deterministically; this covers response shaping,
+	// not cloud behavior (real submission round-trips live in E2E)
+
+	#[Test]
+	#[TestDox('GET event/user image listings run their body and return an empty page')]
+	#[Group('mantle2/events')]
+	public function imageListingBodiesDegrade(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$eventImages = $this->controller()->getEventImages(
+			(int) $node->id(),
+			$this->authRequest($host, 'GET', '/v2/events/' . $node->id() . '/images'),
+		);
+		$this->assertSame(Response::HTTP_OK, $eventImages->getStatusCode());
+		$this->assertSame(0, $this->decode($eventImages)['total']);
+		$this->assertSame([], $this->decode($eventImages)['items']);
+
+		$userImages = $this->controller()->getUserEventImages(
+			$this->authRequest($host, 'GET', '/v2/events/current/images'),
+		);
+		$this->assertSame(Response::HTTP_OK, $userImages->getStatusCode());
+		$this->assertSame(0, $this->decode($userImages)['total']);
+
+		$userImagesById = $this->controller()->getUserEventImages(
+			$this->authRequest($host, 'GET', '/v2/users/' . $host->id() . '/events/images'),
+			(string) $host->id(),
+		);
+		$this->assertSame(Response::HTTP_OK, $userImagesById->getStatusCode());
+
+		$userEventImage = $this->controller()->getUserEventImage(
+			(int) $node->id(),
+			$this->authRequest($host, 'GET', '/v2/events/current/images/' . $node->id()),
+		);
+		$this->assertSame(Response::HTTP_OK, $userEventImage->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET a single event image with no result is a 404 through the body')]
+	#[Group('mantle2/events')]
+	public function getEventImageNotFoundBody(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$res = $this->controller()->getEventImage(
+			(int) $node->id(),
+			5,
+			$this->authRequest($host, 'GET', '/v2/events/' . $node->id() . '/images/5'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $res->getStatusCode());
+		$this->assertSame('Image not found', $this->decode($res)['message']);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'POST event image with a valid data url reports the failed submission through the body',
+		),
+	]
+	#[Group('mantle2/events')]
+	public function submitEventImageBodyDegrades(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$res = $this->controller()->submitEventImage(
+			(int) $node->id(),
+			$this->authRequest(
+				$host,
+				'POST',
+				'/v2/events/' . $node->id() . '/images',
+				[],
+				'{"photo_url":"data:image/png;base64,AAAA"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_INTERNAL_SERVER_ERROR, $res->getStatusCode());
+
+		$badJson = $this->controller()->submitEventImage(
+			(int) $node->id(),
+			$this->authRequest(
+				$host,
+				'POST',
+				'/v2/events/' . $node->id() . '/images',
+				[],
+				'not json',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('DELETE image endpoints run their body and return 204 or a not-found for the host')]
+	#[Group('mantle2/events')]
+	public function deleteImageBodiesDegrade(): void
+	{
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+
+		$deleteEventImages = $this->controller()->deleteEventImages(
+			(int) $node->id(),
+			$this->authRequest($host, 'DELETE', '/v2/events/' . $node->id() . '/images'),
+		);
+		$this->assertSame(Response::HTTP_NO_CONTENT, $deleteEventImages->getStatusCode());
+
+		$deleteUserImages = $this->controller()->deleteUserEventImages(
+			$this->authRequest($host, 'DELETE', '/v2/events/current/images'),
+		);
+		$this->assertSame(Response::HTTP_NO_CONTENT, $deleteUserImages->getStatusCode());
+
+		$deleteUserImagesById = $this->controller()->deleteUserEventImages(
+			$this->authRequest($host, 'DELETE', '/v2/users/' . $host->id() . '/events/images'),
+			(string) $host->id(),
+		);
+		$this->assertSame(Response::HTTP_NO_CONTENT, $deleteUserImagesById->getStatusCode());
+
+		$deleteUserImage = $this->controller()->deleteUserEventImage(
+			(int) $node->id(),
+			$this->authRequest($host, 'DELETE', '/v2/events/current/images/' . $node->id()),
+		);
+		$this->assertSame(Response::HTTP_NO_CONTENT, $deleteUserImage->getStatusCode());
+
+		// single-image delete needs the submission lookup, which degrades to null -> 404
+		$deleteEventImage = $this->controller()->deleteEventImage(
+			(int) $node->id(),
+			5,
+			$this->authRequest($host, 'DELETE', '/v2/events/' . $node->id() . '/images/5'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $deleteEventImage->getStatusCode());
+	}
+
+	#endregion
+
+	// real image submission round-trips (success payloads from the cloud) live in E2E;
+	// the integration tier covers the controller bodies via the degraded-cloud contract above
 }

@@ -796,5 +796,262 @@ class EngagementTest extends IntegrationTestBase
 		$this->assertNull(UsersHelper::getUserVote((int) $user->id(), 'p1'));
 	}
 
+	#[Test]
+	#[TestDox('GET polls and DELETE vote 403 a cross-user actor')]
+	#[Group('mantle2/users')]
+	public function pollsCrossUser(): void
+	{
+		$owner = $this->createUser();
+		$other = $this->createUser();
+
+		$retract = $this->controller()->retractVote(
+			$this->authRequest($owner, 'DELETE', '/v2/users/' . $other->id() . '/poll?poll_id=p1'),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $retract->getStatusCode());
+
+		// getUserPolls uses resolveAuthorizedUser, so a non-admin viewing another user is 403
+		$polls = $this->controller()->getUserPolls(
+			$this->authRequest($owner, 'GET', '/v2/users/' . $other->id() . '/poll'),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $polls->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('DELETE retract vote 400s a missing poll_id')]
+	#[Group('mantle2/users')]
+	public function retractVoteMissingPollId(): void
+	{
+		$user = $this->createUser();
+		$response = $this->controller()->retractVote(
+			$this->authRequest($user, 'DELETE', '/v2/users/current/poll'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertStringContainsString(
+			'poll_id is required',
+			$this->decode($response)['message'],
+		);
+	}
+
+	#endregion
+
+	#region createUserNotification (bad body + authorization)
+
+	#[Test]
+	#[
+		TestDox(
+			'POST create notification 403s a cross-user non-admin and 400s malformed JSON for an admin',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function createUserNotificationGuards(): void
+	{
+		$owner = $this->createUser();
+		$other = $this->createUser();
+
+		// a non-admin acting on another user is refused by resolveAuthorizedUser (403)
+		$crossUser = $this->controller()->createUserNotification(
+			$this->authRequest(
+				$owner,
+				'POST',
+				'/v2/users/' . $other->id() . '/notifications',
+				[],
+				'{"title":"T","description":"D"}',
+			),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $crossUser->getStatusCode());
+
+		$admin = $this->admin();
+		$badJson = $this->controller()->createUserNotification(
+			$this->authRequest(
+				$admin,
+				'POST',
+				'/v2/users/' . $admin->id() . '/notifications',
+				[],
+				'{bad json',
+			),
+			(string) $admin->id(),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+	}
+
+	#endregion
+
+	#region verify_email (email-change path)
+
+	#[Test]
+	#[TestDox('POST verify_email routes a matching email-change code and persists the new email')]
+	#[Group('mantle2/users')]
+	public function verifyEmailChangeCode(): void
+	{
+		$user = $this->createUser(['mail' => 'old.addr@example.com']);
+
+		// a stored email_change_<uid> code whose value matches routes to verifyEmailChange, which
+		// swaps in the pending new_email; the confirmation email/notification fan out to the dead
+		// cloud, so tolerate that and assert the local email swap persisted
+		RedisHelper::set(
+			'email_change_' . $user->id(),
+			[
+				'code' => '55554444',
+				'new_email' => 'new.addr@example.com',
+				'old_email' => 'old.addr@example.com',
+			],
+			900,
+		);
+
+		try {
+			$this->controller()->verifyEmail(
+				$this->authRequest($user, 'POST', '/v2/users/current/verify_email?code=55554444'),
+			);
+		} catch (\Throwable $e) {
+			$this->assertStringContainsString('HTTP Error', $e->getMessage());
+		}
+
+		$this->assertSame(
+			'new.addr@example.com',
+			\Drupal\user\Entity\User::load($user->id())->getEmail(),
+		);
+	}
+
+	#endregion
+
+	#region quest challenge (local guard branches; cloud send is E2E)
+
+	#[Test]
+	#[TestDox('POST challenge 400s missing friend, 404s unknown friend, and forbids a non-friend')]
+	#[Group('mantle2/users')]
+	public function challengeFriendGuards(): void
+	{
+		$user = $this->createUser();
+		$stranger = $this->createUser();
+
+		$noFriend = $this->controller()->challengeFriendToQuest(
+			$this->authRequest($user, 'POST', '/v2/users/current/quest/challenge'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $noFriend->getStatusCode());
+		$this->assertStringContainsString('Missing friend', $this->decode($noFriend)['message']);
+
+		$unknown = $this->controller()->challengeFriendToQuest(
+			$this->authRequest($user, 'POST', '/v2/users/current/quest/challenge?friend=999999'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $unknown->getStatusCode());
+
+		$notFriend = $this->controller()->challengeFriendToQuest(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/quest/challenge?friend=' . $stranger->id(),
+			),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $notFriend->getStatusCode());
+		$this->assertStringContainsString(
+			'only challenge friends',
+			$this->decode($notFriend)['message'],
+		);
+	}
+
+	#[Test]
+	#[TestDox('GET quest challenge 400s a missing quest parameter')]
+	#[Group('mantle2/users')]
+	public function getQuestChallengeMissingQuest(): void
+	{
+		$user = $this->createUser();
+		$response = $this->controller()->getQuestChallenge(
+			$this->authRequest($user, 'GET', '/v2/users/current/quest/challenge'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertStringContainsString('Missing quest', $this->decode($response)['message']);
+	}
+
+	#endregion
+
+	#region quests catalog + badge/mastery guards
+
+	#[Test]
+	#[TestDox('GET quests badge-mastery id requires auth')]
+	#[Group('mantle2/users')]
+	public function questsBadgeMasteryRequiresAuth(): void
+	{
+		$anon = $this->request('GET', '/v2/users/quests');
+		$anon->query->replace(['id' => 'badge_mastery_recycler']);
+		$response = $this->controller()->quests($anon);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET quests returns the catalog envelope when no id is given')]
+	#[Group('mantle2/users')]
+	public function questsCatalog(): void
+	{
+		$response = $this->controller()->quests($this->request('GET', '/v2/users/quests'));
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$body = $this->decode($response);
+		$this->assertArrayHasKey('total', $body);
+		$this->assertArrayHasKey('quests', $body);
+	}
+
+	#[Test]
+	#[TestDox('GET badge/{badgeId}/mastery and generate 400 a missing badgeId')]
+	#[Group('mantle2/users')]
+	public function badgeMasteryMissingBadgeId(): void
+	{
+		$user = $this->createUser();
+
+		$mastery = $this->controller()->badgeMastery(
+			$this->authRequest($user, 'GET', '/v2/users/current/badges//mastery'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $mastery->getStatusCode());
+
+		$generate = $this->controller()->generateBadgeMastery(
+			$this->authRequest($user, 'POST', '/v2/users/current/badges//mastery/generate'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $generate->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET quest history entry 400s a missing quest_id')]
+	#[Group('mantle2/users')]
+	public function questHistoryEntryMissingId(): void
+	{
+		$user = $this->createUser();
+		$response = $this->controller()->questHistoryEntry(
+			$this->authRequest($user, 'GET', '/v2/users/current/quest/history/'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET share quest card 404s an unknown user, a disabled user, and an unknown quest')]
+	#[Group('mantle2/users')]
+	public function shareQuestCard(): void
+	{
+		$missingUser = $this->controller()->shareQuestCard(
+			$this->request('GET', '/v2/users/999999/share/quest/q1'),
+			'999999',
+			'q1',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missingUser->getStatusCode());
+
+		$disabled = $this->createUser();
+		$disabled->block();
+		$disabled->save();
+		$disabledRes = $this->controller()->shareQuestCard(
+			$this->request('GET', '/v2/users/' . $disabled->id() . '/share/quest/q1'),
+			(string) $disabled->id(),
+			'q1',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $disabledRes->getStatusCode());
+
+		$user = $this->createUser();
+		$badQuest = $this->controller()->shareQuestCard(
+			$this->request('GET', '/v2/users/' . $user->id() . '/share/quest/not_a_quest'),
+			(string) $user->id(),
+			'not_a_quest',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $badQuest->getStatusCode());
+	}
+
 	#endregion
 }

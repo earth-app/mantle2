@@ -491,4 +491,241 @@ class PromptsControllerTest extends IntegrationTestBase
 		);
 		$this->assertSame(Response::HTTP_NO_CONTENT, $ok->getStatusCode());
 	}
+
+	#[Test]
+	#[TestDox('GET /v2/prompts supports rand sort, search, author filter, and rejects bad author')]
+	#[Group('mantle2/prompts')]
+	public function listBranches(): void
+	{
+		$owner = $this->verifiedUser();
+		$this->seedPrompt($owner, 'A searchable alpha prompt', Visibility::PUBLIC);
+		$this->seedPrompt($owner, 'A different beta prompt', Visibility::PUBLIC);
+
+		$rand = $this->controller()->prompts($this->request('GET', '/v2/prompts?sort=rand'));
+		$this->assertSame(Response::HTTP_OK, $rand->getStatusCode());
+		$this->assertSame(2, $this->decode($rand)['total']);
+
+		$randSearch = $this->controller()->prompts(
+			$this->request('GET', '/v2/prompts?sort=rand&search=alpha'),
+		);
+		$this->assertSame(1, $this->decode($randSearch)['total']);
+
+		$randAuthor = $this->controller()->prompts(
+			$this->request('GET', '/v2/prompts?sort=rand&author=' . $owner->id()),
+		);
+		$this->assertSame(2, $this->decode($randAuthor)['total']);
+
+		$search = $this->controller()->prompts($this->request('GET', '/v2/prompts?search=beta'));
+		$this->assertSame(1, $this->decode($search)['total']);
+
+		$byAuthor = $this->controller()->prompts(
+			$this->request('GET', '/v2/prompts?author=' . $owner->id()),
+		);
+		$this->assertSame(2, $this->decode($byAuthor)['total']);
+
+		$badAuthor = $this->controller()->prompts(
+			$this->request('GET', '/v2/prompts?author=999999'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badAuthor->getStatusCode());
+
+		// admin sees all visibilities
+		$this->seedPrompt($owner, 'A private admin-visible prompt', Visibility::PRIVATE);
+		$asAdmin = $this->controller()->prompts(
+			$this->authRequest($this->admin(), 'GET', '/v2/prompts?sort=rand'),
+		);
+		$this->assertSame(3, $this->decode($asAdmin)['total']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/prompts/random validates count/author and enforces visibility')]
+	#[Group('mantle2/prompts')]
+	public function random(): void
+	{
+		$owner = $this->verifiedUser();
+
+		$empty = $this->controller()->randomPrompt($this->request('GET', '/v2/prompts/random'));
+		$this->assertSame(Response::HTTP_NOT_FOUND, $empty->getStatusCode());
+
+		$this->seedPrompt($owner, 'A public random prompt', Visibility::PUBLIC);
+		$this->seedPrompt($owner, 'A private random prompt', Visibility::PRIVATE);
+
+		$badCount = $this->controller()->randomPrompt(
+			$this->request('GET', '/v2/prompts/random?count=99'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badCount->getStatusCode());
+
+		$badAuthor = $this->controller()->randomPrompt(
+			$this->request('GET', '/v2/prompts/random?author=-1'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badAuthor->getStatusCode());
+
+		// anon only sees the public one
+		$anon = $this->controller()->randomPrompt(
+			$this->request('GET', '/v2/prompts/random?count=10'),
+		);
+		$this->assertSame(Response::HTTP_OK, $anon->getStatusCode());
+		$this->assertCount(1, $this->decode($anon));
+
+		// owner sees both (public + own private)
+		$asOwner = $this->controller()->randomPrompt(
+			$this->authRequest($owner, 'GET', '/v2/prompts/random?count=10'),
+		);
+		$this->assertCount(2, $this->decode($asOwner));
+
+		// the author filter matches on node uid; seeded prompts default to uid 1 (root)
+		$byAuthor = $this->controller()->randomPrompt(
+			$this->request('GET', '/v2/prompts/random?count=10&author=1'),
+		);
+		$this->assertSame(Response::HTTP_OK, $byAuthor->getStatusCode());
+
+		// a uid that owns none yields a 404 (author branch still exercised)
+		$noneForAuthor = $this->controller()->randomPrompt(
+			$this->request('GET', '/v2/prompts/random?count=10&author=' . $owner->id()),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $noneForAuthor->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('PATCH /v2/prompts/:id censors flagged bodies and rejects them without censor')]
+	#[Group('mantle2/prompts')]
+	public function patchFlagged(): void
+	{
+		$owner = $this->verifiedUser();
+		$node = $this->seedPrompt($owner, 'A clean prompt body here', Visibility::PUBLIC);
+
+		$rejected = $this->controller()->updatePrompt(
+			(int) $node->id(),
+			$this->authRequest($owner, 'PATCH', '/', [], '{"prompt":"this is fucking bad"}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $rejected->getStatusCode());
+		$this->assertStringContainsString('inappropriate', $this->decode($rejected)['message']);
+
+		$censored = $this->controller()->updatePrompt(
+			(int) $node->id(),
+			$this->authRequest(
+				$owner,
+				'PATCH',
+				'/',
+				[],
+				'{"prompt":"this is fucking fine now","censor":true}',
+			),
+		);
+		$this->assertSame(Response::HTTP_OK, $censored->getStatusCode());
+		$this->assertStringContainsString('****', $this->decode($censored)['prompt']);
+
+		$badCensor = $this->controller()->updatePrompt(
+			(int) $node->id(),
+			$this->authRequest(
+				$owner,
+				'PATCH',
+				'/',
+				[],
+				'{"prompt":"another body","censor":"yes"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badCensor->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('PATCH /v2/prompts/:id/responses/:response censors flagged content')]
+	#[Group('mantle2/prompts')]
+	public function patchResponseFlagged(): void
+	{
+		$owner = $this->verifiedUser();
+		$responder = $this->verifiedUser();
+		$node = $this->seedPrompt($owner);
+		$comment = PromptsHelper::addComment($responder, $node, 'the original response');
+
+		$rejected = $this->controller()->updatePromptResponse(
+			(int) $node->id(),
+			(int) $comment->id(),
+			$this->authRequest($responder, 'PATCH', '/', [], '{"content":"you piece of shit"}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $rejected->getStatusCode());
+
+		$censored = $this->controller()->updatePromptResponse(
+			(int) $node->id(),
+			(int) $comment->id(),
+			$this->authRequest(
+				$responder,
+				'PATCH',
+				'/',
+				[],
+				'{"content":"this shit right here","censor":true}',
+			),
+		);
+		$this->assertSame(Response::HTTP_OK, $censored->getStatusCode());
+		$this->assertStringContainsString('****', $this->decode($censored)['response']);
+
+		$empty = $this->controller()->updatePromptResponse(
+			(int) $node->id(),
+			(int) $comment->id(),
+			$this->authRequest($responder, 'PATCH', '/', [], '{"content":"   "}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $empty->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET/PATCH/DELETE response endpoints 404 on hidden prompts and mismatched ids')]
+	#[Group('mantle2/prompts')]
+	public function responseVisibilityGuards(): void
+	{
+		$owner = $this->verifiedUser();
+		$private = $this->seedPrompt($owner, 'A private prompt body', Visibility::PRIVATE);
+		$comment = PromptsHelper::addComment($owner, $private, 'owner response');
+
+		// anon cannot see a private prompt's responses
+		$hiddenGet = $this->controller()->getPromptResponse(
+			(int) $private->id(),
+			(int) $comment->id(),
+			$this->request('GET', '/'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $hiddenGet->getStatusCode());
+
+		$hiddenPatch = $this->controller()->updatePromptResponse(
+			(int) $private->id(),
+			(int) $comment->id(),
+			$this->authRequest($this->verifiedUser(), 'PATCH', '/', [], '{"content":"x"}'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $hiddenPatch->getStatusCode());
+
+		$hiddenDelete = $this->controller()->deletePromptResponse(
+			(int) $private->id(),
+			(int) $comment->id(),
+			$this->authRequest($this->verifiedUser(), 'DELETE', '/'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $hiddenDelete->getStatusCode());
+
+		// mismatched response id under a visible prompt
+		$public = $this->seedPrompt($owner, 'A public prompt body', Visibility::PUBLIC);
+		$mismatch = $this->controller()->deletePromptResponse(
+			(int) $public->id(),
+			(int) $comment->id(),
+			$this->authRequest($owner, 'DELETE', '/'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $mismatch->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST responses 404s a hidden prompt and rejects invalid JSON')]
+	#[Group('mantle2/prompts')]
+	public function createResponseGuards(): void
+	{
+		$owner = $this->verifiedUser();
+		$private = $this->seedPrompt($owner, 'A private prompt body', Visibility::PRIVATE);
+		$responder = $this->verifiedUser();
+
+		$hidden = $this->controller()->createPromptResponse(
+			(int) $private->id(),
+			$this->authRequest($responder, 'POST', '/', [], '{"content":"hi there"}'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $hidden->getStatusCode());
+
+		$public = $this->seedPrompt($owner, 'A public prompt body', Visibility::PUBLIC);
+		$badJson = $this->controller()->createPromptResponse(
+			(int) $public->id(),
+			$this->authRequest($responder, 'POST', '/', [], '{bad json'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+	}
 }

@@ -1037,4 +1037,196 @@ class SocialTest extends IntegrationTestBase
 	}
 
 	// #endregion
+
+	// #region Friends / Blocked / Circle (missing-param, 404, anon, cross-user)
+
+	#[Test]
+	#[TestDox('PUT blocked 401s anonymous, 400s a missing param, and 404s an unknown target')]
+	#[Group('mantle2/users')]
+	public function blockUserGuards(): void
+	{
+		$owner = $this->publicUser();
+
+		$anon = $this->controller()->blockUser(
+			$this->request('PUT', '/v2/users/current/blocked?user=2'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$noParam = $this->controller()->blockUser(
+			$this->authRequest($owner, 'PUT', '/v2/users/current/blocked'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $noParam->getStatusCode());
+		$this->assertStringContainsString('Missing user', $this->decode($noParam)['message']);
+
+		$missing = $this->controller()->blockUser(
+			$this->authRequest($owner, 'PUT', '/v2/users/current/blocked?user=999999'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('DELETE blocked 400s a missing param and 404s an unknown target')]
+	#[Group('mantle2/users')]
+	public function unblockUserGuards(): void
+	{
+		$owner = $this->publicUser();
+
+		$noParam = $this->controller()->unblockUser(
+			$this->authRequest($owner, 'DELETE', '/v2/users/current/blocked'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $noParam->getStatusCode());
+
+		$missing = $this->controller()->unblockUser(
+			$this->authRequest($owner, 'DELETE', '/v2/users/current/blocked?user=999999'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('PUT circle 400s a missing param and 404s an unknown friend')]
+	#[Group('mantle2/users')]
+	public function addUserToCircleGuards(): void
+	{
+		$owner = $this->publicUser();
+
+		$noParam = $this->controller()->addUserToCircle(
+			$this->authRequest($owner, 'PUT', '/v2/users/current/circle'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $noParam->getStatusCode());
+		$this->assertStringContainsString('Missing friend', $this->decode($noParam)['message']);
+
+		$missing = $this->controller()->addUserToCircle(
+			$this->authRequest($owner, 'PUT', '/v2/users/current/circle?friend=999999'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET blocked 401s anonymous and 403s a cross-user read without admin')]
+	#[Group('mantle2/users')]
+	public function userBlockedAuthorization(): void
+	{
+		$owner = $this->publicUser();
+		$other = $this->publicUser();
+
+		$anon = $this->controller()->userBlocked(
+			$this->request('GET', '/v2/users/current/blocked'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$forbidden = $this->controller()->userBlocked(
+			$this->authRequest($owner, 'GET', '/v2/users/' . $other->id() . '/blocked'),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
+	// #endregion
+
+	// #region Read routes (visibility + missing user)
+
+	#[Test]
+	#[
+		TestDox(
+			'GET activities 404s an unknown user and hides a private target from an anonymous caller',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function userActivitiesVisibility(): void
+	{
+		$missing = $this->controller()->userActivities(
+			$this->request('GET', '/v2/users/999999/activities'),
+			'999999',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		$private = $this->createUser(['field_visibility' => '2']);
+		$hidden = $this->controller()->userActivities(
+			$this->request('GET', '/v2/users/' . $private->id() . '/activities'),
+			(string) $private->id(),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $hidden->getStatusCode());
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'GET circle 404s an unknown user and hides a private target from an anonymous caller',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function userCircleVisibility(): void
+	{
+		$missing = $this->controller()->userCircle(
+			$this->request('GET', '/v2/users/999999/circle'),
+			'999999',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		$private = $this->createUser(['field_visibility' => '2']);
+		$hidden = $this->controller()->userCircle(
+			$this->request('GET', '/v2/users/' . $private->id() . '/circle'),
+			(string) $private->id(),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $hidden->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET activities/recommend 400s a pool_limit above the max')]
+	#[Group('mantle2/users')]
+	public function recommendUserActivitiesHighLimit(): void
+	{
+		$owner = $this->publicUser();
+		$response = $this->controller()->recommendUserActivities(
+			$this->authRequest(
+				$owner,
+				'GET',
+				'/v2/users/current/activities/recommend?pool_limit=500',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertStringContainsString('pool_limit', $this->decode($response)['message']);
+	}
+
+	// #endregion
+
+	// #region Cosmetics (authorization)
+
+	#[Test]
+	#[TestDox('GET/PUT profile_photo/cosmetic 401 anonymous and 403 cross-user')]
+	#[Group('mantle2/users')]
+	public function cosmeticsAuthorization(): void
+	{
+		$owner = $this->publicUser();
+		$other = $this->publicUser();
+
+		$anonGet = $this->controller()->getUserCosmetics(
+			$this->request('GET', '/v2/users/current/profile_photo/cosmetic'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anonGet->getStatusCode());
+
+		$crossGet = $this->controller()->getUserCosmetics(
+			$this->authRequest(
+				$owner,
+				'GET',
+				'/v2/users/' . $other->id() . '/profile_photo/cosmetic',
+			),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $crossGet->getStatusCode());
+
+		$crossSet = $this->controller()->setUserCosmetic(
+			$this->authRequest(
+				$owner,
+				'PUT',
+				'/v2/users/' . $other->id() . '/profile_photo/cosmetic',
+				[],
+				'{"current":null}',
+			),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $crossSet->getStatusCode());
+	}
+
+	// #endregion
 }

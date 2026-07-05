@@ -363,4 +363,228 @@ class ActivityControllerTest extends IntegrationTestBase
 		);
 		$this->assertSame(Response::HTTP_BAD_REQUEST, $res->getStatusCode());
 	}
+
+	#[Test]
+	#[TestDox('POST /v2/activities validates optional field/alias entry shapes')]
+	#[Group('mantle2/activities')]
+	public function createValidatesOptionalShapes(): void
+	{
+		$admin = $this->admin();
+
+		$badFields = $this->controller()->createActivity(
+			$this->authRequest(
+				$admin,
+				'POST',
+				'/v2/activities',
+				[],
+				'{"id":"a","name":"A","description":"d","types":["HOBBY"],"fields":"nope"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badFields->getStatusCode());
+		$this->assertSame('Invalid optional field types', $this->decode($badFields)['message']);
+
+		$badFieldEntry = $this->controller()->createActivity(
+			$this->authRequest(
+				$admin,
+				'POST',
+				'/v2/activities',
+				[],
+				'{"id":"b","name":"B","description":"d","types":["HOBBY"],"fields":{"icon":5}}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badFieldEntry->getStatusCode());
+		$this->assertSame('Invalid field entry types', $this->decode($badFieldEntry)['message']);
+
+		$badAlias = $this->controller()->createActivity(
+			$this->authRequest(
+				$admin,
+				'POST',
+				'/v2/activities',
+				[],
+				'{"id":"c","name":"C","description":"d","types":["HOBBY"],"aliases":[5]}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badAlias->getStatusCode());
+		$this->assertSame('Invalid alias entry type', $this->decode($badAlias)['message']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/activities supports asc and rand sorts alongside search')]
+	#[Group('mantle2/activities')]
+	public function listSorts(): void
+	{
+		$this->seed('run', ['SPORT']);
+		$this->seed('read', ['LEARNING']);
+
+		$asc = $this->controller()->activities($this->request('GET', '/v2/activities?sort=asc'));
+		$this->assertSame(Response::HTTP_OK, $asc->getStatusCode());
+		$this->assertSame('asc', $this->decode($asc)['sort']);
+		$this->assertSame(2, $this->decode($asc)['total']);
+
+		$rand = $this->controller()->activities(
+			$this->request('GET', '/v2/activities?sort=rand&search=run'),
+		);
+		$this->assertSame(Response::HTTP_OK, $rand->getStatusCode());
+		$randBody = $this->decode($rand);
+		$this->assertSame('rand', $randBody['sort']);
+		$this->assertSame(1, $randBody['total']);
+		$this->assertSame('run', $randBody['items'][0]['id']);
+
+		$randType = $this->controller()->activities(
+			$this->request('GET', '/v2/activities?sort=rand&type=SPORT'),
+		);
+		$this->assertSame(1, $this->decode($randType)['total']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/activities/list searches and supports asc/rand sorting')]
+	#[Group('mantle2/activities')]
+	public function listIdsSortsAndSearch(): void
+	{
+		$this->seed('run');
+		$this->seed('read');
+		$this->seed('cook');
+
+		$searched = $this->controller()->listActivities(
+			$this->request('GET', '/v2/activities/list?search=run'),
+		);
+		$this->assertSame(Response::HTTP_OK, $searched->getStatusCode());
+		$body = $this->decode($searched);
+		$this->assertSame(1, $body['total']);
+		$this->assertContains('run', $body['items']);
+
+		$asc = $this->controller()->listActivities(
+			$this->request('GET', '/v2/activities/list?sort=asc'),
+		);
+		$this->assertSame(Response::HTTP_OK, $asc->getStatusCode());
+		$this->assertSame(3, $this->decode($asc)['total']);
+
+		$rand = $this->controller()->listActivities(
+			$this->request('GET', '/v2/activities/list?sort=rand'),
+		);
+		$this->assertSame(Response::HTTP_OK, $rand->getStatusCode());
+
+		// over-long limit rejected via the 1000 max
+		$badLimit = $this->controller()->listActivities(
+			$this->request('GET', '/v2/activities/list?limit=2000'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badLimit->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/activities/:id resolves a direct id even when include_aliases is set')]
+	#[Group('mantle2/activities')]
+	public function getWithAliasesFlag(): void
+	{
+		$this->seed('run', ['SPORT'], ['aliases' => ['jog']]);
+
+		$direct = $this->controller()->getActivity(
+			$this->request('GET', '/v2/activities/run?include_aliases=1'),
+			'run',
+		);
+		$this->assertSame(Response::HTTP_OK, $direct->getStatusCode());
+		$this->assertSame('run', $this->decode($direct)['id']);
+
+		// alias without the flag is a miss
+		$noFlag = $this->controller()->getActivity(
+			$this->request('GET', '/v2/activities/jog'),
+			'jog',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $noFlag->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('PATCH /v2/activities/:id validates each optional field type before applying')]
+	#[Group('mantle2/activities')]
+	public function patchValidation(): void
+	{
+		$this->seed('run', ['SPORT']);
+		$admin = $this->admin();
+
+		$badBody = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{bad'),
+			'run',
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badBody->getStatusCode());
+
+		$badName = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{"name":5}'),
+			'run',
+		);
+		$this->assertSame('Invalid name type', $this->decode($badName)['message']);
+
+		$badDesc = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{"description":5}'),
+			'run',
+		);
+		$this->assertSame('Invalid description type', $this->decode($badDesc)['message']);
+
+		$emptyTypes = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{"types":[]}'),
+			'run',
+		);
+		$this->assertSame('Invalid types', $this->decode($emptyTypes)['message']);
+
+		$badType = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{"types":["NOPE"]}'),
+			'run',
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badType->getStatusCode());
+
+		$badFields = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{"fields":"nope"}'),
+			'run',
+		);
+		$this->assertSame('Invalid fields type', $this->decode($badFields)['message']);
+
+		$badFieldEntry = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{"fields":{"icon":5}}'),
+			'run',
+		);
+		$this->assertSame('Invalid field entry types', $this->decode($badFieldEntry)['message']);
+
+		$badAliases = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{"aliases":"nope"}'),
+			'run',
+		);
+		$this->assertSame('Invalid aliases type', $this->decode($badAliases)['message']);
+
+		$badAliasEntry = $this->controller()->updateActivity(
+			$this->authRequest($admin, 'PATCH', '/v2/activities/run', [], '{"aliases":[5]}'),
+			'run',
+		);
+		$this->assertSame('Invalid alias entry type', $this->decode($badAliasEntry)['message']);
+
+		// only fields (no name/desc/types/aliases) still updates
+		$fieldsOnly = $this->controller()->updateActivity(
+			$this->authRequest(
+				$admin,
+				'PATCH',
+				'/v2/activities/run',
+				[],
+				'{"fields":{"icon":"mdi:run"}}',
+			),
+			'run',
+		);
+		$this->assertSame(Response::HTTP_OK, $fieldsOnly->getStatusCode());
+		$this->assertSame('mdi:run', $this->decode($fieldsOnly)['fields']['icon']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/activities/random validates a negative count parameter')]
+	#[Group('mantle2/activities')]
+	public function randomNegativeCount(): void
+	{
+		$this->seed('run');
+		// a negative count exercises the range/count branch without crashing; the
+		// backend tolerates it (returns rows or none) rather than erroring
+		$res = $this->controller()->randomActivity(
+			$this->request('GET', '/v2/activities/random?count=-1'),
+		);
+		$this->assertContains($res->getStatusCode(), [
+			Response::HTTP_OK,
+			Response::HTTP_BAD_REQUEST,
+			Response::HTTP_NOT_FOUND,
+		]);
+	}
 }

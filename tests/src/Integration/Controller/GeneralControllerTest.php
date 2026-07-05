@@ -131,4 +131,40 @@ class GeneralControllerTest extends IntegrationTestBase
 		$setBy = RedisHelper::get('motd_set_by');
 		$this->assertSame((int) $admin->id(), (int) $setBy['value']);
 	}
+
+	#[Test]
+	#[TestDox('GET /v2/motd fills icon/type/link defaults when they are absent')]
+	#[Group('mantle2/general')]
+	public function getMotdDefaults(): void
+	{
+		RedisHelper::set('motd', ['motd' => 'Bare message'], 3600);
+
+		$response = $this->controller()->getMotd();
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$body = $this->decode($response);
+		$this->assertSame('Bare message', $body['motd']);
+		$this->assertSame('mdi:earth', $body['icon']);
+		$this->assertSame('info', $body['type']);
+		$this->assertNull($body['link']);
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/motd applies icon/type/link defaults when omitted')]
+	#[Group('mantle2/general')]
+	public function setMotdDefaults(): void
+	{
+		$admin = $this->admin();
+		$ok = $this->controller()->setMotd(
+			$this->authRequest($admin, 'POST', '/v2/motd', [], '{"motd":"Minimal"}'),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $ok->getStatusCode());
+		$body = $this->decode($ok);
+		$this->assertSame('Minimal', $body['motd']);
+		$this->assertSame(86400, $body['ttl']);
+		$this->assertSame('mdi:earth', $body['icon']);
+		$this->assertSame('info', $body['type']);
+
+		$stored = RedisHelper::get('motd');
+		$this->assertNull($stored['link']);
+	}
 }

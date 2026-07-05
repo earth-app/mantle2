@@ -564,4 +564,145 @@ class ApiKeysControllerTest extends IntegrationTestBase
 		);
 		$this->assertSame(0, $this->decode($again)['revoked']);
 	}
+
+	#[Test]
+	#[TestDox('create_ accepts never/absolute/empty expiry inputs and admins skip the email gate')]
+	#[Group('mantle2/api_keys')]
+	public function createExpiryVariants(): void
+	{
+		$user = $this->member();
+
+		$never = $this->controller()->create_(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/api-keys',
+				[],
+				$this->createBody(['name' => 'Never Key', 'expiry_preset' => 'never']),
+			),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $never->getStatusCode());
+		$this->assertTrue($this->decode($never)['never_expires']);
+
+		$absolute = $this->controller()->create_(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/api-keys',
+				[],
+				$this->createBody(['name' => 'Absolute Key', 'expires_at' => time() + 7 * 86400]),
+			),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $absolute->getStatusCode());
+		$this->assertFalse($this->decode($absolute)['never_expires']);
+
+		// admin without a verified email is not blocked (isAdmin bypasses the gate)
+		$admin = $this->createUser([
+			'field_account_type' => (string) array_search(
+				AccountType::ADMINISTRATOR,
+				AccountType::cases(),
+				true,
+			),
+		]);
+		$adminOk = $this->controller()->create_(
+			$this->authRequest(
+				$admin,
+				'POST',
+				'/v2/users/current/api-keys',
+				[],
+				$this->createBody(['name' => 'Admin Key']),
+			),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $adminOk->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('create_ 403s a user with no email on file')]
+	#[Group('mantle2/api_keys')]
+	public function createNoEmail(): void
+	{
+		$noEmail = $this->createUser(['field_email_verified' => true, 'mail' => '']);
+		$res = $this->controller()->create_(
+			$this->authRequest(
+				$noEmail,
+				'POST',
+				'/v2/users/current/api-keys',
+				[],
+				$this->createBody(),
+			),
+		);
+		// email-verified but empty mail -> issue() returns no_email -> mapped to 403
+		$this->assertSame(Response::HTTP_FORBIDDEN, $res->getStatusCode());
+		$this->assertStringContainsString('email address', $this->decode($res)['message']);
+	}
+
+	#[Test]
+	#[TestDox('PATCH validates description length and empty scopes')]
+	#[Group('mantle2/api_keys')]
+	public function patchMoreValidation(): void
+	{
+		$user = $this->member();
+		$issued = ApiKeysHelper::issue(
+			$user,
+			'Patch Target',
+			null,
+			[ApiKeyScope::USER_READ_PROFILE],
+			null,
+		);
+		$keyId = $issued['key']->getKeyId();
+
+		$badDesc = $this->controller()->patch(
+			$this->authRequest(
+				$user,
+				'PATCH',
+				'/v2/users/current/api-keys/' . $keyId,
+				[],
+				json_encode(['description' => str_repeat('d', ApiKey::DESCRIPTION_MAX + 1)]),
+			),
+			$keyId,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badDesc->getStatusCode());
+		$this->assertStringContainsString('Description', $this->decode($badDesc)['message']);
+
+		$emptyScopes = $this->controller()->patch(
+			$this->authRequest(
+				$user,
+				'PATCH',
+				'/v2/users/current/api-keys/' . $keyId,
+				[],
+				'{"scopes":[]}',
+			),
+			$keyId,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $emptyScopes->getStatusCode());
+
+		$badScopesType = $this->controller()->patch(
+			$this->authRequest(
+				$user,
+				'PATCH',
+				'/v2/users/current/api-keys/' . $keyId,
+				[],
+				'{"scopes":"nope"}',
+			),
+			$keyId,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badScopesType->getStatusCode());
+		$this->assertSame(
+			'scopes must be an array of strings',
+			$this->decode($badScopesType)['message'],
+		);
+
+		$badJson = $this->controller()->patch(
+			$this->authRequest(
+				$user,
+				'PATCH',
+				'/v2/users/current/api-keys/' . $keyId,
+				[],
+				'not json',
+			),
+			$keyId,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+		$this->assertSame('Invalid JSON body', $this->decode($badJson)['message']);
+	}
 }

@@ -21,10 +21,6 @@ use Throwable;
 
 class AuthAccountTest extends IntegrationTestBase
 {
-	// success paths here fan out to CloudHelper::sendWebsocketMessage (addNotification)
-	// which is unavailable in the integration tier; the local write completes before
-	// that hop, so we let a cloud failure through and assert the persisted state.
-	// the full success response is covered in E2E against a live worker.
 	private function invokeToleratingCloud(callable $fn): ?JsonResponse
 	{
 		try {
@@ -1151,6 +1147,749 @@ class AuthAccountTest extends IntegrationTestBase
 		);
 		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
 		$this->assertSame('PRIVATE', UsersHelper::getFieldPrivacy(User::load($user->id()))['bio']);
+	}
+
+	#endregion
+
+	#region createUser (traditional signup)
+
+	#[Test]
+	#[
+		TestDox(
+			'POST /v2/users/create 400s malformed JSON, a JSON array, and missing username/password',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function createUserBadBody(): void
+	{
+		$badJson = $this->controller()->createUser(
+			$this->request('POST', '/v2/users/create', [], '{not json'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+		$this->assertStringContainsString('Invalid JSON body', $this->decode($badJson)['message']);
+
+		$listBody = $this->controller()->createUser(
+			$this->request('POST', '/v2/users/create', [], '[1,2,3]'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $listBody->getStatusCode());
+		$this->assertSame('Invalid JSON', $this->decode($listBody)['message']);
+
+		$missing = $this->controller()->createUser(
+			$this->request('POST', '/v2/users/create', [], '{"username":"onlyname"}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $missing->getStatusCode());
+		$this->assertStringContainsString(
+			'Username and Password',
+			$this->decode($missing)['message'],
+		);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'POST /v2/users/create validates username pattern, password pattern, name length, and email shape',
+		),
+	]
+	#[Group('mantle2/users')]
+	#[DataProvider('createUserValidationProvider')]
+	public function createUserValidation(string $json, string $needle): void
+	{
+		$response = $this->controller()->createUser(
+			$this->request('POST', '/v2/users/create', [], $json),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertStringContainsString($needle, $this->decode($response)['message']);
+	}
+
+	public static function createUserValidationProvider(): array
+	{
+		return [
+			'illegal username chars' => [
+				'{"username":"has spaces","password":"GoodPass123"}',
+				'Username must be',
+			],
+			'weak password' => ['{"username":"validname","password":"short"}', 'Password must be'],
+			'short first name' => [
+				'{"username":"validname","password":"GoodPass123","first_name":"A"}',
+				'First name must be between',
+			],
+			'short last name' => [
+				'{"username":"validname","password":"GoodPass123","last_name":"B"}',
+				'Last name must be between',
+			],
+			'bad email' => [
+				'{"username":"validname","password":"GoodPass123","email":"not-an-email"}',
+				'Invalid email address',
+			],
+		];
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/users/create 409s a duplicate username and a duplicate email')]
+	#[Group('mantle2/users')]
+	public function createUserConflicts(): void
+	{
+		$this->createUser(['name' => 'takenname', 'mail' => 'taken@example.com']);
+
+		$dupName = $this->controller()->createUser(
+			$this->request(
+				'POST',
+				'/v2/users/create',
+				[],
+				'{"username":"takenname","password":"GoodPass123"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_CONFLICT, $dupName->getStatusCode());
+		$this->assertStringContainsString(
+			'Username already exists',
+			$this->decode($dupName)['message'],
+		);
+
+		$dupEmail = $this->controller()->createUser(
+			$this->request(
+				'POST',
+				'/v2/users/create',
+				[],
+				'{"username":"freshname","password":"GoodPass123","email":"taken@example.com"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_CONFLICT, $dupEmail->getStatusCode());
+		$this->assertStringContainsString(
+			'Email already in use',
+			$this->decode($dupEmail)['message'],
+		);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'POST /v2/users/create persists a new user and issues a session token (blacklist fails open)',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function createUserSuccess(): void
+	{
+		// the blacklist check + funnel bump + welcome notification all fan out to the dead cloud;
+		// the local user->save() completes first, so tolerate the cloud failure and assert state
+		$response = $this->invokeToleratingCloud(
+			fn() => $this->controller()->createUser(
+				$this->request(
+					'POST',
+					'/v2/users/create',
+					[],
+					'{"username":"brandnew","password":"GoodPass123","first_name":"New","last_name":"User"}',
+				),
+			),
+		);
+
+		$created = UsersHelper::findByUsername('brandnew');
+		$this->assertInstanceOf(UserInterface::class, $created);
+		$this->assertSame('New', $created->get('field_first_name')->value);
+		$this->assertSame('User', $created->get('field_last_name')->value);
+		$this->assertTrue($created->isActive());
+
+		if ($response !== null) {
+			$this->assertSame(Response::HTTP_CREATED, $response->getStatusCode());
+			$this->assertNotEmpty($this->decode($response)['session_token']);
+		}
+	}
+
+	#endregion
+
+	#region users (list edge cases)
+
+	#[Test]
+	#[TestDox('GET /v2/users 400s an out-of-range page/limit and a bad sort')]
+	#[Group('mantle2/users')]
+	#[DataProvider('usersBadPaginationProvider')]
+	public function usersBadPagination(array $query): void
+	{
+		$request = $this->request('GET', '/v2/users');
+		$request->query->replace($query);
+		$response = $this->controller()->users($request);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+	}
+
+	public static function usersBadPaginationProvider(): array
+	{
+		return [
+			'page zero' => [['page' => '0']],
+			'negative page' => [['page' => '-3']],
+			'limit zero' => [['limit' => '0']],
+			'limit too high' => [['limit' => '9999']],
+			'bad sort' => [['sort' => 'sideways']],
+		];
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/users?sort=rand returns only public users for an anonymous caller')]
+	#[Group('mantle2/users')]
+	public function usersRandomSortPublicOnly(): void
+	{
+		$this->publicUser(['name' => 'rand_pub_' . bin2hex(random_bytes(2))]);
+		$this->createUser([
+			'field_visibility' => $this->visibilityOrdinal(Visibility::PRIVATE),
+		]);
+
+		$request = $this->request('GET', '/v2/users');
+		$request->query->replace(['sort' => 'rand']);
+		$response = $this->controller()->users($request);
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$body = $this->decode($response);
+		// only the single public user is countable/returned to anon
+		$this->assertSame(1, $body['total']);
+		$this->assertCount(1, $body['items']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/users?search matches username on a normal (non-random) sort')]
+	#[Group('mantle2/users')]
+	public function usersSearchFilter(): void
+	{
+		$this->publicUser(['name' => 'searchme_zeta']);
+		$this->publicUser(['name' => 'unrelated_name']);
+
+		$request = $this->request('GET', '/v2/users');
+		$request->query->replace(['search' => 'searchme']);
+		$body = $this->decode($this->controller()->users($request));
+		$this->assertSame(1, $body['total']);
+		$this->assertSame('searchme_zeta', $body['items'][0]['username']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/users hides a disabled account even when it is public')]
+	#[Group('mantle2/users')]
+	public function usersHidesDisabled(): void
+	{
+		$this->publicUser(['name' => 'live_pub_' . bin2hex(random_bytes(2))]);
+		$disabled = $this->publicUser(['name' => 'dead_pub_' . bin2hex(random_bytes(2))]);
+		$disabled->block();
+		$disabled->save();
+
+		$body = $this->decode($this->controller()->users($this->request('GET', '/v2/users')));
+		$usernames = array_column($body['items'], 'username');
+		$this->assertNotContains($disabled->getAccountName(), $usernames);
+	}
+
+	#endregion
+
+	#region getUser (more branches)
+
+	#[Test]
+	#[TestDox('GET /v2/users/current 401s an anonymous caller (findByRequest gates it)')]
+	#[Group('mantle2/users')]
+	public function getUserCurrentAnonymous(): void
+	{
+		$response = $this->controller()->getUser($this->request('GET', '/v2/users/current'));
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/users/{id} 403s a disabled account for a non-admin viewer')]
+	#[Group('mantle2/users')]
+	public function getUserDisabledForbidden(): void
+	{
+		$disabled = $this->publicUser();
+		$disabled->block();
+		$disabled->save();
+
+		$viewer = $this->publicUser();
+		$response = $this->controller()->getUser(
+			$this->authRequest($viewer, 'GET', '/v2/users/' . $disabled->id()),
+			(string) $disabled->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/users/{id} 404s a viewer the target has blocked')]
+	#[Group('mantle2/users')]
+	public function getUserBlockedBy404(): void
+	{
+		$target = $this->publicUser();
+		$viewer = $this->publicUser();
+		$target->set('field_blocked_users', json_encode([(int) $viewer->id()]));
+		$target->save();
+		$viewer->set('field_blocked_by', json_encode([(int) $target->id()]));
+		$viewer->save();
+
+		$response = $this->controller()->getUser(
+			$this->authRequest($viewer, 'GET', '/v2/users/' . $target->id()),
+			(string) $target->id(),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $response->getStatusCode());
+	}
+
+	#endregion
+
+	#region patchUser (remaining validated fields)
+
+	#[Test]
+	#[TestDox('PATCH /v2/users validates username length, flagged content, and duplicates')]
+	#[Group('mantle2/users')]
+	public function patchUserUsername(): void
+	{
+		$user = $this->createUser();
+		$this->createUser(['name' => 'existingtaken']);
+
+		$short = $this->controller()->patchUser(
+			$this->authRequest($user, 'PATCH', '/v2/users/current', [], '{"username":"ab"}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $short->getStatusCode());
+		$this->assertStringContainsString('username length', $this->decode($short)['message']);
+
+		$dup = $this->controller()->patchUser(
+			$this->authRequest(
+				$user,
+				'PATCH',
+				'/v2/users/current',
+				[],
+				'{"username":"existingtaken"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $dup->getStatusCode());
+		$this->assertStringContainsString('already exists', $this->decode($dup)['message']);
+
+		$ok = $this->controller()->patchUser(
+			$this->authRequest($user, 'PATCH', '/v2/users/current', [], '{"username":"renamedok"}'),
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertSame('renamedok', User::load($user->id())->getAccountName());
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'PATCH /v2/users validates last name length, bio length, censor flag, and email shape',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function patchUserMoreFields(): void
+	{
+		$user = $this->createUser();
+
+		$shortLast = $this->controller()->patchUser(
+			$this->authRequest($user, 'PATCH', '/v2/users/current', [], '{"last_name":"Z"}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $shortLast->getStatusCode());
+		$this->assertStringContainsString('last name length', $this->decode($shortLast)['message']);
+
+		$longBio = $this->controller()->patchUser(
+			$this->authRequest(
+				$user,
+				'PATCH',
+				'/v2/users/current',
+				[],
+				json_encode(['bio' => str_repeat('a', 501)]),
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $longBio->getStatusCode());
+		$this->assertStringContainsString('biography length', $this->decode($longBio)['message']);
+
+		$badCensor = $this->controller()->patchUser(
+			$this->authRequest(
+				$user,
+				'PATCH',
+				'/v2/users/current',
+				[],
+				'{"bio":"hi","censor":"yes"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badCensor->getStatusCode());
+		$this->assertStringContainsString(
+			'censor must be a boolean',
+			$this->decode($badCensor)['message'],
+		);
+
+		$badEmail = $this->controller()->patchUser(
+			$this->authRequest($user, 'PATCH', '/v2/users/current', [], '{"email":"nope"}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badEmail->getStatusCode());
+		$this->assertStringContainsString(
+			'Invalid email format',
+			$this->decode($badEmail)['message'],
+		);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'PATCH /v2/users rejects a non-boolean disabled and refuses to disable a protected account',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function patchUserDisabledGuards(): void
+	{
+		$admin = $this->admin();
+
+		$nonBool = $this->controller()->patchUser(
+			$this->authRequest(
+				$admin,
+				'PATCH',
+				'/v2/users/' . $admin->id(),
+				[],
+				'{"disabled":"true"}',
+			),
+			(string) $admin->id(),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $nonBool->getStatusCode());
+		$this->assertStringContainsString('must be a boolean', $this->decode($nonBool)['message']);
+
+		// an admin cannot disable another admin (protected-account guard)
+		$otherAdmin = $this->admin();
+		$protected = $this->controller()->patchUser(
+			$this->authRequest(
+				$admin,
+				'PATCH',
+				'/v2/users/' . $otherAdmin->id(),
+				[],
+				'{"disabled":true}',
+			),
+			(string) $otherAdmin->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $protected->getStatusCode());
+		$this->assertStringContainsString(
+			'cannot be disabled',
+			$this->decode($protected)['message'],
+		);
+	}
+
+	#[Test]
+	#[TestDox('PATCH /v2/users 401s anonymous and 403s a cross-user edit without admin')]
+	#[Group('mantle2/users')]
+	public function patchUserAuthorization(): void
+	{
+		$owner = $this->createUser();
+		$other = $this->createUser();
+
+		$anon = $this->controller()->patchUser(
+			$this->request('PATCH', '/v2/users/' . $other->id(), [], '{"bio":"x"}'),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$forbidden = $this->controller()->patchUser(
+			$this->authRequest($owner, 'PATCH', '/v2/users/' . $other->id(), [], '{"bio":"x"}'),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
+	#endregion
+
+	#region deleteUser (cross-user + protected)
+
+	#[Test]
+	#[TestDox('DELETE /v2/users 401s anonymous, 403s a cross-user delete, and refuses uid 1')]
+	#[Group('mantle2/users')]
+	public function deleteUserAuthorization(): void
+	{
+		$owner = $this->createUser();
+		$other = $this->createUser();
+
+		$anon = $this->controller()->deleteUser(
+			$this->request('DELETE', '/v2/users/' . $other->id(), [], ''),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$forbidden = $this->controller()->deleteUser(
+			$this->authRequest($owner, 'DELETE', '/v2/users/' . $other->id(), [], ''),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+
+		// uid 1 is the reserved root user; an admin deleting it hits the protected-account guard
+		$admin = $this->admin();
+		$root = $this->controller()->deleteUser(
+			$this->authRequest($admin, 'DELETE', '/v2/users/1', [], ''),
+			'1',
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $root->getStatusCode());
+		$this->assertNotNull(User::load(1));
+	}
+
+	#[Test]
+	#[TestDox('DELETE /v2/users 403s a self-delete without a password when the account has none')]
+	#[Group('mantle2/users')]
+	public function deleteUserSelfNoPasswordReauthRequired(): void
+	{
+		$user = $this->createUser();
+		$user->setPassword(null);
+		$user->save();
+		$this->assertFalse(UsersHelper::hasPassword($user));
+
+		$response = $this->controller()->deleteUser(
+			$this->authRequest($user, 'DELETE', '/v2/users/current', [], ''),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
+		$this->assertSame('REAUTH_REQUIRED', $this->decode($response)['reason']);
+	}
+
+	#endregion
+
+	#region getProfilePhoto (validation)
+
+	#[Test]
+	#[TestDox('GET /v2/users/{id}/profile_photo 400s a bad size and 404s an unknown user')]
+	#[Group('mantle2/users')]
+	public function getProfilePhotoValidation(): void
+	{
+		$user = $this->publicUser();
+
+		$badSize = $this->request('GET', '/v2/users/' . $user->id() . '/profile_photo');
+		$badSize->query->replace(['size' => '77']);
+		$sizeRes = $this->controller()->getProfilePhoto($badSize, (string) $user->id());
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $sizeRes->getStatusCode());
+
+		$missing = $this->request('GET', '/v2/users/999999/profile_photo');
+		$missingRes = $this->controller()->getProfilePhoto($missing, '999999');
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missingRes->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/users/{id}/profile_photo 403s a disabled account')]
+	#[Group('mantle2/users')]
+	public function getProfilePhotoDisabled(): void
+	{
+		$disabled = $this->publicUser();
+		$disabled->block();
+		$disabled->save();
+
+		$request = $this->request('GET', '/v2/users/' . $disabled->id() . '/profile_photo');
+		$response = $this->controller()->getProfilePhoto($request, (string) $disabled->id());
+		$this->assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
+	}
+
+	#endregion
+
+	#region reauth (anonymous + bad shape)
+
+	#[Test]
+	#[TestDox('POST /v2/users/current/reauth/oauth 401s anonymous and 400s a missing provider')]
+	#[Group('mantle2/users')]
+	public function reauthWithOAuthGuards(): void
+	{
+		$anon = $this->controller()->reauthWithOAuth(
+			$this->request('POST', '/v2/users/current/reauth/oauth', [], '{"provider":"google"}'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$user = $this->createUser();
+		$noProvider = $this->controller()->reauthWithOAuth(
+			$this->authRequest($user, 'POST', '/v2/users/current/reauth/oauth', [], '{}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $noProvider->getStatusCode());
+		$this->assertStringContainsString('provider', $this->decode($noProvider)['message']);
+	}
+
+	#endregion
+
+	#region setAccountType / createTypeTrial (extra guards)
+
+	#[Test]
+	#[
+		TestDox(
+			'PUT /v2/users/{id}/account_type/trial 401s anonymous and 400s a missing/invalid type',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function createTypeTrialGuards(): void
+	{
+		$member = $this->createUser();
+
+		$anon = $this->controller()->createTypeTrial(
+			$this->request('PUT', '/v2/users/' . $member->id() . '/account_type/trial'),
+			(string) $member->id(),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$admin = $this->admin();
+		$missingType = $this->controller()->createTypeTrial(
+			$this->authRequest($admin, 'PUT', '/v2/users/' . $member->id() . '/account_type/trial'),
+			(string) $member->id(),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $missingType->getStatusCode());
+		$this->assertStringContainsString('Missing type', $this->decode($missingType)['message']);
+
+		$badType = $this->authRequest(
+			$admin,
+			'PUT',
+			'/v2/users/' . $member->id() . '/account_type/trial',
+		);
+		$badType->query->replace(['type' => 'wizard']);
+		$badTypeRes = $this->controller()->createTypeTrial($badType, (string) $member->id());
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badTypeRes->getStatusCode());
+		$this->assertStringContainsString('Invalid type', $this->decode($badTypeRes)['message']);
+
+		$tooManyDays = $this->authRequest(
+			$admin,
+			'PUT',
+			'/v2/users/' . $member->id() . '/account_type/trial',
+		);
+		$tooManyDays->query->replace(['type' => 'pro', 'days' => '365']);
+		$daysRes = $this->controller()->createTypeTrial($tooManyDays, (string) $member->id());
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $daysRes->getStatusCode());
+		$this->assertStringContainsString('between 1 and 90', $this->decode($daysRes)['message']);
+	}
+
+	#endregion
+
+	#region OAuth (pre-token guard branches; token validation is E2E)
+
+	#[Test]
+	#[TestDox('POST /v2/users/oauth/{provider} 400s malformed JSON and a missing token')]
+	#[Group('mantle2/users')]
+	public function oauthLoginBadInput(): void
+	{
+		$badJson = $this->controller()->oauthGoogle(
+			$this->request('POST', '/v2/users/oauth/google', [], '{bad'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+		$this->assertStringContainsString('Invalid JSON body', $this->decode($badJson)['message']);
+
+		$noToken = $this->controller()->oauthGoogle(
+			$this->request('POST', '/v2/users/oauth/google', [], '{}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $noToken->getStatusCode());
+		$this->assertStringContainsString('id_token', $this->decode($noToken)['message']);
+	}
+
+	#[Test]
+	#[TestDox('DELETE /v2/users/oauth/{provider} 401s anonymous and 400s an unlinked provider')]
+	#[Group('mantle2/users')]
+	public function oauthUnlinkGuards(): void
+	{
+		$anon = $this->controller()->unlinkOAuthGoogle(
+			$this->request('DELETE', '/v2/users/oauth/google'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$user = $this->createUser();
+		$notLinked = $this->controller()->unlinkOAuthGoogle(
+			$this->authRequest($user, 'DELETE', '/v2/users/oauth/google'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $notLinked->getStatusCode());
+		$this->assertStringContainsString('not linked', $this->decode($notLinked)['message']);
+	}
+
+	#endregion
+
+	#region registerPushToken
+
+	#[Test]
+	#[
+		TestDox(
+			'POST /v2/users/current/notifications/push validates auth, User-Agent, JSON, token, and platform',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function registerPushTokenValidation(): void
+	{
+		$anon = $this->controller()->registerPushToken(
+			$this->request('POST', '/v2/users/current/notifications/push'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$user = $this->createUser();
+
+		// Request::create injects a default User-Agent, so strip it to hit the missing-header branch
+		$noAgentReq = $this->authRequest(
+			$user,
+			'POST',
+			'/v2/users/current/notifications/push',
+			[],
+			'{}',
+		);
+		$noAgentReq->headers->remove('User-Agent');
+		$noAgent = $this->controller()->registerPushToken($noAgentReq);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $noAgent->getStatusCode());
+		$this->assertStringContainsString('User-Agent', $this->decode($noAgent)['message']);
+
+		$server = ['HTTP_USER_AGENT' => 'TestAgent/1.0'];
+
+		$badJson = $this->controller()->registerPushToken(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/notifications/push',
+				$server,
+				'{bad',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+
+		$shortToken = $this->controller()->registerPushToken(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/notifications/push',
+				$server,
+				'{"token":"abc","platform":"ios"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $shortToken->getStatusCode());
+
+		$badPlatform = $this->controller()->registerPushToken(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/notifications/push',
+				$server,
+				'{"token":"a-sufficiently-long-token-value","platform":"windows"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badPlatform->getStatusCode());
+		$this->assertStringContainsString(
+			'Platform must be',
+			$this->decode($badPlatform)['message'],
+		);
+
+		$ok = $this->controller()->registerPushToken(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/notifications/push',
+				$server,
+				'{"token":"a-sufficiently-long-token-value","platform":"ios"}',
+			),
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+
+		$stored = \Drupal::database()
+			->select('push_tokens', 'p')
+			->fields('p', ['token'])
+			->condition('user_id', (int) $user->id())
+			->condition('platform', 'ios')
+			->execute()
+			->fetchField();
+		$this->assertSame('a-sufficiently-long-token-value', $stored);
+	}
+
+	#endregion
+
+	#region getGlobalPolls (admin gate)
+
+	#[Test]
+	#[TestDox('GET /v2/admin/polls 401s anonymous, 403s a non-admin, and 200s an admin')]
+	#[Group('mantle2/users')]
+	public function getGlobalPolls(): void
+	{
+		$anon = $this->controller()->getGlobalPolls($this->request('GET', '/v2/admin/polls'));
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$member = $this->createUser();
+		$forbidden = $this->controller()->getGlobalPolls(
+			$this->authRequest($member, 'GET', '/v2/admin/polls'),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+
+		$admin = $this->admin();
+		$ok = $this->controller()->getGlobalPolls(
+			$this->authRequest($admin, 'GET', '/v2/admin/polls'),
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertArrayHasKey('items', $this->decode($ok));
 	}
 
 	#endregion
