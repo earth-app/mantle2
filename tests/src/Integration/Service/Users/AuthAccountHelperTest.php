@@ -645,4 +645,824 @@ class AuthAccountHelperTest extends IntegrationTestBase
 	}
 
 	#endregion
+
+	#region User Endpoint Validation (branches)
+
+	#[Test]
+	#[TestDox('getVisibility falls back to UNLISTED for an out-of-range stored ordinal')]
+	#[Group('mantle2/users')]
+	public function getVisibilityFallback(): void
+	{
+		$user = $this->createUser(['field_visibility' => '99']);
+		$this->assertSame(Visibility::UNLISTED, UsersHelper::getVisibility($user));
+
+		// a disabled PRIVATE account keeps PRIVATE (only non-private is demoted)
+		$privDisabled = $this->createUser([
+			'field_visibility' => (string) array_search(
+				Visibility::PRIVATE,
+				Visibility::cases(),
+				true,
+			),
+		]);
+		$privDisabled->block();
+		$privDisabled->save();
+		$this->assertSame(Visibility::PRIVATE, UsersHelper::getVisibility($privDisabled));
+	}
+
+	#[Test]
+	#[TestDox('checkVisibility 404s when the target has blocked the requester')]
+	#[Group('mantle2/users')]
+	public function checkVisibilityBlockedBy(): void
+	{
+		$target = $this->createUser([
+			'field_visibility' => (string) array_search(
+				Visibility::PUBLIC,
+				Visibility::cases(),
+				true,
+			),
+		]);
+		$viewer = $this->createUser();
+		$target->set('field_blocked_users', json_encode([(int) $viewer->id()]));
+		$target->save();
+
+		$viewerReq = $this->bearerRequest(UsersHelper::issueToken($viewer));
+		$result = UsersHelper::checkVisibility(User::load($target->id()), $viewerReq);
+		$this->assertInstanceOf(JsonResponse::class, $result);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $result->getStatusCode());
+
+		// an admin viewer is exempt from the block gate and still sees the profile
+		$adminReq = $this->bearerRequest(UsersHelper::issueToken($this->admin()));
+		$this->assertInstanceOf(
+			UserInterface::class,
+			UsersHelper::checkVisibility(User::load($target->id()), $adminReq),
+		);
+	}
+
+	#[Test]
+	#[TestDox('checkVisibility shows a PRIVATE profile to an added friend')]
+	#[Group('mantle2/users')]
+	public function checkVisibilityPrivateFriend(): void
+	{
+		$private = $this->createUser([
+			'field_visibility' => (string) array_search(
+				Visibility::PRIVATE,
+				Visibility::cases(),
+				true,
+			),
+		]);
+		$friend = $this->createUser();
+		// checkVisibility shows PRIVATE to a requester who has added the target as a friend
+		$friend->set('field_friends', json_encode([(string) $private->id()]));
+		$friend->save();
+
+		$friendReq = $this->bearerRequest(UsersHelper::issueToken($friend));
+		$this->assertInstanceOf(
+			UserInterface::class,
+			UsersHelper::checkVisibility(User::load($private->id()), $friendReq),
+		);
+	}
+
+	#endregion
+
+	#region User Privacy Settings (branches)
+
+	#[Test]
+	#[TestDox('isVisible resolves every tier: CIRCLE and MUTUAL against the viewer relationship')]
+	#[Group('mantle2/users')]
+	public function isVisibleCircleAndMutual(): void
+	{
+		$owner = $this->createUser();
+		$circleMember = $this->createUser();
+		$mutual = $this->createUser();
+		$shared = $this->createUser();
+		$stranger = $this->createUser();
+
+		$owner->set('field_circle', json_encode([(string) $circleMember->id()]));
+		$owner->set('field_friends', json_encode([(string) $shared->id()]));
+		$owner->save();
+		$mutual->set('field_friends', json_encode([(string) $shared->id()]));
+		$mutual->save();
+		$owner = User::load($owner->id());
+		// isInCircle strict-compares loaded entities, so use the cached instances
+		$circleMember = User::load($circleMember->id());
+		$mutual = User::load($mutual->id());
+		$stranger = User::load($stranger->id());
+
+		// CIRCLE: only a circle member passes
+		$this->assertTrue(UsersHelper::isVisible($owner, $circleMember, 'CIRCLE'));
+		$this->assertFalse(UsersHelper::isVisible($owner, $stranger, 'CIRCLE'));
+
+		// MUTUAL: shared friend intersection passes
+		$this->assertTrue(UsersHelper::isVisible($owner, $mutual, 'MUTUAL'));
+		$this->assertFalse(UsersHelper::isVisible($owner, $stranger, 'MUTUAL'));
+
+		// an unknown required level defaults to hidden for a stranger
+		$this->assertFalse(UsersHelper::isVisible($owner, $stranger, 'NONSENSE'));
+		// but PUBLIC is always visible even with no requester
+		$this->assertTrue(UsersHelper::isVisible($owner, null, 'PUBLIC'));
+
+		// tryVisible passes the value through when visible, null otherwise
+		$this->assertSame('v', UsersHelper::tryVisible('v', $owner, $circleMember, 'CIRCLE'));
+		$this->assertNull(UsersHelper::tryVisible('v', $owner, $stranger, 'CIRCLE'));
+	}
+
+	#[Test]
+	#[TestDox('setFieldPrivacy writes the raw json read back by getFieldPrivacy')]
+	#[Group('mantle2/users')]
+	public function setFieldPrivacyRoundTrip(): void
+	{
+		$user = $this->createUser();
+		UsersHelper::setFieldPrivacy($user, ['bio' => 'PRIVATE', 'country' => 'PUBLIC']);
+		$user->save();
+
+		$privacy = UsersHelper::getFieldPrivacy(User::load($user->id()));
+		$this->assertSame('PRIVATE', $privacy['bio']);
+		$this->assertSame('PUBLIC', $privacy['country']);
+		// email still defaults since it was not set
+		$this->assertSame('MUTUAL', $privacy['email']);
+	}
+
+	#[Test]
+	#[TestDox('getFieldPrivacy tolerates malformed json and falls back to defaults')]
+	#[Group('mantle2/users')]
+	public function getFieldPrivacyMalformed(): void
+	{
+		$user = $this->createUser();
+		$user->set('field_privacy', 'not-json');
+		$user->save();
+
+		$privacy = UsersHelper::getFieldPrivacy(User::load($user->id()));
+		$this->assertSame('PUBLIC', $privacy['name']);
+		$this->assertSame('MUTUAL', $privacy['email']);
+	}
+
+	#endregion
+
+	#region User Account Tiers (branches)
+
+	#[Test]
+	#[TestDox('getAccountType defaults to FREE for an unset or out-of-range ordinal')]
+	#[Group('mantle2/users')]
+	public function getAccountTypeDefault(): void
+	{
+		$blank = $this->createUser(['field_account_type' => null]);
+		$this->assertSame(AccountType::FREE, UsersHelper::getAccountType($blank));
+
+		$outOfRange = $this->createUser(['field_account_type' => '99']);
+		$this->assertSame(AccountType::FREE, UsersHelper::getAccountType($outOfRange));
+	}
+
+	#[Test]
+	#[TestDox('isAdmin is true via the administrator role and the administer-users permission')]
+	#[Group('mantle2/users')]
+	public function isAdminRoleAndPermission(): void
+	{
+		// role grant
+		$this->container
+			->get('entity_type.manager')
+			->getStorage('user_role')
+			->create(['id' => 'administrator', 'label' => 'Administrator'])
+			->save();
+		$roleUser = $this->createUser();
+		$roleUser->addRole('administrator');
+		$roleUser->save();
+		$this->assertTrue(UsersHelper::isAdmin(User::load($roleUser->id())));
+
+		// permission grant (authenticated role with administer users)
+		$this->container
+			->get('entity_type.manager')
+			->getStorage('user_role')
+			->create([
+				'id' => 'perm_admin',
+				'label' => 'Perm',
+				'permissions' => ['administer users'],
+			])
+			->save();
+		$permUser = $this->createUser();
+		$permUser->addRole('perm_admin');
+		$permUser->save();
+		$this->assertTrue(UsersHelper::isAdmin(User::load($permUser->id())));
+
+		// plain member is not an admin
+		$this->assertFalse(UsersHelper::isAdmin($this->createUser()));
+	}
+
+	#[Test]
+	#[TestDox('createTierTrial upgrades a member, persists the trial key, and notifies')]
+	#[Group('mantle2/users')]
+	public function createTierTrialUpgrade(): void
+	{
+		$member = $this->createUser(['mail' => 'trial@example.com']);
+		UsersHelper::createTierTrial($member, AccountType::PRO, 14, 'promo');
+
+		$reloaded = User::load($member->id());
+		$this->assertSame(AccountType::PRO, UsersHelper::getAccountType($reloaded));
+
+		$trial = RedisHelper::get('user:account_trial:' . $member->id());
+		$this->assertNotNull($trial);
+		$this->assertSame('FREE', $trial['old_type']);
+		$this->assertSame('PRO', $trial['new_type']);
+
+		$notes = UsersHelper::getNotifications($reloaded);
+		$this->assertNotEmpty($notes);
+		$this->assertSame('Account Trial Activated', $notes[0]->getTitle());
+	}
+
+	#[Test]
+	#[TestDox('createTierTrial clamps an invalid duration to 7 days but still upgrades')]
+	#[Group('mantle2/users')]
+	public function createTierTrialInvalidDays(): void
+	{
+		$member = $this->createUser(['mail' => 'trial2@example.com']);
+		UsersHelper::createTierTrial($member, AccountType::PRO, 0);
+		$this->assertSame(AccountType::PRO, UsersHelper::getAccountType(User::load($member->id())));
+
+		$member2 = $this->createUser(['mail' => 'trial3@example.com']);
+		UsersHelper::createTierTrial($member2, AccountType::WRITER, 500);
+		$this->assertSame(
+			AccountType::WRITER,
+			UsersHelper::getAccountType(User::load($member2->id())),
+		);
+	}
+
+	#[Test]
+	#[TestDox('setDisabled reactivates a wrongly-blocked admin instead of leaving it disabled')]
+	#[Group('mantle2/users')]
+	public function setDisabledReactivatesBlockedAdmin(): void
+	{
+		$admin = $this->admin();
+		$admin->block();
+		$admin->save();
+		$admin = User::load($admin->id());
+		$this->assertTrue($admin->isBlocked());
+
+		UsersHelper::setDisabled($admin, true);
+		$this->assertFalse($admin->isBlocked());
+		$this->assertFalse(UsersHelper::isDisabled($admin));
+	}
+
+	#[Test]
+	#[TestDox('isDisabled protects root (uid 1) even when blocked')]
+	#[Group('mantle2/users')]
+	public function isDisabledProtectsRoot(): void
+	{
+		$root = User::load(1);
+		$this->assertFalse(UsersHelper::isDisabled($root));
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'enforceDisabledAccountRestrictions re-enables a blocked admin and revokes member tokens',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function enforceDisabledRestrictions(): void
+	{
+		// a blocked admin gets re-activated by the cron pass
+		$admin = $this->admin();
+		$admin->block();
+		$admin->save();
+
+		// a blocked member keeps its blocked state but loses its tokens
+		$member = $this->createUser();
+		$token = UsersHelper::issueToken($member);
+		$member->block();
+		$member->save();
+		$this->assertNotNull(UsersHelper::getUserByToken($token));
+
+		UsersHelper::enforceDisabledAccountRestrictions();
+
+		$this->assertFalse(User::load($admin->id())->isBlocked());
+		$this->assertTrue(User::load($member->id())->isBlocked());
+		$this->assertNull(UsersHelper::getUserByToken($token));
+	}
+
+	#endregion
+
+	#region Inactive Account Deletion (branches)
+
+	#[Test]
+	#[TestDox('inactivityReference is the later of last-login and created time')]
+	#[Group('mantle2/users')]
+	public function inactivityReferenceMax(): void
+	{
+		$user = $this->createUser();
+		$created = (int) $user->getCreatedTime();
+		$this->assertSame($created, UsersHelper::inactivityReference($user));
+
+		$later = $created + 5000;
+		$user->setLastLoginTime($later);
+		$user->save();
+		$this->assertSame($later, UsersHelper::inactivityReference(User::load($user->id())));
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'resolveDeletionWarningWindow buckets by nearest window and rejects out-of-range spans',
+		),
+	]
+	#[Group('mantle2/users')]
+	#[DataProvider('deletionWindowProvider')]
+	public function resolveDeletionWarningWindow(int $seconds, ?string $expectedKey): void
+	{
+		$window = UsersHelper::resolveDeletionWarningWindow($seconds);
+		if ($expectedKey === null) {
+			$this->assertNull($window);
+		} else {
+			$this->assertSame($expectedKey, $window['key']);
+		}
+	}
+
+	public static function deletionWindowProvider(): array
+	{
+		return [
+			'at deletion moment' => [0, null],
+			'past deletion moment' => [-100, null],
+			'within an hour' => [1800, '1_hour'],
+			'exactly one hour' => [3600, '1_hour'],
+			'within a day' => [3601, '1_day'],
+			'within three days' => [200000, '3_days'],
+			'within a week' => [500000, '1_week'],
+			'within two weeks' => [1000000, '2_weeks'],
+			'beyond widest window' => [5000000, null],
+		];
+	}
+
+	#endregion
+
+	#region User CRUD Operations (branches)
+
+	#[Test]
+	#[TestDox('serializeUser returns [] for an UNLISTED profile viewed anonymously')]
+	#[Group('mantle2/users')]
+	public function serializeUserUnlistedAnon(): void
+	{
+		$unlisted = $this->createUser([
+			'field_visibility' => (string) array_search(
+				Visibility::UNLISTED,
+				Visibility::cases(),
+				true,
+			),
+		]);
+		$this->assertSame([], UsersHelper::serializeUser($unlisted, null));
+
+		// a logged-in viewer sees the UNLISTED shell
+		$viewer = $this->createUser();
+		$view = UsersHelper::serializeUser($unlisted, $viewer);
+		$this->assertSame($unlisted->getAccountName(), $view['username']);
+	}
+
+	#[Test]
+	#[TestDox('serializeUser shows an admin viewer the private fields of any profile')]
+	#[Group('mantle2/users')]
+	public function serializeUserAdminViewer(): void
+	{
+		$user = $this->createUser([
+			'field_visibility' => (string) array_search(
+				Visibility::PRIVATE,
+				Visibility::cases(),
+				true,
+			),
+			'mail' => 'target@example.com',
+			'field_country' => 'US',
+		]);
+		$adminView = UsersHelper::serializeUser($user, $this->admin());
+		$this->assertNotSame([], $adminView);
+		$this->assertSame('target@example.com', $adminView['account']['email']);
+		$this->assertSame('US', $adminView['account']['country']);
+	}
+
+	#[Test]
+	#[TestDox('serializeUser exposes MUTUAL-gated fields to a mutual friend but not a stranger')]
+	#[Group('mantle2/users')]
+	public function serializeUserMutualViewer(): void
+	{
+		$shared = $this->createUser();
+		$user = $this->createUser([
+			'field_visibility' => (string) array_search(
+				Visibility::PUBLIC,
+				Visibility::cases(),
+				true,
+			),
+			'mail' => 'mut@example.com',
+		]);
+		$viewer = $this->createUser();
+		$user->set('field_friends', json_encode([(string) $shared->id()]));
+		$user->save();
+		$viewer->set('field_friends', json_encode([(string) $shared->id()]));
+		$viewer->save();
+
+		$view = UsersHelper::serializeUser(User::load($user->id()), User::load($viewer->id()));
+		$this->assertSame('mut@example.com', $view['account']['email']);
+		$this->assertTrue($view['is_mutual']);
+	}
+
+	#[Test]
+	#[TestDox('serializeUser marks a disabled account and hides its fields from a stranger')]
+	#[Group('mantle2/users')]
+	public function serializeUserDisabled(): void
+	{
+		$user = $this->createUser([
+			'field_visibility' => (string) array_search(
+				Visibility::PUBLIC,
+				Visibility::cases(),
+				true,
+			),
+			'field_first_name' => 'Grace',
+			'mail' => 'dis@example.com',
+		]);
+		$user->block();
+		$user->save();
+		$stranger = $this->createUser();
+
+		$view = UsersHelper::serializeUser(User::load($user->id()), $stranger);
+		$this->assertTrue($view['disabled']);
+		// disabled accounts force every field to PRIVATE, so a stranger sees nulls
+		$this->assertNull($view['account']['first_name']);
+		$this->assertNull($view['account']['email']);
+	}
+
+	#[Test]
+	#[TestDox('patchUser rejects empty data and validates each editable field length/format')]
+	#[Group('mantle2/users')]
+	#[DataProvider('patchValidationProvider')]
+	public function patchUserValidation(array $data, int $expectedStatus): void
+	{
+		$user = $this->createUser(['mail' => 'patch@example.com']);
+		$response = UsersHelper::patchUser(User::load($user->id()), $data, $user);
+		$this->assertSame($expectedStatus, $response->getStatusCode());
+	}
+
+	public static function patchValidationProvider(): array
+	{
+		return [
+			'empty data' => [[], Response::HTTP_BAD_REQUEST],
+			'short username' => [['username' => 'ab'], Response::HTTP_BAD_REQUEST],
+			'long username' => [['username' => str_repeat('a', 31)], Response::HTTP_BAD_REQUEST],
+			'short first name' => [['first_name' => 'A'], Response::HTTP_BAD_REQUEST],
+			'long first name' => [
+				['first_name' => str_repeat('A', 51)],
+				Response::HTTP_BAD_REQUEST,
+			],
+			'short last name' => [['last_name' => 'B'], Response::HTTP_BAD_REQUEST],
+			'long bio' => [['bio' => str_repeat('x', 501)], Response::HTTP_BAD_REQUEST],
+			'bad country length' => [['country' => 'USA'], Response::HTTP_BAD_REQUEST],
+			'invalid visibility' => [['visibility' => 'NOPE'], Response::HTTP_BAD_REQUEST],
+			'invalid email format' => [['email' => 'not-an-email'], Response::HTTP_BAD_REQUEST],
+			'non-bool censor' => [['bio' => 'hi', 'censor' => 'yes'], Response::HTTP_BAD_REQUEST],
+		];
+	}
+
+	#[Test]
+	#[TestDox('patchUser writes valid profile fields and reflects them in the serialized response')]
+	#[Group('mantle2/users')]
+	public function patchUserSuccess(): void
+	{
+		$user = $this->createUser(['mail' => 'ok@example.com']);
+		$response = UsersHelper::patchUser(
+			User::load($user->id()),
+			[
+				'first_name' => 'Ada',
+				'last_name' => 'Byron',
+				'bio' => 'mathematician',
+				'country' => 'GB',
+				'visibility' => 'PUBLIC',
+				'subscribed' => false,
+			],
+			$user,
+		);
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+
+		$reloaded = User::load($user->id());
+		$this->assertSame('Ada', $reloaded->get('field_first_name')->value);
+		$this->assertSame('Byron', $reloaded->get('field_last_name')->value);
+		$this->assertSame('mathematician', $reloaded->get('field_bio')->value);
+		$this->assertSame('GB', $reloaded->get('field_country')->value);
+		$this->assertSame(Visibility::PUBLIC, UsersHelper::getVisibility($reloaded));
+		$this->assertFalse(UsersHelper::isSubscribed($reloaded));
+	}
+
+	#[Test]
+	#[TestDox('patchUser rejects a duplicate username but accepts the owner keeping theirs')]
+	#[Group('mantle2/users')]
+	public function patchUserDuplicateUsername(): void
+	{
+		$taken = $this->createUser(['name' => 'taken_name']);
+		$user = $this->createUser(['name' => 'mine_name', 'mail' => 'dup@example.com']);
+
+		$dup = UsersHelper::patchUser(User::load($user->id()), ['username' => 'taken_name'], $user);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $dup->getStatusCode());
+
+		// setting to a fresh available name succeeds
+		$ok = UsersHelper::patchUser(User::load($user->id()), ['username' => 'fresh_name'], $user);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertSame('fresh_name', User::load($user->id())->getAccountName());
+	}
+
+	#[Test]
+	#[TestDox('patchUser censors a flagged bio when opted in and blocks it otherwise')]
+	#[Group('mantle2/users')]
+	public function patchUserBioCensor(): void
+	{
+		$user = $this->createUser(['mail' => 'bio@example.com']);
+		$blocked = UsersHelper::patchUser(
+			User::load($user->id()),
+			['bio' => 'this is shit content'],
+			$user,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $blocked->getStatusCode());
+
+		$censored = UsersHelper::patchUser(
+			User::load($user->id()),
+			['bio' => 'this is shit content', 'censor' => true],
+			$user,
+		);
+		$this->assertSame(Response::HTTP_OK, $censored->getStatusCode());
+		$this->assertStringNotContainsString(
+			'shit',
+			User::load($user->id())->get('field_bio')->value,
+		);
+	}
+
+	#[Test]
+	#[TestDox('patchUser disabled toggle is admin-only, boolean-only, and protects admin targets')]
+	#[Group('mantle2/users')]
+	public function patchUserDisabledGuards(): void
+	{
+		$member = $this->createUser(['mail' => 'dis@example.com']);
+
+		// a non-admin requester cannot touch disabled
+		$forbidden = UsersHelper::patchUser(
+			User::load($member->id()),
+			['disabled' => true],
+			$member,
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+
+		$admin = $this->admin();
+		// non-bool disabled is a 400
+		$badType = UsersHelper::patchUser(User::load($member->id()), ['disabled' => 'yes'], $admin);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badType->getStatusCode());
+
+		// disabling an admin target is forbidden
+		$adminTarget = $this->admin();
+		$protect = UsersHelper::patchUser(
+			User::load($adminTarget->id()),
+			['disabled' => true],
+			$admin,
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $protect->getStatusCode());
+
+		// an admin can disable a member; the change notifies them
+		$ok = UsersHelper::patchUser(
+			User::load($member->id()),
+			['disabled' => true, 'disable_reason' => 'spam'],
+			$admin,
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertTrue(UsersHelper::isDisabled(User::load($member->id())));
+		$notes = UsersHelper::getNotifications(User::load($member->id()));
+		$this->assertSame('Account Disabled', $notes[0]->getTitle());
+	}
+
+	#[Test]
+	#[TestDox('patchUser leaves an unchanged email untouched and flags a pending email change')]
+	#[Group('mantle2/users')]
+	public function patchUserEmailChange(): void
+	{
+		$user = $this->createUser(['mail' => 'same@example.com']);
+
+		// same email is a no-op path (no pending flag)
+		$noChange = UsersHelper::patchUser(
+			User::load($user->id()),
+			['email' => 'same@example.com'],
+			$user,
+		);
+		$this->assertSame(Response::HTTP_OK, $noChange->getStatusCode());
+		$this->assertArrayNotHasKey('email_change_pending', $this->decode($noChange));
+
+		// a valid different email initiates verification (cloud blacklist degrades to allow)
+		$change = UsersHelper::patchUser(
+			User::load($user->id()),
+			['email' => 'new_' . bin2hex(random_bytes(3)) . '@example.com'],
+			$user,
+		);
+		$this->assertSame(Response::HTTP_OK, $change->getStatusCode());
+		$body = $this->decode($change);
+		$this->assertTrue($body['email_change_pending']);
+		$this->assertNotNull(RedisHelper::get('email_change_' . $user->id()));
+	}
+
+	#[Test]
+	#[TestDox('patchFieldPrivacy rejects empty data, unknown fields, and never-public fields')]
+	#[Group('mantle2/users')]
+	public function patchFieldPrivacyBranches(): void
+	{
+		$user = $this->createUser();
+
+		$empty = UsersHelper::patchFieldPrivacy(User::load($user->id()), [], $user);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $empty->getStatusCode());
+
+		$unknown = UsersHelper::patchFieldPrivacy(
+			User::load($user->id()),
+			['not_a_field' => 'PUBLIC'],
+			$user,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $unknown->getStatusCode());
+
+		$neverPublic = UsersHelper::patchFieldPrivacy(
+			User::load($user->id()),
+			['address' => 'PUBLIC'],
+			$user,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $neverPublic->getStatusCode());
+
+		$ok = UsersHelper::patchFieldPrivacy(User::load($user->id()), ['bio' => 'PRIVATE'], $user);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertSame('PRIVATE', UsersHelper::getFieldPrivacy(User::load($user->id()))['bio']);
+	}
+
+	#endregion
+
+	#region User Token Authentication (branches)
+
+	#[Test]
+	#[TestDox('getUserByToken returns null for an expired token and cleans it from the index')]
+	#[Group('mantle2/users')]
+	public function tokenExpiry(): void
+	{
+		$user = $this->createUser();
+		$store = $this->container->get('keyvalue')->get('mantle2_tokens');
+		$index = $this->container->get('keyvalue')->get('mantle2_tokens_by_user');
+		$token = 'expired' . bin2hex(random_bytes(8));
+		$store->set($token, ['uid' => (int) $user->id(), 'created' => 100, 'exp' => 200]);
+		$index->set((string) $user->id(), [$token]);
+
+		$this->assertNull(UsersHelper::getUserByToken($token));
+		$this->assertNull($store->get($token));
+		$this->assertNotContains($token, $index->get((string) $user->id()) ?? []);
+	}
+
+	#[Test]
+	#[TestDox('getUserByToken slides the expiry forward once past the half-life')]
+	#[Group('mantle2/users')]
+	public function tokenSlidingExpiry(): void
+	{
+		$user = $this->createUser();
+		$store = $this->container->get('keyvalue')->get('mantle2_tokens');
+		$index = $this->container->get('keyvalue')->get('mantle2_tokens_by_user');
+		$token = 'slide' . bin2hex(random_bytes(8));
+		$soon = time() + 60;
+		$store->set($token, ['uid' => (int) $user->id(), 'created' => time(), 'exp' => $soon]);
+		$index->set((string) $user->id(), [$token]);
+
+		$resolved = UsersHelper::getUserByToken($token);
+		$this->assertSame((int) $user->id(), (int) $resolved->id());
+		$this->assertGreaterThan($soon, (int) $store->get($token)['exp']);
+	}
+
+	#[Test]
+	#[TestDox('getUserByToken returns null when the stored uid no longer loads')]
+	#[Group('mantle2/users')]
+	public function tokenDanglingUid(): void
+	{
+		$store = $this->container->get('keyvalue')->get('mantle2_tokens');
+		$token = 'ghost' . bin2hex(random_bytes(8));
+		$store->set($token, ['uid' => 987654, 'created' => time(), 'exp' => time() + 100000]);
+		$this->assertNull(UsersHelper::getUserByToken($token));
+	}
+
+	#[Test]
+	#[TestDox('revokeToken is a no-op for an empty token and drops a live one from the index')]
+	#[Group('mantle2/users')]
+	public function revokeTokenEdges(): void
+	{
+		UsersHelper::revokeToken('');
+		$this->addToAssertionCount(1);
+
+		$user = $this->createUser();
+		$token = UsersHelper::issueToken($user);
+		$index = $this->container->get('keyvalue')->get('mantle2_tokens_by_user');
+		$this->assertContains($token, $index->get((string) $user->id()) ?? []);
+
+		UsersHelper::revokeToken($token);
+		$this->assertNull(UsersHelper::getUserByToken($token));
+		$this->assertNotContains($token, $index->get((string) $user->id()) ?? []);
+	}
+
+	#[Test]
+	#[TestDox('clearCachedUserResponses ignores a non-positive uid')]
+	#[Group('mantle2/users')]
+	public function clearCachedResponsesGuard(): void
+	{
+		UsersHelper::clearCachedUserResponses(0);
+		UsersHelper::clearCachedUserResponses(-5);
+		$this->addToAssertionCount(1);
+	}
+
+	#endregion
+
+	#region User Passwords (branches)
+
+	#[Test]
+	#[TestDox('validateResetPasswordToken is false when no token was ever generated')]
+	#[Group('mantle2/users')]
+	public function resetTokenMissing(): void
+	{
+		$user = $this->createUser();
+		$this->assertFalse(UsersHelper::validateResetPasswordToken($user, 'whatever'));
+	}
+
+	#[Test]
+	#[TestDox('changePassword rehashes so the old password stops validating')]
+	#[Group('mantle2/users')]
+	public function changePassword(): void
+	{
+		$user = $this->createUser(['pass' => 'OldPass123', 'mail' => 'pw@example.com']);
+		$this->assertTrue(UsersHelper::validatePassword($user, 'OldPass123'));
+
+		$this->assertTrue(UsersHelper::changePassword($user, 'NewPass456'));
+		$reloaded = User::load($user->id());
+		$this->assertTrue(UsersHelper::validatePassword($reloaded, 'NewPass456'));
+		$this->assertFalse(UsersHelper::validatePassword($reloaded, 'OldPass123'));
+	}
+
+	#endregion
+
+	#region User Fields (branches)
+
+	#[Test]
+	#[TestDox('getName returns null when both name parts are empty')]
+	#[Group('mantle2/users')]
+	public function getNameEmpty(): void
+	{
+		$user = $this->createUser();
+		$this->assertNull(UsersHelper::getName($user, $user));
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'getPhoneNumber honors the CIRCLE default: hidden from stranger, shown to circle member',
+		),
+	]
+	#[Group('mantle2/users')]
+	public function getPhoneNumberPrivacy(): void
+	{
+		$user = $this->createUser(['field_phone' => 15550001111]);
+		$stranger = $this->createUser();
+		$circleMember = $this->createUser();
+		$user->set('field_circle', json_encode([(string) $circleMember->id()]));
+		$user->save();
+		$user = User::load($user->id());
+		$circleMember = User::load($circleMember->id());
+
+		$this->assertNull(UsersHelper::getPhoneNumber($user, $stranger));
+		$this->assertSame(15550001111, UsersHelper::getPhoneNumber($user, $user));
+		$this->assertSame(15550001111, UsersHelper::getPhoneNumber($user, $circleMember));
+	}
+
+	#[Test]
+	#[TestDox('getLastName resolves under the shared name privacy key')]
+	#[Group('mantle2/users')]
+	public function getLastNamePrivacy(): void
+	{
+		$user = $this->createUser(['field_first_name' => 'Ada', 'field_last_name' => 'Lovelace']);
+		UsersHelper::setFieldPrivacy($user, ['name' => 'PRIVATE']);
+		$user->save();
+		$user = User::load($user->id());
+		$stranger = $this->createUser();
+
+		$this->assertNull(UsersHelper::getFirstName($user, $stranger));
+		$this->assertNull(UsersHelper::getLastName($user, $stranger));
+		$this->assertSame('Lovelace', UsersHelper::getLastName($user, $user));
+	}
+
+	#[Test]
+	#[TestDox('isSubscribed defaults true and setSubscribed(false) persists the opt-out')]
+	#[Group('mantle2/users')]
+	public function subscriptionDefaultAndToggle(): void
+	{
+		$user = $this->createUser();
+		$this->assertTrue(UsersHelper::isSubscribed($user));
+
+		UsersHelper::setSubscribed($user, false);
+		$user->save();
+		$this->assertFalse(UsersHelper::isSubscribed(User::load($user->id())));
+	}
+
+	#[Test]
+	#[TestDox('requireEmailVerified flags whether the user even has an email to verify')]
+	#[Group('mantle2/users')]
+	public function requireEmailVerifiedNoEmail(): void
+	{
+		$noEmail = $this->createUser(['mail' => '']);
+		$gate = UsersHelper::requireEmailVerified($noEmail);
+		$this->assertInstanceOf(JsonResponse::class, $gate);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $gate->getStatusCode());
+	}
+
+	#endregion
 }

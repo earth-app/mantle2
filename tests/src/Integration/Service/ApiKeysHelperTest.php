@@ -135,6 +135,56 @@ class ApiKeysHelperTest extends IntegrationTestBase
 	}
 
 	#[Test]
+	#[TestDox('looksLikeApiKey checks prefix and total length only')]
+	#[Group('mantle2/api_keys')]
+	public function looksLikeApiKey(): void
+	{
+		$good = ApiKeysHelper::buildToken(
+			7,
+			str_repeat('a', ApiKey::RANDOM_HEX_LEN),
+			(int) (microtime(true) * 1000),
+		);
+		$this->assertTrue(ApiKeysHelper::looksLikeApiKey($good));
+
+		$this->assertFalse(ApiKeysHelper::looksLikeApiKey('EAshort'));
+		$this->assertFalse(
+			ApiKeysHelper::looksLikeApiKey('XX' . substr($good, 2)),
+			'wrong prefix but right length is not an api key',
+		);
+		$this->assertFalse(ApiKeysHelper::looksLikeApiKey(''));
+	}
+
+	public static function structurallyBadTokenProvider(): array
+	{
+		$random = str_repeat('a', ApiKey::RANDOM_HEX_LEN);
+		$ts = (int) (microtime(true) * 1000);
+		$good = ApiKeysHelper::buildToken(7, $random, $ts);
+		$randomEnd = 4 + ApiKey::RANDOM_HEX_LEN;
+		$gPos = $randomEnd + 1 + ApiKey::USER_HEX_LEN;
+		return [
+			// corrupt the random block with a non-hex char at a fixed offset
+			'non-hex random' => [substr_replace($good, 'z', 5, 1)],
+			// break the 'U' separator
+			'missing U separator' => [substr_replace($good, 'X', $randomEnd, 1)],
+			// non-hex in the user id block
+			'non-hex user id' => [substr_replace($good, 'z', $randomEnd + 1, 1)],
+			// break the 'G' separator
+			'missing G separator' => [substr_replace($good, 'X', $gPos, 1)],
+			// non-hex in the timestamp block
+			'non-hex timestamp' => [substr_replace($good, 'z', $gPos + 1, 1)],
+		];
+	}
+
+	#[Test]
+	#[TestDox('parseToken rejects structural corruption at each field boundary')]
+	#[Group('mantle2/api_keys')]
+	#[DataProvider('structurallyBadTokenProvider')]
+	public function parseRejectsStructural(string $token): void
+	{
+		$this->assertNull(ApiKeysHelper::parseToken($token));
+	}
+
+	#[Test]
 	#[TestDox('hashToken is a stable sha256 hex digest')]
 	#[Group('mantle2/api_keys')]
 	public function hashing(): void
@@ -477,11 +527,40 @@ class ApiKeysHelperTest extends IntegrationTestBase
 			ApiKeysHelper::update($keyId, (int) $user->id(), null, null, ['nope']),
 		);
 
+		$this->assertSame(
+			'invalid_description',
+			ApiKeysHelper::update(
+				$keyId,
+				(int) $user->id(),
+				null,
+				str_repeat('d', ApiKey::DESCRIPTION_MAX + 1),
+				null,
+			),
+		);
+
 		ApiKeysHelper::revoke($keyId, (int) $user->id());
 		$this->assertSame(
 			'revoked',
 			ApiKeysHelper::update($keyId, (int) $user->id(), 'Renamed Again', null, null),
 		);
+	}
+
+	#[Test]
+	#[TestDox('countActive honors an explicit now and excludes expired keys')]
+	#[Group('mantle2/api_keys')]
+	public function countActiveWithNow(): void
+	{
+		$user = $this->member();
+		ApiKeysHelper::issue(
+			$user,
+			'Short Lived',
+			null,
+			[ApiKeyScope::USER_READ_PROFILE],
+			time() + 3600,
+		);
+		$this->assertSame(1, ApiKeysHelper::countActive((int) $user->id(), time()));
+		// evaluated far in the future the key has expired, so it is not counted
+		$this->assertSame(0, ApiKeysHelper::countActive((int) $user->id(), time() + 7200));
 	}
 
 	#[Test]

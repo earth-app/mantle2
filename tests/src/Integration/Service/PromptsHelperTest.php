@@ -237,5 +237,87 @@ class PromptsHelperTest extends IntegrationTestBase
 		$this->assertArrayHasKey('owner', $sr);
 	}
 
+	#[Test]
+	#[TestDox('serializePromptResponse omits owner details for a system (-1) author')]
+	#[Group('mantle2/prompts')]
+	public function serializeSystemResponse(): void
+	{
+		$response = new \Drupal\mantle2\Custom\PromptResponse(
+			1,
+			2,
+			'system text',
+			-1,
+			time(),
+			time(),
+		);
+		$serialized = PromptsHelper::serializePromptResponse($response, null);
+		$this->assertSame('system text', $serialized['response']);
+		$this->assertArrayNotHasKey('owner', $serialized);
+		$this->assertArrayHasKey('prompt_id', $serialized);
+	}
+
+	#endregion
+
+	#region random + expiry
+
+	#[Test]
+	#[TestDox('getRandomPrompt and getRandomPrompts return only public prompts')]
+	#[Group('mantle2/prompts')]
+	public function randomSelection(): void
+	{
+		$owner = $this->createUser();
+		$this->assertNull(PromptsHelper::getRandomPrompt());
+		$this->assertSame([], PromptsHelper::getRandomPrompts());
+
+		$this->makePrompt($owner, 'Public prompt one', Visibility::PUBLIC);
+		$this->makePrompt($owner, 'Public prompt two', Visibility::PUBLIC);
+		$this->makePrompt($owner, 'A hidden private prompt', Visibility::PRIVATE);
+
+		$this->assertInstanceOf(Prompt::class, PromptsHelper::getRandomPrompt());
+		$this->assertSame(Visibility::PUBLIC, PromptsHelper::getRandomPrompt()->getVisibility());
+
+		$batch = PromptsHelper::getRandomPrompts(5);
+		$this->assertCount(2, $batch);
+		$this->assertContainsOnlyInstancesOf(Prompt::class, $batch);
+	}
+
+	#[Test]
+	#[TestDox('checkExpiredPrompts deletes stale public prompts and keeps fresh ones')]
+	#[Group('mantle2/prompts')]
+	public function expiry(): void
+	{
+		$owner = $this->createUser();
+		$fresh = $this->makePrompt($owner, 'A fresh public prompt', Visibility::PUBLIC);
+		$stale = $this->makePrompt($owner, 'A stale public prompt', Visibility::PUBLIC);
+
+		$staleNode = \Drupal\node\Entity\Node::load($stale->id());
+		$staleNode->setCreatedTime(time() - PromptsHelper::EXPIRED_PROMPTS_TTL - 100);
+		$staleNode->save();
+
+		PromptsHelper::checkExpiredPrompts();
+
+		$this->assertNotNull(\Drupal\node\Entity\Node::load($fresh->id()));
+		$this->assertNull(\Drupal\node\Entity\Node::load($stale->id()));
+	}
+
+	#[Test]
+	#[TestDox('getComments supports rand sort with search')]
+	#[Group('mantle2/prompts')]
+	public function commentRandSort(): void
+	{
+		$owner = $this->createUser();
+		$responder = $this->createUser();
+		$node = $this->makePrompt($owner);
+
+		PromptsHelper::addComment($responder, $node, 'alpha comment');
+		PromptsHelper::addComment($responder, $node, 'beta comment');
+
+		$rand = PromptsHelper::getComments($node, 1, 25, '', 'rand');
+		$this->assertCount(2, $rand);
+
+		$randSearch = PromptsHelper::getComments($node, 1, 25, 'alpha', 'rand');
+		$this->assertCount(1, $randSearch);
+	}
+
 	#endregion
 }

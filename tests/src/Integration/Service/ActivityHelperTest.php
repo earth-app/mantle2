@@ -148,4 +148,34 @@ class ActivityHelperTest extends IntegrationTestBase
 		$this->assertCount(3, $recent);
 		$this->assertContainsOnlyInstancesOf(Activity::class, $recent);
 	}
+
+	#[Test]
+	#[TestDox('nodeToActivity tolerates empty aliases/fields and drops out-of-range type ordinals')]
+	#[Group('mantle2/activities')]
+	public function nodeToActivityGuards(): void
+	{
+		$node = ActivityHelper::createActivity($this->make('run', ['SPORT']));
+
+		// blank out the json blobs so the null-coalesce branches run
+		$node->set('field_activity_aliases', null);
+		$node->set('field_activity_fields', null);
+		$node->save();
+
+		$activity = ActivityHelper::nodeToActivity($node);
+		$this->assertSame([], $activity->getAliases());
+		$this->assertSame([], $activity->getAllFields());
+		$this->assertSame(['SPORT'], $activity->getTypes());
+	}
+
+	#[Test]
+	#[TestDox('getRandomActivities caps at the requested count when more exist')]
+	#[Group('mantle2/activities')]
+	public function randomBatchCap(): void
+	{
+		foreach (['a', 'b', 'c', 'd'] as $id) {
+			ActivityHelper::createActivity($this->make($id));
+		}
+		$this->assertCount(2, ActivityHelper::getRandomActivities(2));
+		$this->assertCount(4, ActivityHelper::getRandomActivities(10));
+	}
 }

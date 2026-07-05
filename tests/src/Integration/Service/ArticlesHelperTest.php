@@ -279,6 +279,120 @@ class ArticlesHelperTest extends IntegrationTestBase
 
 	#endregion
 
+	#[Test]
+	#[TestDox('validateOcean accepts a full payload and normalizes the date to ISO')]
+	#[Group('mantle2/articles')]
+	public function validateOceanFullPayload(): void
+	{
+		$ocean = [
+			'title' => 'Deep Sea',
+			'url' => 'https://example.com/a',
+			'author' => 'Jane',
+			'source' => 'Journal',
+			'content' => 'A longer body of content',
+			'keywords' => ['ocean', 'depth'],
+			'links' => ['home' => 'https://example.com'],
+			'favicon' => 'https://example.com/favicon.ico',
+			'theme_color' => '#0af',
+			'date' => '2021-01-02',
+		];
+		$result = ArticlesHelper::validateOcean($ocean, User::load(1));
+		$this->assertIsArray($result);
+		// date is normalized to DATE_ATOM in the server timezone; assert the calendar day
+		$this->assertStringContainsString('2021-01-02T', $result['date']);
+		$this->assertSame(['ocean', 'depth'], $result['keywords']);
+
+		// an unparseable date is silently dropped
+		$oceanBadDate = $ocean;
+		$oceanBadDate['date'] = 'not a date at all';
+		$dropped = ArticlesHelper::validateOcean($oceanBadDate, User::load(1));
+		$this->assertArrayNotHasKey('date', $dropped);
+	}
+
+	public static function deepOceanInvalidProvider(): array
+	{
+		$base = [
+			'title' => 'x',
+			'url' => 'https://example.com',
+			'author' => 'a',
+			'source' => 's',
+			'abstract' => 'brief',
+		];
+		return [
+			'key too long' => [[str_repeat('k', 51) => 'v'] + $base, 'at most 50 characters'],
+			'string value too long' => [
+				['abstract' => str_repeat('a', 10001)] + $base,
+				'at most 10,000 characters',
+			],
+			'keywords not array' => [['keywords' => 'nope'] + $base, 'keywords must be an array'],
+			'too many keywords' => [
+				['keywords' => array_fill(0, 36, 'k')] + $base,
+				'maximum of 35 items',
+			],
+			'keyword not string' => [['keywords' => [123]] + $base, 'must be an array of strings'],
+			'keyword too long' => [
+				['keywords' => [str_repeat('k', 321)]] + $base,
+				'up to 320 characters',
+			],
+			'links not array' => [['links' => 'nope'] + $base, 'links must be an array'],
+			'links bad url' => [
+				['links' => ['home' => 'not-a-url']] + $base,
+				'map of valid URL strings',
+			],
+			'favicon bad url' => [['favicon' => 'nope'] + $base, 'favicon must be a valid URL'],
+			'theme_color bad' => [['theme_color' => 'blue'] + $base, 'valid hex color code'],
+			'date not string' => [['date' => 123] + $base, 'date must be a string'],
+		];
+	}
+
+	#[Test]
+	#[TestDox('validateOcean rejects malformed optional fields')]
+	#[Group('mantle2/articles')]
+	#[DataProvider('deepOceanInvalidProvider')]
+	public function validateOceanDeepInvalid(array $ocean, string $needle): void
+	{
+		$result = ArticlesHelper::validateOcean($ocean, User::load(1));
+		$this->assertInstanceOf(JsonResponse::class, $result);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $result->getStatusCode());
+		$this->assertStringContainsString(
+			$needle,
+			json_decode($result->getContent(), true)['message'],
+		);
+	}
+
+	#[Test]
+	#[TestDox('validateOcean allows a null user (no ownership check)')]
+	#[Group('mantle2/articles')]
+	public function validateOceanNullUser(): void
+	{
+		$ocean = [
+			'title' => 'Deep Sea',
+			'url' => 'https://example.com/a',
+			'author' => 'Jane',
+			'source' => 'Journal',
+			'abstract' => 'A brief look',
+		];
+		$result = ArticlesHelper::validateOcean($ocean, null);
+		$this->assertIsArray($result);
+		$this->assertSame('https://example.com/a', $result['url']);
+	}
+
+	#[Test]
+	#[TestDox('nodeToArticle tolerates missing tags and ocean blobs')]
+	#[Group('mantle2/articles')]
+	public function nodeToArticleEmptyBlobs(): void
+	{
+		$author = $this->author();
+		$node = $this->make($author);
+		$node->set('field_article_tags', null);
+		$node->set('field_ocean_article', null);
+		$node->save();
+
+		$article = ArticlesHelper::nodeToArticle(Node::load($node->id()));
+		$this->assertSame([], $article->getTags());
+		$this->assertSame([], $article->getOcean());
+	}
+
 	// cloud-backed methods deferred to E2E: getArticleQuiz, saveArticleQuiz,
 	// deleteArticleQuiz (all call CloudHelper::sendRequest)
 }
