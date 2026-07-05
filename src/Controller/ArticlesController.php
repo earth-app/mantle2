@@ -704,7 +704,9 @@ final class ArticlesController extends ControllerBase
 		}
 
 		$uid = (int) $user->id();
-		foreach ($questions as $index => $question) {
+
+		// iterate by reference so computed fields persist back into $questions before save
+		foreach ($questions as $index => &$question) {
 			if (!is_array($question)) {
 				return GeneralHelper::badRequest("Question at index $index must be an object");
 			}
@@ -880,6 +882,8 @@ final class ArticlesController extends ControllerBase
 				}
 			}
 		}
+
+		unset($question);
 
 		try {
 			ArticlesHelper::saveArticleQuiz($articleId, $questions);
