@@ -55,7 +55,7 @@ class PointsHelper
 				'%uid' => $user->id(),
 				'%message' => json_encode($data),
 			]);
-			return self::getPoints($user)[0];
+			return self::getPoints($user);
 		}
 
 		$newHistory = $data['history'] ?? [];
@@ -91,7 +91,7 @@ class PointsHelper
 				'%uid' => $user->id(),
 				'%message' => json_encode($data),
 			]);
-			return self::getPoints($user)[0];
+			return self::getPoints($user);
 		}
 
 		$newHistory = $data['history'] ?? [];
@@ -112,7 +112,7 @@ class PointsHelper
 	{
 		$data = CloudHelper::sendRequest(
 			'/v1/users/impact_points/' . GeneralHelper::formatId($user->id()) . '/set',
-			'POST',
+			'PUT',
 			[
 				'points' => $points,
 				'reason' => $reason,
@@ -125,7 +125,7 @@ class PointsHelper
 				'%uid' => $user->id(),
 				'%message' => json_encode($data),
 			]);
-			return self::getPoints($user)[0];
+			return self::getPoints($user);
 		}
 
 		$newHistory = $data['history'] ?? [];
