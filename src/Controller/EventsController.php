@@ -1246,7 +1246,8 @@ final class EventsController extends ControllerBase
 		}
 
 		try {
-			if (!EventsHelper::deleteImageSubmission($eventId, null, null)) {
+			// bulk delete every submission for this event (eventId is event_id, not submission_id)
+			if (!EventsHelper::deleteImageSubmission(null, null, $eventId)) {
 				return GeneralHelper::internalError('Failed to delete image submission');
 			}
 
@@ -1292,7 +1293,11 @@ final class EventsController extends ControllerBase
 		}
 
 		try {
-			$success = EventsHelper::deleteImageSubmission($eventId, $imageId, $user->id());
+			$success = EventsHelper::deleteImageSubmission(
+				$submission->submission_id,
+				null,
+				$eventId,
+			);
 			if (!$success) {
 				return GeneralHelper::internalError('Failed to delete image');
 			}
