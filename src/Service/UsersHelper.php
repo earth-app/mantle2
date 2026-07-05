@@ -3335,7 +3335,15 @@ class UsersHelper
 
 	public static function updateNotification(UserInterface $user, string $id, array $updates): bool
 	{
-		$notification = self::getNotification($user, $id);
+		// mutate the notification within the list we persist, not a detached copy
+		$notifications = self::getNotifications($user);
+		$notification = null;
+		foreach ($notifications as $n) {
+			if ($n->getId() === $id) {
+				$notification = $n;
+				break;
+			}
+		}
 		if ($notification === null) {
 			return false;
 		}
@@ -3351,7 +3359,7 @@ class UsersHelper
 			$notification->setRead((bool) $updates['read']);
 		}
 
-		self::setNotifications($user, self::getNotifications($user));
+		self::setNotifications($user, $notifications);
 		return true;
 	}
 
