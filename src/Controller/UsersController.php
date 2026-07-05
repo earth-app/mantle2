@@ -428,12 +428,11 @@ final class UsersController extends ControllerBase
 			return $this->createUserWithOAuth($request, $oauthProvider, $idToken, $body);
 		}
 
-		// Traditional username/password signup
-		$username = trim(strtolower($body['username'] ?? null));
-		$password = trim($body['password'] ?? null);
-		$email = trim(strtolower($body['email'] ?? null));
-		$firstName = trim($body['first_name'] ?? null);
-		$lastName = trim($body['last_name'] ?? null);
+		$username = trim(strtolower($body['username'] ?? ''));
+		$password = trim($body['password'] ?? '');
+		$email = trim(strtolower($body['email'] ?? ''));
+		$firstName = trim($body['first_name'] ?? '');
+		$lastName = trim($body['last_name'] ?? '');
 		$referralCode = trim($body['referral_code'] ?? '');
 
 		if (!$username || !$password) {
