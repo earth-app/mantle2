@@ -1297,6 +1297,12 @@ class UsersHelper
 				return GeneralHelper::badRequest('Invalid username length');
 			}
 
+			if (!preg_match('/' . Mantle2Schemas::$username['pattern'] . '/', $username)) {
+				return GeneralHelper::badRequest(
+					'Username can only contain letters, numbers, underscores, dashes, and periods, with no spaces.',
+				);
+			}
+
 			$usernameFlag = GeneralHelper::isFlagged($username);
 			if ($usernameFlag['flagged']) {
 				return GeneralHelper::badRequest(
