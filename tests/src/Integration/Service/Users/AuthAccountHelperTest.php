@@ -1101,6 +1101,10 @@ class AuthAccountHelperTest extends IntegrationTestBase
 			'empty data' => [[], Response::HTTP_BAD_REQUEST],
 			'short username' => [['username' => 'ab'], Response::HTTP_BAD_REQUEST],
 			'long username' => [['username' => str_repeat('a', 31)], Response::HTTP_BAD_REQUEST],
+			'spaced username' => [['username' => 'foo bar'], Response::HTTP_BAD_REQUEST],
+			'nbsp username' => [['username' => "foo\u{00A0}bar"], Response::HTTP_BAD_REQUEST],
+			'tab username' => [['username' => "foo\tbar"], Response::HTTP_BAD_REQUEST],
+			'whitespace-only username' => [['username' => '   '], Response::HTTP_BAD_REQUEST],
 			'short first name' => [['first_name' => 'A'], Response::HTTP_BAD_REQUEST],
 			'long first name' => [
 				['first_name' => str_repeat('A', 51)],

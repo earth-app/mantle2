@@ -1192,12 +1192,12 @@ class AuthAccountTest extends IntegrationTestBase
 	]
 	#[Group('mantle2/users')]
 	#[DataProvider('createUserValidationProvider')]
-	public function createUserValidation(string $json, string $needle): void
+	public function createUserValidation(string $json, string $needle, int $expectedStatus): void
 	{
 		$response = $this->controller()->createUser(
 			$this->request('POST', '/v2/users/create', [], $json),
 		);
-		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertSame($expectedStatus, $response->getStatusCode());
 		$this->assertStringContainsString($needle, $this->decode($response)['message']);
 	}
 
@@ -1207,19 +1207,32 @@ class AuthAccountTest extends IntegrationTestBase
 			'illegal username chars' => [
 				'{"username":"has spaces","password":"GoodPass123"}',
 				'Username must be',
+				Response::HTTP_BAD_REQUEST,
 			],
-			'weak password' => ['{"username":"validname","password":"short"}', 'Password must be'],
+			'unicode-space username' => [
+				'{"username":"foo bar","password":"GoodPass123"}',
+				'Username must be',
+				Response::HTTP_BAD_REQUEST,
+			],
+			'weak password' => [
+				'{"username":"validname","password":"short"}',
+				'Password must be',
+				Response::HTTP_BAD_REQUEST,
+			],
 			'short first name' => [
 				'{"username":"validname","password":"GoodPass123","first_name":"A"}',
 				'First name must be between',
+				Response::HTTP_BAD_REQUEST,
 			],
 			'short last name' => [
 				'{"username":"validname","password":"GoodPass123","last_name":"B"}',
 				'Last name must be between',
+				Response::HTTP_BAD_REQUEST,
 			],
 			'bad email' => [
 				'{"username":"validname","password":"GoodPass123","email":"not-an-email"}',
 				'Invalid email address',
+				Response::HTTP_BAD_REQUEST,
 			],
 		];
 	}
