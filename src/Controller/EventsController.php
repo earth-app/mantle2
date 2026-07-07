@@ -614,6 +614,10 @@ final class EventsController extends ControllerBase
 			return GeneralHelper::badRequest('Cannot sign up for a cancelled event');
 		}
 
+		if ($event->hasPassed()) {
+			return GeneralHelper::badRequest('Cannot sign up for an event that has already ended');
+		}
+
 		if ($event->isAttendee($user->id())) {
 			return GeneralHelper::conflict('You are already signed up for this event');
 		}

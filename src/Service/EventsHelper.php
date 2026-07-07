@@ -756,9 +756,7 @@ class EventsHelper
 		// timing info
 		$now = time() * 1000; // Convert to milliseconds for comparison
 		$timing = [];
-		$timing['has_passed'] = $event->getRawEndDate()
-			? $now > $event->getRawEndDate()
-			: $now > $event->getRawDate();
+		$timing['has_passed'] = $event->hasPassed();
 		$timing['is_ongoing'] = $event->getRawEndDate()
 			? $now >= $event->getRawDate() && $now <= $event->getRawEndDate()
 			: false;

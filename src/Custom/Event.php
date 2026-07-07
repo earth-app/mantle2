@@ -238,6 +238,13 @@ class Event implements JsonSerializable
 		return $this->endDate;
 	}
 
+	// event is over once its end (or start, when no end) is in the past
+	public function hasPassed(): bool
+	{
+		$now = time() * 1000; // ms to match stored timestamps
+		return $this->endDate ? $now > $this->endDate : $now > $this->date;
+	}
+
 	public function setEndDate(?int $endDate): void
 	{
 		$this->endDate = $endDate;
