@@ -116,6 +116,70 @@ class EventTest extends TestCase
 	}
 
 	#[Test]
+	#[TestDox('hasPassed uses end date when set, else start date')]
+	#[Group('mantle2/custom')]
+	public function testHasPassed(): void
+	{
+		$now = time() * 1000;
+
+		// end date in the past => passed
+		$pastEnd = new Event(
+			1,
+			'n',
+			'd',
+			EventType::ONLINE,
+			[],
+			0.0,
+			0.0,
+			$now - 7200000,
+			$now - 3600000,
+		);
+		$this->assertTrue($pastEnd->hasPassed());
+
+		// end date in the future => not passed (even if start already began)
+		$ongoing = new Event(
+			1,
+			'n',
+			'd',
+			EventType::ONLINE,
+			[],
+			0.0,
+			0.0,
+			$now - 3600000,
+			$now + 3600000,
+		);
+		$this->assertFalse($ongoing->hasPassed());
+
+		// no end date, start in the past => passed
+		$startedNoEnd = new Event(
+			1,
+			'n',
+			'd',
+			EventType::ONLINE,
+			[],
+			0.0,
+			0.0,
+			$now - 3600000,
+			null,
+		);
+		$this->assertTrue($startedNoEnd->hasPassed());
+
+		// no end date, start in the future => not passed
+		$upcomingNoEnd = new Event(
+			1,
+			'n',
+			'd',
+			EventType::ONLINE,
+			[],
+			0.0,
+			0.0,
+			$now + 3600000,
+			null,
+		);
+		$this->assertFalse($upcomingNoEnd->hasPassed());
+	}
+
+	#[Test]
 	#[TestDox('Attendee helpers count host, dedupe adds, and filter removes')]
 	#[Group('mantle2/custom')]
 	public function testAttendees(): void

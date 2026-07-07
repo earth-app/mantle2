@@ -74,6 +74,7 @@ class EventsControllerTest extends IntegrationTestBase
 		Visibility $visibility = Visibility::UNLISTED,
 		array $attendees = [],
 		array $fields = [],
+		?int $date = null,
 	): Node {
 		$event = new \Drupal\mantle2\Custom\Event(
 			(int) $host->id(),
@@ -83,7 +84,7 @@ class EventsControllerTest extends IntegrationTestBase
 			[\Drupal\mantle2\Custom\ActivityType::HOBBY],
 			0.0,
 			0.0,
-			(time() + 3600) * 1000,
+			$date ?? (time() + 3600) * 1000,
 			null,
 			$visibility,
 			$attendees,
@@ -474,6 +475,33 @@ class EventsControllerTest extends IntegrationTestBase
 			$this->authRequest($attendee, 'POST', '/v2/events/' . $node->id() . '/signup'),
 		);
 		$this->assertSame(Response::HTTP_BAD_REQUEST, $res->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST signup is rejected for an event that has already ended')]
+	#[Group('mantle2/events')]
+	public function signupRejectedWhenPast(): void
+	{
+		$host = $this->verifiedUser();
+		// start well in the past, no end date => already passed (30d avoids any tz round-trip drift)
+		$node = $this->makeEventNode(
+			$host,
+			Visibility::UNLISTED,
+			[],
+			[],
+			(time() - 30 * 86400) * 1000,
+		);
+		$attendee = $this->verifiedUser();
+
+		$res = $this->controller()->signUpForEvent(
+			(int) $node->id(),
+			$this->authRequest($attendee, 'POST', '/v2/events/' . $node->id() . '/signup'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $res->getStatusCode());
+		$this->assertSame(
+			'Cannot sign up for an event that has already ended',
+			$this->decode($res)['message'],
+		);
 	}
 
 	#endregion
