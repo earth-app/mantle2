@@ -123,7 +123,7 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		return null;
 	}
 
-	private static function buildCacheKey(string $template, array $params): string
+	private static function buildCacheKey(string $template, array $params): ?string
 	{
 		$key = $template;
 
@@ -131,7 +131,19 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 			$key = str_replace('{' . $param . '}', (string) $value, $key);
 		}
 
-		return preg_replace('/\{[^}]+\}/', '', $key);
+		// an unresolved placeholder means the key is ambiguous
+		if (preg_match('/\{[^}]+\}/', $key)) {
+			return null;
+		}
+
+		return $key;
+	}
+
+	// requests carrying elevated (admin) credentials must never read from or write to the
+	// shared per-requester cache buckets; their responses can be privileged/unmasked
+	private static function isElevated(Request $request): bool
+	{
+		return $request->headers->has('X-Admin-Key');
 	}
 
 	private static function extractPathParams(string $route, string $path): array
@@ -151,11 +163,18 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 					$params['pid'] = $params['pid'] ?? $val;
 					$params['aid'] = $params['aid'] ?? $val;
 					$params['eid'] = $params['eid'] ?? $val;
+				} elseif ($match === 'current') {
+					// "current" is the requester alias; bound to req_uid in applyPlaceholders
+					$params['uid'] = $params['uid'] ?? '@current';
 				} else {
 					// non-numeric capture is treated as username
 					$user = UsersHelper::findByUsername($match);
 					if ($user) {
-						$params['uid'] = $user->id();
+						$params['uid'] = $params['uid'] ?? $user->id();
+					} else {
+						// unknown segment; keep it literal so distinct routes never collapse
+						// onto the same key (this is what let quests poison current)
+						$params['uid'] = $params['uid'] ?? $match;
 					}
 				}
 			}
@@ -168,6 +187,9 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 	{
 		foreach ($patterns as $pattern) {
 			$keyPattern = self::buildCacheKey($pattern, $params);
+			if ($keyPattern === null) {
+				continue;
+			}
 
 			if (str_contains($keyPattern, '*')) {
 				$prefix = str_replace('*', '', $keyPattern);
@@ -205,6 +227,7 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		$params['read'] = $request->query->get('read', 'all');
 		$params['activities'] = md5($request->query->get('activities', ''));
 		$params['type'] = $request->query->get('type', 'all');
+		$params['cosmetic'] = $request->query->get('cosmetic', '');
 
 		$requester = UsersHelper::findByRequest($request);
 		if ($requester instanceof UserInterface) {
@@ -216,6 +239,11 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 			$params['req_uid'] = -1;
 		} else {
 			$params['req_uid'] = 0;
+		}
+
+		// the "current" alias points at whoever is asking; bind it now that req_uid is known
+		if (($params['uid'] ?? null) === '@current') {
+			$params['uid'] = $params['req_uid'];
 		}
 
 		return $params;
@@ -243,6 +271,11 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 			return;
 		}
 
+		// elevated (admin) requests never read the shared cache; they must see fresh data
+		if (self::isElevated($request)) {
+			return;
+		}
+
 		$config = self::findRetrievalConfig($path, $method);
 		if (!$config) {
 			return;
@@ -252,6 +285,9 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		$params = self::applyPlaceholders($params, $request);
 
 		$cacheKey = self::buildCacheKey($config['key_template'], $params);
+		if ($cacheKey === null) {
+			return;
+		}
 		$cached = RedisHelper::get($cacheKey);
 
 		if ($cached !== null) {
@@ -283,6 +319,11 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		}
 
 		if ($method === 'GET' && $response instanceof JsonResponse && $status === 200) {
+			// never store an elevated (admin) response into the shared cache buckets
+			if (self::isElevated($request)) {
+				return;
+			}
+
 			$config = self::findRetrievalConfig($path, $method);
 			if (!$config) {
 				return;
@@ -293,6 +334,9 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 			$params = self::applyPlaceholders($params, $request);
 
 			$cacheKey = self::buildCacheKey($config['key_template'], $params);
+			if ($cacheKey === null) {
+				return;
+			}
 			$data = json_decode($response->getContent(), true);
 
 			if ($data !== null) {

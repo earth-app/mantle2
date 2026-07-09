@@ -1,6 +1,8 @@
 cache:
   retrievals:
-    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)$'
+    # lookahead keeps the greedy id/username capture from swallowing sibling collection
+    # routes (quests/badges/cosmetics), which collapsed onto one key and poisoned each other
+    - route: '^/v2/users/(?!quests$|badges$|cosmetics$)([0-9]+|[a-zA-Z0-9_]+)$'
       methods: [GET]
       key_template: 'request_cache:user:profile:{uid}:req:{req_uid}'
       ttl: 180
@@ -27,7 +29,7 @@ cache:
 
     - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/notifications$'
       methods: [GET]
-      key_template: 'request_cache:user:notifications:{uid}:p:{page}:l:{limit}:read:{read}'
+      key_template: 'request_cache:user:notifications:{uid}:req:{req_uid}:p:{page}:l:{limit}:read:{read}'
       ttl: 30
 
     - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)/prompts$'
@@ -141,7 +143,7 @@ cache:
       ttl: 3600
 
   updates:
-    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)$'
+    - route: '^/v2/users/(?!quests$|badges$|cosmetics$)([0-9]+|[a-zA-Z0-9_]+)$'
       methods: [PATCH]
       invalidate_patterns:
         - 'request_cache:user:profile:{uid}:*'
@@ -242,7 +244,7 @@ cache:
         - 'request_cache:users:list:*'
 
   deletes:
-    - route: '^/v2/users/([0-9]+|[a-zA-Z0-9_]+)$'
+    - route: '^/v2/users/(?!quests$|badges$|cosmetics$)([0-9]+|[a-zA-Z0-9_]+)$'
       methods: [DELETE]
       invalidate_patterns:
         - 'request_cache:user:*:{uid}:*'
