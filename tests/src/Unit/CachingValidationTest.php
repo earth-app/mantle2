@@ -257,6 +257,8 @@ class CachingValidationTest extends TestCase
 	{
 		$normalized = $pattern;
 		$normalized = preg_replace('/^\^/', '', $normalized);
+		// drop lookahead/lookbehind assertions; they constrain matching but add no path text
+		$normalized = preg_replace('/\(\?[!=<][^)]*\)/', '', $normalized);
 		$normalized = preg_replace('/\$$/', '', $normalized);
 		$normalized = str_replace('\\', '', $normalized);
 		$normalized = preg_replace('/\(\[0-9\]\+\)/', '{param}', $normalized);
@@ -377,6 +379,93 @@ class CachingValidationTest extends TestCase
 		foreach ($exclusions as $index => $exclusion) {
 			$this->assertIsString($exclusion, "exclusions[$index] is not a string");
 			$this->assertNotEmpty($exclusion, "exclusions[$index] is empty");
+		}
+	}
+
+	// mirrors ResponseCacheSubscriber::findRetrievalConfig first-match semantics
+	private function matchRetrieval(string $path, string $method = 'GET'): ?array
+	{
+		$retrievals = self::$cachingConfig['cache']['retrievals'] ?? [];
+		foreach ($retrievals as $retrieval) {
+			if (
+				in_array($method, $retrieval['methods'], true) &&
+				preg_match('#' . $retrieval['route'] . '#', $path)
+			) {
+				return $retrieval;
+			}
+		}
+		return null;
+	}
+
+	#[Test]
+	#[TestDox('Sibling collection routes never collapse onto the user-profile retrieval rule')]
+	#[Group('mantle2/caching')]
+	public function testReservedSubroutesDoNotHitProfileRule(): void
+	{
+		$profileKey = 'request_cache:user:profile:{uid}:req:{req_uid}';
+
+		$profile = $this->matchRetrieval('/v2/users/123');
+		$this->assertNotNull($profile, 'numeric id must match the profile rule');
+		$this->assertSame($profileKey, $profile['key_template']);
+
+		// quests is dynamic + per-query; it must not be cached at all
+		$this->assertNull(
+			$this->matchRetrieval('/v2/users/quests'),
+			'/v2/users/quests must not match any retrieval rule',
+		);
+
+		// badges/cosmetics must fall through to their own dedicated list rules
+		$badges = $this->matchRetrieval('/v2/users/badges');
+		$this->assertNotNull($badges);
+		$this->assertSame('request_cache:badges:list', $badges['key_template']);
+
+		$cosmetics = $this->matchRetrieval('/v2/users/cosmetics');
+		$this->assertNotNull($cosmetics);
+		$this->assertSame('request_cache:cosmetics:list', $cosmetics['key_template']);
+
+		// the "current" alias is still a profile fetch (subscriber resolves {uid} to req_uid)
+		$current = $this->matchRetrieval('/v2/users/current');
+		$this->assertNotNull($current, 'current must still match the profile rule');
+		$this->assertSame($profileKey, $current['key_template']);
+
+		// a username-shaped segment (not a reserved word) is still a profile lookup
+		$named = $this->matchRetrieval('/v2/users/gregory');
+		$this->assertNotNull($named);
+		$this->assertSame($profileKey, $named['key_template']);
+
+		// only the exact reserved words are excluded; a username prefixed with one is fine
+		$prefixed = $this->matchRetrieval('/v2/users/questsmaster');
+		$this->assertNotNull($prefixed);
+		$this->assertSame($profileKey, $prefixed['key_template']);
+	}
+
+	#[Test]
+	#[TestDox('Retrieval keys that expose per-requester data are partitioned by req_uid')]
+	#[Group('mantle2/caching')]
+	public function testPrivateRetrievalsKeyByRequester(): void
+	{
+		// endpoints whose visible payload depends on WHO is asking must include req_uid,
+		// or a pre-auth cache HIT would serve one requester's view to another
+		$requesterScoped = [
+			'request_cache:user:profile:',
+			'request_cache:user:notifications:',
+			'request_cache:user:friends:',
+			'request_cache:user:circle:',
+		];
+		$retrievals = self::$cachingConfig['cache']['retrievals'] ?? [];
+
+		foreach ($retrievals as $retrieval) {
+			$template = $retrieval['key_template'];
+			foreach ($requesterScoped as $marker) {
+				if (str_starts_with($template, $marker)) {
+					$this->assertStringContainsString(
+						'{req_uid}',
+						$template,
+						"retrieval '{$retrieval['route']}' exposes per-requester data " .
+							'but its key is not partitioned by {req_uid}',
+					);
+				}
+			}
 		}
 	}
 }

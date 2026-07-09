@@ -207,4 +207,102 @@ class ResponseCacheSubscriberTest extends IntegrationTestBase
 		$this->assertFalse($event->getResponse()->headers->has('X-Cache'));
 		$this->assertNull(RedisHelper::get(self::LIST_KEY));
 	}
+
+	// carries the shared admin key configured by IntegrationTestBase::setAdminKey
+	private function adminRequest(string $method = 'GET', string $uri = '/v2/events'): Request
+	{
+		return Request::create($uri, $method, [], [], [], ['HTTP_X_ADMIN_KEY' => 'test_admin_key']);
+	}
+
+	#[Test]
+	#[TestDox('Regression: a /v2/users/quests response never poisons /v2/users/current')]
+	#[Group('mantle2/subscribers')]
+	public function questsResponseDoesNotPoisonCurrentUser(): void
+	{
+		$this->onResponse(
+			Request::create('/v2/users/quests', 'GET', ['id' => 'runner']),
+			new JsonResponse(['id' => 'runner', 'title' => 'Runner']),
+		);
+
+		$event = $this->onRequest(Request::create('/v2/users/current', 'GET'));
+		$this->assertFalse(
+			$event->hasResponse(),
+			'quests response must not be served for a current-user request',
+		);
+	}
+
+	#[Test]
+	#[TestDox('Regression: a /v2/users/current response is never served for /v2/users/quests')]
+	#[Group('mantle2/subscribers')]
+	public function currentUserResponseIsNotServedForQuests(): void
+	{
+		$this->onResponse(
+			Request::create('/v2/users/current', 'GET'),
+			new JsonResponse(['id' => 99, 'username' => 'me']),
+		);
+
+		$event = $this->onRequest(Request::create('/v2/users/quests', 'GET', ['id' => 'runner']));
+		$this->assertFalse(
+			$event->hasResponse(),
+			'quests is uncacheable and must miss even when a current-user entry exists',
+		);
+	}
+
+	#[Test]
+	#[TestDox('The current alias caches under a requester-scoped profile key')]
+	#[Group('mantle2/subscribers')]
+	public function currentUserCachesUnderRequesterScopedProfileKey(): void
+	{
+		// anonymous requester resolves req_uid=0, and "current" binds {uid} to it too
+		$key = 'request_cache:user:profile:0:req:0';
+		$this->assertNull(RedisHelper::get($key));
+
+		$event = $this->onResponse(
+			Request::create('/v2/users/current', 'GET'),
+			new JsonResponse(['id' => 7]),
+		);
+		$this->assertSame('MISS', $event->getResponse()->headers->get('X-Cache'));
+		$this->assertSame(['id' => 7], RedisHelper::get($key));
+	}
+
+	#[Test]
+	#[TestDox('The badges collection route falls through to its dedicated list key')]
+	#[Group('mantle2/subscribers')]
+	public function badgesListRoutesToItsDedicatedKey(): void
+	{
+		$event = $this->onResponse(
+			Request::create('/v2/users/badges', 'GET'),
+			new JsonResponse(['badges' => []]),
+		);
+		$this->assertSame('MISS', $event->getResponse()->headers->get('X-Cache'));
+		$this->assertSame(['badges' => []], RedisHelper::get('request_cache:badges:list'));
+		// and it must NOT have leaked into a profile-style key
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:badges:req:0'));
+	}
+
+	#[Test]
+	#[TestDox('Elevated (admin-key) requests are never served from the shared cache')]
+	#[Group('mantle2/subscribers')]
+	public function elevatedRequestDoesNotReadCache(): void
+	{
+		RedisHelper::set(self::LIST_KEY, ['events' => ['cached']], 300);
+		$event = $this->onRequest($this->adminRequest());
+		$this->assertFalse(
+			$event->hasResponse(),
+			'admin requests must always see fresh data, never a cached bucket',
+		);
+	}
+
+	#[Test]
+	#[TestDox('Elevated (admin-key) responses are never written to the shared cache')]
+	#[Group('mantle2/subscribers')]
+	public function elevatedResponseIsNotStored(): void
+	{
+		$event = $this->onResponse(
+			$this->adminRequest(),
+			new JsonResponse(['events' => ['privileged']]),
+		);
+		$this->assertFalse($event->getResponse()->headers->has('X-Cache'));
+		$this->assertNull(RedisHelper::get(self::LIST_KEY));
+	}
 }
