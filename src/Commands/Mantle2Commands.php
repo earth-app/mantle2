@@ -4,6 +4,7 @@ namespace Drupal\mantle2\Commands;
 
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Service\CampaignHelper;
+use Drupal\mantle2\Service\SubscriptionsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drush\Commands\DrushCommands;
 
@@ -186,5 +187,104 @@ class Mantle2Commands extends DrushCommands
 		$this->output()->writeln(
 			"Created account trial for user '$identifier': $oldType->name to $type->name for $days days.",
 		);
+	}
+
+	/**
+	 * Create a redeemable trial code.
+	 *
+	 * @option tier The tier the code grants (pro, writer, organizer). Default: 'pro'.
+	 * @option days The trial length in days. Default: 30.
+	 * @option max The maximum redemptions (0 = unlimited). Default: 0.
+	 * @option expires Optional ISO-8601 expiry (e.g. 2026-12-31). Default: never.
+	 * @command mantle2:create-trial-code
+	 * @aliases m2:tcode m2:create-trial-code
+	 * @usage drush m2:tcode --tier=pro --days=30 --max=100
+	 */
+	public function createTrialCode(
+		array $options = ['tier' => 'pro', 'days' => 30, 'max' => 0, 'expires' => null],
+	) {
+		$tier = AccountType::tryFrom(strtolower((string) $options['tier']));
+		if (!$tier || $tier === AccountType::FREE || $tier === AccountType::ADMINISTRATOR) {
+			$this->stderr()->writeln(
+				"Invalid tier '{$options['tier']}'. Valid: pro, writer, organizer.",
+			);
+			return;
+		}
+
+		$expiresAt = null;
+		if (!empty($options['expires'])) {
+			$expiresAt = strtotime((string) $options['expires']) ?: null;
+			if (!$expiresAt) {
+				$this->stderr()->writeln("Invalid expires date '{$options['expires']}'.");
+				return;
+			}
+		}
+
+		$code = SubscriptionsHelper::createTrialCode(
+			$tier,
+			(int) $options['days'],
+			(int) $options['max'],
+			$expiresAt,
+			(int) UsersHelper::cloud()->id(),
+		);
+
+		$this->output()->writeln("Created trial code: {$code['code']}");
+		$this->output()->writeln(
+			"  Tier: {$code['tier']}, Days: {$code['days']}, Max: {$code['max_redemptions']}",
+		);
+	}
+
+	/**
+	 * List all trial codes.
+	 *
+	 * @command mantle2:list-trial-codes
+	 * @aliases m2:tcodes m2:list-trial-codes
+	 * @usage drush m2:tcodes
+	 */
+	public function listTrialCodes()
+	{
+		$codes = SubscriptionsHelper::listTrialCodes();
+		if (!$codes) {
+			$this->output()->writeln('No trial codes found.');
+			return;
+		}
+
+		$this->output()->writeln('Trial Codes:');
+		foreach ($codes as $code) {
+			$active = $code['active'] ? 'active' : 'disabled';
+			$max = $code['max_redemptions'] === 0 ? 'unlimited' : (string) $code['max_redemptions'];
+			$this->output()->writeln(
+				"- {$code['code']} [{$active}] tier={$code['tier']} days={$code['days']} " .
+					"redemptions={$code['redemptions']}/{$max}",
+			);
+		}
+	}
+
+	/**
+	 * Refund and cancel a user's subscription (reverts to Free).
+	 *
+	 * @param string $identifier The user identifier (ID or username with '@')
+	 * @option reason An optional reason recorded with the refund.
+	 * @command mantle2:refund-user
+	 * @aliases m2:refund m2:refund-user
+	 * @usage drush m2:refund @username --reason="Support request"
+	 */
+	public function refundUser(string $identifier, array $options = ['reason' => ''])
+	{
+		$user = UsersHelper::findBy($identifier);
+		if (!$user) {
+			$this->stderr()->writeln(
+				"User '$identifier' not found. Hint: for usernames, try prefixing with '@'.",
+			);
+			return;
+		}
+
+		$result = SubscriptionsHelper::refundUser($user, (string) $options['reason']);
+		if (isset($result['error'])) {
+			$this->stderr()->writeln("User '$identifier' has no active subscription to refund.");
+			return;
+		}
+
+		$this->output()->writeln("Refunded and canceled subscription for user '$identifier'.");
 	}
 }
