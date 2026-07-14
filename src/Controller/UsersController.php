@@ -25,6 +25,8 @@ use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\OAuthHelper;
 use Drupal\mantle2\Service\PointsHelper;
 use Drupal\mantle2\Service\ReferralHelper;
+use Drupal\mantle2\Service\SubscriptionsHelper;
+use Stripe\Exception\CardException;
 use Exception;
 use Throwable;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -3982,6 +3984,264 @@ final class UsersController extends ControllerBase
 		];
 
 		return new JsonResponse($data, Response::HTTP_CREATED);
+	}
+
+	#endregion
+
+	#region Billing Subscriptions
+
+	// GET /v2/subscriptions/plans (public)
+	public function subscriptionPlans(Request $request): JsonResponse
+	{
+		return new JsonResponse(
+			[
+				'plans' => SubscriptionsHelper::getPlans(),
+				'refund_window_days' => SubscriptionsHelper::REFUND_WINDOW_DAYS,
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// GET /v2/users/current/subscription
+	public function currentSubscription(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		return new JsonResponse(SubscriptionsHelper::getBillingStatus($user), Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/subscription/checkout
+	public function subscriptionCheckout(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$body = json_decode((string) $request->getContent(), true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
+		$tier = AccountType::tryFrom(strtolower((string) ($body['tier'] ?? '')));
+		if (
+			!$tier ||
+			!in_array($tier, [AccountType::PRO, AccountType::WRITER, AccountType::ORGANIZER], true)
+		) {
+			return GeneralHelper::badRequest('Invalid tier; must be pro, writer, or organizer');
+		}
+
+		// express consent to recurring auto-renewal billing is mandatory
+		if (($body['consent'] ?? false) !== true) {
+			return GeneralHelper::badRequest('Consent to recurring billing is required');
+		}
+
+		if (SubscriptionsHelper::hasActiveSubscription($user)) {
+			return GeneralHelper::conflict('You already have an active subscription');
+		}
+
+		$successUrl = is_string($body['success_url'] ?? null)
+			? $body['success_url']
+			: 'https://app.earth-app.com/subscription/success';
+		$cancelUrl = is_string($body['cancel_url'] ?? null)
+			? $body['cancel_url']
+			: 'https://app.earth-app.com/subscription/cancel';
+
+		try {
+			$session = SubscriptionsHelper::createCheckoutSession(
+				$user,
+				$tier,
+				$successUrl,
+				$cancelUrl,
+			);
+			return new JsonResponse($session, Response::HTTP_OK);
+		} catch (CardException $e) {
+			return GeneralHelper::paymentRequired('Your card was declined');
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->error('Checkout session failed for %uid: %m', [
+				'%uid' => $user->id(),
+				'%m' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to start checkout');
+		}
+	}
+
+	// POST /v2/users/current/subscription/portal
+	public function subscriptionPortal(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$row = SubscriptionsHelper::getSubscriptionRow((int) $user->id());
+		if (
+			$row &&
+			in_array($row['provider'], ['apple', 'google'], true) &&
+			in_array($row['status'], ['active', 'trialing', 'past_due'], true)
+		) {
+			return GeneralHelper::conflict(
+				'This subscription is managed through the ' .
+					($row['provider'] === 'apple' ? 'App Store' : 'Google Play') .
+					'; use the store to manage billing.',
+			);
+		}
+
+		if (!SubscriptionsHelper::stripeSecret()) {
+			return new JsonResponse(
+				['code' => 503, 'message' => 'stripe billing is not configured'],
+				Response::HTTP_SERVICE_UNAVAILABLE,
+			);
+		}
+
+		$body = json_decode((string) $request->getContent(), true);
+		$returnUrl =
+			is_array($body) && is_string($body['return_url'] ?? null)
+				? $body['return_url']
+				: 'https://app.earth-app.com/settings/subscription';
+
+		try {
+			$url = SubscriptionsHelper::createPortalSession($user, $returnUrl);
+			return new JsonResponse(['url' => $url], Response::HTTP_OK);
+		} catch (Throwable $e) {
+			if ((int) $e->getCode() === 404) {
+				return GeneralHelper::notFound('No billing customer on file');
+			}
+			Drupal::logger('mantle2')->error('Portal session failed for %uid: %m', [
+				'%uid' => $user->id(),
+				'%m' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to open billing portal');
+		}
+	}
+
+	// POST /v2/users/current/subscription/cancel
+	public function subscriptionCancel(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$row = SubscriptionsHelper::getSubscriptionRow((int) $user->id());
+		if (!$row || !in_array($row['status'], ['active', 'trialing', 'past_due'], true)) {
+			return GeneralHelper::notFound('No active subscription to cancel');
+		}
+
+		$body = json_decode((string) $request->getContent(), true);
+		$immediate = is_array($body) && ($body['immediate'] ?? false) === true;
+
+		try {
+			$result = SubscriptionsHelper::cancelSubscription($user, $immediate);
+			return new JsonResponse($result, Response::HTTP_OK);
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->error('Cancel failed for %uid: %m', [
+				'%uid' => $user->id(),
+				'%m' => $e->getMessage(),
+			]);
+			return GeneralHelper::internalError('Failed to cancel subscription');
+		}
+	}
+
+	// POST /v2/users/current/subscription/redeem-code
+	public function subscriptionRedeemCode(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$body = json_decode((string) $request->getContent(), true);
+		$code = is_array($body) ? trim((string) ($body['code'] ?? '')) : '';
+		if ($code === '' || !preg_match('/^[A-Za-z0-9-]{1,32}$/', $code)) {
+			return GeneralHelper::badRequest('Malformed trial code');
+		}
+
+		$result = SubscriptionsHelper::redeemTrialCode($user, $code);
+		if (isset($result['error'])) {
+			return match ($result['error']) {
+				'unknown' => GeneralHelper::notFound('Unknown trial code'),
+				'not_redeemable' => GeneralHelper::conflict(
+					$result['reason'] ?? 'This code cannot be redeemed',
+				),
+				default => GeneralHelper::badRequest('Malformed trial code'),
+			};
+		}
+
+		return new JsonResponse($result, Response::HTTP_OK);
+	}
+
+	// POST /v2/subscriptions/iap/apple/verify
+	public function iapAppleVerify(Request $request): JsonResponse
+	{
+		return $this->handleIapVerify($request, 'apple');
+	}
+
+	// POST /v2/subscriptions/iap/google/verify
+	public function iapGoogleVerify(Request $request): JsonResponse
+	{
+		return $this->handleIapVerify($request, 'google');
+	}
+
+	private function handleIapVerify(Request $request, string $provider): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$body = json_decode((string) $request->getContent(), true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
+		$result =
+			$provider === 'apple'
+				? SubscriptionsHelper::verifyAppleTransaction($user, $body)
+				: SubscriptionsHelper::verifyGoogleTransaction($user, $body);
+
+		if (isset($result['error'])) {
+			return match ($result['error']) {
+				'unconfigured' => new JsonResponse(
+					['code' => 503, 'message' => "$provider billing is not configured"],
+					Response::HTTP_SERVICE_UNAVAILABLE,
+				),
+				'bad_payload' => GeneralHelper::badRequest('Invalid or missing purchase payload'),
+				'validation' => GeneralHelper::paymentRequired('Purchase validation failed'),
+				'cross_provider' => GeneralHelper::conflict(
+					'You already have an active subscription on another platform',
+				),
+				default => GeneralHelper::internalError('Verification failed'),
+			};
+		}
+
+		return new JsonResponse($result, Response::HTTP_OK);
+	}
+
+	#endregion
+
+	#region Billing Webhooks
+
+	// POST /v2/webhooks/stripe
+	public function webhookStripe(Request $request): JsonResponse
+	{
+		$sig = $request->headers->get('Stripe-Signature') ?? '';
+		return SubscriptionsHelper::handleStripeWebhook($request->getContent(), $sig);
+	}
+
+	// POST /v2/webhooks/apple
+	public function webhookApple(Request $request): JsonResponse
+	{
+		return SubscriptionsHelper::handleAppleWebhook($request->getContent());
+	}
+
+	// POST /v2/webhooks/google
+	public function webhookGoogle(Request $request): JsonResponse
+	{
+		return SubscriptionsHelper::handleGoogleWebhook($request->getContent());
 	}
 
 	#endregion

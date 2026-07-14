@@ -6464,3 +6464,284 @@ mantle2.reports.patch:
   methods: [PATCH]
 
 # #endregion
+
+# #region Subscriptions & Billing
+
+mantle2.subscriptions.plans:
+  path: '/v2/subscriptions/plans'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::subscriptionPlans'
+    _title: 'List Subscription Plans'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Public catalog of subscription plans and the refund window (no auth required).
+    schema/200: '#SubscriptionPlans'
+  methods: [GET]
+
+mantle2.users.current.subscription:
+  path: '/v2/users/current/subscription'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::currentSubscription'
+    _title: 'Get Current Subscription'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Returns the current user's billing status.
+    schema/200: '#SubscriptionStatus'
+    schema/401: Unauthorized
+  methods: [GET]
+
+mantle2.users.current.subscription.checkout:
+  path: '/v2/users/current/subscription/checkout'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::subscriptionCheckout'
+    _title: 'Start Subscription Checkout'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Creates a Stripe Checkout session for a paid tier. Requires express auto-renewal consent.
+    schema/200: '#CheckoutSession'
+    schema/400: Invalid tier or missing consent
+    schema/401: Unauthorized
+    schema/402: Payment error
+    schema/409: An active subscription already exists
+    schema/500: Stripe error
+    body/description: Tier, consent, and optional redirect URLs
+    body/schema: '#CheckoutBodyJson'
+  methods: [POST]
+
+mantle2.users.current.subscription.portal:
+  path: '/v2/users/current/subscription/portal'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::subscriptionPortal'
+    _title: 'Open Billing Portal'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Creates a Stripe Billing Portal session for managing an existing subscription.
+    schema/200: '#PortalSession'
+    schema/401: Unauthorized
+    schema/404: No billing customer on file
+    schema/409: Subscription is managed by a native store
+    schema/503: Billing not configured
+    body/description: Optional return URL
+    body/schema: '#PortalBodyJson'
+  methods: [POST]
+
+mantle2.users.current.subscription.cancel:
+  path: '/v2/users/current/subscription/cancel'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::subscriptionCancel'
+    _title: 'Cancel Subscription'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Cancels the current subscription. Full refund within the refund window, otherwise cancels at period end.
+    schema/200: '#CancelResult'
+    schema/401: Unauthorized
+    schema/404: No active subscription
+    body/description: Optional immediate flag
+    body/schema: '#CancelBodyJson'
+  methods: [POST]
+
+mantle2.users.current.subscription.redeem_code:
+  path: '/v2/users/current/subscription/redeem-code'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::subscriptionRedeemCode'
+    _title: 'Redeem Trial Code'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Redeems a trial code, granting a tier trial for a number of days.
+    schema/200: '#RedeemResult'
+    schema/400: Malformed code
+    schema/401: Unauthorized
+    schema/404: Unknown code
+    schema/409: Code not redeemable
+    body/description: The trial code to redeem
+    body/schema: '#RedeemBodyJson'
+  methods: [POST]
+
+mantle2.subscriptions.iap.apple:
+  path: '/v2/subscriptions/iap/apple/verify'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::iapAppleVerify'
+    _title: 'Verify Apple IAP'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Verifies an Apple StoreKit 2 signed transaction and applies the entitlement.
+    schema/200: '#SubscriptionStatus'
+    schema/400: Bad payload
+    schema/401: Unauthorized
+    schema/402: Validation failed
+    schema/409: Active subscription on another provider
+    schema/503: Apple billing not configured
+    body/description: Apple transaction id, product id, and signed JWS payload
+    body/schema: '#AppleVerifyJson'
+  methods: [POST]
+
+mantle2.subscriptions.iap.google:
+  path: '/v2/subscriptions/iap/google/verify'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::iapGoogleVerify'
+    _title: 'Verify Google IAP'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Verifies a Google Play purchase token and applies the entitlement.
+    schema/200: '#SubscriptionStatus'
+    schema/400: Bad payload
+    schema/401: Unauthorized
+    schema/402: Validation failed
+    schema/409: Active subscription on another provider
+    schema/503: Google billing not configured
+    body/description: Google purchase token, product id, and package name
+    body/schema: '#GoogleVerifyJson'
+  methods: [POST]
+
+mantle2.webhooks.stripe:
+  path: '/v2/webhooks/stripe'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::webhookStripe'
+    _title: 'Stripe Webhook'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Stripe webhook receiver. Verifies the signature on the raw body and is idempotent.
+    schema/200: '#WebhookAck'
+    schema/400: Invalid signature
+  methods: [POST]
+
+mantle2.webhooks.apple:
+  path: '/v2/webhooks/apple'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::webhookApple'
+    _title: 'Apple Webhook'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: App Store Server Notifications V2 receiver. Verifies the JWS signature and is idempotent.
+    schema/200: '#WebhookAck'
+    schema/400: Invalid signature
+  methods: [POST]
+
+mantle2.webhooks.google:
+  path: '/v2/webhooks/google'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::webhookGoogle'
+    _title: 'Google Webhook'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions
+    description: Google Play Real-time Developer Notifications (Pub/Sub) receiver. Always acknowledges with 200.
+    schema/200: '#WebhookAck'
+  methods: [POST]
+
+mantle2.admin.trial_codes.create:
+  path: '/v2/admin/trial-codes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::createTrialCode'
+    _title: 'Create Trial Code'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions,Admin
+    description: Creates a redeemable trial code (admin only).
+    schema/201: '#TrialCode'
+    schema/400: Invalid input
+    schema/403: 403
+    schema/409: Code already exists
+    body/description: Tier, days, and optional limits/code
+    body/schema: '#TrialCodeCreateJson'
+  methods: [POST]
+
+mantle2.admin.trial_codes.list:
+  path: '/v2/admin/trial-codes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::listTrialCodes'
+    _title: 'List Trial Codes'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions,Admin
+    description: Lists all trial codes (admin only).
+    schema/200: '#TrialCodeList'
+    schema/403: 403
+  methods: [GET]
+
+mantle2.admin.trial_codes.patch:
+  path: '/v2/admin/trial-codes/{code}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::patchTrialCode'
+    _title: 'Update Trial Code'
+  requirements:
+    _access: 'TRUE'
+    code: '[A-Za-z0-9\-]{1,32}'
+  options:
+    tags: Subscriptions,Admin
+    description: Updates a trial code (admin only).
+    schema/200: '#TrialCode'
+    schema/400: Invalid input
+    schema/403: 403
+    schema/404: Unknown code
+    body/description: Subset of fields to update
+    body/schema: '#TrialCodePatchJson'
+    parameters:
+      code:
+        type: string
+  methods: [PATCH]
+
+mantle2.admin.trial_codes.delete:
+  path: '/v2/admin/trial-codes/{code}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::deleteTrialCode'
+    _title: 'Delete Trial Code'
+  requirements:
+    _access: 'TRUE'
+    code: '[A-Za-z0-9\-]{1,32}'
+  options:
+    tags: Subscriptions,Admin
+    description: Deletes a trial code (admin only).
+    schema/204: Deleted
+    schema/403: 403
+    schema/404: Unknown code
+    parameters:
+      code:
+        type: string
+  methods: [DELETE]
+
+mantle2.admin.users.refund:
+  path: '/v2/admin/users/{id}/refund'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::refundUser'
+    _title: 'Refund User Subscription'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Subscriptions,Admin
+    description: Refunds and cancels a user's subscription, reverting them to Free (admin only).
+    schema/200: '#CancelResult'
+    schema/403: 403
+    schema/404: No subscription found
+    body/description: Optional reason
+    body/schema: '#AdminRefundJson'
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
+# #endregion
