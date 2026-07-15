@@ -258,8 +258,6 @@ jobs:
           MANTLE2_ADMIN_KEY: test-admin-key
           MANTLE2_REDIS_HOST: 127.0.0.1
           MANTLE2_REDIS_PORT: 6379
-          # stripe TEST-mode config (repo Settings -> Secrets and variables -> Actions).
-          # empty on fork PRs -> SubscriptionsE2ETest skips; the sk_test_ guard rejects live keys
           MANTLE2_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_TEST_WEBHOOK_SECRET }}
           STRIPE_PRICE_PRO: ${{ secrets.STRIPE_TEST_PRICE_PRO }}
