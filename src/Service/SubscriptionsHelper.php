@@ -953,11 +953,12 @@ class SubscriptionsHelper
 		}
 
 		$days = (int) $row['days'];
+		$expiresAt = $now + $days * 86400;
 		UsersHelper::createTierTrial($user, $tier, $days, "trial code $code");
-		self::recordRedemption($code, (int) $user->id());
+		self::recordRedemption($code, (int) $user->id(), $tier->value, $expiresAt);
 
 		$label = self::tierLabel($tier);
-		$trialEnd = GeneralHelper::dateToIso($now + $days * 86400);
+		$trialEnd = GeneralHelper::dateToIso($expiresAt);
 		UsersHelper::addNotification(
 			$user,
 			'Trial Code Redeemed',
@@ -1135,13 +1136,23 @@ class SubscriptionsHelper
 		return $found !== false;
 	}
 
-	private static function recordRedemption(string $code, int $uid): void
-	{
+	private static function recordRedemption(
+		string $code,
+		int $uid,
+		string $tier,
+		int $expiresAt,
+	): void {
 		$code = strtoupper(trim($code));
 		try {
 			self::db()
 				->insert(self::TABLE_REDEMPTIONS)
-				->fields(['code' => $code, 'user_id' => $uid, 'redeemed_at' => time()])
+				->fields([
+					'code' => $code,
+					'user_id' => $uid,
+					'redeemed_at' => time(),
+					'tier' => $tier,
+					'expires_at' => $expiresAt,
+				])
 				->execute();
 			self::db()
 				->update(self::TABLE_CODES)
@@ -1153,6 +1164,216 @@ class SubscriptionsHelper
 				'%code' => $code,
 				'%m' => $e->getMessage(),
 			]);
+		}
+	}
+
+	#endregion
+
+	#region Admin Trials
+
+	// active redeemer = trial detail still present and in the future
+	public static function redemptionIsActive(?int $expiresAt, int $now): bool
+	{
+		return $expiresAt !== null && $expiresAt > $now;
+	}
+
+	// classifies a lookup query: id (all digits), email (has @), name (anything else), empty
+	public static function lookupQueryKind(string $q): string
+	{
+		$q = trim($q);
+		if ($q === '') {
+			return 'empty';
+		}
+		if (ctype_digit($q)) {
+			return 'id';
+		}
+		if (str_contains($q, '@')) {
+			return 'email';
+		}
+		return 'name';
+	}
+
+	// lists every redemption of a code with per-user active status (active first, then newest)
+	public static function listRedemptions(string $code): array
+	{
+		$code = strtoupper(trim($code));
+		$rows = self::db()
+			->select(self::TABLE_REDEMPTIONS, 'r')
+			->fields('r', ['user_id', 'redeemed_at', 'tier', 'expires_at'])
+			->condition('code', $code)
+			->execute()
+			->fetchAll(\PDO::FETCH_ASSOC);
+
+		$now = time();
+		$entries = [];
+		$activeCount = 0;
+		foreach ($rows ?: [] as $r) {
+			$uid = (int) $r['user_id'];
+			$expiresAt = $r['expires_at'] !== null ? (int) $r['expires_at'] : null;
+			$active = self::redemptionIsActive($expiresAt, $now);
+			if ($active) {
+				$activeCount++;
+			}
+			$user = UsersHelper::findById($uid);
+			$entries[] = [
+				'uid' => $uid,
+				'username' => $user?->getAccountName() ?? (string) $uid,
+				'redeemed_ts' => (int) $r['redeemed_at'],
+				'tier' => $r['tier'] !== null ? (string) $r['tier'] : null,
+				'expires_at' => $expiresAt !== null ? GeneralHelper::dateToIso($expiresAt) : null,
+				'active' => $active,
+			];
+		}
+
+		// active first, then most recently redeemed
+		usort($entries, function (array $a, array $b): int {
+			if ($a['active'] !== $b['active']) {
+				return $a['active'] ? -1 : 1;
+			}
+			return $b['redeemed_ts'] <=> $a['redeemed_ts'];
+		});
+
+		$redemptions = array_map(
+			fn(array $e) => [
+				'uid' => $e['uid'],
+				'username' => $e['username'],
+				'redeemed_at' => GeneralHelper::dateToIso($e['redeemed_ts']),
+				'tier' => $e['tier'],
+				'expires_at' => $e['expires_at'],
+				'active' => $e['active'],
+			],
+			$entries,
+		);
+
+		return [
+			'redemptions' => $redemptions,
+			'active_count' => $activeCount,
+			'total_count' => count($redemptions),
+		];
+	}
+
+	// notifies every ACTIVE redeemer of a code via account notification + transactional email
+	public static function notifyRedeemers(string $code, string $title, string $message): int
+	{
+		$code = strtoupper(trim($code));
+		$rows = self::db()
+			->select(self::TABLE_REDEMPTIONS, 'r')
+			->fields('r', ['user_id', 'expires_at'])
+			->condition('code', $code)
+			->execute()
+			->fetchAll(\PDO::FETCH_ASSOC);
+
+		$now = time();
+		$count = 0;
+		foreach ($rows ?: [] as $r) {
+			$expiresAt = $r['expires_at'] !== null ? (int) $r['expires_at'] : null;
+			if (!self::redemptionIsActive($expiresAt, $now)) {
+				continue;
+			}
+			$user = UsersHelper::findById((int) $r['user_id']);
+			if (!$user) {
+				continue;
+			}
+			UsersHelper::addNotification($user, $title, $message, null, 'info', 'billing');
+			UsersHelper::sendEmail(
+				$user,
+				'trial_broadcast',
+				['title' => $title, 'body' => $message],
+				false,
+			);
+			$count++;
+		}
+		return $count;
+	}
+
+	// drops trial detail (tier, expires_at) once a trial ends; keeps the guard row (re-redeem block)
+	public static function pruneExpiredRedemptionDetail(): int
+	{
+		$now = time();
+		try {
+			return (int) self::db()
+				->update(self::TABLE_REDEMPTIONS)
+				->fields(['tier' => null, 'expires_at' => null])
+				->isNotNull('expires_at')
+				->condition('expires_at', $now, '<')
+				->execute();
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->error('Failed to prune expired redemption detail: %m', [
+				'%m' => $e->getMessage(),
+			]);
+			return 0;
+		}
+	}
+
+	// resolves users for the admin refund lookup by id, email, exact username, or name (cap 10)
+	public static function lookupUsersForAdmin(string $q): array
+	{
+		$q = trim($q);
+		/** @var array<int,UserInterface> $matches */
+		$matches = [];
+
+		$add = function (?UserInterface $u) use (&$matches): void {
+			if (!$u) {
+				return;
+			}
+			$id = (int) $u->id();
+			if ($id <= 0 || isset($matches[$id])) {
+				return;
+			}
+			$matches[$id] = $u;
+		};
+
+		switch (self::lookupQueryKind($q)) {
+			case 'id':
+				$add(UsersHelper::findById((int) $q));
+				break;
+			case 'email':
+				$add(UsersHelper::findByEmail($q));
+				break;
+			case 'name':
+				$add(UsersHelper::findByUsername($q));
+				foreach (self::searchUsersByName($q) as $u) {
+					$add($u);
+				}
+				break;
+		}
+
+		$out = [];
+		foreach (array_slice($matches, 0, 10, true) as $u) {
+			$first = (string) ($u->get('field_first_name')->value ?? '');
+			$last = (string) ($u->get('field_last_name')->value ?? '');
+			$out[] = [
+				'id' => (int) $u->id(),
+				'username' => $u->getAccountName(),
+				'email' => $u->getEmail() ?? '',
+				'full_name' => trim($first . ' ' . $last),
+				'subscription' => self::getBillingStatus($u),
+			];
+		}
+		return ['matches' => $out];
+	}
+
+	// CONTAINS search on first/last name fields, capped at 10
+	private static function searchUsersByName(string $q): array
+	{
+		if (strlen($q) < 2) {
+			return [];
+		}
+		try {
+			$storage = Drupal::entityTypeManager()->getStorage('user');
+			$query = $storage->getQuery()->accessCheck(false)->condition('uid', 0, '>');
+			$group = $query
+				->orConditionGroup()
+				->condition('field_first_name', $q, 'CONTAINS')
+				->condition('field_last_name', $q, 'CONTAINS');
+			$query->condition($group)->range(0, 10);
+			$ids = $query->execute();
+			return $ids ? array_values($storage->loadMultiple($ids)) : [];
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->error('User name search failed: %m', [
+				'%m' => $e->getMessage(),
+			]);
+			return [];
 		}
 	}
 
@@ -1969,6 +2190,9 @@ class SubscriptionsHelper
 
 	public static function reconcile(): void
 	{
+		// drop trial detail for redemptions whose trials have ended (guard row stays)
+		self::pruneExpiredRedemptionDetail();
+
 		try {
 			$rows = self::db()
 				->select(self::TABLE_SUBS, 's')
