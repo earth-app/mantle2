@@ -9,6 +9,7 @@ use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\mantle2\Service\ReportsHelper;
+use Drupal\mantle2\Service\SubscriptionsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 
 function mantle2_help($route_name, RouteMatchInterface $route_match)
@@ -390,6 +391,123 @@ function mantle2_mail($key, &$message, $params)
 
 			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
+		case 'subscription_activated':
+			$type = $params['tier'] ?? 'Pro';
+			$price = $params['price'] ?? '';
+			$renewsOn = $params['renews_on'] ?? null;
+			$message['subject'] = "The Earth App - $type Subscription Activated";
+
+			$renewsLine = $renewsOn ? "**Renews On:** {$renewsOn}\n\n" : '';
+			$markdown = "@$username, Your subscription to The Earth App **$type** is now active.\n\n
+			**Plan:** {$type}\n
+			**Price:** {$price}/month\n
+			{$renewsLine}Your plan renews automatically each month until you cancel. You can manage or cancel your subscription any time from your account settings.\n\n
+			Thanks for supporting The Earth App!";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'subscription_renewed':
+			$type = $params['tier'] ?? 'Pro';
+			$price = $params['price'] ?? '';
+			$renewsOn = $params['renews_on'] ?? null;
+			$message['subject'] = "The Earth App - $type Subscription Renewed";
+
+			$renewsLine = $renewsOn ? "**Next Renewal:** {$renewsOn}\n\n" : '';
+			$markdown = "@$username, Your The Earth App **$type** subscription has renewed.\n\n
+			**Plan:** {$type}\n
+			**Amount:** {$price}\n
+			{$renewsLine}No action is needed. You can manage or cancel your subscription any time from your account settings.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'subscription_canceled':
+			$type = $params['tier'] ?? 'Pro';
+			$accessUntil = $params['access_until'] ?? null;
+			$message['subject'] = "The Earth App - $type Subscription Canceled";
+
+			$accessLine = $accessUntil
+				? "Your access to **$type** features stays active until **{$accessUntil}**.\n\n"
+				: '';
+			$markdown = "@$username, Your The Earth App **$type** subscription has been canceled.\n\n
+			{$accessLine}We're sorry to see you go. You can resubscribe at any time from your account settings.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'subscription_refunded':
+			$message['subject'] = 'The Earth App - Subscription Refunded';
+
+			$markdown = "@$username, Your The Earth App subscription has been refunded and your account reverted to the Free plan.\n\n
+			The refund should appear on your original payment method within 5-10 business days, depending on your bank.\n\n
+			If you have any questions about this refund, please contact our support team.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'payment_failed_warning':
+			$type = $params['tier'] ?? 'Pro';
+			$actionRequired = $params['action_required'] ?? false;
+			$message['subject'] = $actionRequired
+				? 'The Earth App - Payment Confirmation Required'
+				: 'The Earth App - Payment Failed';
+
+			$markdown = $actionRequired
+				? "@$username, Your bank requires additional confirmation to complete your **$type** subscription payment.\n\n
+			Please open The Earth App and confirm the payment to keep your subscription active."
+				: "@$username, We were unable to process the latest payment for your The Earth App **$type** subscription.\n\n
+			Please update your payment method from your account settings to keep your subscription active. We'll retry the payment automatically over the next few days.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'renewal_reminder':
+			$type = $params['tier'] ?? 'Pro';
+			$price = $params['price'] ?? '';
+			$renewsOn = $params['renews_on'] ?? null;
+			$message['subject'] = "The Earth App - $type Subscription Renews Soon";
+
+			$renewsLine = $renewsOn ? "**Renews On:** {$renewsOn}\n\n" : '';
+			$markdown = "@$username, Your The Earth App **$type** subscription will renew soon.\n\n
+			**Plan:** {$type}\n
+			**Amount:** {$price}\n
+			{$renewsLine}No action is needed to continue. If you'd like to make changes, visit your account settings before the renewal date.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'price_change_notice':
+			$type = $params['tier'] ?? 'Pro';
+			$oldPrice = $params['old_price'] ?? '';
+			$newPrice = $params['new_price'] ?? '';
+			$effectiveAt = $params['effective_at'] ?? null;
+			$message['subject'] = "The Earth App - Upcoming Price Change for $type";
+
+			$effectiveLine = $effectiveAt ? "**Effective:** {$effectiveAt}\n\n" : '';
+			$markdown = "@$username, The price of your The Earth App **$type** subscription is changing.\n\n
+			**Current Price:** {$oldPrice}\n
+			**New Price:** {$newPrice}\n
+			{$effectiveLine}This change applies to your next renewal on or after the effective date. If you do not wish to continue at the new price, you can cancel any time before then from your account settings.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'trial_code_redeemed':
+			$type = $params['tier'] ?? 'Pro';
+			$days = $params['days'] ?? 7;
+			$trialEnd = $params['trial_end'] ?? null;
+			$message['subject'] = "The Earth App - $type Trial Activated";
+
+			$endLine = $trialEnd ? "**Trial Ends:** {$trialEnd}\n\n" : '';
+			$markdown = "@$username, You redeemed a trial code for The Earth App **$type**.\n\n
+			**Plan:** {$type}\n
+			**Trial Length:** {$days} days\n
+			{$endLine}Enjoy exploring the features! When your trial ends, your account reverts to the Free plan unless you subscribe.";
+
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'trial_broadcast':
+			$title = $params['title'] ?? 'The Earth App';
+			$body = $params['body'] ?? '';
+			$message['subject'] = 'The Earth App - ' . $title;
+
+			$markdown = "@$username,\n\n{$body}";
+			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
 		case 'api_key_expiring':
 			$keyName = $params['key_name'] ?? 'Unnamed key';
 			$prefix = $params['key_prefix'] ?? '';
@@ -501,6 +619,15 @@ function mantle2_mail_alter(&$message)
 		'mantle2_plan_trial',
 		'mantle2_plan_trial_warning',
 		'mantle2_plan_trial_expired',
+		'mantle2_subscription_activated',
+		'mantle2_subscription_renewed',
+		'mantle2_subscription_canceled',
+		'mantle2_subscription_refunded',
+		'mantle2_payment_failed_warning',
+		'mantle2_renewal_reminder',
+		'mantle2_price_change_notice',
+		'mantle2_trial_code_redeemed',
+		'mantle2_trial_broadcast',
 		'mantle2_unread_notifications_reminder',
 		'mantle2_api_key_expiring',
 		'mantle2_api_key_expired',
@@ -595,6 +722,7 @@ function mantle2_cron()
 			'Unread Notifications' => fn() => UsersHelper::checkUnreadNotifications(),
 			'Stale Push Tokens' => fn() => UsersHelper::pruneStalePushTokens(),
 			'API Key Expirations' => fn() => ApiKeysHelper::checkExpirations(),
+			'Subscriptions' => fn() => SubscriptionsHelper::reconcile(),
 			'Cycle MOTD' => fn() => GeneralHelper::cycleMotd(),
 		];
 

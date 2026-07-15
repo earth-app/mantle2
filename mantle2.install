@@ -1147,6 +1147,223 @@ function mantle2_schema()
 			],
 		],
 		'mantle2_api_keys' => mantle2_api_keys_table_schema(),
+		'mantle2_subscriptions' => mantle2_subscriptions_table_schema(),
+		'mantle2_trial_codes' => mantle2_trial_codes_table_schema(),
+		'mantle2_trial_code_redemptions' => mantle2_trial_code_redemptions_table_schema(),
+	];
+}
+
+function mantle2_subscriptions_table_schema(): array
+{
+	return [
+		'description' => 'One paid/native subscription per user (Stripe, Apple, Google, or trial).',
+		'fields' => [
+			'user_id' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Owning user uid',
+			],
+			'provider' => [
+				'type' => 'varchar',
+				'length' => 16,
+				'not null' => true,
+				'description' => 'stripe | apple | google | trial',
+			],
+			'external_customer_id' => [
+				'type' => 'varchar',
+				'length' => 255,
+				'not null' => false,
+				'description' => 'Provider customer id (Stripe customer)',
+			],
+			'external_subscription_id' => [
+				'type' => 'varchar',
+				'length' => 255,
+				'not null' => false,
+				'description' =>
+					'Provider subscription id / original transaction id / purchase token',
+			],
+			'tier' => [
+				'type' => 'varchar',
+				'length' => 16,
+				'not null' => true,
+				'description' => 'AccountType value (free|pro|writer|organizer)',
+			],
+			'status' => [
+				'type' => 'varchar',
+				'length' => 16,
+				'not null' => true,
+				'description' => 'active|trialing|past_due|canceled|refunded|incomplete|none',
+			],
+			'current_period_end' => [
+				'type' => 'int',
+				'not null' => false,
+				'description' => 'Unix timestamp of current period end',
+			],
+			'cancel_at_period_end' => [
+				'type' => 'int',
+				'size' => 'tiny',
+				'not null' => true,
+				'default' => 0,
+				'description' => '1 when the subscription is set to cancel at period end',
+			],
+			'consent_at' => [
+				'type' => 'int',
+				'not null' => false,
+				'description' => 'Unix timestamp of express auto-renewal consent',
+			],
+			'price_cents' => [
+				'type' => 'int',
+				'not null' => true,
+				'default' => 0,
+				'description' => 'Recurring price in cents',
+			],
+			'started_at' => [
+				'type' => 'int',
+				'not null' => false,
+				'description' => 'First paid start; reset each renewal (refund-window basis)',
+			],
+			'created' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Unix timestamp of row creation',
+			],
+			'updated' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Unix timestamp of last update',
+			],
+		],
+		'primary key' => ['user_id'],
+		'indexes' => [
+			'provider' => ['provider'],
+			'status' => ['status'],
+			'external_subscription_id' => ['external_subscription_id'],
+		],
+	];
+}
+
+function mantle2_trial_codes_table_schema(): array
+{
+	return [
+		'description' => 'Redeemable trial codes that grant a tier trial for a number of days.',
+		'fields' => [
+			'id' => [
+				'type' => 'serial',
+				'unsigned' => true,
+				'not null' => true,
+				'description' => 'Auto-increment primary key',
+			],
+			'code' => [
+				'type' => 'varchar',
+				'length' => 32,
+				'not null' => true,
+				'description' => 'Redeemable code (unique)',
+			],
+			'tier' => [
+				'type' => 'varchar',
+				'length' => 16,
+				'not null' => true,
+				'description' => 'AccountType value the trial grants',
+			],
+			'days' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Trial length in days',
+			],
+			'max_redemptions' => [
+				'type' => 'int',
+				'not null' => true,
+				'default' => 0,
+				'description' => '0 = unlimited',
+			],
+			'redemptions' => [
+				'type' => 'int',
+				'not null' => true,
+				'default' => 0,
+				'description' => 'Number of times redeemed',
+			],
+			'expires_at' => [
+				'type' => 'int',
+				'not null' => false,
+				'description' => 'Unix timestamp; NULL = never expires',
+			],
+			'active' => [
+				'type' => 'int',
+				'size' => 'tiny',
+				'not null' => true,
+				'default' => 1,
+				'description' => '1 = active, 0 = disabled',
+			],
+			'created_by' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'uid of the admin that created the code',
+			],
+			'created' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Unix timestamp of creation',
+			],
+		],
+		'primary key' => ['id'],
+		'unique keys' => [
+			'code' => ['code'],
+		],
+		'indexes' => [
+			'active' => ['active'],
+		],
+	];
+}
+
+function mantle2_trial_code_redemptions_table_schema(): array
+{
+	return [
+		'description' => 'One row per (code, user) trial-code redemption.',
+		'fields' => [
+			'id' => [
+				'type' => 'serial',
+				'unsigned' => true,
+				'not null' => true,
+				'description' => 'Auto-increment primary key',
+			],
+			'code' => [
+				'type' => 'varchar',
+				'length' => 32,
+				'not null' => true,
+				'description' => 'Redeemed code',
+			],
+			'user_id' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Redeeming user uid',
+			],
+			'redeemed_at' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Unix timestamp of redemption',
+			],
+			// trial detail (keep-guard-row / drop-detail retention); nulled on prune
+			'tier' => [
+				'type' => 'varchar',
+				'length' => 16,
+				'not null' => false,
+				'description' =>
+					'Tier granted by this redemption; nulled when the trial detail is pruned',
+			],
+			'expires_at' => [
+				'type' => 'int',
+				'not null' => false,
+				'description' =>
+					'Unix timestamp the trial detail expires; nulled on prune (guard row stays)',
+			],
+		],
+		'primary key' => ['id'],
+		'unique keys' => [
+			'code_user' => ['code', 'user_id'],
+		],
+		'indexes' => [
+			'user_id' => ['user_id'],
+		],
 	];
 }
 
@@ -1370,4 +1587,83 @@ function mantle2_update_9004(): string
 	]);
 
 	return 'Created field_blocked_users and field_blocked_by user fields';
+}
+
+/**
+ * Install: Create mantle2_subscriptions table for paid/native subscriptions.
+ */
+function mantle2_update_9005(): string
+{
+	$schema = Database::getConnection()->schema();
+	if (!$schema->tableExists('mantle2_subscriptions')) {
+		$schema->createTable('mantle2_subscriptions', mantle2_subscriptions_table_schema());
+		return 'Created mantle2_subscriptions table';
+	}
+	return 'mantle2_subscriptions table already exists';
+}
+
+/**
+ * Install: Create mantle2_trial_codes table for redeemable trial codes.
+ */
+function mantle2_update_9006(): string
+{
+	$schema = Database::getConnection()->schema();
+	if (!$schema->tableExists('mantle2_trial_codes')) {
+		$schema->createTable('mantle2_trial_codes', mantle2_trial_codes_table_schema());
+		return 'Created mantle2_trial_codes table';
+	}
+	return 'mantle2_trial_codes table already exists';
+}
+
+/**
+ * Install: Create mantle2_trial_code_redemptions table for trial-code redemptions.
+ */
+function mantle2_update_9007(): string
+{
+	$schema = Database::getConnection()->schema();
+	if (!$schema->tableExists('mantle2_trial_code_redemptions')) {
+		$schema->createTable(
+			'mantle2_trial_code_redemptions',
+			mantle2_trial_code_redemptions_table_schema(),
+		);
+		return 'Created mantle2_trial_code_redemptions table';
+	}
+	return 'mantle2_trial_code_redemptions table already exists';
+}
+
+/**
+ * Update: Add trial detail columns (tier, expires_at) to redemptions for the
+ * keep-guard-row / drop-detail retention model.
+ */
+function mantle2_update_9008(): string
+{
+	$schema = Database::getConnection()->schema();
+	if (!$schema->tableExists('mantle2_trial_code_redemptions')) {
+		return 'mantle2_trial_code_redemptions table does not exist; nothing to update';
+	}
+
+	$added = [];
+	if (!$schema->fieldExists('mantle2_trial_code_redemptions', 'tier')) {
+		$schema->addField('mantle2_trial_code_redemptions', 'tier', [
+			'type' => 'varchar',
+			'length' => 16,
+			'not null' => false,
+			'description' =>
+				'Tier granted by this redemption; nulled when the trial detail is pruned',
+		]);
+		$added[] = 'tier';
+	}
+	if (!$schema->fieldExists('mantle2_trial_code_redemptions', 'expires_at')) {
+		$schema->addField('mantle2_trial_code_redemptions', 'expires_at', [
+			'type' => 'int',
+			'not null' => false,
+			'description' =>
+				'Unix timestamp the trial detail expires; nulled on prune (guard row stays)',
+		]);
+		$added[] = 'expires_at';
+	}
+
+	return $added
+		? 'Added redemption detail columns: ' . implode(', ', $added)
+		: 'Redemption detail columns already present';
 }
