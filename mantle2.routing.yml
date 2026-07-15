@@ -6723,6 +6723,67 @@ mantle2.admin.trial_codes.delete:
         type: string
   methods: [DELETE]
 
+mantle2.admin.trial_codes.redemptions:
+  path: '/v2/admin/trial-codes/{code}/redemptions'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::listRedemptions'
+    _title: 'List Trial Code Redemptions'
+  requirements:
+    _access: 'TRUE'
+    code: '[A-Za-z0-9\-]{1,32}'
+  options:
+    tags: Subscriptions,Admin
+    description: Lists every redeemer of a trial code with per-user active status (admin only).
+    schema/200: '#TrialRedemptionList'
+    schema/403: 403
+    schema/404: Unknown code
+    parameters:
+      code:
+        type: string
+  methods: [GET]
+
+mantle2.admin.trial_codes.notify:
+  path: '/v2/admin/trial-codes/{code}/notify'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::notifyRedeemers'
+    _title: 'Notify Trial Code Redeemers'
+  requirements:
+    _access: 'TRUE'
+    code: '[A-Za-z0-9\-]{1,32}'
+  options:
+    tags: Subscriptions,Admin
+    description: Notifies every active redeemer of a trial code via account notification and email (admin only).
+    schema/200: '#NotifyResult'
+    schema/400: Invalid input
+    schema/403: 403
+    schema/404: Unknown code
+    body/description: Notification title and message
+    body/schema: '#NotifyRedeemersJson'
+    parameters:
+      code:
+        type: string
+  methods: [POST]
+
+mantle2.admin.users.lookup:
+  path: '/v2/admin/users/lookup'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::lookupUsers'
+    _title: 'Look Up Users for Admin'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Subscriptions,Admin
+    description: Resolves users by id, email, username, or name for the refund flow (admin only).
+    schema/200: '#AdminUserLookup'
+    schema/400: Query too short
+    schema/403: 403
+    query:
+      q:
+        type: string
+        required: true
+        description: Username, numeric id, email, or first/last name (min 2 chars)
+  methods: [GET]
+
 mantle2.admin.users.refund:
   path: '/v2/admin/users/{id}/refund'
   defaults:
