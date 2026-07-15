@@ -20,3 +20,4 @@ tests/out
 .env
 .env.local
 data/service-account.json
+data/subscriptions.yml
