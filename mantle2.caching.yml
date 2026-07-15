@@ -72,6 +72,11 @@ cache:
       key_template: 'request_cache:user:points:{uid}'
       ttl: 180
 
+    - route: '^/v2/users/current/subscription$'
+      methods: [GET]
+      key_template: 'request_cache:user:subscription:req:{req_uid}'
+      ttl: 30
+
     - route: '^/v2/users$'
       methods: [GET]
       key_template: 'request_cache:users:list:req:{req_uid}:p:{page}:l:{limit}:s:{search}:sort:{sort}:act:{activities}'
@@ -243,6 +248,29 @@ cache:
         - 'request_cache:user:profile:{req_uid}:*'
         - 'request_cache:users:list:*'
 
+    - route: '^/v2/users/current/subscription/(checkout|cancel|portal)$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'request_cache:user:subscription:req:{req_uid}'
+        - 'request_cache:user:profile:{req_uid}:*'
+
+    - route: '^/v2/users/current/subscription/redeem-code$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'request_cache:user:subscription:req:{req_uid}'
+        - 'request_cache:user:profile:{req_uid}:*'
+
+    - route: '^/v2/subscriptions/iap/(apple|google)/verify$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'request_cache:user:subscription:req:{req_uid}'
+        - 'request_cache:user:profile:{req_uid}:*'
+
+    - route: '^/v2/webhooks/(stripe|apple|google)$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'request_cache:user:subscription:*'
+
   deletes:
     - route: '^/v2/users/(?!quests$|badges$|cosmetics$)([0-9]+|[a-zA-Z0-9_]+)$'
       methods: [DELETE]
@@ -320,3 +348,4 @@ cache:
     - '/verify_email'
     - '/change_password'
     - '/send_email_verification'
+    - '/webhooks'
