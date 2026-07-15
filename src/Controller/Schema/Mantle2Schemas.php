@@ -3337,6 +3337,403 @@ class Mantle2Schemas
 		];
 	}
 
+	#region Subscriptions
+
+	public static function subscriptionPlan(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'tier' => [
+					'type' => 'string',
+					'enum' => ['free', 'pro', 'writer', 'organizer'],
+					'example' => 'pro',
+				],
+				'name' => ['type' => 'string', 'example' => 'Pro'],
+				'price_cents' => ['type' => 'integer', 'example' => 599],
+				'price_display' => ['type' => 'string', 'example' => '$5.99'],
+				'currency' => ['type' => 'string', 'example' => 'usd'],
+				'interval' => ['type' => 'string', 'enum' => ['month'], 'example' => 'month'],
+			],
+			'required' => ['tier', 'name', 'price_cents', 'price_display', 'currency', 'interval'],
+		];
+	}
+
+	public static function subscriptionPlans(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'plans' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/SubscriptionPlan'],
+				],
+				'refund_window_days' => ['type' => 'integer', 'example' => 14],
+			],
+			'required' => ['plans', 'refund_window_days'],
+		];
+	}
+
+	public static function subscriptionStatus(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'tier' => ['type' => 'string', 'example' => 'pro'],
+				'status' => [
+					'type' => 'string',
+					'enum' => [
+						'active',
+						'trialing',
+						'past_due',
+						'canceled',
+						'refunded',
+						'incomplete',
+						'none',
+					],
+					'example' => 'active',
+				],
+				'provider' => ['type' => ['string', 'null'], 'example' => 'stripe'],
+				'current_period_end' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'cancel_at_period_end' => ['type' => 'boolean'],
+				'is_trial' => ['type' => 'boolean'],
+				'trial_end' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'refund_eligible' => ['type' => 'boolean'],
+				'refund_deadline' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'can_manage_billing' => ['type' => 'boolean'],
+			],
+			'required' => [
+				'tier',
+				'status',
+				'provider',
+				'cancel_at_period_end',
+				'is_trial',
+				'refund_eligible',
+				'can_manage_billing',
+			],
+		];
+	}
+
+	public static function checkoutSession(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'url' => [
+					'type' => 'string',
+					'example' => 'https://checkout.stripe.com/c/pay/cs_...',
+				],
+				'session_id' => ['type' => 'string', 'example' => 'cs_test_a1b2c3'],
+			],
+			'required' => ['url', 'session_id'],
+		];
+	}
+
+	public static function portalSession(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'url' => [
+					'type' => 'string',
+					'example' => 'https://billing.stripe.com/p/session/...',
+				],
+			],
+			'required' => ['url'],
+		];
+	}
+
+	public static function cancelResult(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'result' => [
+					'type' => 'string',
+					'enum' => ['refunded', 'canceled', 'store_managed'],
+					'example' => 'canceled',
+				],
+				'tier' => ['type' => 'string', 'example' => 'pro'],
+				'cancel_at_period_end' => ['type' => 'boolean'],
+				'access_until' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'provider' => ['type' => 'string', 'example' => 'apple'],
+				'manage_url' => ['type' => 'string'],
+				'message' => ['type' => 'string'],
+			],
+			'required' => ['result', 'message'],
+		];
+	}
+
+	public static function redeemResult(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'tier' => ['type' => 'string', 'example' => 'pro'],
+				'days' => ['type' => 'integer', 'example' => 30],
+				'trial_end' => ['type' => 'string', 'format' => 'date-time'],
+				'message' => ['type' => 'string'],
+			],
+			'required' => ['tier', 'days', 'trial_end', 'message'],
+		];
+	}
+
+	public static function trialCode(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'code' => ['type' => 'string', 'example' => 'EARTH-ABCD-1234'],
+				'tier' => ['type' => 'string', 'example' => 'pro'],
+				'days' => ['type' => 'integer', 'example' => 30],
+				'max_redemptions' => ['type' => 'integer', 'example' => 100],
+				'redemptions' => ['type' => 'integer', 'example' => 5],
+				'expires_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'active' => ['type' => 'boolean'],
+				'created_by' => ['type' => 'integer', 'example' => 42],
+				'created' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => [
+				'code',
+				'tier',
+				'days',
+				'max_redemptions',
+				'redemptions',
+				'active',
+				'created_by',
+				'created',
+			],
+		];
+	}
+
+	public static function trialCodeList(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'codes' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/TrialCode'],
+				],
+			],
+			'required' => ['codes'],
+		];
+	}
+
+	public static function webhookAck(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => ['received' => ['type' => 'boolean', 'example' => true]],
+			'required' => ['received'],
+		];
+	}
+
+	public static function checkoutBodyJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'tier' => [
+					'type' => 'string',
+					'enum' => ['pro', 'writer', 'organizer'],
+					'example' => 'pro',
+				],
+				'consent' => [
+					'type' => 'boolean',
+					'description' => 'Express consent to recurring auto-renewal billing',
+					'example' => true,
+				],
+				'success_url' => ['type' => 'string'],
+				'cancel_url' => ['type' => 'string'],
+			],
+			'required' => ['tier', 'consent'],
+		];
+	}
+
+	public static function portalBodyJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => ['return_url' => ['type' => 'string']],
+		];
+	}
+
+	public static function cancelBodyJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => ['immediate' => ['type' => 'boolean', 'default' => false]],
+		];
+	}
+
+	public static function redeemBodyJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => ['code' => ['type' => 'string', 'example' => 'EARTH-ABCD-1234']],
+			'required' => ['code'],
+		];
+	}
+
+	public static function appleVerifyJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'transaction_id' => ['type' => 'string'],
+				'product_id' => ['type' => 'string'],
+				'signed_payload' => ['type' => 'string', 'description' => 'StoreKit 2 signed JWS'],
+			],
+			'required' => ['transaction_id', 'product_id', 'signed_payload'],
+		];
+	}
+
+	public static function googleVerifyJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'purchase_token' => ['type' => 'string'],
+				'product_id' => ['type' => 'string'],
+				'package_name' => ['type' => 'string'],
+			],
+			'required' => ['purchase_token', 'product_id', 'package_name'],
+		];
+	}
+
+	public static function trialCodeCreateJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'tier' => [
+					'type' => 'string',
+					'enum' => ['pro', 'writer', 'organizer'],
+					'example' => 'pro',
+				],
+				'days' => ['type' => 'integer', 'example' => 30],
+				'max_redemptions' => ['type' => 'integer', 'default' => 0, 'example' => 100],
+				'expires_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'code' => [
+					'type' => 'string',
+					'description' => 'Optional; auto-generated if omitted',
+				],
+			],
+			'required' => ['tier', 'days'],
+		];
+	}
+
+	public static function trialCodePatchJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'active' => ['type' => 'boolean'],
+				'max_redemptions' => ['type' => 'integer'],
+				'expires_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'days' => ['type' => 'integer'],
+				'tier' => ['type' => 'string', 'enum' => ['pro', 'writer', 'organizer']],
+			],
+		];
+	}
+
+	public static function adminRefundJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => ['reason' => ['type' => 'string']],
+		];
+	}
+
+	public static function trialRedemption(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'uid' => ['type' => 'integer', 'example' => 42],
+				'username' => ['type' => 'string', 'example' => 'earthfan'],
+				'redeemed_at' => ['type' => 'string', 'format' => 'date-time'],
+				'tier' => ['type' => ['string', 'null'], 'example' => 'pro'],
+				'expires_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'active' => ['type' => 'boolean'],
+			],
+			'required' => ['uid', 'username', 'redeemed_at', 'tier', 'expires_at', 'active'],
+		];
+	}
+
+	public static function trialRedemptionList(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'redemptions' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/TrialRedemption'],
+				],
+				'active_count' => ['type' => 'integer', 'example' => 3],
+				'total_count' => ['type' => 'integer', 'example' => 12],
+			],
+			'required' => ['redemptions', 'active_count', 'total_count'],
+		];
+	}
+
+	public static function notifyRedeemersJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'title' => ['type' => 'string', 'maxLength' => 120, 'example' => 'Your Trial'],
+				'message' => [
+					'type' => 'string',
+					'maxLength' => 2000,
+					'example' => 'Your trial ends soon; upgrade to keep Pro features.',
+				],
+			],
+			'required' => ['title', 'message'],
+		];
+	}
+
+	public static function notifyResult(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => ['notified' => ['type' => 'integer', 'example' => 5]],
+			'required' => ['notified'],
+		];
+	}
+
+	public static function adminUserMatch(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'integer', 'example' => 42],
+				'username' => ['type' => 'string', 'example' => 'earthfan'],
+				'email' => ['type' => 'string', 'example' => 'fan@example.com'],
+				'full_name' => ['type' => 'string', 'example' => 'Ada Lovelace'],
+				'subscription' => ['$ref' => '#/components/schemas/SubscriptionStatus'],
+			],
+			'required' => ['id', 'username', 'email', 'full_name', 'subscription'],
+		];
+	}
+
+	public static function adminUserLookup(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'matches' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/AdminUserMatch'],
+				],
+			],
+			'required' => ['matches'],
+		];
+	}
+
+	#endregion
+
 	public static function getAllSchemas(): array
 	{
 		return [
@@ -3482,6 +3879,33 @@ class Mantle2Schemas
 			'ApiKeyRevokeAll' => self::apiKeyRevokeAll(),
 			'ApiKeyCreateJson' => self::apiKeyCreateJson(),
 			'ApiKeyUpdateJson' => self::apiKeyUpdateJson(),
+
+			// Subscriptions + Billing
+			'SubscriptionPlan' => self::subscriptionPlan(),
+			'SubscriptionPlans' => self::subscriptionPlans(),
+			'SubscriptionStatus' => self::subscriptionStatus(),
+			'CheckoutSession' => self::checkoutSession(),
+			'PortalSession' => self::portalSession(),
+			'CancelResult' => self::cancelResult(),
+			'RedeemResult' => self::redeemResult(),
+			'TrialCode' => self::trialCode(),
+			'TrialCodeList' => self::trialCodeList(),
+			'WebhookAck' => self::webhookAck(),
+			'CheckoutBodyJson' => self::checkoutBodyJson(),
+			'PortalBodyJson' => self::portalBodyJson(),
+			'CancelBodyJson' => self::cancelBodyJson(),
+			'RedeemBodyJson' => self::redeemBodyJson(),
+			'AppleVerifyJson' => self::appleVerifyJson(),
+			'GoogleVerifyJson' => self::googleVerifyJson(),
+			'TrialCodeCreateJson' => self::trialCodeCreateJson(),
+			'TrialCodePatchJson' => self::trialCodePatchJson(),
+			'AdminRefundJson' => self::adminRefundJson(),
+			'TrialRedemption' => self::trialRedemption(),
+			'TrialRedemptionList' => self::trialRedemptionList(),
+			'NotifyRedeemersJson' => self::notifyRedeemersJson(),
+			'NotifyResult' => self::notifyResult(),
+			'AdminUserMatch' => self::adminUserMatch(),
+			'AdminUserLookup' => self::adminUserLookup(),
 
 			// Reports + Moderation
 			'Report' => self::report(),
