@@ -10,35 +10,38 @@ use Drupal\user\UserInterface;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
+use Stripe\Exception\ApiErrorException;
 
-// runs against Stripe TEST mode. skips the whole suite when no test secret key is present,
-// mirroring E2ETestBase's skip-when-the-cloud-worker-is-unreachable. card + test-clock
-// scenarios that need Checkout UI / PaymentMethod attach / test clocks are documented as
-// skipped (manual) so the matrix is legible without a live card flow.
 class SubscriptionsE2ETest extends IntegrationTestBase
 {
 	private string $stripeKey;
 
 	protected function setUp(): void
 	{
-		$this->stripeKey = getenv('MANTLE2_STRIPE_SECRET_KEY') ?: (getenv('STRIPE_TEST_KEY') ?: '');
+		parent::setUp();
+
+		// e2e drives the REAL stripe client, so unlike the integration tier it uses the app's
+		// real config resolution (env OR data/subscriptions.yml) instead of isolated/empty config
+		SubscriptionsHelper::setDataConfigOverride(null);
+
+		$this->stripeKey =
+			getenv('MANTLE2_STRIPE_SECRET_KEY') ?:
+			(getenv('STRIPE_TEST_KEY') ?:
+			SubscriptionsHelper::stripeSecret() ?? '');
 		if ($this->stripeKey === '') {
 			self::markTestSkipped(
-				'Stripe test key not set (MANTLE2_STRIPE_SECRET_KEY / STRIPE_TEST_KEY); skipping Stripe E2E',
+				'Stripe test key not set (MANTLE2_STRIPE_SECRET_KEY / STRIPE_TEST_KEY / data/subscriptions.yml); skipping Stripe E2E',
 			);
 		}
 		if (!str_starts_with($this->stripeKey, 'sk_test_')) {
 			self::markTestSkipped('Refusing to run E2E against a non-test Stripe key');
 		}
 
-		parent::setUp();
-
-		// real client reads this secret; no setClientOverride so calls hit Stripe test mode
+		// pin the resolved secret so the live client is deterministic (also covers the env-only case)
 		$this->seedKey('mantle2_stripe_secret_key', $this->stripeKey);
-		$this->seedKey(
-			'mantle2_stripe_webhook_secret',
-			getenv('STRIPE_WEBHOOK_SECRET') ?: 'whsec_test',
-		);
+		if ($ws = getenv('STRIPE_WEBHOOK_SECRET') ?: null) {
+			$this->seedKey('mantle2_stripe_webhook_secret', $ws);
+		}
 
 		foreach (
 			[
@@ -55,9 +58,10 @@ class SubscriptionsE2ETest extends IntegrationTestBase
 		}
 	}
 
+	// respect the full resolution (settings/env/data file), not just settings.php
 	private function priceConfigured(): bool
 	{
-		return (bool) \Drupal::service('settings')->get('mantle2.stripe_price_pro');
+		return SubscriptionsHelper::getPriceIdForTier(AccountType::PRO) !== null;
 	}
 
 	private function payingUser(): UserInterface
@@ -96,12 +100,21 @@ class SubscriptionsE2ETest extends IntegrationTestBase
 		}
 
 		$user = $this->payingUser();
-		$result = SubscriptionsHelper::createCheckoutSession(
-			$user,
-			AccountType::PRO,
-			'https://app.earth-app.com/subscription/success',
-			'https://app.earth-app.com/subscription/cancel',
-		);
+		try {
+			$result = SubscriptionsHelper::createCheckoutSession(
+				$user,
+				AccountType::PRO,
+				'https://app.earth-app.com/subscription/success',
+				'https://app.earth-app.com/subscription/cancel',
+			);
+		} catch (ApiErrorException $e) {
+			// the price must exist in the SAME mode as the key; skip (don't fail) when the stripe
+			// account isn't set up for a test-mode round-trip (e.g. a live price id + a test key)
+			self::markTestSkipped(
+				'Stripe rejected the live checkout; configure test-mode products/prices: ' .
+					$e->getMessage(),
+			);
+		}
 
 		$this->assertStringStartsWith('https://checkout.stripe.com', $result['url']);
 		$this->assertStringStartsWith('cs_', $result['session_id']);

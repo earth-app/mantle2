@@ -5,6 +5,7 @@ namespace Drupal\Tests\mantle2\Integration;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\mantle2\Service\RedisHelper;
+use Drupal\mantle2\Service\SubscriptionsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
@@ -40,6 +41,8 @@ abstract class IntegrationTestBase extends KernelTestBase
 		parent::setUp();
 
 		RedisHelper::reset();
+		// isolate tests from any real data/subscriptions.yml on the box running the suite
+		SubscriptionsHelper::setDataConfigOverride([]);
 
 		$this->installEntitySchema('user');
 		$this->installEntitySchema('node');
