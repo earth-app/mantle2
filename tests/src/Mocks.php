@@ -32,10 +32,21 @@ class Mocks extends TestCase
 		$key = $this->createMock(KeyInterface::class);
 		$key->method('getKeyValue')->willReturn($adminKey);
 
+		// stripe secrets used by SubscriptionsHelper (client + webhook verify)
+		$stripeSecret = $this->createMock(KeyInterface::class);
+		$stripeSecret->method('getKeyValue')->willReturn('sk_test_x');
+		$stripeWebhook = $this->createMock(KeyInterface::class);
+		$stripeWebhook->method('getKeyValue')->willReturn('whsec_test');
+
 		$keyRepository = $this->createMock(KeyRepositoryInterface::class);
-		$keyRepository
-			->method('getKey')
-			->willReturnCallback(fn($id) => $id === 'mantle2_api_key' ? $key : null);
+		$keyRepository->method('getKey')->willReturnCallback(
+			fn($id) => match ($id) {
+				'mantle2_api_key' => $key,
+				'mantle2_stripe_secret_key' => $stripeSecret,
+				'mantle2_stripe_webhook_secret' => $stripeWebhook,
+				default => null,
+			},
+		);
 
 		$logger = $this->createMock(LoggerChannelInterface::class);
 		$loggerFactory = $this->createMock(LoggerChannelFactoryInterface::class);
