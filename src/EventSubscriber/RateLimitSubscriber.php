@@ -49,6 +49,16 @@ class RateLimitSubscriber implements EventSubscriberInterface
 			return;
 		}
 
+		// provider webhooks are signature-verified and must never be rate limited
+		$webhookRoutes = [
+			'mantle2.webhooks.stripe',
+			'mantle2.webhooks.apple',
+			'mantle2.webhooks.google',
+		];
+		if (in_array((string) $request->attributes->get('_route'), $webhookRoutes, true)) {
+			return;
+		}
+
 		$ip =
 			$request->headers->get('CF-Connecting-IP') ??
 			(($request->headers->get('X-Forwarded-For')
