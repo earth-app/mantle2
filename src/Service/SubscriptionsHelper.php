@@ -17,6 +17,7 @@ use Stripe\StripeClient;
 use Stripe\Webhook;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Yaml\Yaml;
 use Throwable;
 use UnexpectedValueException;
 
@@ -84,25 +85,78 @@ class SubscriptionsHelper
 
 	#region Config
 
+	// flat key -> value from data/subscriptions.yml (drop-in file, no ssh/env needed); parsed once
+	private static ?array $dataConfigCache = null;
+	private static ?array $dataConfigOverride = null;
+
+	// test seam so a real prod data/subscriptions.yml can't leak into test runs (mirror setClientOverride)
+	public static function setDataConfigOverride(?array $config): void
+	{
+		self::$dataConfigOverride = $config;
+		self::$dataConfigCache = null;
+	}
+
+	private static function dataValue(string $key): ?string
+	{
+		if (self::$dataConfigOverride !== null) {
+			$v = self::$dataConfigOverride[$key] ?? null;
+			return is_string($v) && $v !== '' ? $v : null;
+		}
+		if (self::$dataConfigCache === null) {
+			self::$dataConfigCache = [];
+			try {
+				$path =
+					Drupal::service('extension.list.module')->getPath('mantle2') .
+					'/data/subscriptions.yml';
+				if (is_file($path)) {
+					$parsed = Yaml::parseFile($path);
+					if (is_array($parsed)) {
+						self::$dataConfigCache = $parsed;
+					}
+				}
+			} catch (Throwable $e) {
+				Drupal::logger('mantle2')->warning('failed to parse data/subscriptions.yml: %m', [
+					'%m' => $e->getMessage(),
+				]);
+			}
+		}
+		$v = self::$dataConfigCache[$key] ?? null;
+		return is_string($v) && $v !== '' ? $v : null;
+	}
+
+	// secret resolution: drupal key repo -> env (UPPER of the key name) -> data/subscriptions.yml
+	// mirrors FCMHelper's key -> env -> data-file credential loading so creds are drop-in either way
 	private static function keyValue(string $name): ?string
 	{
 		$key = Drupal::service('key.repository')->getKey($name);
-		if (!$key) {
-			return null;
+		if ($key) {
+			$value = $key->getKeyValue();
+			if ($value !== null && $value !== '') {
+				return $value;
+			}
 		}
-		$value = $key->getKeyValue();
-		return $value === null || $value === '' ? null : $value;
+		$env = getenv(strtoupper($name));
+		if ($env !== false && $env !== '') {
+			return $env;
+		}
+		return self::dataValue($name);
 	}
 
-	// non-secret config; mirror CloudHelper::getCloudEndpoint (settings first, env fallback)
-	private static function setting(string $settingKey, string $envKey): ?string
-	{
+	// non-secret config: settings.php -> env -> data/subscriptions.yml -> code default (polyfill)
+	private static function setting(
+		string $settingKey,
+		string $envKey,
+		?string $default = null,
+	): ?string {
 		$value = Drupal::service('settings')->get($settingKey);
 		if (is_string($value) && $value !== '') {
 			return $value;
 		}
 		$env = getenv($envKey);
-		return $env !== false && $env !== '' ? $env : null;
+		if ($env !== false && $env !== '') {
+			return $env;
+		}
+		return self::dataValue($settingKey) ?? $default;
 	}
 
 	public static function stripeSecret(): ?string
@@ -170,9 +224,14 @@ class SubscriptionsHelper
 	}
 
 	// apple config
+	// defaults polyfill the sky app id / product ids (see sky useIapPurchase); only secrets need config
 	public static function appleBundleId(): ?string
 	{
-		return self::setting('mantle2.apple_bundle_id', 'MANTLE2_APPLE_BUNDLE_ID');
+		return self::setting(
+			'mantle2.apple_bundle_id',
+			'MANTLE2_APPLE_BUNDLE_ID',
+			'com.earthapp.sky',
+		);
 	}
 
 	public static function appleProductForTier(AccountType $t): ?string
@@ -181,14 +240,17 @@ class SubscriptionsHelper
 			AccountType::PRO => self::setting(
 				'mantle2.apple_product_pro',
 				'MANTLE2_APPLE_PRODUCT_PRO',
+				'com.earthapp.sky.pro.monthly',
 			),
 			AccountType::WRITER => self::setting(
 				'mantle2.apple_product_writer',
 				'MANTLE2_APPLE_PRODUCT_WRITER',
+				'com.earthapp.sky.writer.monthly',
 			),
 			AccountType::ORGANIZER => self::setting(
 				'mantle2.apple_product_organizer',
 				'MANTLE2_APPLE_PRODUCT_ORGANIZER',
+				'com.earthapp.sky.organizer.monthly',
 			),
 			default => null,
 		};
@@ -208,21 +270,44 @@ class SubscriptionsHelper
 	public static function appleRootCaPem(): ?string
 	{
 		$pem = self::keyValue(self::KEY_APPLE_ROOT_CA);
-		return is_string($pem) && str_contains($pem, 'BEGIN CERTIFICATE') ? $pem : null;
+		if (!is_string($pem) || !str_contains($pem, 'BEGIN CERTIFICATE')) {
+			return null;
+		}
+		return self::normalizeCertPem($pem);
+	}
+
+	// openssl needs the BEGIN/END markers on their own lines; a cert pasted with newlines
+	// collapsed to spaces (env var, single-line paste, folded yaml) fails to parse. rebuild the
+	// canonical pem: strip everything but the base64 body, re-wrap at 64, re-add the markers
+	public static function normalizeCertPem(string $raw): string
+	{
+		if (preg_match('/-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----/s', $raw, $m)) {
+			$body = preg_replace('/[^A-Za-z0-9+\/=]/', '', $m[1]);
+			if ($body !== '') {
+				return "-----BEGIN CERTIFICATE-----\n" .
+					chunk_split($body, 64, "\n") .
+					"-----END CERTIFICATE-----\n";
+			}
+		}
+		return $raw;
 	}
 
 	public static function appleConfigured(): bool
 	{
-		// require the pinned root ca too; without it jws verification cannot be trusted
-		return self::keyValue(self::KEY_APPLE_IAP) !== null &&
-			self::appleBundleId() !== null &&
-			self::appleRootCaPem() !== null;
+		// we verify storekit 2 JWS against the pinned apple root ca (no app store server api call),
+		// so the root ca is the essential secret; KEY_APPLE_IAP (.p8) is optional/reserved for future
+		// server-api queries. bundle id is polyfilled, so apple is active once the root ca is dropped in
+		return self::appleRootCaPem() !== null && self::appleBundleId() !== null;
 	}
 
 	// google config
 	public static function googlePackageName(): ?string
 	{
-		return self::setting('mantle2.google_package_name', 'MANTLE2_GOOGLE_PACKAGE_NAME');
+		return self::setting(
+			'mantle2.google_package_name',
+			'MANTLE2_GOOGLE_PACKAGE_NAME',
+			'com.earthapp.sky',
+		);
 	}
 
 	public static function googleProductForTier(AccountType $t): ?string
@@ -231,14 +316,17 @@ class SubscriptionsHelper
 			AccountType::PRO => self::setting(
 				'mantle2.google_product_pro',
 				'MANTLE2_GOOGLE_PRODUCT_PRO',
+				'sky_pro_monthly',
 			),
 			AccountType::WRITER => self::setting(
 				'mantle2.google_product_writer',
 				'MANTLE2_GOOGLE_PRODUCT_WRITER',
+				'sky_writer_monthly',
 			),
 			AccountType::ORGANIZER => self::setting(
 				'mantle2.google_product_organizer',
 				'MANTLE2_GOOGLE_PRODUCT_ORGANIZER',
+				'sky_organizer_monthly',
 			),
 			default => null,
 		};

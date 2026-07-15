@@ -439,5 +439,46 @@ class SubscriptionsUnitTest extends TestCase
 		$this->assertSame($expected, SubscriptionsHelper::lookupQueryKind($q));
 	}
 
+	#[Test]
+	#[TestDox('normalizeCertPem repairs a root ca whose newlines were collapsed to whitespace')]
+	#[Group('mantle2/subscriptions')]
+	public function normalizeCertPemRepairsCollapsedNewlines(): void
+	{
+		// self-signed throwaway cert; only its whitespace shape matters for this test
+		$pkey = openssl_pkey_new([
+			'private_key_bits' => 2048,
+			'private_key_type' => OPENSSL_KEYTYPE_RSA,
+		]);
+		$csr = openssl_csr_new(['commonName' => 'Earth Test Root'], $pkey);
+		$x509 = openssl_csr_sign($csr, null, $pkey, 2);
+		openssl_x509_export($x509, $proper);
+
+		$expected = openssl_x509_fingerprint($proper, 'sha256');
+		$this->assertNotFalse($expected);
+
+		// every whitespace run collapsed to a single space (env var / single-line paste / folded yaml)
+		$collapsed = preg_replace('/\s+/', ' ', trim($proper));
+		$this->assertSame(
+			$expected,
+			openssl_x509_fingerprint(SubscriptionsHelper::normalizeCertPem($collapsed), 'sha256'),
+			'space-collapsed pem should normalize back to a parseable cert',
+		);
+
+		// no newlines at all between markers and body
+		$this->assertSame(
+			$expected,
+			openssl_x509_fingerprint(
+				SubscriptionsHelper::normalizeCertPem(str_replace("\n", '', $proper)),
+				'sha256',
+			),
+		);
+
+		// idempotent on an already-canonical pem
+		$this->assertSame(
+			$expected,
+			openssl_x509_fingerprint(SubscriptionsHelper::normalizeCertPem($proper), 'sha256'),
+		);
+	}
+
 	#endregion
 }
