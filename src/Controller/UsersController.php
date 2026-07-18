@@ -4564,6 +4564,474 @@ final class UsersController extends ControllerBase
 
 	#endregion
 
+	#region Trails
+
+	// GET /v2/users/trails
+	public function trails(Request $request): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/trails',
+				'GET',
+				[],
+				UsersHelper::TRAILS_CLOUD_TIMEOUT,
+			);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to fetch trails');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	// GET /v2/users/trails/{id}
+	public function getTrail(Request $request, string $id): JsonResponse
+	{
+		$user = UsersHelper::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$trailId = trim($id);
+		if ($trailId === '') {
+			return GeneralHelper::badRequest('Trail ID is required');
+		}
+
+		// rank drives the premium/seasonal gate in cloud (rank === 'free' locks perk trails)
+		$rank = UsersHelper::getAccountType($user)->value;
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/trails/' . rawurlencode($trailId),
+				'GET',
+				['rank' => $rank],
+				UsersHelper::TRAILS_CLOUD_TIMEOUT,
+			);
+		} catch (Exception $e) {
+			// cloud 403 = locked perk trail for a free rank; surface as a paywall, not a permission error
+			if ((int) $e->getCode() === 403) {
+				return GeneralHelper::paymentRequired(
+					'Premium and seasonal trails require a paid rank. Upgrade to unlock this trail.',
+				);
+			}
+			return CloudHelper::mapCloudException($e, 'Failed to fetch trail');
+		}
+
+		// sendRequest folds a 404 into an empty array
+		if (empty($data)) {
+			return GeneralHelper::notFound('Trail not found');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	#endregion
+
+	#region Nature Minutes
+
+	// GET /v2/users/current/nature-minutes
+	// GET /v2/users/{id}/nature-minutes
+	// GET /v2/users/{username}/nature-minutes
+	public function getNatureMinutes(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$query = ['uid' => GeneralHelper::formatId($user->id())];
+		$week = $request->query->get('week');
+		if (is_string($week) && $week !== '') {
+			$query['week'] = $week;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/nature-minutes',
+				'GET',
+				$query,
+				UsersHelper::TRAILS_CLOUD_TIMEOUT,
+			);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to fetch nature minutes');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/nature-minutes
+	// POST /v2/users/{id}/nature-minutes
+	// POST /v2/users/{username}/nature-minutes
+	public function creditNatureMinutes(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid request body');
+		}
+
+		$minutes = $body['minutes'] ?? null;
+		if (!is_numeric($minutes) || (float) $minutes <= 0) {
+			return GeneralHelper::badRequest('minutes must be a positive number');
+		}
+
+		$kind = $body['kind'] ?? 'manual';
+		if (!in_array($kind, UsersHelper::NATURE_MINUTE_KINDS, true)) {
+			$kind = 'manual';
+		}
+
+		$payload = [
+			'uid' => GeneralHelper::formatId($user->id()),
+			'minutes' => (float) $minutes,
+			'kind' => $kind,
+		];
+		if (isset($body['ref_id']) && is_string($body['ref_id']) && $body['ref_id'] !== '') {
+			$payload['ref_id'] = $body['ref_id'];
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/nature-minutes',
+				'POST',
+				$payload,
+				UsersHelper::TRAILS_CLOUD_TIMEOUT,
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to credit nature minutes');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	#endregion
+
+	#region Expeditions
+
+	// POST /v2/users/current/expedition
+	public function startExpedition(Request $request): JsonResponse
+	{
+		$owner = UsersHelper::findByRequest($request);
+		if ($owner instanceof JsonResponse) {
+			return $owner;
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid request body');
+		}
+
+		$goal = $body['goal'] ?? null;
+		if (!is_string($goal) || !in_array($goal, UsersHelper::EXPEDITION_GOALS, true)) {
+			return GeneralHelper::badRequest('Invalid goal');
+		}
+
+		$endsAt = $body['ends_at'] ?? null;
+		if (!is_string($endsAt) || strtotime($endsAt) === false) {
+			return GeneralHelper::badRequest('Valid ends_at is required');
+		}
+
+		$target = $body['target'] ?? UsersHelper::EXPEDITION_MINUTES_PER_MEMBER;
+		if (!is_numeric($target) || (float) $target <= 0) {
+			return GeneralHelper::badRequest('target must be a positive number');
+		}
+
+		// perk: larger expeditions gate on rank (reuse getMaxCircleCount tiering)
+		$maxTarget =
+			UsersHelper::getMaxCircleCount($owner) * UsersHelper::EXPEDITION_MINUTES_PER_MEMBER;
+		if ((float) $target > $maxTarget) {
+			return GeneralHelper::paymentRequired(
+				'This expedition goal is too large for your rank. Upgrade to lead bigger expeditions.',
+			);
+		}
+
+		$payload = [
+			'goal' => $goal,
+			'target' => (int) $target,
+			'ends_at' => $endsAt,
+			'members' => UsersHelper::circleMembers($owner),
+		];
+		if (isset($body['title']) && is_string($body['title']) && trim($body['title']) !== '') {
+			$payload['title'] = trim($body['title']);
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/circles/' . GeneralHelper::formatId($owner->id()) . '/expedition',
+				'POST',
+				$payload,
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to start expedition');
+		}
+
+		return new JsonResponse($data, Response::HTTP_CREATED);
+	}
+
+	// GET /v2/users/current/expedition
+	// GET /v2/users/{id}/expedition
+	// GET /v2/users/{username}/expedition
+	public function getExpedition(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$owner = UsersHelper::resolveCircleView($request, $id, $username);
+		if ($owner instanceof JsonResponse) {
+			return $owner;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/circles/' . GeneralHelper::formatId($owner->id()) . '/expedition',
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to fetch expedition');
+		}
+
+		// cloud folds "no active expedition" (404) into an empty array
+		if (empty($data)) {
+			return GeneralHelper::notFound('No active expedition for this circle');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/{id}/expedition/contribute
+	// POST /v2/users/{username}/expedition/contribute
+	public function contribute(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$contributor = UsersHelper::findByRequest($request);
+		if ($contributor instanceof JsonResponse) {
+			return $contributor;
+		}
+
+		$identifier = $id ?? $username;
+		$owner = $identifier !== null ? UsersHelper::findBy($identifier) : null;
+		if (!$owner) {
+			return GeneralHelper::notFound('Circle owner not found');
+		}
+
+		// only the owner or a member of the owner's circle may contribute
+		if (
+			$contributor->id() !== $owner->id() &&
+			!UsersHelper::isInCircle($owner, $contributor) &&
+			!UsersHelper::isAdmin($contributor)
+		) {
+			return GeneralHelper::forbidden('You are not a member of this circle');
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid request body');
+		}
+
+		$amount = $body['amount'] ?? null;
+		if (!is_numeric($amount) || (float) $amount <= 0) {
+			return GeneralHelper::badRequest('amount must be a positive number');
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/circles/' . GeneralHelper::formatId($owner->id()) . '/expedition/contribute',
+				'POST',
+				[
+					'member_uid' => GeneralHelper::formatId($contributor->id()),
+					'amount' => (float) $amount,
+					'username' => $contributor->getAccountName(),
+				],
+			);
+		} catch (Exception $e) {
+			// cloud returns { message, code } JSON for a closed/missing expedition
+			$code = (int) $e->getCode();
+			$message = CloudHelper::extractCloudMessage($e);
+			return match ($code) {
+				404 => GeneralHelper::notFound($message ?: 'No active expedition'),
+				409 => GeneralHelper::conflict($message ?: 'Expedition is closed'),
+				default => GeneralHelper::internalError('Failed to credit contribution'),
+			};
+		}
+
+		if (empty($data)) {
+			return GeneralHelper::notFound('No active expedition');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/garden
+	// GET /v2/users/{id}/garden
+	// GET /v2/users/{username}/garden
+	public function getGarden(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$owner = UsersHelper::resolveCircleView($request, $id, $username);
+		if ($owner instanceof JsonResponse) {
+			return $owner;
+		}
+
+		// animated variants unlock on the owner's paid rank (deterministic per circle)
+		$query = ['rank' => UsersHelper::getAccountType($owner)->value];
+		$minutes = $request->query->get('minutes');
+		if (is_numeric($minutes) && (int) $minutes > 0) {
+			$query['minutes'] = (int) $minutes;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/circles/' . GeneralHelper::formatId($owner->id()) . '/garden',
+				'GET',
+				$query,
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to fetch garden');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	#endregion
+
+	#region Kudos
+
+	// POST /v2/users/{id}/kudos
+	// POST /v2/users/{username}/kudos
+	public function sendKudos(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$sender = UsersHelper::findByRequest($request);
+		if ($sender instanceof JsonResponse) {
+			return $sender;
+		}
+
+		$identifier = $id ?? $username;
+		$recipient = $identifier !== null ? UsersHelper::findBy($identifier) : null;
+		if (!$recipient) {
+			return GeneralHelper::notFound('Recipient not found');
+		}
+
+		if ($sender->id() === $recipient->id()) {
+			return GeneralHelper::badRequest('You cannot send kudos to yourself');
+		}
+
+		// friends/circle only
+		if (
+			!UsersHelper::isAddedFriend($sender, $recipient) &&
+			!UsersHelper::isInCircle($sender, $recipient)
+		) {
+			return GeneralHelper::forbidden('You can only send kudos to friends or circle members');
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid request body');
+		}
+
+		$contextType = $body['context_type'] ?? null;
+		if (
+			!is_string($contextType) ||
+			!in_array($contextType, UsersHelper::KUDOS_CONTEXTS, true)
+		) {
+			return GeneralHelper::badRequest('Invalid context_type');
+		}
+
+		$phrase = $body['phrase'] ?? null;
+		if (!is_string($phrase) || !isset(UsersHelper::KUDOS_PHRASES[$phrase])) {
+			return GeneralHelper::badRequest('Invalid phrase');
+		}
+
+		$contextRef = '';
+		if (isset($body['context_ref']) && is_string($body['context_ref'])) {
+			$contextRef = trim($body['context_ref']);
+		}
+
+		// rate-limit: cap kudos per hour per sender (challenge-throttle pattern)
+		$throttleKey = 'kudos:throttle:' . $sender->id();
+		$throttle = RedisHelper::get($throttleKey);
+		$count = (int) ($throttle['count'] ?? 0);
+		if ($count >= UsersHelper::KUDOS_HOURLY_LIMIT) {
+			return GeneralHelper::conflict('You have sent too many kudos; please try again later.');
+		}
+
+		// one kudos per sender+recipient+context pair
+		$dedupeKey = sprintf(
+			'kudos:sent:%s:%s:%s:%s',
+			$sender->id(),
+			$recipient->id(),
+			$contextType,
+			$contextRef !== '' ? $contextRef : '_',
+		);
+		if (RedisHelper::exists($dedupeKey)) {
+			return GeneralHelper::conflict('You have already sent kudos for this moment.');
+		}
+
+		$title = 'Kudos';
+		$message = sprintf(
+			'%s sent you kudos: %s',
+			$sender->getAccountName(),
+			UsersHelper::KUDOS_PHRASES[$phrase],
+		);
+		$link = UsersHelper::kudosLink($contextType, $contextRef);
+		$source = '@' . $sender->getAccountName();
+
+		$notification = UsersHelper::addNotification(
+			$recipient,
+			$title,
+			$message,
+			$link,
+			'info',
+			$source,
+		);
+		if ($notification === null) {
+			return GeneralHelper::internalError('Failed to send kudos');
+		}
+
+		// record dedupe marker and bump the hourly throttle
+		RedisHelper::set($dedupeKey, ['sent_at' => time()], 2592000);
+		$ttl = $count > 0 ? max(1, RedisHelper::ttl($throttleKey)) : 3600;
+		RedisHelper::set($throttleKey, ['count' => $count + 1], $ttl);
+
+		$kudos = [
+			'id' => bin2hex(random_bytes(16)),
+			'from_uid' => GeneralHelper::formatId($sender->id()),
+			'to_uid' => GeneralHelper::formatId($recipient->id()),
+			'context_type' => $contextType,
+			'phrase' => $phrase,
+			'created_at' => GeneralHelper::dateToIso(time()),
+		];
+		if ($contextRef !== '') {
+			$kudos['context_ref'] = $contextRef;
+		}
+
+		// never return a tally — only the sent kudos + its notification
+		return new JsonResponse(
+			['kudos' => $kudos, 'notification' => $notification->jsonSerialize()],
+			Response::HTTP_CREATED,
+		);
+	}
+
+	#endregion
+
 	#region Utility Functions
 
 	// Utility Functions
