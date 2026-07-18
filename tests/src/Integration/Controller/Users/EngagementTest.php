@@ -1054,4 +1054,167 @@ class EngagementTest extends IntegrationTestBase
 	}
 
 	#endregion
+
+	#region Trails
+
+	#[Test]
+	#[TestDox('GET /v2/users/trails requires auth and returns a list for authenticated users')]
+	#[Group('mantle2/trails')]
+	public function trailsAuth(): void
+	{
+		$anon = $this->controller()->trails($this->request('GET', '/v2/users/trails'));
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$ok = $this->controller()->trails(
+			$this->authRequest($this->createUser(), 'GET', '/v2/users/trails'),
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/users/trails/{id} requires auth and validates the id')]
+	#[Group('mantle2/trails')]
+	public function getTrailAuth(): void
+	{
+		$anon = $this->controller()->getTrail($this->request('GET', '/v2/users/trails/x'), 'x');
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		// with a dead cloud the lookup degrades to empty -> 404
+		$missing = $this->controller()->getTrail(
+			$this->authRequest($this->createUser(), 'GET', '/v2/users/trails/nope'),
+			'nope',
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+	}
+
+	#endregion
+
+	#region Nature Minutes
+
+	#[Test]
+	#[TestDox('GET /v2/users/{id}/nature-minutes enforces self/admin and rejects anon')]
+	#[Group('mantle2/trails')]
+	public function natureMinutesAuth(): void
+	{
+		$anon = $this->controller()->getNatureMinutes(
+			$this->request('GET', '/v2/users/current/nature-minutes'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$self = $this->createUser();
+		$ok = $this->controller()->getNatureMinutes(
+			$this->authRequest($self, 'GET', '/v2/users/current/nature-minutes'),
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+
+		// another user's ring is forbidden
+		$other = $this->createUser();
+		$forbidden = $this->controller()->getNatureMinutes(
+			$this->authRequest($self, 'GET', '/v2/users/' . $other->id() . '/nature-minutes'),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'GET /v2/users/{username}/nature-minutes resolves self and forbids another user by handle',
+		),
+	]
+	#[Group('mantle2/trails')]
+	public function natureMinutesByUsername(): void
+	{
+		$self = $this->createUser();
+		$selfHandle = '@' . $self->getAccountName();
+
+		// self via username handle is allowed
+		$ok = $this->controller()->getNatureMinutes(
+			$this->authRequest($self, 'GET', '/v2/users/' . $selfHandle . '/nature-minutes'),
+			null,
+			$selfHandle,
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+
+		// another user's ring by handle is forbidden
+		$other = $this->createUser();
+		$otherHandle = '@' . $other->getAccountName();
+		$forbidden = $this->controller()->getNatureMinutes(
+			$this->authRequest($self, 'GET', '/v2/users/' . $otherHandle . '/nature-minutes'),
+			null,
+			$otherHandle,
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/users/current/nature-minutes validates the body and credits')]
+	#[Group('mantle2/trails')]
+	public function creditValidation(): void
+	{
+		$user = $this->createUser();
+
+		$badJson = $this->controller()->creditNatureMinutes(
+			$this->authRequest($user, 'POST', '/v2/users/current/nature-minutes', [], 'not-json'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+
+		$zero = $this->controller()->creditNatureMinutes(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/nature-minutes',
+				[],
+				json_encode(['minutes' => 0]),
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $zero->getStatusCode());
+		$this->assertSame('minutes must be a positive number', $this->decode($zero)['message']);
+
+		$negative = $this->controller()->creditNatureMinutes(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/nature-minutes',
+				[],
+				json_encode(['minutes' => -5]),
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $negative->getStatusCode());
+
+		// a valid credit passes validation (cloud is dead so the body is empty, but status is 200)
+		$ok = $this->controller()->creditNatureMinutes(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/nature-minutes',
+				[],
+				json_encode(['minutes' => 15, 'kind' => 'trail_step', 'ref_id' => 'forest_wonder']),
+			),
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/users/{id}/nature-minutes forbids crediting another user')]
+	#[Group('mantle2/trails')]
+	public function creditForbidsOthers(): void
+	{
+		$self = $this->createUser();
+		$other = $this->createUser();
+
+		$forbidden = $this->controller()->creditNatureMinutes(
+			$this->authRequest(
+				$self,
+				'POST',
+				'/v2/users/' . $other->id() . '/nature-minutes',
+				[],
+				json_encode(['minutes' => 10]),
+			),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
+	#endregion
 }
