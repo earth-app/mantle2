@@ -3734,9 +3734,456 @@ class Mantle2Schemas
 
 	#endregion
 
+	#region Trails, Circles & Trailmarks
+
+	public static function trailStep(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'step' => ['$ref' => '#/components/schemas/QuestStep'],
+				'clue' => [
+					'type' => 'string',
+					'description' => 'The curiosity-gap clue shown before acting',
+					'example' => 'What lives under a rotting log?',
+				],
+				'reveal' => [
+					'type' => 'string',
+					'description' => 'The awe payoff revealed on completion',
+					'example' => 'A single log can host over 100 species.',
+				],
+			],
+			'required' => ['step', 'clue', 'reveal'],
+		];
+	}
+
+	public static function trail(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'string', 'example' => 'forest_wonder'],
+				'title' => ['type' => 'string', 'example' => 'Forest Wonder'],
+				'theme' => [
+					'type' => 'string',
+					'enum' => ['nature', 'curiosity', 'creative', 'mixed'],
+					'example' => 'nature',
+				],
+				'description' => [
+					'type' => 'string',
+					'example' => 'A trail through hidden wonders',
+				],
+				'icon' => ['type' => 'string', 'example' => 'mdi:tree'],
+				'rarity' => [
+					'type' => 'string',
+					'enum' => ['normal', 'rare', 'amazing', 'green'],
+					'example' => 'rare',
+				],
+				'steps' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/TrailStep'],
+				],
+				'reward' => ['type' => 'integer', 'example' => 100],
+				'premium' => ['type' => 'boolean', 'example' => false],
+				'seasonal' => ['type' => 'boolean', 'example' => false],
+			],
+			'required' => [
+				'id',
+				'title',
+				'theme',
+				'description',
+				'icon',
+				'rarity',
+				'steps',
+				'reward',
+			],
+		];
+	}
+
+	public static function trailsList(): array
+	{
+		return [
+			'type' => 'array',
+			'items' => ['$ref' => '#/components/schemas/Trail'],
+		];
+	}
+
+	public static function natureMinutesSource(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'kind' => [
+					'type' => 'string',
+					'enum' => ['trail_step', 'quest', 'healthkit', 'manual'],
+					'example' => 'trail_step',
+				],
+				'ref_id' => ['type' => 'string', 'nullable' => true, 'example' => 'forest_wonder'],
+				'minutes' => ['type' => 'number', 'example' => 15],
+				'at' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => ['kind', 'minutes', 'at'],
+		];
+	}
+
+	public static function natureMinutes(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'week' => ['type' => 'string', 'example' => '2026-W29'],
+				'minutes' => ['type' => 'number', 'example' => 75],
+				'target' => ['type' => 'number', 'example' => 120],
+				'best' => ['type' => 'number', 'example' => 130],
+				'sources' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/NatureMinutesSource'],
+				],
+				'updated_at' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => ['week', 'minutes', 'target', 'best', 'sources', 'updated_at'],
+		];
+	}
+
+	public static function natureMinutesCreateJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'minutes' => ['type' => 'number', 'minimum' => 0, 'example' => 15],
+				'kind' => [
+					'type' => 'string',
+					'enum' => ['trail_step', 'quest', 'healthkit', 'manual'],
+					'example' => 'trail_step',
+				],
+				'ref_id' => ['type' => 'string', 'example' => 'forest_wonder'],
+			],
+			'required' => ['minutes'],
+		];
+	}
+
+	public static function expeditionContributor(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'uid' => ['type' => 'string', 'example' => '42'],
+				'username' => ['type' => 'string', 'example' => 'earthfan'],
+				'contribution' => ['type' => 'number', 'example' => 60],
+				'last_contributed_at' => [
+					'type' => 'string',
+					'format' => 'date-time',
+					'nullable' => true,
+				],
+			],
+			'required' => ['uid', 'username', 'contribution'],
+		];
+	}
+
+	public static function expedition(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'string', 'example' => 'a1b2c3d4e5f6'],
+				'owner_uid' => ['type' => 'string', 'example' => '42'],
+				'title' => ['type' => 'string', 'example' => 'Circle Expedition'],
+				'goal' => [
+					'type' => 'string',
+					'enum' => ['nature_minutes', 'trail_steps', 'quests'],
+					'example' => 'nature_minutes',
+				],
+				'target' => ['type' => 'number', 'example' => 600],
+				'progress' => ['type' => 'number', 'example' => 240],
+				'contributors' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/ExpeditionContributor'],
+				],
+				'status' => [
+					'type' => 'string',
+					'enum' => ['active', 'complete', 'expired'],
+					'example' => 'active',
+				],
+				'starts_at' => ['type' => 'string', 'format' => 'date-time'],
+				'ends_at' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => [
+				'id',
+				'owner_uid',
+				'title',
+				'goal',
+				'target',
+				'progress',
+				'contributors',
+				'status',
+				'starts_at',
+				'ends_at',
+			],
+		];
+	}
+
+	public static function expeditionCreateJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'title' => ['type' => 'string', 'example' => 'Weekend Circle Expedition'],
+				'goal' => [
+					'type' => 'string',
+					'enum' => ['nature_minutes', 'trail_steps', 'quests'],
+					'example' => 'nature_minutes',
+				],
+				'target' => ['type' => 'number', 'minimum' => 1, 'example' => 600],
+				'ends_at' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => ['goal', 'ends_at'],
+		];
+	}
+
+	public static function expeditionContributeJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'amount' => ['type' => 'number', 'minimum' => 0, 'example' => 30],
+			],
+			'required' => ['amount'],
+		];
+	}
+
+	public static function contributeResult(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'expedition' => ['$ref' => '#/components/schemas/Expedition'],
+				'just_completed' => ['type' => 'boolean', 'example' => false],
+			],
+			'required' => ['expedition', 'just_completed'],
+		];
+	}
+
+	public static function gardenElement(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'kind' => [
+					'type' => 'string',
+					'enum' => ['tree', 'flower', 'water', 'stone', 'creature', 'star'],
+					'example' => 'tree',
+				],
+				'seed' => ['type' => 'number', 'example' => 12345],
+				'growth' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1, 'example' => 0.6],
+				'contributor_uid' => ['type' => 'string', 'nullable' => true, 'example' => '42'],
+			],
+			'required' => ['kind', 'seed', 'growth'],
+		];
+	}
+
+	public static function circleGarden(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'owner_uid' => ['type' => 'string', 'example' => '42'],
+				'level' => ['type' => 'number', 'example' => 3],
+				'total_minutes' => ['type' => 'number', 'example' => 480],
+				'elements' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/GardenElement'],
+				],
+				'animated' => ['type' => 'boolean', 'example' => true],
+				'updated_at' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => [
+				'owner_uid',
+				'level',
+				'total_minutes',
+				'elements',
+				'animated',
+				'updated_at',
+			],
+		];
+	}
+
+	public static function kudos(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'string', 'example' => 'a1b2c3d4'],
+				'from_uid' => ['type' => 'string', 'example' => '42'],
+				'to_uid' => ['type' => 'string', 'example' => '43'],
+				'context_type' => [
+					'type' => 'string',
+					'enum' => ['quest', 'trail', 'journey', 'expedition', 'trailmark'],
+					'example' => 'trail',
+				],
+				'context_ref' => [
+					'type' => 'string',
+					'nullable' => true,
+					'example' => 'forest_wonder',
+				],
+				'phrase' => [
+					'type' => 'string',
+					'enum' => [
+						'nice_find',
+						'go_you',
+						'keep_going',
+						'inspiring',
+						'welcome_back',
+						'trailblazer',
+					],
+					'example' => 'nice_find',
+				],
+				'created_at' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => ['id', 'from_uid', 'to_uid', 'context_type', 'phrase', 'created_at'],
+		];
+	}
+
+	public static function kudosSendJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'context_type' => [
+					'type' => 'string',
+					'enum' => ['quest', 'trail', 'journey', 'expedition', 'trailmark'],
+					'example' => 'trail',
+				],
+				'context_ref' => ['type' => 'string', 'example' => 'forest_wonder'],
+				'phrase' => [
+					'type' => 'string',
+					'enum' => [
+						'nice_find',
+						'go_you',
+						'keep_going',
+						'inspiring',
+						'welcome_back',
+						'trailblazer',
+					],
+					'example' => 'nice_find',
+				],
+			],
+			'required' => ['context_type', 'phrase'],
+		];
+	}
+
+	public static function kudosResult(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'kudos' => ['$ref' => '#/components/schemas/Kudos'],
+				'notification' => ['$ref' => '#/components/schemas/Notification'],
+			],
+			'required' => ['kudos', 'notification'],
+		];
+	}
+
+	public static function trailmarkGeo(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'lat' => ['type' => 'number', 'example' => 41.8781],
+				'lng' => ['type' => 'number', 'example' => -87.6298],
+				'place_label' => [
+					'type' => 'string',
+					'nullable' => true,
+					'example' => 'Lincoln Park',
+				],
+			],
+			'required' => ['lat', 'lng'],
+		];
+	}
+
+	public static function trailmark(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'string', 'example' => 'a1b2c3d4e5f6'],
+				'author_uid' => ['type' => 'string', 'example' => '42'],
+				'author_username' => ['type' => 'string', 'example' => 'earthfan'],
+				'geo' => ['$ref' => '#/components/schemas/TrailmarkGeo'],
+				'note' => ['type' => 'string', 'example' => 'Look up — the oaks here are ancient.'],
+				'created_at' => ['type' => 'string', 'format' => 'date-time'],
+				'thanked_by_me' => ['type' => 'boolean', 'example' => false],
+				'thanks_for_author' => ['type' => 'number', 'nullable' => true, 'example' => 3],
+			],
+			'required' => ['id', 'author_uid', 'author_username', 'geo', 'note', 'created_at'],
+		];
+	}
+
+	public static function trailmarks(): array
+	{
+		return [
+			'type' => 'array',
+			'items' => ['$ref' => '#/components/schemas/Trailmark'],
+		];
+	}
+
+	public static function trailmarkCreateJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'geo' => ['$ref' => '#/components/schemas/TrailmarkGeo'],
+				'note' => [
+					'type' => 'string',
+					'maxLength' => 240,
+					'example' => 'A calm spot to breathe.',
+				],
+			],
+			'required' => ['geo', 'note'],
+		];
+	}
+
+	public static function thankResult(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => ['thanked' => ['type' => 'boolean', 'example' => true]],
+			'required' => ['thanked'],
+		];
+	}
+
+	#endregion
+
 	public static function getAllSchemas(): array
 	{
 		return [
+			// Trails, Circles & Trailmarks
+			'Trail' => self::trail(),
+			'TrailStep' => self::trailStep(),
+			'TrailsList' => self::trailsList(),
+			'NatureMinutes' => self::natureMinutes(),
+			'NatureMinutesSource' => self::natureMinutesSource(),
+			'NatureMinutesCreateJson' => self::natureMinutesCreateJson(),
+			'Expedition' => self::expedition(),
+			'ExpeditionContributor' => self::expeditionContributor(),
+			'ExpeditionCreateJson' => self::expeditionCreateJson(),
+			'ExpeditionContributeJson' => self::expeditionContributeJson(),
+			'ContributeResult' => self::contributeResult(),
+			'CircleGarden' => self::circleGarden(),
+			'GardenElement' => self::gardenElement(),
+			'Kudos' => self::kudos(),
+			'KudosSendJson' => self::kudosSendJson(),
+			'KudosResult' => self::kudosResult(),
+			'Trailmark' => self::trailmark(),
+			'TrailmarkGeo' => self::trailmarkGeo(),
+			'Trailmarks' => self::trailmarks(),
+			'TrailmarkCreateJson' => self::trailmarkCreateJson(),
+			'ThankResult' => self::thankResult(),
+
 			// Error schemas
 			'ErrorResponse' => self::$errorResponse,
 			'ConflictError' => self::$conflictError,

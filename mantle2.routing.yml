@@ -6806,3 +6806,437 @@ mantle2.admin.users.refund:
   methods: [POST]
 
 # #endregion
+
+#region Trails Catalog
+
+mantle2.users.trails.list:
+  path: '/v2/users/trails'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::trails'
+    _title: 'List Curiosity Trails'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Trails
+    description: Lists the available curiosity trails (premium and seasonal trails are flagged).
+    schema/200: '#TrailsList'
+    schema/401: Unauthorized
+  methods: [GET]
+
+mantle2.users.trails.get:
+  path: '/v2/users/trails/{id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getTrail'
+    _title: 'Get Curiosity Trail'
+  requirements:
+    _access: 'TRUE'
+    id: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Trails
+    description: Retrieves a single trail. Premium and seasonal trails require a paid rank.
+    schema/200: '#Trail'
+    schema/401: Unauthorized
+    schema/402: Premium or seasonal trail requires a paid rank
+    schema/404: Trail not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+#endregion
+
+#region Nature Minutes, Expeditions & Kudos - Current
+
+mantle2.users.current.nature_minutes.get:
+  path: '/v2/users/current/nature-minutes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getNatureMinutes'
+    _title: 'Get Nature Minutes by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Trails,Users
+    description: Retrieves the current user's weekly nature-minutes ring.
+    schema/200: '#NatureMinutes'
+    schema/401: Unauthorized
+  methods: [GET]
+
+mantle2.users.current.nature_minutes.post:
+  path: '/v2/users/current/nature-minutes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::creditNatureMinutes'
+    _title: 'Credit Nature Minutes by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Trails,Users
+    description: Credits nature minutes to the current user's weekly ring.
+    schema/200: '#NatureMinutes'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    body/schema: '#NatureMinutesCreateJson'
+  methods: [POST]
+
+mantle2.users.current.expedition.start:
+  path: '/v2/users/current/expedition'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::startExpedition'
+    _title: 'Start Circle Expedition'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Circles
+    description: Starts a shared expedition for the current user's circle. Larger goals require a paid rank.
+    schema/201: '#Expedition'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/402: Expedition goal too large for rank
+    body/schema: '#ExpeditionCreateJson'
+  methods: [POST]
+
+mantle2.users.current.expedition.get:
+  path: '/v2/users/current/expedition'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getExpedition'
+    _title: 'Get Circle Expedition by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Circles
+    description: Retrieves the current user's active circle expedition.
+    schema/200: '#Expedition'
+    schema/401: Unauthorized
+    schema/404: No active expedition
+  methods: [GET]
+
+mantle2.users.current.garden:
+  path: '/v2/users/current/garden'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getGarden'
+    _title: 'Get Circle Garden by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Circles
+    description: Retrieves the current user's shared circle garden projection.
+    schema/200: '#CircleGarden'
+    schema/401: Unauthorized
+  methods: [GET]
+
+#endregion
+
+#region Nature Minutes, Expeditions & Kudos - By ID
+
+mantle2.users.id.nature_minutes.get:
+  path: '/v2/users/{id}/nature-minutes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getNatureMinutes'
+    _title: 'Get Nature Minutes by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Trails,Users
+    description: Retrieves a user's weekly nature-minutes ring (self or admin only).
+    schema/200: '#NatureMinutes'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.nature_minutes.post:
+  path: '/v2/users/{id}/nature-minutes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::creditNatureMinutes'
+    _title: 'Credit Nature Minutes by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Trails,Users
+    description: Credits nature minutes to a user's weekly ring (self or admin only).
+    schema/200: '#NatureMinutes'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    body/schema: '#NatureMinutesCreateJson'
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.expedition.get:
+  path: '/v2/users/{id}/expedition'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getExpedition'
+    _title: 'Get Circle Expedition by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Circles
+    description: Retrieves a circle owner's active expedition (owner or circle member only).
+    schema/200: '#Expedition'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: No active expedition
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.expedition.contribute:
+  path: '/v2/users/{id}/expedition/contribute'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::contribute'
+    _title: 'Contribute to Circle Expedition by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Circles
+    description: Credits an outdoor action to a circle owner's expedition (owner or circle member only).
+    schema/200: '#ContributeResult'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: No active expedition
+    schema/409: Expedition is closed
+    body/schema: '#ExpeditionContributeJson'
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.garden:
+  path: '/v2/users/{id}/garden'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getGarden'
+    _title: 'Get Circle Garden by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Circles
+    description: Retrieves a circle owner's shared garden projection (owner or circle member only).
+    schema/200: '#CircleGarden'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
+mantle2.users.id.kudos:
+  path: '/v2/users/{id}/kudos'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::sendKudos'
+    _title: 'Send Kudos to User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Circles
+    description: Sends counter-free kudos to a friend or circle member; fires a warm private notification and never returns a tally.
+    schema/201: '#KudosResult'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/403: Not a friend or circle member
+    schema/404: Recipient not found
+    schema/409: Already sent for this context or rate limited
+    body/schema: '#KudosSendJson'
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
+#endregion
+
+#region Nature Minutes, Expeditions & Kudos - By Username
+
+mantle2.users.username.nature_minutes.get:
+  path: '/v2/users/{username}/nature-minutes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getNatureMinutes'
+    _title: 'Get Nature Minutes by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Trails,Users
+    description: Retrieves a user's weekly nature-minutes ring by username (self or admin only).
+    schema/200: '#NatureMinutes'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: User not found
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.nature_minutes.post:
+  path: '/v2/users/{username}/nature-minutes'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::creditNatureMinutes'
+    _title: 'Credit Nature Minutes by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Trails,Users
+    description: Credits nature minutes to a user's weekly ring by username (self or admin only).
+    schema/200: '#NatureMinutes'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    body/schema: '#NatureMinutesCreateJson'
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.expedition.get:
+  path: '/v2/users/{username}/expedition'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getExpedition'
+    _title: 'Get Circle Expedition by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Circles
+    description: Retrieves a circle owner's active expedition by username (owner or circle member only).
+    schema/200: '#Expedition'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: No active expedition
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.expedition.contribute:
+  path: '/v2/users/{username}/expedition/contribute'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::contribute'
+    _title: 'Contribute to Circle Expedition by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Circles
+    description: Credits an outdoor action to a circle owner's expedition by username (owner or circle member only).
+    schema/200: '#ContributeResult'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: No active expedition
+    schema/409: Expedition is closed
+    body/schema: '#ExpeditionContributeJson'
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.garden:
+  path: '/v2/users/{username}/garden'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getGarden'
+    _title: 'Get Circle Garden by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Circles
+    description: Retrieves a circle owner's shared garden projection by username (owner or circle member only).
+    schema/200: '#CircleGarden'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
+mantle2.users.username.kudos:
+  path: '/v2/users/{username}/kudos'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::sendKudos'
+    _title: 'Send Kudos to User by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Circles
+    description: Sends counter-free kudos to a friend or circle member by username; fires a warm private notification and never returns a tally.
+    schema/201: '#KudosResult'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/403: Not a friend or circle member
+    schema/404: Recipient not found
+    schema/409: Already sent for this context or rate limited
+    body/schema: '#KudosSendJson'
+    parameters:
+      username:
+        type: string
+  methods: [POST]
+
+#endregion
+
+#region Trailmarks
+
+mantle2.trailmarks.list:
+  path: '/v2/trailmarks'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\TrailmarksController::nearby'
+    _title: 'List Nearby Trailmarks'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Trailmarks
+    description: Lists trailmarks near a location (radius in meters, capped ~2km).
+    schema/200: '#Trailmarks'
+    schema/400: Valid lat and lng are required
+    schema/401: Unauthorized
+  methods: [GET]
+
+mantle2.trailmarks.create:
+  path: '/v2/trailmarks'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\TrailmarksController::createTrailmark'
+    _title: 'Create Trailmark'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Trailmarks
+    description: Leaves a short, positive, censored note at a place.
+    schema/201: '#Trailmark'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    body/schema: '#TrailmarkCreateJson'
+  methods: [POST]
+
+mantle2.trailmarks.thank:
+  path: '/v2/trailmarks/{id}/thank'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\TrailmarksController::thank'
+    _title: 'Thank a Trailmark'
+  requirements:
+    _access: 'TRUE'
+    id: '[A-Za-z0-9]+'
+  options:
+    tags: Trailmarks
+    description: Privately thanks a trailmark's author (cloud holds the one-thank gate and notifies the author).
+    schema/200: '#ThankResult'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/404: Trailmark not found
+    schema/409: Already thanked
+    parameters:
+      id:
+        type: string
+  methods: [POST]
+
+#endregion
