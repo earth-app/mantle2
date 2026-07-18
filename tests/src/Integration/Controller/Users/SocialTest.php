@@ -77,6 +77,45 @@ class SocialTest extends IntegrationTestBase
 		return \Drupal\user\Entity\User::load($user->id());
 	}
 
+	private function user(): UserInterface
+	{
+		return $this->createUser();
+	}
+
+	private function proUser(): UserInterface
+	{
+		return $this->createUser([
+			'field_account_type' => (string) array_search(
+				AccountType::PRO,
+				AccountType::cases(),
+				true,
+			),
+		]);
+	}
+
+	private function addToCircle(UserInterface $owner, UserInterface $member): void
+	{
+		$owner->set('field_circle', json_encode([$member->id()]));
+		$owner->save();
+	}
+
+	private function expeditionBody(array $overrides = []): string
+	{
+		return json_encode(
+			array_merge(
+				['goal' => 'nature_minutes', 'target' => 600, 'ends_at' => '2026-12-31T00:00:00Z'],
+				$overrides,
+			),
+		);
+	}
+
+	private function kudosBody(array $overrides = []): string
+	{
+		return json_encode(
+			array_merge(['context_type' => 'trail', 'phrase' => 'nice_find'], $overrides),
+		);
+	}
+
 	// #region User Friends
 
 	#[Test]
@@ -1226,6 +1265,496 @@ class SocialTest extends IntegrationTestBase
 			(string) $other->id(),
 		);
 		$this->assertSame(Response::HTTP_FORBIDDEN, $crossSet->getStatusCode());
+	}
+
+	// #endregion
+
+	// #region Expeditions
+
+	#[Test]
+	#[TestDox('POST /v2/users/current/expedition rejects anon and validates goal/ends_at/target')]
+	#[Group('mantle2/circles')]
+	public function startValidation(): void
+	{
+		$anon = $this->controller()->startExpedition(
+			$this->request('POST', '/v2/users/current/expedition', [], $this->expeditionBody()),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$user = $this->user();
+
+		$badGoal = $this->controller()->startExpedition(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/expedition',
+				[],
+				$this->expeditionBody(['goal' => 'nope']),
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badGoal->getStatusCode());
+		$this->assertSame('Invalid goal', $this->decode($badGoal)['message']);
+
+		$noEnds = $this->controller()->startExpedition(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/expedition',
+				[],
+				json_encode(['goal' => 'quests', 'target' => 5]),
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $noEnds->getStatusCode());
+
+		$badTarget = $this->controller()->startExpedition(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/expedition',
+				[],
+				$this->expeditionBody(['target' => 0]),
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badTarget->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('Expedition target gates on rank: free 402s an oversized goal, pro does not')]
+	#[Group('mantle2/circles')]
+	public function startGatesOnRank(): void
+	{
+		// free cap = getMaxCircleCount(25) * 120 = 3000
+		$free = $this->user();
+		$gated = $this->controller()->startExpedition(
+			$this->authRequest(
+				$free,
+				'POST',
+				'/v2/users/current/expedition',
+				[],
+				$this->expeditionBody(['target' => 100000]),
+			),
+		);
+		$this->assertSame(Response::HTTP_PAYMENT_REQUIRED, $gated->getStatusCode());
+
+		// pro cap = 500 * 120 = 60000; the same goal is allowed (cloud is dead so body is empty, 201)
+		$pro = $this->proUser();
+		$ok = $this->controller()->startExpedition(
+			$this->authRequest(
+				$pro,
+				'POST',
+				'/v2/users/current/expedition',
+				[],
+				$this->expeditionBody(['target' => 5000, 'title' => 'Big Trek']),
+			),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $ok->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET expedition rejects anon and enforces owner/circle-member/admin for {id}')]
+	#[Group('mantle2/circles')]
+	public function getExpeditionAuth(): void
+	{
+		$anon = $this->controller()->getExpedition(
+			$this->request('GET', '/v2/users/current/expedition'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$owner = $this->user();
+		// current: passes auth, degraded cloud -> 404
+		$own = $this->controller()->getExpedition(
+			$this->authRequest($owner, 'GET', '/v2/users/current/expedition'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $own->getStatusCode());
+
+		// a stranger cannot view the owner's expedition
+		$stranger = $this->user();
+		$forbidden = $this->controller()->getExpedition(
+			$this->authRequest($stranger, 'GET', '/v2/users/' . $owner->id() . '/expedition'),
+			(string) $owner->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+
+		// an admin bypasses the circle check (reaches cloud -> 404)
+		$admin = $this->admin();
+		$asAdmin = $this->controller()->getExpedition(
+			$this->authRequest($admin, 'GET', '/v2/users/' . $owner->id() . '/expedition'),
+			(string) $owner->id(),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $asAdmin->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('A circle member may view the owner expedition (passes auth, reaches cloud)')]
+	#[Group('mantle2/circles')]
+	public function circleMemberMayView(): void
+	{
+		$owner = $this->user();
+		$member = $this->user();
+		$this->addToCircle($owner, $member);
+
+		$view = $this->controller()->getExpedition(
+			$this->authRequest($member, 'GET', '/v2/users/' . $owner->id() . '/expedition'),
+			(string) $owner->id(),
+		);
+		// not forbidden — the member cleared the circle check; cloud is dead so 404
+		$this->assertSame(Response::HTTP_NOT_FOUND, $view->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('The {username} owner variant enforces the same owner/circle-member gate as {id}')]
+	#[Group('mantle2/circles')]
+	public function getExpeditionByUsername(): void
+	{
+		$owner = $this->user();
+		$ownerHandle = '@' . $owner->getAccountName();
+
+		// a stranger cannot view the owner's expedition by handle
+		$stranger = $this->user();
+		$forbidden = $this->controller()->getExpedition(
+			$this->authRequest($stranger, 'GET', '/v2/users/' . $ownerHandle . '/expedition'),
+			null,
+			$ownerHandle,
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+
+		// a circle member clears the gate by handle (cloud dead -> 404)
+		$member = $this->user();
+		$this->addToCircle($owner, $member);
+		$view = $this->controller()->getExpedition(
+			$this->authRequest($member, 'GET', '/v2/users/' . $ownerHandle . '/expedition'),
+			null,
+			$ownerHandle,
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $view->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST contribute rejects anon, non-members, and a bad amount')]
+	#[Group('mantle2/circles')]
+	public function contributeAuth(): void
+	{
+		$owner = $this->user();
+
+		$anon = $this->controller()->contribute(
+			$this->request(
+				'POST',
+				'/v2/users/' . $owner->id() . '/expedition/contribute',
+				[],
+				json_encode(['amount' => 30]),
+			),
+			(string) $owner->id(),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$stranger = $this->user();
+		$forbidden = $this->controller()->contribute(
+			$this->authRequest(
+				$stranger,
+				'POST',
+				'/v2/users/' . $owner->id() . '/expedition/contribute',
+				[],
+				json_encode(['amount' => 30]),
+			),
+			(string) $owner->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+
+		// the owner may contribute to their own expedition; a bad amount 400s before cloud
+		$badAmount = $this->controller()->contribute(
+			$this->authRequest(
+				$owner,
+				'POST',
+				'/v2/users/' . $owner->id() . '/expedition/contribute',
+				[],
+				json_encode(['amount' => -1]),
+			),
+			(string) $owner->id(),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badAmount->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST contribute by {username} resolves the owner and enforces membership')]
+	#[Group('mantle2/circles')]
+	public function contributeByUsername(): void
+	{
+		$owner = $this->user();
+		$ownerHandle = '@' . $owner->getAccountName();
+
+		$stranger = $this->user();
+		$forbidden = $this->controller()->contribute(
+			$this->authRequest(
+				$stranger,
+				'POST',
+				'/v2/users/' . $ownerHandle . '/expedition/contribute',
+				[],
+				json_encode(['amount' => 30]),
+			),
+			null,
+			$ownerHandle,
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+
+		// owner contributes by their own handle; a bad amount 400s before cloud
+		$badAmount = $this->controller()->contribute(
+			$this->authRequest(
+				$owner,
+				'POST',
+				'/v2/users/' . $ownerHandle . '/expedition/contribute',
+				[],
+				json_encode(['amount' => 0]),
+			),
+			null,
+			$ownerHandle,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badAmount->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET garden rejects anon and enforces circle membership for {id}')]
+	#[Group('mantle2/circles')]
+	public function gardenAuth(): void
+	{
+		$anon = $this->controller()->getGarden($this->request('GET', '/v2/users/current/garden'));
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$owner = $this->user();
+		$own = $this->controller()->getGarden(
+			$this->authRequest($owner, 'GET', '/v2/users/current/garden'),
+		);
+		$this->assertSame(Response::HTTP_OK, $own->getStatusCode());
+
+		$stranger = $this->user();
+		$forbidden = $this->controller()->getGarden(
+			$this->authRequest($stranger, 'GET', '/v2/users/' . $owner->id() . '/garden'),
+			(string) $owner->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
+	// #endregion
+
+	// #region Kudos
+
+	#[Test]
+	#[TestDox('POST /v2/users/{id}/kudos rejects anon, self, and non-friends')]
+	#[Group('mantle2/kudos')]
+	public function kudosGuards(): void
+	{
+		$recipient = $this->user();
+
+		$anon = $this->controller()->sendKudos(
+			$this->request(
+				'POST',
+				'/v2/users/' . $recipient->id() . '/kudos',
+				[],
+				$this->kudosBody(),
+			),
+			(string) $recipient->id(),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$sender = $this->user();
+		$self = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $sender->id() . '/kudos',
+				[],
+				$this->kudosBody(),
+			),
+			(string) $sender->id(),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $self->getStatusCode());
+
+		// not a friend / not in circle
+		$notFriend = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $recipient->id() . '/kudos',
+				[],
+				$this->kudosBody(),
+			),
+			(string) $recipient->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $notFriend->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('Kudos validates context_type and phrase against the fixed sets')]
+	#[Group('mantle2/kudos')]
+	public function kudosValidation(): void
+	{
+		$sender = $this->user();
+		$recipient = $this->user();
+		$this->makeFriends($sender, $recipient);
+
+		$badContext = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $recipient->id() . '/kudos',
+				[],
+				$this->kudosBody(['context_type' => 'gossip']),
+			),
+			(string) $recipient->id(),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badContext->getStatusCode());
+		$this->assertSame('Invalid context_type', $this->decode($badContext)['message']);
+
+		$badPhrase = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $recipient->id() . '/kudos',
+				[],
+				$this->kudosBody(['phrase' => 'insult']),
+			),
+			(string) $recipient->id(),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badPhrase->getStatusCode());
+		$this->assertSame('Invalid phrase', $this->decode($badPhrase)['message']);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'Kudos sends a private notification, never a tally, and 409s a repeat for the same context',
+		),
+	]
+	#[Group('mantle2/kudos')]
+	public function kudosSendsThenDedupes(): void
+	{
+		$sender = $this->user();
+		$recipient = $this->user();
+		$this->makeFriends($sender, $recipient);
+
+		$first = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $recipient->id() . '/kudos',
+				[],
+				$this->kudosBody(['context_type' => 'trail', 'context_ref' => 'forest_wonder']),
+			),
+			(string) $recipient->id(),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $first->getStatusCode());
+		$body = $this->decode($first);
+		$this->assertArrayHasKey('kudos', $body);
+		$this->assertArrayHasKey('notification', $body);
+		$this->assertSame('trail', $body['kudos']['context_type']);
+		$this->assertSame('nice_find', $body['kudos']['phrase']);
+		$this->assertSame(GeneralHelper::formatId($recipient->id()), $body['kudos']['to_uid']);
+		$this->assertSame(GeneralHelper::formatId($sender->id()), $body['kudos']['from_uid']);
+		// never a tally
+		$this->assertArrayNotHasKey('count', $body);
+		$this->assertArrayNotHasKey('tally', $body);
+		$this->assertArrayNotHasKey('total', $body);
+		// the notification source is the sender handle
+		$this->assertSame('@' . $sender->getAccountName(), $body['notification']['source']);
+
+		$repeat = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $recipient->id() . '/kudos',
+				[],
+				$this->kudosBody(['context_type' => 'trail', 'context_ref' => 'forest_wonder']),
+			),
+			(string) $recipient->id(),
+		);
+		$this->assertSame(Response::HTTP_CONFLICT, $repeat->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('Kudos is rate limited via the challenge-throttle pattern')]
+	#[Group('mantle2/kudos')]
+	public function kudosThrottled(): void
+	{
+		$sender = $this->user();
+		$recipient = $this->user();
+		$this->makeFriends($sender, $recipient);
+
+		// seed the hourly throttle at the cap
+		RedisHelper::set('kudos:throttle:' . $sender->id(), ['count' => 30], 3600);
+
+		$throttled = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $recipient->id() . '/kudos',
+				[],
+				$this->kudosBody(['context_ref' => 'unique-ref']),
+			),
+			(string) $recipient->id(),
+		);
+		$this->assertSame(Response::HTTP_CONFLICT, $throttled->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('Kudos is allowed to a circle member even when not an added friend')]
+	#[Group('mantle2/kudos')]
+	public function kudosToCircleMember(): void
+	{
+		$sender = $this->user();
+		$member = $this->user();
+		$this->addToCircle($sender, $member);
+
+		$ok = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $member->id() . '/kudos',
+				[],
+				$this->kudosBody(['context_type' => 'expedition']),
+			),
+			(string) $member->id(),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $ok->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('Kudos by {username} resolves the recipient and sends to a friend by handle')]
+	#[Group('mantle2/kudos')]
+	public function kudosByUsername(): void
+	{
+		$sender = $this->user();
+		$recipient = $this->user();
+		$this->makeFriends($sender, $recipient);
+		$recipientHandle = '@' . $recipient->getAccountName();
+
+		$ok = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $recipientHandle . '/kudos',
+				[],
+				$this->kudosBody(['context_type' => 'journey', 'context_ref' => 'by_handle']),
+			),
+			null,
+			$recipientHandle,
+		);
+		$this->assertSame(Response::HTTP_CREATED, $ok->getStatusCode());
+		$body = $this->decode($ok);
+		$this->assertSame(GeneralHelper::formatId($recipient->id()), $body['kudos']['to_uid']);
+
+		// self-kudos by handle is still rejected
+		$senderHandle = '@' . $sender->getAccountName();
+		$self = $this->controller()->sendKudos(
+			$this->authRequest(
+				$sender,
+				'POST',
+				'/v2/users/' . $senderHandle . '/kudos',
+				[],
+				$this->kudosBody(),
+			),
+			null,
+			$senderHandle,
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $self->getStatusCode());
 	}
 
 	// #endregion
