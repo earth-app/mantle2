@@ -364,4 +364,252 @@ class UsersCloudTest extends E2ETestBase
 	}
 
 	// #endregion
+
+	// #region trails
+
+	#[Test]
+	#[
+		TestDox(
+			'GET /v2/users/trails lists trails and GET /v2/users/trails/{id} returns a full trail from cloud',
+		),
+	]
+	#[Group('mantle2/trails')]
+	public function listAndGet(): void
+	{
+		$user = $this->createUser();
+
+		$list = $this->controller()->trails($this->authRequest($user, 'GET', '/v2/users/trails'));
+		$this->assertSame(Response::HTTP_OK, $list->getStatusCode());
+		$trails = $this->decode($list);
+		$this->assertNotEmpty($trails, 'cloud should return a non-empty trail catalog');
+
+		$first = $trails[0];
+		$this->assertArrayHasKey('id', $first);
+		$this->assertArrayHasKey('steps', $first);
+
+		$one = $this->controller()->getTrail(
+			$this->authRequest($user, 'GET', '/v2/users/trails/' . $first['id']),
+			$first['id'],
+		);
+		$this->assertSame(Response::HTTP_OK, $one->getStatusCode());
+		$body = $this->decode($one);
+		$this->assertSame($first['id'], $body['id']);
+		$this->assertArrayHasKey('theme', $body);
+		$this->assertArrayHasKey('rarity', $body);
+		$this->assertNotEmpty($body['steps']);
+		// each step carries the underlying quest action + curiosity clue + awe reveal
+		$this->assertArrayHasKey('step', $body['steps'][0]);
+		$this->assertArrayHasKey('clue', $body['steps'][0]);
+		$this->assertArrayHasKey('reveal', $body['steps'][0]);
+	}
+
+	#[Test]
+	#[TestDox('A premium or seasonal trail is paywalled (402) for a free rank')]
+	#[Group('mantle2/trails')]
+	public function premiumGate(): void
+	{
+		$user = $this->createUser();
+
+		$list = $this->controller()->trails($this->authRequest($user, 'GET', '/v2/users/trails'));
+		$trails = $this->decode($list);
+
+		$locked = null;
+		foreach ($trails as $trail) {
+			if (($trail['premium'] ?? false) || ($trail['seasonal'] ?? false)) {
+				$locked = $trail;
+				break;
+			}
+		}
+
+		if ($locked === null) {
+			$this->markTestSkipped('No premium/seasonal trail in the catalog to gate');
+		}
+
+		$res = $this->controller()->getTrail(
+			$this->authRequest($user, 'GET', '/v2/users/trails/' . $locked['id']),
+			$locked['id'],
+		);
+		$this->assertSame(Response::HTTP_PAYMENT_REQUIRED, $res->getStatusCode());
+	}
+
+	// #endregion
+
+	// #region nature minutes
+
+	#[Test]
+	#[TestDox('POST then GET /v2/users/current/nature-minutes credits and reads the weekly ring')]
+	#[Group('mantle2/trails')]
+	public function creditAndReadNatureMinutes(): void
+	{
+		$user = $this->createUser();
+
+		$credit = $this->controller()->creditNatureMinutes(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/nature-minutes',
+				[],
+				json_encode(['minutes' => 15, 'kind' => 'trail_step', 'ref_id' => 'e2e_trail']),
+			),
+		);
+		$this->assertSame(Response::HTTP_OK, $credit->getStatusCode());
+		$body = $this->decode($credit);
+		$this->assertArrayHasKey('week', $body);
+		$this->assertSame(120, (int) $body['target']);
+		$this->assertGreaterThanOrEqual(15, (float) $body['minutes']);
+		$this->assertNotEmpty($body['sources']);
+
+		$read = $this->controller()->getNatureMinutes(
+			$this->authRequest($user, 'GET', '/v2/users/current/nature-minutes'),
+		);
+		$this->assertSame(Response::HTTP_OK, $read->getStatusCode());
+		$this->assertSame($body['week'], $this->decode($read)['week']);
+	}
+
+	#[Test]
+	#[TestDox('The {username} variant resolves the same self ring as /current for nature-minutes')]
+	#[Group('mantle2/trails')]
+	public function creditAndReadNatureMinutesByUsername(): void
+	{
+		$user = $this->createUser();
+		$handle = '@' . $user->getAccountName();
+
+		$credit = $this->controller()->creditNatureMinutes(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/' . $handle . '/nature-minutes',
+				[],
+				json_encode(['minutes' => 20, 'kind' => 'quest', 'ref_id' => 'e2e_username']),
+			),
+			null,
+			$handle,
+		);
+		$this->assertSame(Response::HTTP_OK, $credit->getStatusCode());
+		$creditBody = $this->decode($credit);
+		$this->assertArrayHasKey('week', $creditBody);
+		$this->assertGreaterThanOrEqual(20, (float) $creditBody['minutes']);
+
+		$read = $this->controller()->getNatureMinutes(
+			$this->authRequest($user, 'GET', '/v2/users/' . $handle . '/nature-minutes'),
+			null,
+			$handle,
+		);
+		$this->assertSame(Response::HTTP_OK, $read->getStatusCode());
+		$this->assertSame($creditBody['week'], $this->decode($read)['week']);
+	}
+
+	// #endregion
+
+	// expeditions/kudos now live in UsersController under /v2/users/*
+	// #region expeditions
+
+	#[Test]
+	#[TestDox('Full expedition lifecycle: start, get, contribute, and garden projection via cloud')]
+	#[Group('mantle2/circles')]
+	public function lifecycle(): void
+	{
+		$owner = $this->createUser();
+
+		$start = $this->controller()->startExpedition(
+			$this->authRequest(
+				$owner,
+				'POST',
+				'/v2/users/current/expedition',
+				[],
+				json_encode([
+					'title' => 'E2E Expedition',
+					'goal' => 'nature_minutes',
+					'target' => 300,
+					'ends_at' => '2030-12-31T00:00:00Z',
+				]),
+			),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $start->getStatusCode());
+		$expedition = $this->decode($start);
+		$this->assertArrayHasKey('id', $expedition);
+		$this->assertSame('nature_minutes', $expedition['goal']);
+		$this->assertSame('active', $expedition['status']);
+		$this->assertArrayHasKey('contributors', $expedition);
+
+		$get = $this->controller()->getExpedition(
+			$this->authRequest($owner, 'GET', '/v2/users/current/expedition'),
+		);
+		$this->assertSame(Response::HTTP_OK, $get->getStatusCode());
+		$this->assertSame($expedition['id'], $this->decode($get)['id']);
+
+		$contribute = $this->controller()->contribute(
+			$this->authRequest(
+				$owner,
+				'POST',
+				'/v2/users/' . $owner->id() . '/expedition/contribute',
+				[],
+				json_encode(['amount' => 60]),
+			),
+			(string) $owner->id(),
+		);
+		$this->assertSame(Response::HTTP_OK, $contribute->getStatusCode());
+		$result = $this->decode($contribute);
+		$this->assertArrayHasKey('expedition', $result);
+		$this->assertArrayHasKey('just_completed', $result);
+		$this->assertGreaterThanOrEqual(60, (float) $result['expedition']['progress']);
+
+		$garden = $this->controller()->getGarden(
+			$this->authRequest($owner, 'GET', '/v2/users/current/garden'),
+		);
+		$this->assertSame(Response::HTTP_OK, $garden->getStatusCode());
+		$gardenBody = $this->decode($garden);
+		$this->assertArrayHasKey('elements', $gardenBody);
+		$this->assertArrayHasKey('animated', $gardenBody);
+		$this->assertArrayHasKey('total_minutes', $gardenBody);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'The {username} owner variant reads the same expedition + garden as the owner /current view',
+		),
+	]
+	#[Group('mantle2/circles')]
+	public function ownerByUsername(): void
+	{
+		$owner = $this->createUser();
+		$handle = '@' . $owner->getAccountName();
+
+		$start = $this->controller()->startExpedition(
+			$this->authRequest(
+				$owner,
+				'POST',
+				'/v2/users/current/expedition',
+				[],
+				json_encode([
+					'title' => 'Username Expedition',
+					'goal' => 'trail_steps',
+					'target' => 300,
+					'ends_at' => '2030-12-31T00:00:00Z',
+				]),
+			),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $start->getStatusCode());
+		$expeditionId = $this->decode($start)['id'];
+
+		// the owner may read their own expedition via their username handle
+		$get = $this->controller()->getExpedition(
+			$this->authRequest($owner, 'GET', '/v2/users/' . $handle . '/expedition'),
+			null,
+			$handle,
+		);
+		$this->assertSame(Response::HTTP_OK, $get->getStatusCode());
+		$this->assertSame($expeditionId, $this->decode($get)['id']);
+
+		$garden = $this->controller()->getGarden(
+			$this->authRequest($owner, 'GET', '/v2/users/' . $handle . '/garden'),
+			null,
+			$handle,
+		);
+		$this->assertSame(Response::HTTP_OK, $garden->getStatusCode());
+		$this->assertArrayHasKey('elements', $this->decode($garden));
+	}
+
+	// #endregion
 }
