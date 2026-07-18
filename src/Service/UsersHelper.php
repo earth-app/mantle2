@@ -5002,4 +5002,95 @@ class UsersHelper
 	}
 
 	#endregion
+
+	#region Trails
+
+	// accepted nature-minute credit sources (anything else collapses to manual)
+	public const NATURE_MINUTE_KINDS = ['trail_step', 'quest', 'healthkit', 'manual'];
+
+	// trails come from stored KV so the default timeout is plenty
+	public const TRAILS_CLOUD_TIMEOUT = 15;
+
+	#endregion
+
+	#region Expeditions
+
+	public const EXPEDITION_GOALS = ['nature_minutes', 'trail_steps', 'quests'];
+
+	// per-member weekly nature-minutes target; scales the max expedition target by rank tier
+	public const EXPEDITION_MINUTES_PER_MEMBER = 120;
+
+	// max kudos a sender can send per hour (challenge-throttle pattern)
+	public const KUDOS_HOURLY_LIMIT = 30;
+
+	public const KUDOS_PHRASES = [
+		'nice_find' => 'Nice find!',
+		'go_you' => 'Go you!',
+		'keep_going' => 'Keep going!',
+		'inspiring' => "You're inspiring!",
+		'welcome_back' => 'Welcome back!',
+		'trailblazer' => "You're a trailblazer!",
+	];
+
+	public const KUDOS_CONTEXTS = ['quest', 'trail', 'journey', 'expedition', 'trailmark'];
+
+	// owner is current user for /current routes, or {id}/{username} for member views; a member view is
+	// only allowed for the owner, a member of the owner's circle, or an admin
+	public static function resolveCircleView(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): UserInterface|JsonResponse {
+		$viewer = self::findByRequest($request);
+		if ($viewer instanceof JsonResponse) {
+			return $viewer;
+		}
+
+		$identifier = $id ?? $username;
+		if ($identifier === null) {
+			return $viewer;
+		}
+
+		$owner = self::findBy($identifier);
+		if (!$owner) {
+			return GeneralHelper::notFound('Circle owner not found');
+		}
+
+		if (
+			$viewer->id() !== $owner->id() &&
+			!self::isInCircle($owner, $viewer) &&
+			!self::isAdmin($viewer)
+		) {
+			return GeneralHelper::forbidden('You are not a member of this circle');
+		}
+
+		return $owner;
+	}
+
+	// seed the owner's circle as expedition members so their contributions can be tracked
+	public static function circleMembers(UserInterface $owner): array
+	{
+		$members = [];
+		foreach (self::getCircle($owner, 1000) as $member) {
+			$members[] = [
+				'uid' => GeneralHelper::formatId($member->id()),
+				'username' => $member->getAccountName(),
+			];
+		}
+		return $members;
+	}
+
+	public static function kudosLink(string $contextType, string $contextRef): string
+	{
+		$base = match ($contextType) {
+			'quest' => '/profile/quests',
+			'trail' => '/trails',
+			'expedition' => '/profile/circle',
+			'trailmark' => '/trailmarks',
+			default => '/profile',
+		};
+		return $contextRef !== '' ? $base . '?ref=' . rawurlencode($contextRef) : $base;
+	}
+
+	#endregion
 }
