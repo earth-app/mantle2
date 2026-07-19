@@ -3736,54 +3736,64 @@ class Mantle2Schemas
 
 	#region Trails, Circles & Trailmarks
 
-	public static function trailStep(): array
-	{
-		return [
-			'type' => 'object',
-			'properties' => [
-				'step' => ['$ref' => '#/components/schemas/QuestStep'],
-				'clue' => [
-					'type' => 'string',
-					'description' => 'The curiosity-gap clue shown before acting',
-					'example' => 'What lives under a rotting log?',
-				],
-				'reveal' => [
-					'type' => 'string',
-					'description' => 'The awe payoff revealed on completion',
-					'example' => 'A single log can host over 100 species.',
-				],
-			],
-			'required' => ['step', 'clue', 'reveal'],
-		];
-	}
-
 	public static function trail(): array
 	{
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => ['type' => 'string', 'example' => 'forest_wonder'],
-				'title' => ['type' => 'string', 'example' => 'Forest Wonder'],
+				'id' => ['type' => 'string', 'example' => 'sit_spot_dawn'],
+				'title' => ['type' => 'string', 'example' => 'Dawn Sit Spot'],
 				'theme' => [
 					'type' => 'string',
-					'enum' => ['nature', 'curiosity', 'creative', 'mixed'],
+					'enum' => ['nature', 'curiosity', 'creative', 'reflective', 'mixed'],
 					'example' => 'nature',
+				],
+				'practice' => [
+					'type' => 'string',
+					'description' =>
+						'The sustained qualitative practice this trail invites (no ordered steps)',
+					'enum' => [
+						'sit_spot',
+						'photo_series',
+						'sound_map',
+						'slow_look',
+						'sky_watch',
+						'wander',
+						'texture',
+						'water_sit',
+					],
+					'example' => 'sit_spot',
 				],
 				'description' => [
 					'type' => 'string',
-					'example' => 'A trail through hidden wonders',
+					'example' => 'Settle into one place and let the morning come to you.',
 				],
-				'icon' => ['type' => 'string', 'example' => 'mdi:tree'],
+				'icon' => ['type' => 'string', 'example' => 'mdi:meditation'],
 				'rarity' => [
 					'type' => 'string',
 					'enum' => ['normal', 'rare', 'amazing', 'green'],
 					'example' => 'rare',
 				],
-				'steps' => [
-					'type' => 'array',
-					'items' => ['$ref' => '#/components/schemas/TrailStep'],
+				'curiosity' => [
+					'type' => 'string',
+					'description' => 'The curiosity-gap line shown before going out',
+					'example' => 'What wakes up first where you live?',
 				],
-				'reward' => ['type' => 'integer', 'example' => 100],
+				'duration' => [
+					'type' => 'integer',
+					'description' => 'Suggested unhurried minutes (gentle, never enforced)',
+					'example' => 12,
+				],
+				'reflectionPrompt' => [
+					'type' => 'string',
+					'description' => 'The reflective question posed on return',
+					'example' => 'What was the smallest thing you noticed?',
+				],
+				'reveal' => [
+					'type' => 'string',
+					'description' => 'The awe payoff revealed on completion',
+					'example' => 'Birds tune their dawn chorus to the fading of the stars.',
+				],
 				'premium' => ['type' => 'boolean', 'example' => false],
 				'seasonal' => ['type' => 'boolean', 'example' => false],
 			],
@@ -3791,11 +3801,14 @@ class Mantle2Schemas
 				'id',
 				'title',
 				'theme',
+				'practice',
 				'description',
 				'icon',
 				'rarity',
-				'steps',
-				'reward',
+				'curiosity',
+				'duration',
+				'reflectionPrompt',
+				'reveal',
 			],
 		];
 	}
@@ -3808,6 +3821,126 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function trailPledge(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'when' => ['type' => 'string', 'example' => 'tomorrow at dawn'],
+				'where' => ['type' => 'string', 'nullable' => true, 'example' => 'the back garden'],
+			],
+			'required' => ['when'],
+		];
+	}
+
+	public static function trailReflection(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'note' => [
+					'type' => 'string',
+					'nullable' => true,
+					'example' => 'The light kept changing.',
+				],
+				'mood' => [
+					'type' => 'string',
+					'nullable' => true,
+					'enum' => ['calm', 'curious', 'awed', 'grateful', 'refreshed', 'unsettled'],
+					'example' => 'awed',
+				],
+				'photoCount' => ['type' => 'integer', 'nullable' => true, 'example' => 3],
+				'sharedToGarden' => ['type' => 'boolean', 'nullable' => true, 'example' => true],
+				'at' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => ['at'],
+		];
+	}
+
+	public static function trailRun(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'trailId' => ['type' => 'string', 'example' => 'sit_spot_dawn'],
+				'pledge' => ['$ref' => '#/components/schemas/TrailPledge'],
+				'startedAt' => ['type' => 'string', 'format' => 'date-time'],
+				'presenceMinutes' => ['type' => 'number', 'example' => 0],
+				'completed' => ['type' => 'boolean', 'example' => false],
+				'reflection' => ['$ref' => '#/components/schemas/TrailReflection'],
+			],
+			'required' => ['trailId', 'startedAt', 'presenceMinutes', 'completed'],
+		];
+	}
+
+	public static function trailJournalEntry(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'trailId' => ['type' => 'string', 'example' => 'sit_spot_dawn'],
+				'title' => ['type' => 'string', 'example' => 'Dawn Sit Spot'],
+				'practice' => ['type' => 'string', 'example' => 'sit_spot'],
+				'presenceMinutes' => ['type' => 'number', 'example' => 14],
+				'reflection' => ['$ref' => '#/components/schemas/TrailReflection'],
+				'completedAt' => ['type' => 'string', 'format' => 'date-time'],
+			],
+			'required' => [
+				'trailId',
+				'title',
+				'practice',
+				'presenceMinutes',
+				'reflection',
+				'completedAt',
+			],
+		];
+	}
+
+	public static function trailJournal(): array
+	{
+		return [
+			'type' => 'array',
+			'items' => ['$ref' => '#/components/schemas/TrailJournalEntry'],
+		];
+	}
+
+	public static function trailCompleteResult(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'run' => ['$ref' => '#/components/schemas/TrailRun'],
+				'entry' => ['$ref' => '#/components/schemas/TrailJournalEntry'],
+				'natureMinutes' => ['$ref' => '#/components/schemas/NatureMinutes'],
+			],
+			'required' => ['run', 'entry'],
+		];
+	}
+
+	public static function trailStartJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'pledge' => ['$ref' => '#/components/schemas/TrailPledge'],
+			],
+		];
+	}
+
+	public static function trailCompleteJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'presenceMinutes' => ['type' => 'number', 'minimum' => 0, 'example' => 14],
+				'reflection' => ['$ref' => '#/components/schemas/TrailReflection'],
+			],
+			'required' => ['presenceMinutes'],
+		];
+	}
+
 	public static function natureMinutesSource(): array
 	{
 		return [
@@ -3815,10 +3948,10 @@ class Mantle2Schemas
 			'properties' => [
 				'kind' => [
 					'type' => 'string',
-					'enum' => ['trail_step', 'quest', 'healthkit', 'manual'],
-					'example' => 'trail_step',
+					'enum' => ['trail', 'quest', 'healthkit', 'manual'],
+					'example' => 'trail',
 				],
-				'ref_id' => ['type' => 'string', 'nullable' => true, 'example' => 'forest_wonder'],
+				'ref_id' => ['type' => 'string', 'nullable' => true, 'example' => 'sit_spot_dawn'],
 				'minutes' => ['type' => 'number', 'example' => 15],
 				'at' => ['type' => 'string', 'format' => 'date-time'],
 			],
@@ -3854,10 +3987,10 @@ class Mantle2Schemas
 				'minutes' => ['type' => 'number', 'minimum' => 0, 'example' => 15],
 				'kind' => [
 					'type' => 'string',
-					'enum' => ['trail_step', 'quest', 'healthkit', 'manual'],
-					'example' => 'trail_step',
+					'enum' => ['trail', 'quest', 'healthkit', 'manual'],
+					'example' => 'trail',
 				],
-				'ref_id' => ['type' => 'string', 'example' => 'forest_wonder'],
+				'ref_id' => ['type' => 'string', 'example' => 'sit_spot_dawn'],
 			],
 			'required' => ['minutes'],
 		];
@@ -3891,7 +4024,7 @@ class Mantle2Schemas
 				'title' => ['type' => 'string', 'example' => 'Circle Expedition'],
 				'goal' => [
 					'type' => 'string',
-					'enum' => ['nature_minutes', 'trail_steps', 'quests'],
+					'enum' => ['nature_minutes', 'trails', 'quests'],
 					'example' => 'nature_minutes',
 				],
 				'target' => ['type' => 'number', 'example' => 600],
@@ -3932,7 +4065,7 @@ class Mantle2Schemas
 				'title' => ['type' => 'string', 'example' => 'Weekend Circle Expedition'],
 				'goal' => [
 					'type' => 'string',
-					'enum' => ['nature_minutes', 'trail_steps', 'quests'],
+					'enum' => ['nature_minutes', 'trails', 'quests'],
 					'example' => 'nature_minutes',
 				],
 				'target' => ['type' => 'number', 'minimum' => 1, 'example' => 600],
@@ -4113,10 +4246,11 @@ class Mantle2Schemas
 				'author_uid' => ['type' => 'string', 'example' => '42'],
 				'author_username' => ['type' => 'string', 'example' => 'earthfan'],
 				'geo' => ['$ref' => '#/components/schemas/TrailmarkGeo'],
-				'note' => ['type' => 'string', 'example' => 'Look up — the oaks here are ancient.'],
+				'note' => ['type' => 'string', 'example' => 'Look up - the oaks here are ancient.'],
 				'created_at' => ['type' => 'string', 'format' => 'date-time'],
 				'thanked_by_me' => ['type' => 'boolean', 'example' => false],
 				'thanks_for_author' => ['type' => 'number', 'nullable' => true, 'example' => 3],
+				'prompt_id' => ['type' => 'string', 'nullable' => true, 'example' => '482'],
 			],
 			'required' => ['id', 'author_uid', 'author_username', 'geo', 'note', 'created_at'],
 		];
@@ -4142,6 +4276,12 @@ class Mantle2Schemas
 					'maxLength' => 240,
 					'example' => 'A calm spot to breathe.',
 				],
+				'prompt_id' => [
+					'type' => 'string',
+					'nullable' => true,
+					'description' => 'Optional: also surface this note under a daily prompt',
+					'example' => '482',
+				],
 			],
 			'required' => ['geo', 'note'],
 		];
@@ -4163,8 +4303,15 @@ class Mantle2Schemas
 		return [
 			// Trails, Circles & Trailmarks
 			'Trail' => self::trail(),
-			'TrailStep' => self::trailStep(),
 			'TrailsList' => self::trailsList(),
+			'TrailPledge' => self::trailPledge(),
+			'TrailReflection' => self::trailReflection(),
+			'TrailRun' => self::trailRun(),
+			'TrailJournalEntry' => self::trailJournalEntry(),
+			'TrailJournal' => self::trailJournal(),
+			'TrailCompleteResult' => self::trailCompleteResult(),
+			'TrailStartJson' => self::trailStartJson(),
+			'TrailCompleteJson' => self::trailCompleteJson(),
 			'NatureMinutes' => self::natureMinutes(),
 			'NatureMinutesSource' => self::natureMinutesSource(),
 			'NatureMinutesCreateJson' => self::natureMinutesCreateJson(),

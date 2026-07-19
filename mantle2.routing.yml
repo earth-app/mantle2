@@ -6877,6 +6877,63 @@ mantle2.users.current.nature_minutes.post:
     body/schema: '#NatureMinutesCreateJson'
   methods: [POST]
 
+mantle2.users.current.trails.start:
+  path: '/v2/users/current/trails/{trailId}/start'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::startTrail'
+    _title: 'Start a Curiosity Trail Run'
+  requirements:
+    _access: 'TRUE'
+    trailId: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Trails
+    description: Starts (or resumes) the current user's run of a trail; captures the optional if-then pledge.
+    schema/200: '#TrailRun'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/402: Premium or seasonal trail requires a paid rank
+    schema/404: Trail not found
+    body/schema: '#TrailStartJson'
+    parameters:
+      trailId:
+        type: string
+  methods: [POST]
+
+mantle2.users.current.trails.complete:
+  path: '/v2/users/current/trails/{trailId}/complete'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::completeTrail'
+    _title: 'Complete a Curiosity Trail Run'
+  requirements:
+    _access: 'TRUE'
+    trailId: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Trails
+    description: Completes the current user's trail run; records the private reflection and credits nature minutes.
+    schema/200: '#TrailCompleteResult'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/404: Trail not found
+    body/schema: '#TrailCompleteJson'
+    parameters:
+      trailId:
+        type: string
+  methods: [POST]
+
+mantle2.users.current.trail_journal:
+  path: '/v2/users/current/trail-journal'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::trailJournal'
+    _title: 'Get Trail Journal by Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Trails
+    description: Retrieves the current user's private trail journal (cap scales with rank).
+    schema/200: '#TrailJournal'
+    schema/401: Unauthorized
+  methods: [GET]
+
 mantle2.users.current.expedition.start:
   path: '/v2/users/current/expedition'
   defaults:
@@ -6967,6 +7024,76 @@ mantle2.users.id.nature_minutes.post:
       id:
         type: string
   methods: [POST]
+
+mantle2.users.id.trails.start:
+  path: '/v2/users/{id}/trails/{trailId}/start'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::startTrail'
+    _title: 'Start a Curiosity Trail Run by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    trailId: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Trails
+    description: Starts (or resumes) a user's trail run (self or admin only).
+    schema/200: '#TrailRun'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/402: Premium or seasonal trail requires a paid rank
+    schema/403: Forbidden
+    schema/404: Trail not found
+    body/schema: '#TrailStartJson'
+    parameters:
+      id:
+        type: string
+      trailId:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.trails.complete:
+  path: '/v2/users/{id}/trails/{trailId}/complete'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::completeTrail'
+    _title: 'Complete a Curiosity Trail Run by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+    trailId: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Trails
+    description: Completes a user's trail run and credits nature minutes (self or admin only).
+    schema/200: '#TrailCompleteResult'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Trail not found
+    body/schema: '#TrailCompleteJson'
+    parameters:
+      id:
+        type: string
+      trailId:
+        type: string
+  methods: [POST]
+
+mantle2.users.id.trail_journal:
+  path: '/v2/users/{id}/trail-journal'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::trailJournal'
+    _title: 'Get Trail Journal by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Trails
+    description: Retrieves a user's private trail journal (self or admin only).
+    schema/200: '#TrailJournal'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    parameters:
+      id:
+        type: string
+  methods: [GET]
 
 mantle2.users.id.expedition.get:
   path: '/v2/users/{id}/expedition'
@@ -7098,6 +7225,76 @@ mantle2.users.username.nature_minutes.post:
         type: string
   methods: [POST]
 
+mantle2.users.username.trails.start:
+  path: '/v2/users/{username}/trails/{trailId}/start'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::startTrail'
+    _title: 'Start a Curiosity Trail Run by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    trailId: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Trails
+    description: Starts (or resumes) a user's trail run by username (self or admin only).
+    schema/200: '#TrailRun'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/402: Premium or seasonal trail requires a paid rank
+    schema/403: Forbidden
+    schema/404: Trail not found
+    body/schema: '#TrailStartJson'
+    parameters:
+      username:
+        type: string
+      trailId:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.trails.complete:
+  path: '/v2/users/{username}/trails/{trailId}/complete'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::completeTrail'
+    _title: 'Complete a Curiosity Trail Run by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+    trailId: '[A-Za-z0-9_\-]+'
+  options:
+    tags: Trails
+    description: Completes a user's trail run by username and credits nature minutes (self or admin only).
+    schema/200: '#TrailCompleteResult'
+    schema/400: Bad request
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    schema/404: Trail not found
+    body/schema: '#TrailCompleteJson'
+    parameters:
+      username:
+        type: string
+      trailId:
+        type: string
+  methods: [POST]
+
+mantle2.users.username.trail_journal:
+  path: '/v2/users/{username}/trail-journal'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::trailJournal'
+    _title: 'Get Trail Journal by Username'
+  requirements:
+    _access: 'TRUE'
+    username: '@[\w.]+'
+  options:
+    tags: Trails
+    description: Retrieves a user's private trail journal by username (self or admin only).
+    schema/200: '#TrailJournal'
+    schema/401: Unauthorized
+    schema/403: Forbidden
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
 mantle2.users.username.expedition.get:
   path: '/v2/users/{username}/expedition'
   defaults:
@@ -7217,6 +7414,24 @@ mantle2.trailmarks.create:
     schema/401: Unauthorized
     body/schema: '#TrailmarkCreateJson'
   methods: [POST]
+
+mantle2.prompts.trailmarks:
+  path: '/v2/prompts/{prompt}/trailmarks'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\TrailmarksController::nearbyForPrompt'
+    _title: 'List Trailmarks for a Prompt'
+  requirements:
+    _access: 'TRUE'
+    prompt: '\d+'
+  options:
+    tags: Trailmarks,Prompts
+    description: Lists the 'from outside' trailmarks left as answers to a daily prompt (most-recent first).
+    schema/200: '#Trailmarks'
+    schema/401: Unauthorized
+    parameters:
+      prompt:
+        type: string
+  methods: [GET]
 
 mantle2.trailmarks.thank:
   path: '/v2/trailmarks/{id}/thank'
