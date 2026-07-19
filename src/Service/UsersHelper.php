@@ -5006,7 +5006,7 @@ class UsersHelper
 	#region Trails
 
 	// accepted nature-minute credit sources (anything else collapses to manual)
-	public const NATURE_MINUTE_KINDS = ['trail_step', 'quest', 'healthkit', 'manual'];
+	public const NATURE_MINUTE_KINDS = ['trail', 'quest', 'healthkit', 'manual'];
 
 	// trails come from stored KV so the default timeout is plenty
 	public const TRAILS_CLOUD_TIMEOUT = 15;
@@ -5015,7 +5015,7 @@ class UsersHelper
 
 	#region Expeditions
 
-	public const EXPEDITION_GOALS = ['nature_minutes', 'trail_steps', 'quests'];
+	public const EXPEDITION_GOALS = ['nature_minutes', 'trails', 'quests'];
 
 	// per-member weekly nature-minutes target; scales the max expedition target by rank tier
 	public const EXPEDITION_MINUTES_PER_MEMBER = 120;

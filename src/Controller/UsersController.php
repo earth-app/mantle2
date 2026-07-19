@@ -4629,6 +4629,150 @@ final class UsersController extends ControllerBase
 		return new JsonResponse($data, Response::HTTP_OK);
 	}
 
+	// POST /v2/users/current/trails/{trailId}/start
+	// POST /v2/users/{id}/trails/{trailId}/start
+	// POST /v2/users/{username}/trails/{trailId}/start
+	public function startTrail(
+		Request $request,
+		string $trailId,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$trail = trim($trailId);
+		if ($trail === '') {
+			return GeneralHelper::badRequest('Trail ID is required');
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (!is_array($body)) {
+			$body = [];
+		}
+
+		$payload = [
+			'uid' => GeneralHelper::formatId($user->id()),
+			// rank drives the premium/seasonal gate in cloud (rank === 'free' locks perk trails)
+			'rank' => UsersHelper::getAccountType($user)->value,
+		];
+		// optional if-then pledge (the strongest behavior lever); pass through when well-formed
+		if (isset($body['pledge']) && is_array($body['pledge'])) {
+			$payload['pledge'] = $body['pledge'];
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/trails/' . rawurlencode($trail) . '/start',
+				'POST',
+				$payload,
+				UsersHelper::TRAILS_CLOUD_TIMEOUT,
+			);
+		} catch (Exception $e) {
+			// cloud 403 = locked perk trail for a free rank; surface as a paywall, not a permission error
+			if ((int) $e->getCode() === 403) {
+				return GeneralHelper::paymentRequired(
+					'Premium and seasonal trails require a paid rank. Upgrade to unlock this trail.',
+				);
+			}
+			return CloudHelper::mapCloudException($e, 'Failed to start trail');
+		}
+
+		if (empty($data)) {
+			return GeneralHelper::notFound('Trail not found');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/trails/{trailId}/complete
+	// POST /v2/users/{id}/trails/{trailId}/complete
+	// POST /v2/users/{username}/trails/{trailId}/complete
+	public function completeTrail(
+		Request $request,
+		string $trailId,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		$trail = trim($trailId);
+		if ($trail === '') {
+			return GeneralHelper::badRequest('Trail ID is required');
+		}
+
+		$body = json_decode($request->getContent(), true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid request body');
+		}
+
+		$minutes = $body['presenceMinutes'] ?? null;
+		if (!is_numeric($minutes) || (float) $minutes < 0) {
+			return GeneralHelper::badRequest('presenceMinutes must be a non-negative number');
+		}
+
+		$payload = [
+			'uid' => GeneralHelper::formatId($user->id()),
+			// cloud clamps minutes (0..180) and defaults the reflection (photos stay on-device)
+			'presenceMinutes' => (float) $minutes,
+			'reflection' => is_array($body['reflection'] ?? null) ? $body['reflection'] : [],
+			'rank' => UsersHelper::getAccountType($user)->value,
+		];
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/trails/' . rawurlencode($trail) . '/complete',
+				'POST',
+				$payload,
+				UsersHelper::TRAILS_CLOUD_TIMEOUT,
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to complete trail');
+		}
+
+		if (empty($data)) {
+			return GeneralHelper::notFound('Trail not found');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/trail-journal
+	// GET /v2/users/{id}/trail-journal
+	// GET /v2/users/{username}/trail-journal
+	public function trailJournal(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$user = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/users/trail-journal',
+				'GET',
+				[
+					'uid' => GeneralHelper::formatId($user->id()),
+					// rank drives the journal cap (free 20 vs premium 100)
+					'rank' => UsersHelper::getAccountType($user)->value,
+				],
+				UsersHelper::TRAILS_CLOUD_TIMEOUT,
+			);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to fetch trail journal');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
+	}
+
 	#endregion
 
 	#region Nature Minutes
