@@ -449,7 +449,7 @@ class UsersCloudTest extends E2ETestBase
 				'POST',
 				'/v2/users/current/nature-minutes',
 				[],
-				json_encode(['minutes' => 15, 'kind' => 'trail_step', 'ref_id' => 'e2e_trail']),
+				json_encode(['minutes' => 15, 'kind' => 'trail', 'ref_id' => 'e2e_trail']),
 			),
 		);
 		$this->assertSame(Response::HTTP_OK, $credit->getStatusCode());
@@ -584,7 +584,7 @@ class UsersCloudTest extends E2ETestBase
 				[],
 				json_encode([
 					'title' => 'Username Expedition',
-					'goal' => 'trail_steps',
+					'goal' => 'trails',
 					'target' => 300,
 					'ends_at' => '2030-12-31T00:00:00Z',
 				]),
