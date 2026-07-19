@@ -4,11 +4,14 @@ namespace Drupal\Tests\mantle2\Integration\Controller\Users;
 
 use Drupal\mantle2\Controller\UsersController;
 use Drupal\mantle2\Custom\AccountType;
+use Drupal\mantle2\Service\CloudHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\UserInterface;
+use Exception;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
@@ -25,6 +28,13 @@ class EngagementTest extends IntegrationTestBase
 		// hitting an ambient worker; keeps notification/quest/badge local branches inert
 		$this->setSetting('mantle2.cloud_endpoint', 'http://127.0.0.1:1');
 		// prompt comment counts read this table
+	}
+
+	protected function tearDown(): void
+	{
+		// clear any fake cloud a trail-run test installed
+		CloudHelper::setRequestOverride(null);
+		parent::tearDown();
 	}
 
 	private function controller(): UsersController
@@ -1087,6 +1097,212 @@ class EngagementTest extends IntegrationTestBase
 		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
 	}
 
+	#[Test]
+	#[TestDox('nature-minute kinds and expedition goals use the standalone trail vocabulary')]
+	#[Group('mantle2/trails')]
+	public function trailVocabulary(): void
+	{
+		$this->assertContains('trail', UsersHelper::NATURE_MINUTE_KINDS);
+		$this->assertNotContains('trail_step', UsersHelper::NATURE_MINUTE_KINDS);
+		$this->assertContains('trails', UsersHelper::EXPEDITION_GOALS);
+		$this->assertNotContains('trail_steps', UsersHelper::EXPEDITION_GOALS);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'POST /v2/users/current/trails/{id}/start requires auth, injects rank, resolves self',
+		),
+	]
+	#[Group('mantle2/trails')]
+	public function startTrailAuth(): void
+	{
+		$anon = $this->controller()->startTrail(
+			$this->request('POST', '/v2/users/current/trails/sit_spot_dawn/start'),
+			'sit_spot_dawn',
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		// fake cloud captures the forwarded payload and returns a run object
+		$captured = [];
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = ['path' => $path, 'method' => $method, 'data' => $data];
+			return [
+				'trailId' => 'sit_spot_dawn',
+				'pledge' => $data['pledge'] ?? null,
+				'startedAt' => '2026-07-18T00:00:00Z',
+				'presenceMinutes' => 0,
+				'completed' => false,
+			];
+		});
+
+		$self = $this->createUser();
+		$ok = $this->controller()->startTrail(
+			$this->authRequest(
+				$self,
+				'POST',
+				'/v2/users/current/trails/sit_spot_dawn/start',
+				[],
+				json_encode(['pledge' => ['when' => 'tomorrow at dawn']]),
+			),
+			'sit_spot_dawn',
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertSame('sit_spot_dawn', $this->decode($ok)['trailId']);
+		// rank + uid are injected, pledge is passed through, and the trail id is url-built into the path
+		$this->assertSame('/v1/trails/sit_spot_dawn/start', $captured['path']);
+		$this->assertSame(GeneralHelper::formatId($self->id()), $captured['data']['uid']);
+		$this->assertSame('free', $captured['data']['rank']);
+		$this->assertSame('tomorrow at dawn', $captured['data']['pledge']['when']);
+
+		// another user's run is forbidden before any cloud call
+		$other = $this->createUser();
+		$forbidden = $this->controller()->startTrail(
+			$this->authRequest(
+				$self,
+				'POST',
+				'/v2/users/' . $other->id() . '/trails/sit_spot_dawn/start',
+			),
+			'sit_spot_dawn',
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST start maps a cloud 403 (locked perk trail) to a 402 paywall')]
+	#[Group('mantle2/trails')]
+	public function startTrailPaywall(): void
+	{
+		CloudHelper::setRequestOverride(function () {
+			throw new Exception('HTTP Error: 403', 403);
+		});
+
+		$res = $this->controller()->startTrail(
+			$this->authRequest(
+				$this->createUser(),
+				'POST',
+				'/v2/users/current/trails/premium_x/start',
+			),
+			'premium_x',
+		);
+		$this->assertSame(Response::HTTP_PAYMENT_REQUIRED, $res->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST complete validates presenceMinutes, injects rank, and records the run')]
+	#[Group('mantle2/trails')]
+	public function completeTrailValidation(): void
+	{
+		$user = $this->createUser();
+
+		$anon = $this->controller()->completeTrail(
+			$this->request('POST', '/v2/users/current/trails/sit_spot_dawn/complete'),
+			'sit_spot_dawn',
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$badJson = $this->controller()->completeTrail(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/trails/sit_spot_dawn/complete',
+				[],
+				'not-json',
+			),
+			'sit_spot_dawn',
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
+
+		$negative = $this->controller()->completeTrail(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/trails/sit_spot_dawn/complete',
+				[],
+				json_encode(['presenceMinutes' => -3]),
+			),
+			'sit_spot_dawn',
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $negative->getStatusCode());
+
+		$captured = [];
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = $data;
+			return [
+				'run' => ['trailId' => 'sit_spot_dawn', 'completed' => true],
+				'entry' => ['trailId' => 'sit_spot_dawn'],
+			];
+		});
+
+		$ok = $this->controller()->completeTrail(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/trails/sit_spot_dawn/complete',
+				[],
+				json_encode([
+					'presenceMinutes' => 14,
+					'reflection' => ['mood' => 'awed', 'at' => '2026-07-18T00:00:00Z'],
+				]),
+			),
+			'sit_spot_dawn',
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertTrue($this->decode($ok)['run']['completed']);
+		$this->assertSame(14.0, $captured['presenceMinutes']);
+		$this->assertSame('awed', $captured['reflection']['mood']);
+		$this->assertSame('free', $captured['rank']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/users/current/trail-journal requires auth and resolves self/username')]
+	#[Group('mantle2/trails')]
+	public function trailJournalAuth(): void
+	{
+		$anon = $this->controller()->trailJournal(
+			$this->request('GET', '/v2/users/current/trail-journal'),
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		CloudHelper::setRequestOverride(
+			fn($path, $method, $data) => [
+				[
+					'trailId' => 'sit_spot_dawn',
+					'title' => 'Dawn Sit Spot',
+					'practice' => 'sit_spot',
+					'presenceMinutes' => 14,
+					'reflection' => ['at' => '2026-07-18T00:00:00Z'],
+					'completedAt' => '2026-07-18T00:10:00Z',
+				],
+			],
+		);
+
+		$self = $this->createUser();
+		$ok = $this->controller()->trailJournal(
+			$this->authRequest($self, 'GET', '/v2/users/current/trail-journal'),
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertCount(1, $this->decode($ok));
+
+		// self via username handle is allowed
+		$selfHandle = '@' . $self->getAccountName();
+		$okHandle = $this->controller()->trailJournal(
+			$this->authRequest($self, 'GET', '/v2/users/' . $selfHandle . '/trail-journal'),
+			null,
+			$selfHandle,
+		);
+		$this->assertSame(Response::HTTP_OK, $okHandle->getStatusCode());
+
+		// another user's journal is forbidden
+		$other = $this->createUser();
+		$forbidden = $this->controller()->trailJournal(
+			$this->authRequest($self, 'GET', '/v2/users/' . $other->id() . '/trail-journal'),
+			(string) $other->id(),
+		);
+		$this->assertSame(Response::HTTP_FORBIDDEN, $forbidden->getStatusCode());
+	}
+
 	#endregion
 
 	#region Nature Minutes
@@ -1189,7 +1405,7 @@ class EngagementTest extends IntegrationTestBase
 				'POST',
 				'/v2/users/current/nature-minutes',
 				[],
-				json_encode(['minutes' => 15, 'kind' => 'trail_step', 'ref_id' => 'forest_wonder']),
+				json_encode(['minutes' => 15, 'kind' => 'trail', 'ref_id' => 'sit_spot_dawn']),
 			),
 		);
 		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
