@@ -385,7 +385,8 @@ class UsersCloudTest extends E2ETestBase
 
 		$first = $trails[0];
 		$this->assertArrayHasKey('id', $first);
-		$this->assertArrayHasKey('steps', $first);
+		// standalone trails: one qualitative practice + a curiosity gap (no quest steps)
+		$this->assertArrayHasKey('practice', $first);
 
 		$one = $this->controller()->getTrail(
 			$this->authRequest($user, 'GET', '/v2/users/trails/' . $first['id']),
@@ -396,11 +397,11 @@ class UsersCloudTest extends E2ETestBase
 		$this->assertSame($first['id'], $body['id']);
 		$this->assertArrayHasKey('theme', $body);
 		$this->assertArrayHasKey('rarity', $body);
-		$this->assertNotEmpty($body['steps']);
-		// each step carries the underlying quest action + curiosity clue + awe reveal
-		$this->assertArrayHasKey('step', $body['steps'][0]);
-		$this->assertArrayHasKey('clue', $body['steps'][0]);
-		$this->assertArrayHasKey('reveal', $body['steps'][0]);
+		// the sustained practice + the curiosity gap + the awe reveal + the reflection prompt
+		$this->assertArrayHasKey('practice', $body);
+		$this->assertArrayHasKey('curiosity', $body);
+		$this->assertArrayHasKey('reveal', $body);
+		$this->assertArrayHasKey('reflectionPrompt', $body);
 	}
 
 	#[Test]
