@@ -3,17 +3,25 @@
 namespace Drupal\Tests\mantle2\Integration\Controller;
 
 use Drupal\mantle2\Controller\TrailmarksController;
+use Drupal\mantle2\Service\CloudHelper;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\UserInterface;
+use Exception;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
 use Symfony\Component\HttpFoundation\Response;
 
-// cloud is dead in the integration tier, so this covers auth, geo/note validation, and the censor
-// pre-check (the pure-mantle2 branches); cloud round-trips are exercised in the E2E suite
+// cloud is dead in the integration tier (auth, geo/note validation, and the censor pre-check run
+// pure-mantle2); the prompt-link + sentiment-mapping branches drive cloud via the CloudHelper seam
 class TrailmarksControllerTest extends IntegrationTestBase
 {
+	protected function tearDown(): void
+	{
+		CloudHelper::setRequestOverride(null);
+		parent::tearDown();
+	}
+
 	private function controller(): TrailmarksController
 	{
 		return new TrailmarksController();
@@ -113,5 +121,86 @@ class TrailmarksControllerTest extends IntegrationTestBase
 			'abc123',
 		);
 		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/trailmarks forwards an optional prompt_id to cloud')]
+	#[Group('mantle2/trailmarks')]
+	public function createForwardsPromptId(): void
+	{
+		$captured = [];
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = ['path' => $path, 'data' => $data];
+			return ['id' => 'tm1', 'prompt_id' => $data['prompt_id'] ?? null];
+		});
+
+		$ok = $this->controller()->createTrailmark(
+			$this->authRequest(
+				$this->user(),
+				'POST',
+				'/v2/trailmarks',
+				[],
+				json_encode([
+					'geo' => ['lat' => 41.8781, 'lng' => -87.6298],
+					'note' => 'A calm place to breathe.',
+					'prompt_id' => '482',
+				]),
+			),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $ok->getStatusCode());
+		$this->assertSame('/v1/trailmarks', $captured['path']);
+		$this->assertSame('482', $captured['data']['prompt_id']);
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/trailmarks maps a cloud 422 (negative sentiment) to a gentle 400')]
+	#[Group('mantle2/trailmarks')]
+	public function createRejectsNegativeSentiment(): void
+	{
+		CloudHelper::setRequestOverride(function () {
+			throw new Exception('HTTP Error: 422', 422);
+		});
+
+		$res = $this->controller()->createTrailmark(
+			$this->authRequest(
+				$this->user(),
+				'POST',
+				'/v2/trailmarks',
+				[],
+				json_encode([
+					'geo' => ['lat' => 41.8, 'lng' => -87.6],
+					'note' => 'this place is awful and everyone here is the worst',
+				]),
+			),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $res->getStatusCode());
+		$this->assertStringContainsString('kind and encouraging', $this->decode($res)['message']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/prompts/{id}/trailmarks requires auth and proxies to cloud with the viewer')]
+	#[Group('mantle2/trailmarks')]
+	public function nearbyForPromptAuth(): void
+	{
+		$anon = $this->controller()->nearbyForPrompt(
+			$this->request('GET', '/v2/prompts/482/trailmarks'),
+			'482',
+		);
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $anon->getStatusCode());
+
+		$captured = [];
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = ['path' => $path, 'data' => $data];
+			return [['id' => 'tm1', 'prompt_id' => '482']];
+		});
+
+		$ok = $this->controller()->nearbyForPrompt(
+			$this->authRequest($this->user(), 'GET', '/v2/prompts/482/trailmarks'),
+			'482',
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertSame('/v1/prompts/482/trailmarks', $captured['path']);
+		$this->assertArrayHasKey('viewer', $captured['data']);
+		$this->assertCount(1, $this->decode($ok));
 	}
 }

@@ -6,8 +6,10 @@ use Drupal\mantle2\Controller\PromptsController;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Prompt;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\node\Entity\Node;
+use Exception;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\Entity\Role;
 use Drupal\user\RoleInterface;
@@ -36,6 +38,13 @@ class PromptsControllerTest extends IntegrationTestBase
 		}
 		$role->grantPermission('post comments');
 		$role->save();
+	}
+
+	protected function tearDown(): void
+	{
+		// clear any fake cloud a sentiment-gate test installed
+		CloudHelper::setRequestOverride(null);
+		parent::tearDown();
 	}
 
 	private function controller(): PromptsController
@@ -334,6 +343,54 @@ class PromptsControllerTest extends IntegrationTestBase
 		$body = $this->decode($ok);
 		$this->assertSame('My genuine response', $body['response']);
 		$this->assertArrayHasKey('owner', $body);
+		$this->assertSame(1, PromptsHelper::getCommentsCount($node));
+	}
+
+	#[Test]
+	#[TestDox('POST responses rejects a negative-sentiment response with a gentle 400')]
+	#[Group('mantle2/prompts')]
+	public function createResponseNegativeSentiment(): void
+	{
+		$owner = $this->verifiedUser();
+		$node = $this->seedPrompt($owner);
+		$responder = $this->verifiedUser();
+
+		$captured = [];
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = ['path' => $path, 'data' => $data];
+			return ['label' => 'NEGATIVE', 'score' => 0.98, 'negative' => true];
+		});
+
+		$res = $this->controller()->createPromptResponse(
+			(int) $node->id(),
+			$this->authRequest($responder, 'POST', '/', [], '{"content":"everyone here is awful"}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $res->getStatusCode());
+		$this->assertStringContainsString('kind and encouraging', $this->decode($res)['message']);
+		$this->assertSame('/v1/content/sentiment', $captured['path']);
+		$this->assertSame('everyone here is awful', $captured['data']['text']);
+		// nothing was persisted
+		$this->assertSame(0, PromptsHelper::getCommentsCount($node));
+	}
+
+	#[Test]
+	#[TestDox('POST responses fails open (creates) when the sentiment classifier errors')]
+	#[Group('mantle2/prompts')]
+	public function createResponseSentimentFailOpen(): void
+	{
+		$owner = $this->verifiedUser();
+		$node = $this->seedPrompt($owner);
+		$responder = $this->verifiedUser();
+
+		CloudHelper::setRequestOverride(function () {
+			throw new Exception('cURL Error: could not connect');
+		});
+
+		$res = $this->controller()->createPromptResponse(
+			(int) $node->id(),
+			$this->authRequest($responder, 'POST', '/', [], '{"content":"A thoughtful reply"}'),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $res->getStatusCode());
 		$this->assertSame(1, PromptsHelper::getCommentsCount($node));
 	}
 
