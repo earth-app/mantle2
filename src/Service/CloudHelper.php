@@ -8,6 +8,15 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 
 class CloudHelper
 {
+	// test seam: routes sendRequest through a fake instead of curl (integration cloud mocking)
+	private static $requestOverride = null;
+
+	// lets tests inject a fake cloud (return an array body, or throw an Exception with an http code)
+	public static function setRequestOverride(?callable $override): void
+	{
+		self::$requestOverride = $override;
+	}
+
 	public static function getAdminKey(): string
 	{
 		// MANTLE2_ADMIN_KEY
@@ -38,10 +47,16 @@ class CloudHelper
 		array $data = [],
 		int $timeoutSeconds = 10,
 	): array {
-		$cloud = self::getCloudEndpoint();
 		if (empty($path)) {
 			throw new Exception('Path is required for the request.');
 		}
+
+		// test seam short-circuit; the fake decides the body (or throws to simulate a cloud error)
+		if (self::$requestOverride !== null) {
+			return (self::$requestOverride)($path, $method, $data);
+		}
+
+		$cloud = self::getCloudEndpoint();
 
 		$ch = curl_init();
 		$method = strtoupper($method);
