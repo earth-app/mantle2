@@ -88,15 +88,31 @@ class TrailmarksController extends ControllerBase
 			$geoPayload['place_label'] = $geo['place_label'];
 		}
 
+		$payload = [
+			'author_uid' => GeneralHelper::formatId($author->id()),
+			'author_username' => $author->getAccountName(),
+			'geo' => $geoPayload,
+			'note' => $censored,
+		];
+		// optional: also surface this note under a daily prompt (cloud indexes it by prompt id)
+		if (
+			isset($body['prompt_id']) &&
+			is_string($body['prompt_id']) &&
+			$body['prompt_id'] !== ''
+		) {
+			$payload['prompt_id'] = $body['prompt_id'];
+		}
+
 		try {
-			$data = CloudHelper::sendRequest('/v1/trailmarks', 'POST', [
-				'author_uid' => GeneralHelper::formatId($author->id()),
-				'author_username' => $author->getAccountName(),
-				'geo' => $geoPayload,
-				'note' => $censored,
-			]);
+			$data = CloudHelper::sendRequest('/v1/trailmarks', 'POST', $payload);
 		} catch (Exception $e) {
 			$code = (int) $e->getCode();
+			// cloud 422 = the sentiment gate rejected an unkind note; keep the nudge gentle
+			if ($code === 422) {
+				return GeneralHelper::badRequest(
+					"Let's keep trailmarks kind and encouraging - try rephrasing.",
+				);
+			}
 			if ($code === 400) {
 				return GeneralHelper::badRequest(
 					CloudHelper::extractCloudMessage($e) ?: 'Invalid trailmark',
@@ -106,6 +122,32 @@ class TrailmarksController extends ControllerBase
 		}
 
 		return new JsonResponse($data, Response::HTTP_CREATED);
+	}
+
+	// GET /v2/prompts/{prompt}/trailmarks
+	public function nearbyForPrompt(Request $request, string $prompt): JsonResponse
+	{
+		$viewer = UsersHelper::findByRequest($request);
+		if ($viewer instanceof JsonResponse) {
+			return $viewer;
+		}
+
+		$promptId = trim($prompt);
+		if ($promptId === '') {
+			return GeneralHelper::badRequest('Invalid prompt id');
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/prompts/' . rawurlencode($promptId) . '/trailmarks',
+				'GET',
+				['viewer' => GeneralHelper::formatId($viewer->id())],
+			);
+		} catch (Exception $e) {
+			return GeneralHelper::internalError('Failed to fetch prompt trailmarks');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
 	}
 
 	// POST /v2/trailmarks/{id}/thank
