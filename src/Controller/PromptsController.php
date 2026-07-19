@@ -9,11 +9,13 @@ use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\mantle2\Custom\Prompt;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
+use Exception;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -618,6 +620,20 @@ final class PromptsController extends ControllerBase
 			return $validated;
 		}
 		$content = $validated;
+
+		// gentle sentiment gate; fail-open so an unreachable classifier never blocks a response
+		try {
+			$sentiment = CloudHelper::sendRequest('/v1/content/sentiment', 'POST', [
+				'text' => $content,
+			]);
+			if (($sentiment['negative'] ?? false) === true) {
+				return GeneralHelper::badRequest(
+					"Let's keep responses kind and encouraging - try rephrasing.",
+				);
+			}
+		} catch (Exception $e) {
+			// classifier unreachable; let the response through
+		}
 
 		if (!$user->hasPermission('post comments')) {
 			return GeneralHelper::forbidden('You do not have permission to post responses');
