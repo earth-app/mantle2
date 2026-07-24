@@ -5011,6 +5011,10 @@ class UsersHelper
 	// trails come from stored KV so the default timeout is plenty
 	public const TRAILS_CLOUD_TIMEOUT = 15;
 
+	// trailmark create runs a synchronous AI sentiment gate in cloud; give the model room to
+	// warm up so a cold start never trips the default 10s curl timeout (which silently returns [])
+	public const SENTIMENT_CLOUD_TIMEOUT = 30;
+
 	#endregion
 
 	#region Expeditions

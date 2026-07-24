@@ -88,7 +88,14 @@ class TrailmarksControllerTest extends IntegrationTestBase
 		);
 		$this->assertSame(Response::HTTP_BAD_REQUEST, $emptyNote->getStatusCode());
 
-		// a valid note passes validation + censor and is forwarded (cloud dead -> empty body, 201)
+		// a valid note passes validation + censor and is forwarded; cloud echoes the created mark
+		CloudHelper::setRequestOverride(
+			fn($path, $method, $data) => [
+				'id' => 'u4pruabc123',
+				'note' => $data['note'],
+				'geo' => $data['geo'],
+			],
+		);
 		$ok = $this->controller()->createTrailmark(
 			$this->authRequest(
 				$user,
@@ -102,6 +109,36 @@ class TrailmarksControllerTest extends IntegrationTestBase
 			),
 		);
 		$this->assertSame(Response::HTTP_CREATED, $ok->getStatusCode());
+		$this->assertSame('u4pruabc123', $this->decode($ok)['id']);
+	}
+
+	#[Test]
+	#[
+		TestDox(
+			'POST /v2/trailmarks returns a 500 (not a fake 201) when the cloud create times out to []',
+		),
+	]
+	#[Group('mantle2/trailmarks')]
+	public function createFailsWhenCloudReturnsEmpty(): void
+	{
+		// CloudHelper folds a timeout / connection failure into an empty array; a create that
+		// returns nothing must surface as an error, never a 201 with an empty body
+		CloudHelper::setRequestOverride(fn($path, $method, $data) => []);
+
+		$res = $this->controller()->createTrailmark(
+			$this->authRequest(
+				$this->user(),
+				'POST',
+				'/v2/trailmarks',
+				[],
+				json_encode([
+					'geo' => ['lat' => 41.8781, 'lng' => -87.6298],
+					'note' => 'A quiet bend in the river.',
+				]),
+			),
+		);
+		$this->assertSame(Response::HTTP_INTERNAL_SERVER_ERROR, $res->getStatusCode());
+		$this->assertSame('Failed to create trailmark', $this->decode($res)['message']);
 	}
 
 	#[Test]

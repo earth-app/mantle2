@@ -104,7 +104,12 @@ class TrailmarksController extends ControllerBase
 		}
 
 		try {
-			$data = CloudHelper::sendRequest('/v1/trailmarks', 'POST', $payload);
+			$data = CloudHelper::sendRequest(
+				'/v1/trailmarks',
+				'POST',
+				$payload,
+				UsersHelper::SENTIMENT_CLOUD_TIMEOUT,
+			);
 		} catch (Exception $e) {
 			$code = (int) $e->getCode();
 			// cloud 422 = the sentiment gate rejected an unkind note; keep the nudge gentle
@@ -119,6 +124,10 @@ class TrailmarksController extends ControllerBase
 				);
 			}
 			return CloudHelper::mapCloudException($e, 'Failed to create trailmark');
+		}
+
+		if (empty($data)) {
+			return GeneralHelper::internalError('Failed to create trailmark');
 		}
 
 		return new JsonResponse($data, Response::HTTP_CREATED);
