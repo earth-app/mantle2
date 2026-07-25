@@ -4,7 +4,11 @@ namespace Drupal\Tests\mantle2\Integration;
 
 use Drupal\mantle2\Commands\Mantle2Commands;
 use Drupal\mantle2\Custom\AccountType;
+use Drupal\mantle2\Custom\Activity;
+use Drupal\mantle2\Service\ActivityHelper;
+use Drupal\mantle2\Service\StagingHelper;
 use Drupal\mantle2\Service\UsersHelper;
+use Drupal\node\Entity\NodeType;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
@@ -215,4 +219,199 @@ class CommandsTest extends IntegrationTestBase
 		$fresh = UsersHelper::findById((int) $user->id());
 		$this->assertSame(AccountType::PRO, UsersHelper::getAccountType($fresh));
 	}
+
+	// #region sync
+
+	/** every mantle2-owned table, so a wipe anywhere shows up */
+	private const CUSTOM_TABLES = [
+		'push_tokens',
+		'mantle2_api_keys',
+		'mantle2_subscriptions',
+		'mantle2_trial_codes',
+		'mantle2_trial_code_redemptions',
+		'mantle2_staged_activities',
+	];
+
+	private function seedEveryTable(int $uid): void
+	{
+		$db = $this->container->get('database');
+		$now = time();
+
+		$db->insert('push_tokens')
+			->fields(['user_id' => $uid, 'platform' => 'ios', 'token' => 'tok', 'updated' => $now])
+			->execute();
+		$db->insert('mantle2_api_keys')
+			->fields([
+				'key_id' => 'EA26TESTKEY',
+				'user_id' => $uid,
+				'token_hash' => str_repeat('a', 64),
+				'token_prefix' => 'EA26TESTKEY',
+				'name' => 'CI key',
+				'scopes' => json_encode([]),
+				'created_at' => $now,
+			])
+			->execute();
+		$db->insert('mantle2_subscriptions')
+			->fields([
+				'user_id' => $uid,
+				'provider' => 'stripe',
+				'tier' => 'PRO',
+				'status' => 'active',
+				'created' => $now,
+				'updated' => $now,
+			])
+			->execute();
+		$db->insert('mantle2_trial_codes')
+			->fields([
+				'code' => 'TRIALCODE',
+				'tier' => 'PRO',
+				'days' => 7,
+				'max_redemptions' => 1,
+				'created_by' => $uid,
+				'created' => $now,
+			])
+			->execute();
+		$db->insert('mantle2_trial_code_redemptions')
+			->fields(['code' => 'TRIALCODE', 'user_id' => $uid, 'redeemed_at' => $now])
+			->execute();
+	}
+
+	private function rowCounts(): array
+	{
+		$db = $this->container->get('database');
+		$counts = [];
+		foreach (self::CUSTOM_TABLES as $table) {
+			$counts[$table] = (int) $db->select($table, 't')->countQuery()->execute()->fetchField();
+		}
+
+		return $counts;
+	}
+
+	#[Test]
+	#[TestDox('sync creates every custom table and reports what it created')]
+	#[Group('mantle2/drush')]
+	public function syncCreatesTables(): void
+	{
+		$schema = $this->container->get('database')->schema();
+		foreach (self::CUSTOM_TABLES as $table) {
+			if ($schema->tableExists($table)) {
+				$schema->dropTable($table);
+			}
+		}
+
+		$this->command->sync(['skip-content' => true]);
+		$output = $this->flush();
+
+		foreach (self::CUSTOM_TABLES as $table) {
+			$this->assertTrue($schema->tableExists($table), "$table was not created");
+			$this->assertStringContainsString($table, $output);
+		}
+		$this->assertStringContainsString('User fields synced.', $output);
+		$this->assertStringContainsString('mantle2:sync complete.', $output);
+	}
+
+	#[Test]
+	#[TestDox('sync is a no-op on a healthy install and never drops a row')]
+	#[Group('mantle2/drush')]
+	public function syncPreservesEveryRow(): void
+	{
+		$user = $this->createUser();
+		$this->seedEveryTable((int) $user->id());
+		StagingHelper::stage(
+			new Activity('sync_probe', 'Sync Probe', ['SPORT'], 'Seeded before the sync runs.'),
+			$user,
+		);
+
+		$before = $this->rowCounts();
+		foreach ($before as $table => $count) {
+			$this->assertSame(1, $count, "$table was not seeded");
+		}
+
+		$this->command->sync(['skip-content' => true]);
+
+		// this is the whole point of replacing `drush un && drush en`
+		$this->assertSame($before, $this->rowCounts());
+		$this->assertStringContainsString('already present', $this->flush());
+	}
+
+	#[Test]
+	#[TestDox('sync preserves nodes, content types, and user field values')]
+	#[Group('mantle2/drush')]
+	public function syncPreservesContent(): void
+	{
+		$this->container->get('module_handler')->loadInclude('mantle2', 'install');
+		mantle2_install_content();
+
+		$user = $this->createUser();
+		$user->set('field_verified_publisher', true);
+		$user->save();
+
+		ActivityHelper::createActivity(
+			new Activity('persisted_one', 'Persisted One', ['SPORT'], 'Survives the sync.'),
+			$user,
+		);
+
+		$this->command->sync();
+
+		$this->assertNotNull(NodeType::load('activity'));
+		$this->assertNotNull(ActivityHelper::getNodeByActivityId('persisted_one'));
+		$this->assertSame(
+			'Persisted One',
+			ActivityHelper::getActivity('persisted_one')?->getName(),
+		);
+
+		$fresh = UsersHelper::findById((int) $user->id());
+		$this->assertTrue((bool) $fresh->get('field_verified_publisher')->value);
+	}
+
+	#[Test]
+	#[TestDox('sync is idempotent across repeated runs')]
+	#[Group('mantle2/drush')]
+	public function syncIsIdempotent(): void
+	{
+		$user = $this->createUser();
+		$this->seedEveryTable((int) $user->id());
+		$before = $this->rowCounts();
+
+		$this->command->sync(['skip-content' => true]);
+		$this->command->sync(['skip-content' => true]);
+		$this->command->sync(['skip-content' => true]);
+
+		$this->assertSame($before, $this->rowCounts());
+	}
+
+	#[Test]
+	#[TestDox('sync recreates only the table that went missing')]
+	#[Group('mantle2/drush')]
+	public function syncRecreatesOnlyTheMissingTable(): void
+	{
+		$user = $this->createUser();
+		$this->seedEveryTable((int) $user->id());
+
+		$schema = $this->container->get('database')->schema();
+		$schema->dropTable('mantle2_staged_activities');
+
+		$this->command->sync(['skip-content' => true]);
+		$output = $this->flush();
+
+		$this->assertTrue($schema->tableExists('mantle2_staged_activities'));
+		$this->assertStringContainsString('mantle2_staged_activities', $output);
+		// the healthy tables keep their rows rather than being rebuilt
+		$this->assertSame(1, $this->rowCounts()['push_tokens']);
+		$this->assertSame(1, $this->rowCounts()['mantle2_api_keys']);
+	}
+
+	#[Test]
+	#[TestDox('skip-content leaves node content types untouched')]
+	#[Group('mantle2/drush')]
+	public function syncSkipContent(): void
+	{
+		$this->command->sync(['skip-content' => true]);
+		$output = $this->flush();
+
+		$this->assertStringNotContainsString('Content types', $output);
+		$this->assertStringContainsString('User fields synced.', $output);
+	}
+
+	// #endregion
 }
