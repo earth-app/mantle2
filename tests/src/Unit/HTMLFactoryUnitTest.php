@@ -3,6 +3,7 @@
 namespace Drupal\Tests\mantle2\Unit;
 
 use Drupal\mantle2\Service\HTMLFactory;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
@@ -16,6 +17,17 @@ class HTMLFactoryUnitTest extends TestCase
 	{
 		parent::setUp();
 		$this->htmlFactory = new HTMLFactory();
+	}
+
+	/**
+	 * The rendered document without the hidden preheader, which intentionally repeats the
+	 * opening body text and would otherwise break strpos-based ordering assertions.
+	 */
+	private function body(string $html): string
+	{
+		$start = strpos($html, '<table role="presentation"');
+
+		return $start === false ? $html : substr($html, $start);
 	}
 
 	#[Test]
@@ -297,7 +309,7 @@ class HTMLFactoryUnitTest extends TestCase
 	public function testListClosesBeforeParagraph()
 	{
 		$text = "List:\n- Item 1\n- Item 2\n\nRegular paragraph after list.";
-		$html = $this->htmlFactory->toHtml($text);
+		$html = $this->body($this->htmlFactory->toHtml($text));
 
 		// Find positions to verify order
 		$ulPos = strpos($html, '<ul style=');
@@ -610,7 +622,7 @@ class HTMLFactoryUnitTest extends TestCase
 	public function testParagraphListParagraphStructure()
 	{
 		$text = "Intro paragraph.\n\n- List item 1\n- List item 2\n\nClosing paragraph.";
-		$html = $this->htmlFactory->toHtml($text);
+		$html = $this->body($this->htmlFactory->toHtml($text));
 
 		// Should have 2 paragraphs and 1 list
 		$this->assertEquals(
@@ -867,4 +879,281 @@ class HTMLFactoryUnitTest extends TestCase
 		);
 		$this->assertStringContainsString('Thank you for using The Earth App!', $html);
 	}
+
+	// #region Enrichment
+
+	#[Test]
+	#[TestDox('A branded header band renders above the content card')]
+	#[Group('mantle2/html')]
+	public function testHeaderBand()
+	{
+		$html = $this->htmlFactory->toHtml('Hello');
+
+		$this->assertStringContainsString('background-color: #2e7d32; padding: 20px 32px;', $html);
+		$this->assertStringContainsString(
+			'<img src="https://cdn.earth-app.com/earth-app.png" alt="The Earth App"',
+			$html,
+		);
+	}
+
+	#[Test]
+	#[TestDox('A custom accent colour is applied and a malformed one falls back')]
+	#[Group('mantle2/html')]
+	public function testAccentOverride()
+	{
+		$custom = $this->htmlFactory->toHtml('Hello', false, null, ['accent' => '#123456']);
+		$this->assertStringContainsString('background-color: #123456;', $custom);
+
+		$bogus = $this->htmlFactory->toHtml('Hello', false, null, [
+			'accent' => 'javascript:alert(1)',
+		]);
+		$this->assertStringContainsString('background-color: #2e7d32;', $bogus);
+		$this->assertStringNotContainsString('javascript:', $bogus);
+	}
+
+	#[Test]
+	#[TestDox('The preheader is derived from the body, truncated, and followed by a Gmail spacer')]
+	#[Group('mantle2/html')]
+	public function testPreheader()
+	{
+		$html = $this->htmlFactory->toHtml('**Bold** opening line for the preview.');
+		$this->assertStringContainsString('mso-hide: all;', $html);
+		$this->assertStringContainsString('Bold opening line for the preview.', $html);
+		$this->assertStringContainsString('&#847;&zwnj;&nbsp;', $html);
+
+		$long = str_repeat('word ', 60);
+		$this->assertStringContainsString('...', $this->htmlFactory->toHtml($long));
+
+		$explicit = $this->htmlFactory->toHtml('Body', false, null, [
+			'preheader' => 'Custom preview',
+		]);
+		$this->assertStringContainsString('Custom preview', $explicit);
+	}
+
+	#[Test]
+	#[TestDox('A CTA renders as a padded anchor inside a bgcolor cell')]
+	#[Group('mantle2/html')]
+	public function testCtaOption()
+	{
+		$html = $this->htmlFactory->toHtml('Body', false, null, [
+			'cta' => ['label' => 'Open the App', 'url' => 'https://app.earth-app.com'],
+		]);
+
+		$this->assertStringContainsString('bgcolor="#2e7d32"', $html);
+		$this->assertStringContainsString('padding: 14px 28px;', $html);
+		$this->assertStringContainsString('>Open the App</a>', $html);
+	}
+
+	#[Test]
+	#[TestDox('At most two CTAs render and an unsafe CTA url is dropped')]
+	#[Group('mantle2/html')]
+	public function testCtaLimitsAndSafety()
+	{
+		$html = $this->htmlFactory->toHtml('Body', false, null, [
+			'cta' => [
+				['label' => 'One', 'url' => 'https://app.earth-app.com/a'],
+				['label' => 'Two', 'url' => 'https://app.earth-app.com/b'],
+				['label' => 'Three', 'url' => 'https://app.earth-app.com/c'],
+			],
+		]);
+
+		$this->assertStringContainsString('>One</a>', $html);
+		$this->assertStringContainsString('>Two</a>', $html);
+		$this->assertStringNotContainsString('>Three</a>', $html);
+
+		$unsafe = $this->htmlFactory->toHtml('Body', false, null, [
+			'cta' => ['label' => 'Bad', 'url' => 'javascript:alert(1)'],
+		]);
+		$this->assertStringNotContainsString('>Bad</a>', $unsafe);
+	}
+
+	#[Test]
+	#[TestDox('The [[Label]](url) button syntax renders a button rather than a link')]
+	#[Group('mantle2/html')]
+	public function testButtonSyntax()
+	{
+		$html = $this->htmlFactory->toHtml('[[Review Now]](https://app.earth-app.com/admin)');
+
+		$this->assertStringContainsString('bgcolor="#2e7d32"', $html);
+		$this->assertStringContainsString('>Review Now</a>', $html);
+		$this->assertStringNotContainsString('[[', $html);
+	}
+
+	public static function markdownPrimitiveProvider(): array
+	{
+		return [
+			'ordered list' => ["1. First\n2. Second", '<ol style='],
+			'blockquote' => ['> Quoted line', '<blockquote style='],
+			'horizontal rule' => ["Above\n\n---\n\nBelow", '<hr style='],
+			'fenced code' => ["```\nconst a = 1;\n```", '<pre style='],
+			'table' => ["| A | B |\n| --- | --- |\n| 1 | 2 |", '<th style='],
+		];
+	}
+
+	#[Test]
+	#[TestDox('New markdown primitives render')]
+	#[Group('mantle2/html')]
+	#[DataProvider('markdownPrimitiveProvider')]
+	public function testMarkdownPrimitives(string $markdown, string $expected)
+	{
+		$this->assertStringContainsString($expected, $this->htmlFactory->toHtml($markdown));
+	}
+
+	#[Test]
+	#[TestDox('Images are allowed only from the app CDN')]
+	#[Group('mantle2/html')]
+	public function testImageHostAllowList()
+	{
+		$allowed = $this->htmlFactory->toHtml('![Badge](https://cdn.earth-app.com/badge.png)');
+		$this->assertStringContainsString(
+			'<img src="https://cdn.earth-app.com/badge.png"',
+			$allowed,
+		);
+
+		$blocked = $this->htmlFactory->toHtml('![Tracker](https://evil.example.com/pixel.gif)');
+		$this->assertStringNotContainsString('evil.example.com', $blocked);
+		$this->assertStringContainsString('Tracker', $blocked);
+	}
+
+	public static function utmProvider(): array
+	{
+		return [
+			'earth-app host is tagged' => ['https://app.earth-app.com/x', true],
+			'third party is untouched' => ['https://example.com/x', false],
+		];
+	}
+
+	#[Test]
+	#[TestDox('UTM parameters are added only to earth-app hosts')]
+	#[Group('mantle2/html')]
+	#[DataProvider('utmProvider')]
+	public function testUtmHostScope(string $url, bool $tagged)
+	{
+		$html = $this->htmlFactory->toHtml("[Link]($url)", false, null, [
+			'utm' => ['source' => 'email', 'medium' => 'transactional'],
+		]);
+
+		if ($tagged) {
+			$this->assertStringContainsString(
+				'href="https://app.earth-app.com/x?utm_source=email&amp;utm_medium=transactional"',
+				$html,
+			);
+		} else {
+			// the footer's own app link is still tagged, so scope this to the body link
+			$this->assertStringContainsString('href="https://example.com/x"', $html);
+		}
+	}
+
+	#[Test]
+	#[TestDox('UTM tagging respects an existing utm_source, mailto, and the unsubscribe url')]
+	#[Group('mantle2/html')]
+	public function testUtmExceptions()
+	{
+		$utm = ['utm' => ['source' => 'email']];
+
+		$existing = $this->htmlFactory->toHtml(
+			'[Link](https://app.earth-app.com/x?utm_source=manual)',
+			false,
+			null,
+			$utm,
+		);
+		$this->assertStringContainsString(
+			'href="https://app.earth-app.com/x?utm_source=manual"',
+			$existing,
+		);
+
+		$mailto = $this->htmlFactory->toHtml('[Mail](mailto:hi@earth-app.com)', false, null, $utm);
+		$this->assertStringContainsString('href="mailto:hi@earth-app.com"', $mailto);
+
+		// one-click unsubscribe endpoints must never gain query parameters
+		$unsub = $this->htmlFactory->toHtml(
+			'Body',
+			true,
+			'https://api.earth-app.com/v2/unsubscribe?token=abc',
+			$utm,
+		);
+		$this->assertStringContainsString(
+			'href="https://api.earth-app.com/v2/unsubscribe?token=abc"',
+			$unsub,
+		);
+	}
+
+	public static function unsafeUrlProvider(): array
+	{
+		return [
+			'javascript' => ['javascript:alert(1)'],
+			'data uri' => ['data:text/html;base64,PHNjcmlwdD4='],
+			'vbscript' => ['vbscript:msgbox(1)'],
+		];
+	}
+
+	#[Test]
+	#[TestDox('Unsafe link schemes degrade to plain text instead of rendering an anchor')]
+	#[Group('mantle2/html')]
+	#[DataProvider('unsafeUrlProvider')]
+	public function testUnsafeSchemesAreDropped(string $url)
+	{
+		$html = $this->htmlFactory->toHtml("[Click me]($url)");
+
+		$this->assertStringContainsString('Click me', $html);
+		$this->assertStringNotContainsString('href="' . $url, $html);
+		$this->assertStringNotContainsString('<a href="' . substr($url, 0, 6), $html);
+	}
+
+	#[Test]
+	#[TestDox('An attribute-injection attempt in a link url cannot escape the href')]
+	#[Group('mantle2/html')]
+	public function testLinkAttributeInjection()
+	{
+		$html = $this->htmlFactory->toHtml('[x](https://app.earth-app.com" onmouseover="alert(1))');
+
+		$this->assertStringNotContainsString('onmouseover="alert(1)"', $html);
+	}
+
+	#[Test]
+	#[TestDox('The footer carries social links, an app link, and a postal address')]
+	#[Group('mantle2/html')]
+	public function testFooterMarketing()
+	{
+		$html = $this->htmlFactory->toHtml('Body');
+
+		$this->assertStringContainsString('>Instagram</a>', $html);
+		$this->assertStringContainsString('>Open The Earth App</a>', $html);
+		$this->assertStringContainsString('Wilmington, DE', $html);
+		$this->assertStringContainsString('Thank you for using The Earth App!', $html);
+
+		$bare = $this->htmlFactory->toHtml('Body', false, null, ['footer_links' => false]);
+		$this->assertStringNotContainsString('>Instagram</a>', $bare);
+		$this->assertStringContainsString('Thank you for using The Earth App!', $bare);
+	}
+
+	#[Test]
+	#[TestDox('The document title is settable and escaped')]
+	#[Group('mantle2/html')]
+	public function testTitleOption()
+	{
+		$html = $this->htmlFactory->toHtml('Body', false, null, ['title' => 'Your Activity']);
+		$this->assertStringContainsString('<title>Your Activity</title>', $html);
+
+		$escaped = $this->htmlFactory->toHtml('Body', false, null, ['title' => '<script>']);
+		$this->assertStringNotContainsString('<title><script></title>', $escaped);
+	}
+
+	#[Test]
+	#[TestDox('toPlainText strips markdown and keeps link targets readable')]
+	#[Group('mantle2/html')]
+	public function testToPlainText()
+	{
+		$plain = $this->htmlFactory->toPlainText(
+			"# Title\n\n**Bold** and *italic*\n\n- Item\n\n[Link](https://app.earth-app.com)\n\n[[Button]](https://app.earth-app.com/go)",
+		);
+
+		$this->assertStringNotContainsString('**', $plain);
+		$this->assertStringNotContainsString('#', $plain);
+		$this->assertStringContainsString('Link <https://app.earth-app.com>', $plain);
+		$this->assertStringContainsString('Button <https://app.earth-app.com/go>', $plain);
+		$this->assertStringContainsString('- Item', $plain);
+	}
+
+	// #endregion
 }
