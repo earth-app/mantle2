@@ -28,6 +28,14 @@ function mantle2_help($route_name, RouteMatchInterface $route_match)
 	}
 }
 
+// single source of truth; consumed by both mantle2_mail() and mantle2_mail_alter()
+const MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS = [
+	'new_login',
+	'new_password',
+	'oauth_provider_linked',
+	'oauth_provider_unlinked',
+];
+
 function mantle2_get_list_id_header(?string $campaignId = null): string
 {
 	$subdomain = 'notifications';
@@ -92,6 +100,10 @@ function mantle2_mail($key, &$message, $params)
 	}
 	$username = $user->getAccountName();
 
+	$markdown = null;
+	$isCampaign = false;
+	$unsubscribeUrl = $params['unsubscribe_url'] ?? null; // Frontend URL for body link
+
 	// email campaigns that may include unsubscribe links
 	if (str_starts_with($key, 'campaign:')) {
 		$key = substr($key, 9);
@@ -107,33 +119,17 @@ function mantle2_mail($key, &$message, $params)
 
 			$message['subject'] = $campaign['title'];
 			$markdown = $campaign['body'];
-
-			$message['body'][] = $parser->toHtml(
-				$markdown,
-				true,
-				$params['unsubscribe_url'] ?? null,
-			);
-
-			mantle2_apply_list_headers($message, $params, $key);
-			$message['headers']['Precedence'] = 'bulk';
-
-			return;
+			$isCampaign = true;
 		}
 	}
 
-	// determine if this email should include unsubscribe
-	$includeUnsubscribe = in_array(
-		$key,
-		['new_login', 'new_password', 'oauth_provider_linked', 'oauth_provider_unlinked'],
-		true,
-	);
-	$unsubscribeUrl = $params['unsubscribe_url'] ?? null; // Frontend URL for body link
+	$includeUnsubscribe = $isCampaign || in_array($key, MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS, true);
 
+	// a campaign id never matches a case, so the switch is a no-op and $markdown survives
 	switch ($key) {
 		case 'welcome':
 			$message['subject'] = 'Welcome to The Earth App!';
 			$markdown = "Hi @$username,\n\nWelcome to The Earth App! We're excited to have you on board. Explore the app to discover new insights, connect with others, and make a positive impact on our planet. If you have any questions or need assistance, feel free to reach out to our support team.\n\nLet's work together for a better Earth!";
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'quest_challenge':
 			$challenger = $params['challenger'] ?? 'A friend';
@@ -145,7 +141,6 @@ function mantle2_mail($key, &$message, $params)
 			$markdown = "@$username, **{$challenger}** challenged you to the \"{$questTitle}\" quest on The Earth App!\n\n
 			Think you're up for it? [Accept the challenge]({$questLink}) and start your quest now.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'email_verification':
 			$message['subject'] = 'The Earth App - Email Verification Code';
@@ -154,7 +149,6 @@ function mantle2_mail($key, &$message, $params)
 			This code will expire in 15 minutes.\n
 			If you did not request this verification, please ignore this email.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'login_verification':
 			$message['subject'] = 'The Earth App - Sign-in Verification Code';
@@ -172,7 +166,6 @@ function mantle2_mail($key, &$message, $params)
 			If this was you, enter the code in the app to complete sign-in.\n
 			If this wasn't you, **do not share this code** and please change your password immediately.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'oauth_email_auto_set':
 			$message['subject'] = 'The Earth App - Email Address Set';
@@ -183,7 +176,6 @@ function mantle2_mail($key, &$message, $params)
 			You can change this at any time from your account settings.\n\n
 			If this wasn't you, please secure your account immediately by unlinking the provider and updating your email.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'new_login':
 			$message['subject'] = 'The Earth App - New Login Notification';
@@ -196,8 +188,6 @@ function mantle2_mail($key, &$message, $params)
 			If this was you, you can safely ignore this email.\n
 			If you did not log in, please reset your password immediately to secure your account.";
 
-			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
-			mantle2_apply_list_headers($message, $params, $key);
 			break;
 		case 'email_change_notification':
 			$message['subject'] = 'The Earth App - Email Change Notification';
@@ -207,7 +197,6 @@ function mantle2_mail($key, &$message, $params)
 			New Email: **{$params['new_email']}**\n\n
 			If you did not perform this action, please contact support immediately to secure your account.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'email_change_verification':
 			$message['subject'] = 'The Earth App - Email Change Verification Code';
@@ -216,7 +205,6 @@ function mantle2_mail($key, &$message, $params)
 			This code will expire in 15 minutes.\n
 			If you did not request this verification, please ignore this email.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'email_change_confirmed':
 			$message['subject'] = 'The Earth App - Email Change Confirmation';
@@ -226,7 +214,6 @@ function mantle2_mail($key, &$message, $params)
 			New Email: **{$params['new_email']}**\n\n
 			If you did not perform this action, please contact support immediately to secure your account.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'password_reset':
 			$message['subject'] = 'The Earth App - Password Reset';
@@ -237,7 +224,6 @@ function mantle2_mail($key, &$message, $params)
 			This link will expire in 1 hour.\n\n
 			If you did not request this password reset, please ignore this email and your password will remain unchanged.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'new_password':
 			$message['subject'] = 'The Earth App - Password Reset';
@@ -245,8 +231,6 @@ function mantle2_mail($key, &$message, $params)
 			$markdown = "@$username, Your password has been successfully changed.\n\n
 				If you did not perform this action, please reset your password immediately to secure your account.";
 
-			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
-			mantle2_apply_list_headers($message, $params, $key);
 			break;
 		case 'oauth_provider_linked':
 			$message['subject'] = 'The Earth App - OAuth Provider Linked';
@@ -258,8 +242,6 @@ function mantle2_mail($key, &$message, $params)
 			**IP:** {$params['ip']}\n\n
 			If you did not perform this action, please secure your account immediately by unlinking the provider and changing your password.";
 
-			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
-			mantle2_apply_list_headers($message, $params, $key);
 			break;
 		case 'oauth_provider_unlinked':
 			$message['subject'] = 'The Earth App - OAuth Provider Unlinked';
@@ -271,8 +253,6 @@ function mantle2_mail($key, &$message, $params)
 			**IP:** {$params['ip']}\n\n
 			If you did not perform this action, please secure your account immediately and re-link the provider if necessary.";
 
-			$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
-			mantle2_apply_list_headers($message, $params, $key);
 			break;
 		case 'account_disabled':
 			$message['subject'] = 'The Earth App - Account Disabled';
@@ -285,7 +265,6 @@ function mantle2_mail($key, &$message, $params)
 			**Reason:** {$reason}\n\n
 			If you believe this is a mistake, please contact support to appeal this action.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'account_enabled':
 			$message['subject'] = 'The Earth App - Account Re-enabled';
@@ -298,7 +277,6 @@ function mantle2_mail($key, &$message, $params)
 			**Reason:** {$reason}\n\n
 			You can now sign in again and continue using The Earth App.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'account_deletion_warning':
 			$window = $params['window'] ?? 'soon';
@@ -311,7 +289,6 @@ function mantle2_mail($key, &$message, $params)
 			https://app.earth-app.com\n\n
 			If you do nothing, your account and all associated data will be permanently deleted. This cannot be undone.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'account_deleted':
 			$message['subject'] = 'The Earth App - Account Deleted';
@@ -320,7 +297,6 @@ function mantle2_mail($key, &$message, $params)
 			All associated data has been removed. If this was a mistake or you would like to come back, you're always welcome to create a new account at https://app.earth-app.com.\n\n
 			Thank you for having been part of The Earth App.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'content_moderation':
 			$role = $params['role'] ?? 'author';
@@ -347,7 +323,6 @@ function mantle2_mail($key, &$message, $params)
 			}
 			$markdown .= 'If you believe this is a mistake, please contact support.';
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'moderation_digest':
 			$count = (int) ($params['count'] ?? 0);
@@ -357,7 +332,6 @@ function mantle2_mail($key, &$message, $params)
 			Review them in the admin dashboard:\n
 			https://app.earth-app.com/admin?tab=reports";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'plan_trial':
 			$type = $params['type'] ?? 'Pro';
@@ -369,7 +343,6 @@ function mantle2_mail($key, &$message, $params)
 			**Time Remaining:** {$days} days\n\n
 			Enjoy exploring the features of The Earth App! If you have any questions or need assistance, feel free to contact our support team.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'plan_trial_warning':
 			$type = $params['type'] ?? 'Pro';
@@ -380,7 +353,6 @@ function mantle2_mail($key, &$message, $params)
 			**Time Remaining:** {$days} day(s)\n\n
 			To keep your current features, please visit your account page to choose a plan before your trial ends.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'plan_trial_expired':
 			$type = $params['type'] ?? 'Pro';
@@ -389,7 +361,6 @@ function mantle2_mail($key, &$message, $params)
 			$markdown = "@$username, Your free trial for The Earth App $type has expired.\n\n
 			We hope you enjoyed trying out the features! If you have any questions or would like to continue using The Earth App, please consider subscribing to one of our plans. Visit your account page for more details.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'subscription_activated':
 			$type = $params['tier'] ?? 'Pro';
@@ -404,7 +375,6 @@ function mantle2_mail($key, &$message, $params)
 			{$renewsLine}Your plan renews automatically each month until you cancel. You can manage or cancel your subscription any time from your account settings.\n\n
 			Thanks for supporting The Earth App!";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'subscription_renewed':
 			$type = $params['tier'] ?? 'Pro';
@@ -418,7 +388,6 @@ function mantle2_mail($key, &$message, $params)
 			**Amount:** {$price}\n
 			{$renewsLine}No action is needed. You can manage or cancel your subscription any time from your account settings.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'subscription_canceled':
 			$type = $params['tier'] ?? 'Pro';
@@ -431,7 +400,6 @@ function mantle2_mail($key, &$message, $params)
 			$markdown = "@$username, Your The Earth App **$type** subscription has been canceled.\n\n
 			{$accessLine}We're sorry to see you go. You can resubscribe at any time from your account settings.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'subscription_refunded':
 			$message['subject'] = 'The Earth App - Subscription Refunded';
@@ -440,7 +408,6 @@ function mantle2_mail($key, &$message, $params)
 			The refund should appear on your original payment method within 5-10 business days, depending on your bank.\n\n
 			If you have any questions about this refund, please contact our support team.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'payment_failed_warning':
 			$type = $params['tier'] ?? 'Pro';
@@ -455,7 +422,6 @@ function mantle2_mail($key, &$message, $params)
 				: "@$username, We were unable to process the latest payment for your The Earth App **$type** subscription.\n\n
 			Please update your payment method from your account settings to keep your subscription active. We'll retry the payment automatically over the next few days.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'renewal_reminder':
 			$type = $params['tier'] ?? 'Pro';
@@ -469,7 +435,6 @@ function mantle2_mail($key, &$message, $params)
 			**Amount:** {$price}\n
 			{$renewsLine}No action is needed to continue. If you'd like to make changes, visit your account settings before the renewal date.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'price_change_notice':
 			$type = $params['tier'] ?? 'Pro';
@@ -484,7 +449,6 @@ function mantle2_mail($key, &$message, $params)
 			**New Price:** {$newPrice}\n
 			{$effectiveLine}This change applies to your next renewal on or after the effective date. If you do not wish to continue at the new price, you can cancel any time before then from your account settings.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'trial_code_redeemed':
 			$type = $params['tier'] ?? 'Pro';
@@ -498,7 +462,6 @@ function mantle2_mail($key, &$message, $params)
 			**Trial Length:** {$days} days\n
 			{$endLine}Enjoy exploring the features! When your trial ends, your account reverts to the Free plan unless you subscribe.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'trial_broadcast':
 			$title = $params['title'] ?? 'The Earth App';
@@ -506,7 +469,6 @@ function mantle2_mail($key, &$message, $params)
 			$message['subject'] = 'The Earth App - ' . $title;
 
 			$markdown = "@$username,\n\n{$body}";
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'api_key_expiring':
 			$keyName = $params['key_name'] ?? 'Unnamed key';
@@ -523,7 +485,6 @@ function mantle2_mail($key, &$message, $params)
 			https://app.earth-app.com/settings/api-keys\n\n
 			If you no longer use this key you can ignore this email and it will expire automatically.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'api_key_expired':
 			$keyName = $params['key_name'] ?? 'Unnamed key';
@@ -538,7 +499,6 @@ function mantle2_mail($key, &$message, $params)
 			{$expiresLine}It can no longer authenticate requests. If you still need it, create a replacement from your account settings:\n
 			https://app.earth-app.com/settings/api-keys";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
 			break;
 		case 'unread_notifications_reminder':
 			/** @var array<Notification> $notifications */
@@ -591,75 +551,138 @@ function mantle2_mail($key, &$message, $params)
 			$markdown .=
 				"\n\n\nDon't miss out on important updates and interactions! Visit your notifications page to stay informed and engaged with the community.";
 
-			$message['body'][] = $parser->toHtml($markdown, false);
+			break;
+		case 'activity_staged_submitted':
+			$submitter = $params['submitter'] ?? 'An organizer';
+			$message['subject'] = 'The Earth App - Activity Awaiting Review';
+
+			$markdown = "@$username, **@{$submitter}** submitted the activity **{$params['activity']}** for review.\n\n";
+			$markdown .= "This submission is **automatically denied** if it is not approved by **{$params['deadline']}**.\n\n";
+			$markdown .= '[[Review Submission]](https://app.earth-app.com/admin?tab=approvals)';
+			break;
+		case 'activity_staged_digest':
+			$count = (int) ($params['count'] ?? 0);
+			$message['subject'] = "The Earth App - $count Activities Awaiting Review";
+
+			$markdown = "@$username, there are **{$count}** activities awaiting review on The Earth App.\n\n";
+			$markdown .= "- **{$params['count_organizer']}** from organizers, which are **denied automatically** if the window closes\n";
+			$markdown .= "- **{$params['count_automated']}** discovered automatically, which **publish themselves** if the window closes\n\n";
+			$markdown .= "The next deadline is **{$params['soonest_deadline']}**.\n\n";
+			$markdown .=
+				'[[Open the Approvals Queue]](https://app.earth-app.com/admin?tab=approvals)';
+			break;
+		case 'activity_staged_urgent':
+			$count = (int) ($params['count'] ?? 0);
+			$message['subject'] = "The Earth App - $count Staged Activities Expire Within 12 Hours";
+
+			$markdown = "@$username, **{$count}** organizer submissions are about to expire.\n\n";
+			$markdown .= "If they are not approved before **{$params['deadline']}**, they will be automatically **denied** and the organizers will have to resubmit.\n\n";
+			$markdown .= "Awaiting review: {$params['activities']}\n\n";
+			$markdown .= '[[Review Them Now]](https://app.earth-app.com/admin?tab=approvals)';
+			break;
+		case 'activity_staged_approved':
+			$message['subject'] = 'The Earth App - Your Activity Was Published';
+
+			$markdown = "@$username, your submission **{$params['activity']}** is now live in the activity catalog. Thank you for helping the community grow.\n\n";
+			if (!empty($params['notes'])) {
+				$markdown .= "Reviewer notes: {$params['notes']}\n\n";
+			}
+			$markdown .=
+				'[[View Your Activity]](https://app.earth-app.com/activities/' .
+				$params['activity'] .
+				')';
+			break;
+		case 'activity_staged_denied':
+			$message['subject'] = 'The Earth App - Your Activity Was Not Approved';
+
+			$markdown = "@$username, your submission **{$params['activity']}** was not approved.\n\n";
+			if (!empty($params['notes'])) {
+				$markdown .= "Reviewer notes: {$params['notes']}\n\n";
+			}
+			$markdown .= "You are welcome to revise it and submit again.\n\n";
+			$markdown .= '[[Submit Another Activity]](https://app.earth-app.com/profile)';
+			break;
+		case 'verified_publisher_submitted':
+			$message['subject'] = 'The Earth App - New Verified Publisher Application';
+
+			$markdown = "@$username, **@{$params['applicant']}** applied for Verified Publisher status.\n\n";
+			if (!empty($params['organization'])) {
+				$markdown .= "Organization: **{$params['organization']}**\n\n";
+			}
+			$markdown .=
+				'[[Review the Application]](https://app.earth-app.com/admin?tab=approvals)';
+			break;
+		case 'verified_publisher_approved':
+			$message['subject'] = "The Earth App - You're a Verified Publisher";
+
+			$markdown = "@$username, your Verified Publisher application was approved.\n\n";
+			$markdown .=
+				"You can now submit activities for review, and they will carry your verified badge once published.\n\n";
+			if (!empty($params['notes'])) {
+				$markdown .= "Reviewer notes: {$params['notes']}\n\n";
+			}
+			$markdown .= '[[Submit Your First Activity]](https://app.earth-app.com/profile)';
+			break;
+		case 'verified_publisher_denied':
+			$message['subject'] = 'The Earth App - Verified Publisher Application Update';
+
+			$markdown = "@$username, your Verified Publisher application was not approved at this time.\n\n";
+			if (!empty($params['notes'])) {
+				$markdown .= "Reviewer notes: {$params['notes']}\n\n";
+			}
+			$markdown .= 'You may apply again after the re-application window has passed.';
+			break;
+		case 'verified_publisher_revoked':
+			$revoked = (int) ($params['revoked_staged'] ?? 0);
+			$message['subject'] = 'The Earth App - Verified Publisher Status Removed';
+
+			$markdown = "@$username, your Verified Publisher status has been removed.\n\n";
+			if (!empty($params['notes'])) {
+				$markdown .= "Reason: {$params['notes']}\n\n";
+			}
+			if ($revoked > 0) {
+				$markdown .= "**{$revoked}** pending submission(s) were withdrawn as a result.\n\n";
+			}
+			$markdown .= 'Activities you already published remain in the catalog.';
 			break;
 	}
+
+	// every key this hook renders goes through HTMLFactory, so every key is HTML; setting
+	// the header here rather than in mantle2_mail_alter() makes it impossible for a new
+	// case to ship raw markup as text/plain (drupal/smtp calls IsHTML(FALSE) for any
+	// non-text/html content type, which is what broke content_moderation and
+	// moderation_digest)
+	if ($markdown === null) {
+		Drupal::logger('mantle2')->error('No mail body was built for email key: %key', [
+			'%key' => $key,
+		]);
+		return;
+	}
+
+	$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
+	$message['headers']['MIME-Version'] = '1.0';
+	$message['params']['convert'] = false;
+	$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
 }
 
 function mantle2_mail_alter(&$message)
 {
-	$messages = [
-		'mantle2_email_verification',
-		'mantle2_login_verification',
-		'mantle2_oauth_email_auto_set',
-		'mantle2_welcome',
-		'mantle2_quest_challenge',
-		'mantle2_new_login',
-		'mantle2_new_password',
-		'mantle2_password_reset',
-		'mantle2_email_change_notification',
-		'mantle2_email_change_verification',
-		'mantle2_email_change_confirmed',
-		'mantle2_oauth_provider_linked',
-		'mantle2_oauth_provider_unlinked',
-		'mantle2_account_disabled',
-		'mantle2_account_enabled',
-		'mantle2_account_deletion_warning',
-		'mantle2_account_deleted',
-		'mantle2_plan_trial',
-		'mantle2_plan_trial_warning',
-		'mantle2_plan_trial_expired',
-		'mantle2_subscription_activated',
-		'mantle2_subscription_renewed',
-		'mantle2_subscription_canceled',
-		'mantle2_subscription_refunded',
-		'mantle2_payment_failed_warning',
-		'mantle2_renewal_reminder',
-		'mantle2_price_change_notice',
-		'mantle2_trial_code_redeemed',
-		'mantle2_trial_broadcast',
-		'mantle2_unread_notifications_reminder',
-		'mantle2_api_key_expiring',
-		'mantle2_api_key_expired',
-	];
-
-	if (
-		in_array($message['id'], $messages, true) ||
-		str_starts_with($message['id'], 'mantle2_campaign:')
-	) {
-		$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
-		$message['params']['convert'] = false;
+	// Content-Type is set in mantle2_mail() so a new case cannot ship as text/plain;
+	// this hook only adds the List-* headers that depend on the resolved message id.
+	if (!str_starts_with($message['id'], 'mantle2_')) {
+		return;
 	}
 
-	// Add List-Unsubscribe headers for campaign emails
 	if (str_starts_with($message['id'], 'mantle2_campaign:')) {
 		$campaignId = substr($message['id'], strlen('mantle2_campaign:'));
 		mantle2_apply_list_headers($message, $message['params'] ?? [], $campaignId);
 		$message['headers']['Precedence'] = 'bulk';
+		return;
 	}
 
-	// Add List-Unsubscribe headers for specific email types
-	$unsubscribableMessages = [
-		'mantle2_new_login',
-		'mantle2_new_password',
-		'mantle2_oauth_provider_linked',
-		'mantle2_oauth_provider_unlinked',
-	];
-	if (in_array($message['id'], $unsubscribableMessages, true)) {
-		$listId = str_starts_with($message['id'], 'mantle2_')
-			? substr($message['id'], strlen('mantle2_'))
-			: $message['id'];
-		mantle2_apply_list_headers($message, $message['params'] ?? [], $listId);
+	$key = substr($message['id'], strlen('mantle2_'));
+	if (in_array($key, MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS, true)) {
+		mantle2_apply_list_headers($message, $message['params'] ?? [], $key);
 	}
 }
 
