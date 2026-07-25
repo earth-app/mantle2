@@ -47,8 +47,10 @@ abstract class IntegrationTestBase extends KernelTestBase
 		$this->installEntitySchema('user');
 		$this->installEntitySchema('node');
 		$this->installEntitySchema('comment');
-		$this->installSchema('mantle2', ['push_tokens', 'mantle2_api_keys']);
-		$this->installSubscriptionTables();
+		// exercises the same install path production uses; installSchema() cannot be used
+		// because mantle2_schema() is deliberately empty (see mantle2.install)
+		$this->container->get('module_handler')->loadInclude('mantle2', 'install');
+		mantle2_ensure_custom_tables();
 		// node save/delete needs node_access; comment save needs comment_entity_statistics
 		$this->installSchema('node', ['node_access']);
 		$this->installSchema('comment', ['comment_entity_statistics']);
@@ -63,7 +65,6 @@ abstract class IntegrationTestBase extends KernelTestBase
 
 		// user fields are always needed; content types are installed only when a test
 		// opts in (see $installContentTypes) since they are the expensive half of install
-		$this->container->get('module_handler')->loadInclude('mantle2', 'install');
 		mantle2_install_user_fields();
 		if ($this->installContentTypes) {
 			mantle2_install_content();
@@ -170,96 +171,6 @@ abstract class IntegrationTestBase extends KernelTestBase
 	// must match the value Mocks::mockDrupalContainer returns for mantle2_stripe_webhook_secret
 	protected const STRIPE_WEBHOOK_SECRET = 'whsec_test';
 	protected const STRIPE_SECRET_KEY = 'sk_test_x';
-
-	// creates the three subscription tables using the DDL from the frozen contract; guarded so
-	// it is a no-op if a future mantle2_schema() already created them under installSchema
-	protected function installSubscriptionTables(): void
-	{
-		$schema = $this->container->get('database')->schema();
-
-		if (!$schema->tableExists('mantle2_subscriptions')) {
-			$schema->createTable('mantle2_subscriptions', [
-				'description' => 'One billing subscription row per user.',
-				'fields' => [
-					'user_id' => ['type' => 'int', 'not null' => true],
-					'provider' => ['type' => 'varchar', 'length' => 16, 'not null' => true],
-					'external_customer_id' => [
-						'type' => 'varchar',
-						'length' => 255,
-						'not null' => false,
-					],
-					'external_subscription_id' => [
-						'type' => 'varchar',
-						'length' => 255,
-						'not null' => false,
-					],
-					'tier' => ['type' => 'varchar', 'length' => 16, 'not null' => true],
-					'status' => ['type' => 'varchar', 'length' => 16, 'not null' => true],
-					'current_period_end' => ['type' => 'int', 'not null' => false],
-					'cancel_at_period_end' => [
-						'type' => 'int',
-						'size' => 'tiny',
-						'not null' => true,
-						'default' => 0,
-					],
-					'consent_at' => ['type' => 'int', 'not null' => false],
-					'price_cents' => ['type' => 'int', 'not null' => true, 'default' => 0],
-					'started_at' => ['type' => 'int', 'not null' => false],
-					'created' => ['type' => 'int', 'not null' => true],
-					'updated' => ['type' => 'int', 'not null' => true],
-				],
-				'primary key' => ['user_id'],
-				'indexes' => [
-					'provider' => ['provider'],
-					'status' => ['status'],
-					'external_subscription_id' => ['external_subscription_id'],
-				],
-			]);
-		}
-
-		if (!$schema->tableExists('mantle2_trial_codes')) {
-			$schema->createTable('mantle2_trial_codes', [
-				'description' => 'Redeemable trial codes.',
-				'fields' => [
-					'id' => ['type' => 'serial', 'unsigned' => true, 'not null' => true],
-					'code' => ['type' => 'varchar', 'length' => 32, 'not null' => true],
-					'tier' => ['type' => 'varchar', 'length' => 16, 'not null' => true],
-					'days' => ['type' => 'int', 'not null' => true],
-					'max_redemptions' => ['type' => 'int', 'not null' => true, 'default' => 0],
-					'redemptions' => ['type' => 'int', 'not null' => true, 'default' => 0],
-					'expires_at' => ['type' => 'int', 'not null' => false],
-					'active' => [
-						'type' => 'int',
-						'size' => 'tiny',
-						'not null' => true,
-						'default' => 1,
-					],
-					'created_by' => ['type' => 'int', 'not null' => true],
-					'created' => ['type' => 'int', 'not null' => true],
-				],
-				'primary key' => ['id'],
-				'unique keys' => ['code' => ['code']],
-				'indexes' => ['active' => ['active']],
-			]);
-		}
-
-		if (!$schema->tableExists('mantle2_trial_code_redemptions')) {
-			$schema->createTable('mantle2_trial_code_redemptions', [
-				'description' => 'One row per (code, user) redemption.',
-				'fields' => [
-					'id' => ['type' => 'serial', 'unsigned' => true, 'not null' => true],
-					'code' => ['type' => 'varchar', 'length' => 32, 'not null' => true],
-					'user_id' => ['type' => 'int', 'not null' => true],
-					'redeemed_at' => ['type' => 'int', 'not null' => true],
-					'tier' => ['type' => 'varchar', 'length' => 16, 'not null' => false],
-					'expires_at' => ['type' => 'int', 'not null' => false],
-				],
-				'primary key' => ['id'],
-				'unique keys' => ['code_user' => ['code', 'user_id']],
-				'indexes' => ['user_id' => ['user_id']],
-			]);
-		}
-	}
 
 	// inserts a subscription row with sane defaults; overrides win
 	protected function seedSubscription(int $uid, array $fields = []): void

@@ -2,6 +2,7 @@
 
 namespace Drupal\mantle2\Commands;
 
+use Drupal;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\mantle2\Service\SubscriptionsHelper;
@@ -20,6 +21,42 @@ class Mantle2Commands extends DrushCommands
 	public function hi()
 	{
 		$this->output()->writeln('Hello, World!');
+	}
+
+	/**
+	 * Re-run mantle2's idempotent install routines.
+	 *
+	 * Replaces the deploy pipeline's `drush un mantle2 && drush en mantle2`, which dropped
+	 * every table returned by mantle2_schema() on each release (production data loss: push
+	 * tokens, API keys, subscriptions, trial codes). This performs the constructive half
+	 * only, so programmatic content types and fields still appear on deploy without an
+	 * update hook.
+	 *
+	 * @option skip-content Skip node content types and comment install (fields + tables only).
+	 * @command mantle2:sync
+	 * @aliases m2:sync m2:install
+	 * @usage drush m2:sync
+	 */
+	public function sync(array $options = ['skip-content' => false])
+	{
+		Drupal::moduleHandler()->loadInclude('mantle2', 'install');
+
+		$created = mantle2_ensure_custom_tables();
+		$this->output()->writeln(
+			$created
+				? 'Created tables: ' . implode(', ', $created)
+				: 'All custom tables already present.',
+		);
+
+		mantle2_install_user_fields();
+		$this->output()->writeln('User fields synced.');
+
+		if (!$options['skip-content']) {
+			mantle2_install_content();
+			$this->output()->writeln('Content types, comment system, and form displays synced.');
+		}
+
+		$this->output()->writeln('mantle2:sync complete.');
 	}
 
 	/**

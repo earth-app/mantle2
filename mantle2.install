@@ -11,6 +11,7 @@ use Drupal\Core\Database\Database;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\EventType;
+use Drupal\mantle2\Custom\VerifiedPublisherState;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
@@ -369,6 +370,7 @@ function getWidgetType(string $field_type): string
 /** @noinspection PhpUnused */
 function mantle2_install(): void
 {
+	mantle2_ensure_custom_tables();
 	mantle2_install_user_fields();
 	mantle2_install_content();
 }
@@ -1112,44 +1114,91 @@ function mantle2_install_content(): void
 	RedisHelper::delete(['cloud:*', 'request_cache:*']);
 }
 
+/**
+ * Intentionally empty. Do not add tables here.
+ *
+ * Drupal's ModuleInstaller::uninstallSchema() drops every table this returns, and the
+ * deploy pipeline used to run `drush un mantle2 && drush en mantle2` on each release,
+ * which silently wiped push tokens, API keys, subscriptions and trial codes in
+ * production. Table DDL lives in mantle2_ensure_custom_tables() instead, which is
+ * idempotent and unreachable from uninstall. InstallSchemaValidationTest enforces this.
+ */
 function mantle2_schema()
 {
-	return [
-		'push_tokens' => [
-			'description' =>
-				'Stores device push tokens for user notifications (one per user per platform)',
-			'fields' => [
-				'user_id' => [
-					'type' => 'int',
-					'not null' => true,
-				],
-				'platform' => [
-					'type' => 'varchar',
-					'length' => 8,
-					'not null' => true,
-					'description' => "Device platform: 'ios' or 'android'",
-				],
-				'token' => [
-					'type' => 'varchar',
-					'length' => 512,
-					'not null' => true,
-					'description' => 'Push notification token from FCM/APNS',
-				],
-				'updated' => [
-					'type' => 'int',
-					'not null' => true,
-					'description' => 'Unix timestamp of last update',
-				],
-			],
-			'primary key' => ['user_id', 'platform'],
-			'indexes' => [
-				'token' => ['token'],
-			],
-		],
+	return [];
+}
+
+/**
+ * Create every mantle2-owned table that is missing.
+ *
+ * Idempotent; safe to call from hook_install, `drush mantle2:sync`, cron, and tests.
+ * Returns the names of the tables it actually created.
+ */
+function mantle2_ensure_custom_tables(): array
+{
+	$schema = Database::getConnection()->schema();
+	$created = [];
+
+	$tables = [
+		'push_tokens' => mantle2_push_tokens_table_schema(),
 		'mantle2_api_keys' => mantle2_api_keys_table_schema(),
 		'mantle2_subscriptions' => mantle2_subscriptions_table_schema(),
 		'mantle2_trial_codes' => mantle2_trial_codes_table_schema(),
 		'mantle2_trial_code_redemptions' => mantle2_trial_code_redemptions_table_schema(),
+		'mantle2_staged_activities' => mantle2_staged_activities_table_schema(),
+	];
+
+	foreach ($tables as $name => $definition) {
+		if ($schema->tableExists($name)) {
+			continue;
+		}
+
+		try {
+			$schema->createTable($name, $definition);
+			$created[] = $name;
+		} catch (\Throwable $e) {
+			Drupal::logger('mantle2')->error('Failed to create table %table: %message', [
+				'%table' => $name,
+				'%message' => $e->getMessage(),
+			]);
+		}
+	}
+
+	return $created;
+}
+
+function mantle2_push_tokens_table_schema(): array
+{
+	return [
+		'description' =>
+			'Stores device push tokens for user notifications (one per user per platform)',
+		'fields' => [
+			'user_id' => [
+				'type' => 'int',
+				'not null' => true,
+			],
+			'platform' => [
+				'type' => 'varchar',
+				'length' => 8,
+				'not null' => true,
+				'description' => "Device platform: 'ios' or 'android'",
+			],
+			'token' => [
+				'type' => 'varchar',
+				'length' => 512,
+				'not null' => true,
+				'description' => 'Push notification token from FCM/APNS',
+			],
+			'updated' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Unix timestamp of last update',
+			],
+		],
+		'primary key' => ['user_id', 'platform'],
+		'indexes' => [
+			'token' => ['token'],
+		],
 	];
 }
 
@@ -1478,6 +1527,130 @@ function mantle2_api_keys_table_schema(): array
 			'token_prefix' => ['token_prefix'],
 			'expires_at' => ['expires_at'],
 			'revoked_at' => ['revoked_at'],
+		],
+	];
+}
+
+function mantle2_staged_activities_table_schema(): array
+{
+	return [
+		'description' => 'Activities awaiting administrator review before entering the catalog.',
+		'fields' => [
+			'id' => [
+				'type' => 'serial',
+				'unsigned' => true,
+				'not null' => true,
+				'description' => 'Auto-increment primary key',
+			],
+			'activity_id' => [
+				'type' => 'varchar',
+				'length' => 64,
+				'not null' => true,
+				'description' => 'Proposed Activity id',
+			],
+			// field_activity_id lookups are case-sensitive, so fold here or Rock_Climbing
+			// and rock_climbing both stage
+			'dedup_hash' => [
+				'type' => 'varchar',
+				'length' => 64,
+				'not null' => true,
+				'description' => 'SHA-256 of the lowercased activity id; pending-uniqueness key',
+			],
+			'payload' => [
+				'type' => 'text',
+				'size' => 'medium',
+				'not null' => true,
+				'description' =>
+					'JSON-encoded Activity (id, name, description, types, aliases, fields)',
+			],
+			'note' => [
+				'type' => 'varchar',
+				'length' => 512,
+				'not null' => false,
+				'description' => 'Optional submitter message to reviewers',
+			],
+			'submitter_id' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Submitting user uid',
+			],
+			'submitter_kind' => [
+				'type' => 'varchar',
+				'length' => 16,
+				'not null' => true,
+				'description' =>
+					"'organizer', 'admin', or 'cloud'; decides fail-open vs fail-closed",
+			],
+			'source' => [
+				'type' => 'varchar',
+				'length' => 32,
+				'not null' => true,
+				'default' => 'api',
+				'description' => "'api', 'cloud_discovery', 'admin_panel', or 'drush'",
+			],
+			'state' => [
+				'type' => 'varchar',
+				'length' => 24,
+				'not null' => true,
+				'default' => 'pending',
+				'description' =>
+					'pending, approved, denied, expired_published, expired_denied, withdrawn',
+			],
+			'submitted_at' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Unix timestamp of submission',
+			],
+			'expires_at' => [
+				'type' => 'int',
+				'not null' => true,
+				'description' => 'Unix timestamp the review window closes',
+			],
+			'decided_at' => [
+				'type' => 'int',
+				'not null' => false,
+				'description' => 'Unix timestamp of the terminal decision; NULL while pending',
+			],
+			'reviewer_id' => [
+				'type' => 'int',
+				'not null' => false,
+				'description' => 'Deciding administrator uid; NULL when cron decided',
+			],
+			'review_notes' => [
+				'type' => 'varchar',
+				'length' => 1024,
+				'not null' => false,
+				'description' => 'Reviewer notes surfaced to the submitter',
+			],
+			'published_nid' => [
+				'type' => 'int',
+				'not null' => false,
+				'description' => 'Node id produced on publish; audit trail',
+			],
+			'warned_12h' => [
+				'type' => 'int',
+				'size' => 'tiny',
+				'not null' => true,
+				'default' => 0,
+				'description' => '1 once the 12-hour fail-closed warning has been sent',
+			],
+			'notified_pending' => [
+				'type' => 'int',
+				'size' => 'tiny',
+				'not null' => true,
+				'default' => 0,
+				'description' => '1 once administrators have been told about this row',
+			],
+		],
+		'primary key' => ['id'],
+		// no unique key on dedup_hash: denied rows must coexist with a later resubmission,
+		// and the Schema API has no portable partial index
+		'indexes' => [
+			'state' => ['state'],
+			'state_expires' => ['state', 'expires_at'],
+			'submitter' => ['submitter_id', 'state'],
+			'dedup' => ['dedup_hash', 'state'],
+			'activity_id' => ['activity_id'],
 		],
 	];
 }

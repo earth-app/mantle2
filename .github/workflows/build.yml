@@ -377,10 +377,12 @@ jobs:
           key: ${{ secrets.MANTLE2_SSH_KEY }}
           passphrase: ${{ secrets.MANTLE2_SSH_PASSPHRASE }}
           script: |
+            set -e
             cd /var/www/drupal
-            ./vendor/bin/drush un mantle2 -y
-            cd /var/www/drupal
+            ./vendor/bin/drush cr
             ./vendor/bin/drush en mantle2 -y
+            ./vendor/bin/drush mantle2:sync || (./vendor/bin/drush cr && ./vendor/bin/drush mantle2:sync)
             ./vendor/bin/drush updb -y
             ./vendor/bin/drush cr
             sudo /usr/bin/systemctl restart apache2
+            curl -fsS --retry 5 --retry-delay 3 https://api.earth-app.com/v2/info > /dev/null
