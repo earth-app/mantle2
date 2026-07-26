@@ -468,4 +468,151 @@ class CachingValidationTest extends TestCase
 			}
 		}
 	}
+
+	// #region Query-parameter partitioning
+
+	/**
+	 * Retrieval rules paired with the routing entry they cache.
+	 */
+	public static function retrievalRouteProvider(): array
+	{
+		if (!isset(self::$cachingConfig)) {
+			self::setUpBeforeClass();
+		}
+
+		$byPath = [];
+		foreach (self::$routes as $name => $route) {
+			if (!is_array($route) || !isset($route['path'])) {
+				continue;
+			}
+			$methods = $route['methods'] ?? [];
+			if (!in_array('GET', is_array($methods) ? $methods : [$methods], true)) {
+				continue;
+			}
+			$byPath[$route['path']] = ['name' => $name, 'route' => $route];
+		}
+
+		$data = [];
+		foreach (self::$cachingConfig['cache']['retrievals'] ?? [] as $rule) {
+			$pattern = $rule['route'] ?? '';
+			// only the fixed-path rules can be paired unambiguously; the id-captured ones
+			// already carry {uid}/{page}/{limit} and are covered by the other assertions
+			$path = str_replace(['^', '$'], '', $pattern);
+			if (!isset($byPath[$path])) {
+				continue;
+			}
+
+			$data[$path] = [$path, $rule, $byPath[$path]['route']];
+		}
+
+		return $data;
+	}
+
+	#[Test]
+	#[TestDox('A cached route partitions its key by every query parameter it accepts')]
+	#[Group('mantle2/caching')]
+	#[DataProvider('retrievalRouteProvider')]
+	public function testCacheKeyPartitionsByQueryParameters(
+		string $path,
+		array $rule,
+		array $route,
+	): void {
+		$key = $rule['key_template'] ?? '';
+		$options = $route['options'] ?? [];
+
+		// a constant key for a paginated route serves page 1 (or the first search miss) to
+		// every caller for the whole TTL; that is how ?search= poisoned the activity list
+		if (!empty($options['paginated'])) {
+			$this->assertStringContainsString(
+				'{page}',
+				$key,
+				"$path is paginated but its cache key ignores the page",
+			);
+			$this->assertStringContainsString(
+				'{limit}',
+				$key,
+				"$path is paginated but its cache key ignores the limit",
+			);
+		}
+
+		$partitioned = 0;
+		foreach (array_keys($options['query'] ?? []) as $parameter) {
+			// only parameters the key builder can actually resolve
+			if (!in_array($parameter, self::PARTITIONABLE_QUERY_PARAMS, true)) {
+				continue;
+			}
+
+			$partitioned++;
+			$this->assertStringContainsString(
+				'{' . $parameter . '}',
+				$key,
+				"$path accepts ?$parameter= but its cache key ignores it, so one value's " .
+					'response is served for every other value',
+			);
+		}
+
+		// a route with no partitionable input is legitimately cached under a constant key
+		if (empty($options['paginated']) && $partitioned === 0) {
+			$this->assertNotSame('', $key, "$path has no cache key");
+		}
+	}
+
+	// placeholders ResponseCacheSubscriber::applyPlaceholders() can resolve from the query
+	private const PARTITIONABLE_QUERY_PARAMS = [
+		'page',
+		'limit',
+		'search',
+		'sort',
+		'type',
+		'read',
+		'size',
+		'cosmetic',
+		'activities',
+	];
+
+	#[Test]
+	#[TestDox('An invalidation glob matches the partitioned key it is meant to clear')]
+	#[Group('mantle2/caching')]
+	public function testInvalidationGlobsCoverPartitionedKeys(): void
+	{
+		$templates = array_map(
+			fn(array $rule) => $rule['key_template'] ?? '',
+			self::$cachingConfig['cache']['retrievals'] ?? [],
+		);
+
+		foreach (self::$cachingConfig['cache']['updates'] ?? [] as $rule) {
+			foreach ($rule['invalidate_patterns'] ?? [] as $pattern) {
+				// placeholder names differ between a key and the pattern that clears it
+				// ({uid} vs {friend_uid}), so compare their shapes rather than their text
+				$prefix = self::shape(rtrim($pattern, '*'));
+
+				$targets = array_filter(
+					$templates,
+					fn(string $template) => str_starts_with(self::shape($template), $prefix),
+				);
+				$this->assertNotEmpty(
+					$targets,
+					"Invalidation pattern $pattern matches no retrieval key template",
+				);
+
+				// a non-glob pattern must match a key exactly, or it silently clears nothing
+				if (!str_ends_with($pattern, '*')) {
+					$this->assertContains(
+						self::shape($pattern),
+						array_map(self::shape(...), $templates),
+						"Invalidation pattern $pattern is not a glob and matches no key exactly; " .
+							'partitioned keys need a trailing *',
+					);
+				}
+			}
+		}
+	}
+
+	/** collapse every placeholder to a single token so key shapes can be compared */
+	private static function shape(string $value): string
+	{
+		return preg_replace('/\{[^}]+\}/', '{}', $value);
+	}
+
+	// #endregion
 }
