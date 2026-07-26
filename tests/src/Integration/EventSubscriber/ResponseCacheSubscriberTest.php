@@ -305,4 +305,96 @@ class ResponseCacheSubscriberTest extends IntegrationTestBase
 		$this->assertFalse($event->getResponse()->headers->has('X-Cache'));
 		$this->assertNull(RedisHelper::get(self::LIST_KEY));
 	}
+
+	// #region Activity search partitioning
+
+	private function activitiesRequest(array $query = []): Request
+	{
+		return Request::create('/v2/activities', 'GET', $query);
+	}
+
+	/** the payload a repeat request would be served, or null on a miss */
+	private function cachedBody(Request $request): ?array
+	{
+		$event = $this->onRequest($request);
+		$response = $event->getResponse();
+		if (!$response) {
+			return null;
+		}
+
+		return json_decode($response->getContent(), true);
+	}
+
+	private function seedCache(Request $request, array $payload): void
+	{
+		$this->onResponse($request, new JsonResponse($payload));
+	}
+
+	#[Test]
+	#[TestDox('A search response never answers a different search')]
+	#[Group('mantle2/subscribers')]
+	public function activitySearchIsPartitioned(): void
+	{
+		// the exact production symptom: searching "jiu" returned whatever the previous
+		// request had cached under the shared, unpartitioned activities key
+		$this->seedCache($this->activitiesRequest(['search' => 'zzz']), [
+			'items' => [],
+			'total' => 0,
+		]);
+
+		$this->assertNull(
+			$this->cachedBody($this->activitiesRequest(['search' => 'jiu'])),
+			'A miss for one search term was served as the answer for another',
+		);
+		$this->assertNull(
+			$this->cachedBody($this->activitiesRequest()),
+			'A search response was served as the unfiltered activity list',
+		);
+	}
+
+	#[Test]
+	#[TestDox('The same search reads its own cached response back')]
+	#[Group('mantle2/subscribers')]
+	public function activitySearchHitsItsOwnKey(): void
+	{
+		$payload = ['items' => [['id' => 'jiujitsu']], 'total' => 1];
+		$this->seedCache($this->activitiesRequest(['search' => 'jiu']), $payload);
+
+		$this->assertSame(
+			$payload,
+			$this->cachedBody($this->activitiesRequest(['search' => 'jiu'])),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Pages and sorts of the activity list do not overwrite each other')]
+	#[Group('mantle2/subscribers')]
+	public function activityPagesArePartitioned(): void
+	{
+		$this->seedCache($this->activitiesRequest(['page' => 1]), ['items' => ['one']]);
+
+		$this->assertNull($this->cachedBody($this->activitiesRequest(['page' => 2])));
+		$this->assertNull($this->cachedBody($this->activitiesRequest(['sort' => 'asc'])));
+		$this->assertSame(
+			['items' => ['one']],
+			$this->cachedBody($this->activitiesRequest(['page' => 1])),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Publishing an activity clears every cached page and search')]
+	#[Group('mantle2/subscribers')]
+	public function publishingClearsEveryActivityKey(): void
+	{
+		$this->seedCache($this->activitiesRequest(), ['items' => ['before']]);
+		$this->seedCache($this->activitiesRequest(['search' => 'jiu']), ['items' => []]);
+
+		// StagingHelper::publish() busts the same glob when cron publishes outside a request
+		RedisHelper::delete('request_cache:activities:list:*');
+
+		$this->assertNull($this->cachedBody($this->activitiesRequest()));
+		$this->assertNull($this->cachedBody($this->activitiesRequest(['search' => 'jiu'])));
+	}
+
+	// #endregion
 }
