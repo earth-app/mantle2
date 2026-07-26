@@ -62,6 +62,46 @@ class RedisHelper
 	/**
 	 * Store data in Redis with TTL
 	 */
+	// key registry backing glob deletes when Redis is unavailable; the cache bin also holds
+	// application state, so clearing the whole bin is not an option
+	private const FALLBACK_INDEX_KEY = 'mantle2:cache_fallback:index';
+
+	/** @return string[] */
+	private static function fallbackKeyIndex(): array
+	{
+		$item = Drupal::cache('mantle2')->get(self::FALLBACK_INDEX_KEY);
+		if (!$item || !is_string($item->data)) {
+			return [];
+		}
+
+		$decoded = json_decode($item->data, true);
+
+		return is_array($decoded) ? array_values(array_filter($decoded, 'is_string')) : [];
+	}
+
+	/** redis-style glob match; fnmatch is discouraged here and is not portable */
+	private static function globMatches(string $pattern, string $subject): bool
+	{
+		$regex = '/^' . str_replace(['\*', '\?'], ['.*', '.'], preg_quote($pattern, '/')) . '$/';
+
+		return (bool) preg_match($regex, $subject);
+	}
+
+	private static function trackFallbackKey(string $key): void
+	{
+		if ($key === self::FALLBACK_INDEX_KEY) {
+			return;
+		}
+
+		$index = self::fallbackKeyIndex();
+		if (in_array($key, $index, true)) {
+			return;
+		}
+
+		$index[] = $key;
+		Drupal::cache('mantle2')->set(self::FALLBACK_INDEX_KEY, json_encode($index));
+	}
+
 	public static function set(string $key, array $data, int $ttl = 900): bool
 	{
 		try {
@@ -73,6 +113,7 @@ class RedisHelper
 				// Fallback to Drupal cache
 				$cache = Drupal::cache('mantle2');
 				$cache->set($key, $serializedData, time() + $ttl);
+				self::trackFallbackKey($key);
 				return true;
 			}
 		} catch (Exception $e) {
@@ -130,16 +171,38 @@ class RedisHelper
 				// Fallback to Drupal cache
 				$cache = \Drupal::cache('mantle2');
 
+				// the cache bin has no pattern delete, so a tracked key index stands in for
+				// SCAN; silently skipping globs left partitioned list caches stale forever
+				$index = self::fallbackKeyIndex();
+				$changed = false;
+
 				foreach ($keys as $k) {
-					if (is_string($k) && str_contains($k, '*')) {
-						\Drupal::logger('mantle2')->warning(
-							'Glob pattern %pattern not supported in cache fallback mode',
-							['%pattern' => $k],
-						);
+					if (!is_string($k) || $k === '') {
 						continue;
 					}
+
+					if (str_contains($k, '*')) {
+						foreach ($index as $tracked) {
+							if (self::globMatches($k, $tracked)) {
+								$cache->delete($tracked);
+								$index = array_values(array_diff($index, [$tracked]));
+								$changed = true;
+							}
+						}
+						continue;
+					}
+
 					$cache->delete($k);
+					if (in_array($k, $index, true)) {
+						$index = array_values(array_diff($index, [$k]));
+						$changed = true;
+					}
 				}
+
+				if ($changed) {
+					$cache->set(self::FALLBACK_INDEX_KEY, json_encode($index));
+				}
+
 				return true;
 			}
 

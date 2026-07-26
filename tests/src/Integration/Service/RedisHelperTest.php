@@ -128,20 +128,35 @@ class RedisHelperTest extends IntegrationTestBase
 		$this->assertSame(2, $calls);
 	}
 
-	// glob delete / list are unsupported in fallback mode (real redis only, covered by e2e)
+	// list is still unsupported in fallback mode (real redis only, covered by e2e)
 
 	#[Test]
-	#[TestDox('delete with a glob pattern is a graceful no-op in fallback mode')]
+	#[TestDox('delete with a glob pattern clears matching keys in fallback mode')]
 	#[Group('mantle2/redis')]
-	public function globDeleteIsGracefulNoop(): void
+	public function globDeleteExpandsInFallback(): void
 	{
 		RedisHelper::set('rk:glob:1', ['v' => 1], 120);
 		RedisHelper::set('rk:glob:2', ['v' => 2], 120);
 
+		// a silent no-op here left partitioned response caches stale forever
 		$this->assertTrue(RedisHelper::delete('rk:glob:*'));
-		// fallback cannot expand globs, so the keys survive
-		$this->assertTrue(RedisHelper::exists('rk:glob:1'));
-		$this->assertTrue(RedisHelper::exists('rk:glob:2'));
+		$this->assertFalse(RedisHelper::exists('rk:glob:1'));
+		$this->assertFalse(RedisHelper::exists('rk:glob:2'));
+	}
+
+	#[Test]
+	#[TestDox('A glob delete leaves keys outside the pattern alone')]
+	#[Group('mantle2/redis')]
+	public function globDeleteIsScoped(): void
+	{
+		RedisHelper::set('rk:glob:1', ['v' => 1], 120);
+		RedisHelper::set('rk:other:1', ['v' => 2], 120);
+
+		RedisHelper::delete('rk:glob:*');
+
+		$this->assertFalse(RedisHelper::exists('rk:glob:1'));
+		// the fallback bin also holds application state, so over-clearing is not acceptable
+		$this->assertTrue(RedisHelper::exists('rk:other:1'));
 	}
 
 	#[Test]
