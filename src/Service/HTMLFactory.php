@@ -461,7 +461,7 @@ class HTMLFactory
 			' The Earth App. All rights reserved.</p>';
 		// commercial email legally requires a postal address
 		$branding .=
-			'<p style="margin: 4px 0 0 0; font-size: 11px; color: #999;">The Earth App, 1207 Delaware Ave #1234, Wilmington, DE 19806, USA</p>';
+			'<p style="margin: 4px 0 0 0; font-size: 11px; color: #999;">The Earth App</p>';
 		$branding .=
 			'<p style="margin: 8px 0 0 0; font-size: 11px; color: #999;">This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.</p>';
 		$branding .= '</div>';
