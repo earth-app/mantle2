@@ -6,10 +6,10 @@ use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Service\ActivityHelper;
 use Drupal\mantle2\Service\GeneralHelper;
+use Drupal\mantle2\Service\StagingHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\Entity\Node;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -221,53 +221,10 @@ final class ActivityController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid JSON body: ' . json_last_error_msg());
 		}
 
-		if (!is_array($body) || array_keys($body) === range(0, count($body) - 1)) {
-			return GeneralHelper::badRequest('Invalid JSON');
+		$activity = StagingHelper::validateActivityBody($body);
+		if ($activity instanceof JsonResponse) {
+			return $activity;
 		}
-
-		$id = $body['id'] ?? null;
-		$name = $body['name'] ?? null;
-		$description = $body['description'] ?? null;
-		$types = $body['types'] ?? [];
-
-		if (!$id || !$name || !$description || empty($types)) {
-			return GeneralHelper::badRequest('Missing required fields');
-		}
-
-		if (ActivityHelper::getNodeByActivityId($id)) {
-			return GeneralHelper::conflict("Activity with ID '$id' already exists");
-		}
-
-		if (!is_string($id) || !is_string($name) || !is_string($description) || !is_array($types)) {
-			return GeneralHelper::badRequest('Invalid required field types');
-		}
-
-		foreach ($types as $type) {
-			if (!is_string($type) || !ActivityType::tryFrom($type)) {
-				return GeneralHelper::badRequest('Invalid activity type: ' . (string) $type);
-			}
-		}
-
-		$fields = $body['fields'] ?? ['icon' => ''];
-		$aliases = $body['aliases'] ?? [];
-
-		if (!is_array($fields) || !is_array($aliases)) {
-			return GeneralHelper::badRequest('Invalid optional field types');
-		}
-
-		foreach ($fields as $key => $value) {
-			if (!is_string($key) || !is_string($value)) {
-				return GeneralHelper::badRequest('Invalid field entry types');
-			}
-		}
-
-		foreach ($aliases as $alias) {
-			if (!is_string($alias)) {
-				return GeneralHelper::badRequest('Invalid alias entry type');
-			}
-		}
-
-		$activity = new Activity($id, $name, $types, $description, $aliases, $fields);
 		ActivityHelper::createActivity($activity, $user);
 
 		return new JsonResponse($activity, Response::HTTP_CREATED);

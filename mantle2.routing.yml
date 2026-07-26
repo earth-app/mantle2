@@ -5305,6 +5305,221 @@ mantle2.activities.list:
   methods: [GET]
 
 # endregion
+# region Activity Staging Routes
+
+mantle2.activities.stage:
+  path: '/v2/activities/staged'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\StagingController::stageActivity'
+    _title: 'Stage Activity for Review'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Activities,Staging
+    description: Submits an activity for administrator review. Requires Verified Publisher status.
+      Administrator and cloud submissions auto-publish after 24 hours; organizer
+      submissions are auto-denied after 48 hours.
+    schema/201: '#StagedActivity'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/409: Already staged, already exists, or quota reached
+    body/schema: activityStageCreate()
+    body/description: Activity data to stage
+  methods: [POST]
+
+mantle2.activities.staged.list:
+  path: '/v2/activities/staged'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\StagingController::listStaged'
+    _title: 'List Staged Activities [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Activities,Staging,Admin
+    description: Retrieves staged activities awaiting or past review
+    schema/200: '#StagedActivityList'
+    schema/401: Unauthorized
+    schema/403: 403
+    paginated: true
+    query:
+      state:
+        default: pending
+      submitter_kind: {}
+      source: {}
+      search: {}
+      sort:
+        default: asc
+  methods: [GET]
+
+mantle2.activities.staged.mine:
+  path: '/v2/activities/staged/mine'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\StagingController::listMyStaged'
+    _title: 'List My Staged Activities'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Activities,Staging
+    description: Retrieves the calling user's own staged activities
+    schema/200: '#StagedActivityList'
+    schema/401: Unauthorized
+    paginated: true
+    query:
+      state: {}
+  methods: [GET]
+
+mantle2.activities.staged.get:
+  path: '/v2/activities/staged/{stagedId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\StagingController::getStaged'
+    _title: 'Get Staged Activity'
+  requirements:
+    _access: 'TRUE'
+    stagedId: '\d+'
+  options:
+    tags: Activities,Staging
+    description: Retrieves a single staged activity; readable by its submitter or an administrator
+    schema/200: '#StagedActivity'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: Staged activity not found
+  methods: [GET]
+
+mantle2.activities.staged.approve:
+  path: '/v2/activities/staged/{stagedId}/approve'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\StagingController::approveStaged'
+    _title: 'Approve Staged Activity [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    stagedId: '\d+'
+  options:
+    tags: Activities,Staging,Admin
+    description: Publishes a staged activity to the catalog
+    schema/200: '#StagedActivity'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: Staged activity not found
+    schema/409: Already decided, catalog conflict, or submitter no longer verified
+    body/schema: stagedActivityDecisionJson()
+    body/description: Optional reviewer notes and force flag
+  methods: [POST]
+
+mantle2.activities.staged.deny:
+  path: '/v2/activities/staged/{stagedId}/deny'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\StagingController::denyStaged'
+    _title: 'Deny Staged Activity [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    stagedId: '\d+'
+  options:
+    tags: Activities,Staging,Admin
+    description: Rejects a staged activity without publishing it
+    schema/200: '#StagedActivity'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: Staged activity not found
+    schema/409: Already decided
+    body/schema: stagedActivityDecisionJson()
+    body/description: Optional reviewer notes
+  methods: [POST]
+
+mantle2.activities.staged.withdraw:
+  path: '/v2/activities/staged/{stagedId}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\StagingController::withdrawStaged'
+    _title: 'Withdraw Staged Activity'
+  requirements:
+    _access: 'TRUE'
+    stagedId: '\d+'
+  options:
+    tags: Activities,Staging
+    description: Withdraws a pending submission; allowed for its submitter or an administrator
+    schema/204: No Content
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: Staged activity not found
+    schema/409: Already decided
+  methods: [DELETE]
+
+# endregion
+# region Verified Publisher Routes
+
+mantle2.users.current.verified_publisher.get:
+  path: '/v2/users/current/verified_publisher'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::getVerifiedPublisher'
+    _title: 'Get Verified Publisher Status'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Staging
+    description: Returns the calling user's Verified Publisher status and application
+    schema/200: '#VerifiedPublisherApplication'
+    schema/401: Unauthorized
+  methods: [GET]
+
+mantle2.users.current.verified_publisher.apply:
+  path: '/v2/users/current/verified_publisher'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::applyVerifiedPublisher'
+    _title: 'Apply for Verified Publisher Status'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Staging
+    description: Submits a Verified Publisher application; requires an Organizer account
+    schema/201: '#VerifiedPublisherApplication'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/409: Already pending, already approved, or within the re-apply cooldown
+    body/schema: verifiedPublisherApplyJson()
+    body/description: Application details
+  methods: [POST]
+
+mantle2.admin.verified_publishers:
+  path: '/v2/admin/verified_publishers'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::listVerifiedPublisherApplications'
+    _title: 'List Verified Publisher Applications [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Staging,Admin
+    description: Retrieves Verified Publisher applications, defaulting to those awaiting review
+    schema/200: '#VerifiedPublisherApplicationList'
+    schema/401: Unauthorized
+    schema/403: 403
+    paginated: true
+    query:
+      state:
+        default: pending
+  methods: [GET]
+
+mantle2.admin.verified_publishers.patch:
+  path: '/v2/admin/verified_publishers/{id}'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::patchVerifiedPublisherApplication'
+    _title: 'Review Verified Publisher Application [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Staging,Admin
+    description: Approves, denies, or revokes Verified Publisher status. Revoking also denies every
+      pending organizer submission from that user.
+    schema/200: '#VerifiedPublisherApplication'
+    schema/400: Bad Request
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+    body/schema: verifiedPublisherPatchJson()
+    body/description: Review decision
+  methods: [PATCH]
+
+# endregion
 # region Event Routes
 
 mantle2.events:
