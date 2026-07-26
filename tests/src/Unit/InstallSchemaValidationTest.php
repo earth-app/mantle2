@@ -2,7 +2,6 @@
 
 namespace Drupal\Tests\mantle2\Unit;
 
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
@@ -48,39 +47,26 @@ class InstallSchemaValidationTest extends TestCase
 	}
 
 	#[Test]
-	#[TestDox('mantle2_schema() is empty so drush un cannot drop any table')]
+	#[TestDox('mantle2 declares no hook_schema, so an uninstall cannot drop any table')]
 	#[Group('mantle2/install')]
-	public function testSchemaIsEmpty(): void
+	public function testNoSchemaHook(): void
 	{
-		$body = self::functionBody('mantle2_schema');
-		$this->assertMatchesRegularExpression(
-			'/return\s*\[\s*\]\s*;/',
-			$body,
+		$this->assertStringNotContainsString(
+			'function mantle2_schema(',
+			self::$source,
 			'Anything returned from hook_schema is dropped by `drush un`. Register tables in ' .
 				'mantle2_ensure_custom_tables() instead.',
 		);
 	}
 
-	public static function tableProvider(): array
-	{
-		return [
-			'push_tokens' => ['push_tokens'],
-			'api keys' => ['mantle2_api_keys'],
-			'subscriptions' => ['mantle2_subscriptions'],
-			'trial codes' => ['mantle2_trial_codes'],
-			'trial code redemptions' => ['mantle2_trial_code_redemptions'],
-			'staged activities' => ['mantle2_staged_activities'],
-		];
-	}
-
-	#[Test]
-	#[TestDox('No custom table is ever named inside mantle2_schema()')]
-	#[Group('mantle2/install')]
-	#[DataProvider('tableProvider')]
-	public function testTableAbsentFromSchema(string $table): void
-	{
-		$this->assertStringNotContainsString($table, self::functionBody('mantle2_schema'));
-	}
+	private const TABLES = [
+		'push_tokens',
+		'mantle2_api_keys',
+		'mantle2_subscriptions',
+		'mantle2_trial_codes',
+		'mantle2_trial_code_redemptions',
+		'mantle2_staged_activities',
+	];
 
 	#[Test]
 	#[TestDox('Every table in mantle2_ensure_custom_tables() has a matching *_table_schema()')]
@@ -100,7 +86,7 @@ class InstallSchemaValidationTest extends TestCase
 			);
 		}
 
-		foreach (array_column(self::tableProvider(), 0) as $table) {
+		foreach (self::TABLES as $table) {
 			$this->assertContains(
 				$table,
 				$matches[1],

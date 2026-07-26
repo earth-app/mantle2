@@ -1146,26 +1146,8 @@ function mantle2_install_content(): void
 	RedisHelper::delete(['cloud:*', 'request_cache:*']);
 }
 
-/**
- * Intentionally empty. Do not add tables here.
- *
- * Drupal's ModuleInstaller::uninstallSchema() drops every table this returns, and the
- * deploy pipeline used to run `drush un mantle2 && drush en mantle2` on each release,
- * which silently wiped push tokens, API keys, subscriptions and trial codes in
- * production. Table DDL lives in mantle2_ensure_custom_tables() instead, which is
- * idempotent and unreachable from uninstall. InstallSchemaValidationTest enforces this.
- */
-function mantle2_schema()
-{
-	return [];
-}
-
-/**
- * Create every mantle2-owned table that is missing.
- *
- * Idempotent; safe to call from hook_install, `drush mantle2:sync`, cron, and tests.
- * Returns the names of the tables it actually created.
- */
+// every mantle2-owned table lives here, never in hook_schema (uninstall drops those);
+// idempotent, so hook_install, `drush mantle2:sync`, cron and tests all call it
 function mantle2_ensure_custom_tables(): array
 {
 	$schema = Database::getConnection()->schema();
