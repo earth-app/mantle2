@@ -20,6 +20,7 @@ class ApiKeyScope
 	public const USER_EDIT_PHOTO = 'user:edit:photo';
 	public const USER_EDIT_COSMETIC = 'user:edit:cosmetic';
 	public const USER_EDIT_SUBSCRIPTION = 'user:edit:subscription';
+	public const USER_EDIT_PUBLISHER = 'user:edit:publisher';
 
 	// users (other)
 	public const USERS_READ = 'users:read';
@@ -40,9 +41,11 @@ class ApiKeyScope
 
 	// activities
 	public const ACTIVITIES_READ = 'activities:read';
+	public const ACTIVITIES_READ_STAGE = 'activities:read:staged';
 	public const ACTIVITIES_WRITE = 'activities:write';
 	public const ACTIVITIES_WRITE_SELF = 'activities:write:self';
 	public const ACTIVITIES_WRITE_CATALOG = 'activities:write:catalog'; // admin
+	public const ACTIVITIES_WRITE_STAGE = 'activities:write:stage';
 
 	// events
 	public const EVENTS_READ = 'events:read';
@@ -133,6 +136,9 @@ class ApiKeyScope
 					self::USER_EDIT_SUBSCRIPTION => [
 						'description' => 'Subscribe or unsubscribe from marketing emails.',
 					],
+					self::USER_EDIT_PUBLISHER => [
+						'description' => 'Apply for Verified Publisher status.',
+					],
 				],
 			],
 			self::USERS_READ => [
@@ -173,6 +179,11 @@ class ApiKeyScope
 			],
 			self::ACTIVITIES_READ => [
 				'description' => 'Read the activity catalog and your assigned activities.',
+				'children' => [
+					self::ACTIVITIES_READ_STAGE => [
+						'description' => 'Read your own activity submissions awaiting review.',
+					],
+				],
 			],
 			self::ACTIVITIES_WRITE => [
 				'description' => 'Mutate activities.',
@@ -182,6 +193,10 @@ class ApiKeyScope
 					],
 					self::ACTIVITIES_WRITE_CATALOG => [
 						'description' => 'Create/update/delete catalog activities (admin only).',
+					],
+					self::ACTIVITIES_WRITE_STAGE => [
+						'description' =>
+							'Submit activities for review (requires Verified Publisher status).',
 					],
 				],
 			],

@@ -153,6 +153,18 @@ cache:
       ttl: 300
 
   updates:
+    # creating an activity never busted the 3600s catalog cache, so a new activity was
+    # invisible for up to an hour
+    - route: '^/v2/activities$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'request_cache:activities:list'
+
+    - route: '^/v2/activities/staged/([0-9]+)/(approve|deny)$'
+      methods: [POST]
+      invalidate_patterns:
+        - 'request_cache:activities:list'
+
     - route: '^/v2/users/(?!quests$|badges$|cosmetics$|trails$)([0-9]+|[a-zA-Z0-9_]+)$'
       methods: [PATCH]
       invalidate_patterns:
@@ -354,3 +366,7 @@ cache:
     - '/change_password'
     - '/send_email_verification'
     - '/webhooks'
+    # per-requester and volatile; isElevated() only excludes X-Admin-Key, not bearer-admin,
+    # so a cached admin response could leak to a non-admin
+    - '/staged'
+    - '/verified_publisher'

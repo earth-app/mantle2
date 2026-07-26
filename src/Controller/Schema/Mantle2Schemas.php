@@ -2,10 +2,12 @@
 
 namespace Drupal\mantle2\Controller\Schema;
 
+use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Privacy;
+use Drupal\mantle2\Custom\VerifiedPublisherState;
 use Drupal\mantle2\Service\OAuthHelper;
 
 class Mantle2Schemas
@@ -447,6 +449,24 @@ class Mantle2Schemas
 		];
 	}
 
+	public static function accountType(): array
+	{
+		return [
+			'type' => 'string',
+			'example' => 'ORGANIZER',
+			'enum' => array_map(fn($case) => $case->name, AccountType::cases()),
+		];
+	}
+
+	public static function verifiedPublisherState(): array
+	{
+		return [
+			'type' => 'string',
+			'example' => 'pending',
+			'enum' => array_map(fn($case) => $case->value, VerifiedPublisherState::cases()),
+		];
+	}
+
 	public static function visibility(): array
 	{
 		return [
@@ -625,6 +645,45 @@ class Mantle2Schemas
 				'circle' => ['$ref' => '#/$defs/never_public_privacy', 'default' => 'PRIVATE'],
 				'impact_points' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
 				'badges' => ['$ref' => '#/$defs/privacy', 'default' => 'PUBLIC'],
+			],
+		];
+	}
+
+	public static function verifiedPublisherApplicationJson(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'reason' => ['type' => 'string', 'maxLength' => 1000],
+				'organization' => ['type' => 'string', 'maxLength' => 100],
+				'links' => [
+					'type' => 'array',
+					'maxItems' => 5,
+					'items' => ['type' => 'string', 'maxLength' => 200],
+				],
+				'applied_at' => ['type' => 'integer'],
+				'reviewed_at' => ['type' => ['integer', 'null']],
+				'reviewer_id' => ['type' => ['integer', 'null']],
+				'notes' => ['type' => ['string', 'null'], 'maxLength' => 1000],
+				'history' => [
+					'type' => 'array',
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'state' => [
+								'type' => 'string',
+								'enum' => array_map(
+									fn($case) => $case->value,
+									VerifiedPublisherState::cases(),
+								),
+							],
+							'at' => ['type' => 'integer'],
+							'actor_id' => ['type' => ['integer', 'null']],
+							'notes' => ['type' => ['string', 'null']],
+						],
+					],
+				],
 			],
 		];
 	}
@@ -845,6 +904,69 @@ class Mantle2Schemas
 				'aliases' => ['type' => 'array', 'items' => ['type' => 'string']],
 				'fields' => ['type' => 'object', 'additionalProperties' => ['type' => 'string']],
 			],
+		];
+	}
+
+	// Staging + Verified Publisher
+
+	public static function activityStageCreate(): array
+	{
+		$data = self::activityCreate();
+		$data['properties']['note'] = [
+			'type' => 'string',
+			'maxLength' => 512,
+			'example' => 'Requested by our climbing chapter.',
+		];
+		// honored only for the cloud service account; ignored for everyone else
+		$data['properties']['source'] = [
+			'type' => 'string',
+			'enum' => ['api', 'cloud_discovery', 'admin_panel', 'drush'],
+		];
+
+		return $data;
+	}
+
+	public static function stagedActivityDecisionJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'notes' => ['type' => 'string', 'maxLength' => 1024],
+				'force' => [
+					'type' => 'boolean',
+					'description' =>
+						'Publish even if the submitter is no longer a Verified Publisher',
+				],
+			],
+		];
+	}
+
+	public static function verifiedPublisherApplyJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'reason' => ['type' => 'string', 'minLength' => 40, 'maxLength' => 1000],
+				'organization' => ['type' => 'string', 'maxLength' => 100],
+				'links' => [
+					'type' => 'array',
+					'maxItems' => 5,
+					'items' => ['type' => 'string', 'maxLength' => 200],
+				],
+			],
+			'required' => ['reason'],
+		];
+	}
+
+	public static function verifiedPublisherPatchJson(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'action' => ['type' => 'string', 'enum' => ['approve', 'deny', 'revoke']],
+				'notes' => ['type' => 'string', 'maxLength' => 1000],
+			],
+			'required' => ['action'],
 		];
 	}
 
@@ -1714,6 +1836,94 @@ class Mantle2Schemas
 	public static function activities(): array
 	{
 		return self::paginated(['$ref' => '#/components/schemas/Activity']);
+	}
+	public static function stagedActivity(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'id' => ['type' => 'integer', 'example' => 12],
+				'activity' => ['$ref' => '#/components/schemas/Activity'],
+				'note' => ['type' => ['string', 'null'], 'maxLength' => 512],
+				'state' => [
+					'type' => 'string',
+					'enum' => [
+						'pending',
+						'approved',
+						'denied',
+						'expired_published',
+						'expired_denied',
+						'withdrawn',
+					],
+				],
+				'submitter_kind' => [
+					'type' => 'string',
+					'enum' => ['organizer', 'admin', 'cloud'],
+				],
+				'submitter' => [
+					'type' => ['object', 'null'],
+					'properties' => [
+						'id' => ['type' => 'string'],
+						'username' => ['type' => 'string'],
+					],
+				],
+				'source' => ['type' => 'string', 'example' => 'cloud_discovery'],
+				'submitted_at' => ['$ref' => '#/components/schemas/Date'],
+				'expires_at' => ['$ref' => '#/components/schemas/Date'],
+				'expires_in_seconds' => ['type' => 'integer', 'example' => 86400],
+				'fails_open' => [
+					'type' => 'boolean',
+					'description' =>
+						'True when an unreviewed submission auto-publishes; false when it auto-denies. Clients must read this rather than deriving it from submitter_kind. Deadlines resolve on the hourly cron, so a submission can read as expired for up to an hour before it resolves.',
+				],
+				'decided_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'reviewer' => [
+					'type' => ['object', 'null'],
+					'properties' => [
+						'id' => ['type' => 'string'],
+						'username' => ['type' => 'string'],
+					],
+				],
+				'review_notes' => ['type' => ['string', 'null']],
+				'published_activity_id' => ['type' => ['string', 'null']],
+			],
+			'required' => ['id', 'activity', 'state', 'submitter_kind', 'expires_at', 'fails_open'],
+		];
+	}
+	public static function stagedActivityList(): array
+	{
+		return self::paginated(['$ref' => '#/components/schemas/StagedActivity']);
+	}
+	public static function verifiedPublisherApplication(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'user' => [
+					'type' => 'object',
+					'properties' => [
+						'id' => ['type' => 'string'],
+						'username' => ['type' => 'string'],
+						'account_type' => ['$ref' => '#/components/schemas/AccountType'],
+					],
+				],
+				'state' => ['$ref' => '#/components/schemas/VerifiedPublisherState'],
+				'verified' => ['type' => 'boolean'],
+				'reason' => ['type' => ['string', 'null']],
+				'organization' => ['type' => ['string', 'null']],
+				'links' => ['type' => 'array', 'items' => ['type' => 'string']],
+				'applied_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'reviewed_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'notes' => ['type' => ['string', 'null']],
+				'can_reapply_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
+				'revoked_staged' => ['type' => 'integer'],
+			],
+			'required' => ['state', 'verified'],
+		];
+	}
+	public static function verifiedPublisherApplicationList(): array
+	{
+		return self::paginated(['$ref' => '#/components/schemas/VerifiedPublisherApplication']);
 	}
 	public static function activitiesList(): array
 	{
@@ -4365,6 +4575,8 @@ class Mantle2Schemas
 			'UserPrivacy' => self::userPrivacy(),
 			'EventType' => self::eventType(),
 			'SortOrder' => self::sortOrder(),
+			'AccountType' => self::accountType(),
+			'VerifiedPublisherState' => self::verifiedPublisherState(),
 
 			// Arrays
 			'StringArray' => self::$stringArray,
@@ -4388,6 +4600,10 @@ class Mantle2Schemas
 			'ArticleBody' => self::$articleBody,
 			'ActivityCreate' => self::activityCreate(),
 			'ActivityUpdate' => self::activityUpdate(),
+			'ActivityStageCreate' => self::activityStageCreate(),
+			'StagedActivityDecisionJson' => self::stagedActivityDecisionJson(),
+			'VerifiedPublisherApplyJson' => self::verifiedPublisherApplyJson(),
+			'VerifiedPublisherPatchJson' => self::verifiedPublisherPatchJson(),
 			'UserActivitiesSet' => self::$userActivitiesSet,
 
 			// Response objects
@@ -4430,6 +4646,10 @@ class Mantle2Schemas
 			'AttendeeResponse' => self::attendeeResponse(),
 			'Activity' => self::activity(),
 			'Activities' => self::activities(),
+			'StagedActivity' => self::stagedActivity(),
+			'StagedActivityList' => self::stagedActivityList(),
+			'VerifiedPublisherApplication' => self::verifiedPublisherApplication(),
+			'VerifiedPublisherApplicationList' => self::verifiedPublisherApplicationList(),
 			'ActivitiesJson' => self::activitiesJson(),
 			'ActivitiesList' => self::activitiesList(),
 			'ActivitiesIds' => self::activitiesIds(),
