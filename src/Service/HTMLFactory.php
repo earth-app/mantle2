@@ -2,6 +2,8 @@
 
 namespace Drupal\mantle2\Service;
 
+use Drupal;
+
 class HTMLFactory
 {
 	public const ACCENT = '#2e7d32';
@@ -459,14 +461,34 @@ class HTMLFactory
 			'<p style="margin: 8px 0 0 0; font-size: 11px; color: #999;">&copy; ' .
 			date('Y') .
 			' The Earth App. All rights reserved.</p>';
-		// commercial email legally requires a postal address
-		$branding .=
-			'<p style="margin: 4px 0 0 0; font-size: 11px; color: #999;">The Earth App</p>';
+		// commercial email legally requires a postal address; it is read from settings and
+		// omitted entirely when unset, because a wrong address is worse than none
+		$postalAddress = self::postalAddress();
+		if (is_string($postalAddress) && trim($postalAddress) !== '') {
+			$branding .=
+				'<p style="margin: 4px 0 0 0; font-size: 11px; color: #999;">' .
+				htmlspecialchars(trim($postalAddress), ENT_QUOTES, 'UTF-8') .
+				'</p>';
+		}
 		$branding .=
 			'<p style="margin: 8px 0 0 0; font-size: 11px; color: #999;">This email was sent from a notification-only address that cannot accept incoming email. Please do not reply to this message.</p>';
 		$branding .= '</div>';
 
 		return $branding;
+	}
+
+	private static function postalAddress(): ?string
+	{
+		try {
+			if (!Drupal::hasContainer()) {
+				return null;
+			}
+
+			$value = Drupal::service('settings')->get('mantle2.postal_address');
+			return is_string($value) ? $value : null;
+		} catch (\Throwable) {
+			return null;
+		}
 	}
 
 	private function getPreheaderHtml(string $text): string

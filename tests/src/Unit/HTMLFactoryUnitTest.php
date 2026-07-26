@@ -1111,7 +1111,7 @@ class HTMLFactoryUnitTest extends TestCase
 	}
 
 	#[Test]
-	#[TestDox('The footer carries social links, an app link, and a postal address')]
+	#[TestDox('The footer carries social links and an app link')]
 	#[Group('mantle2/html')]
 	public function testFooterMarketing()
 	{
@@ -1119,7 +1119,6 @@ class HTMLFactoryUnitTest extends TestCase
 
 		$this->assertStringContainsString('>Instagram</a>', $html);
 		$this->assertStringContainsString('>Open The Earth App</a>', $html);
-		$this->assertStringContainsString('Wilmington, DE', $html);
 		$this->assertStringContainsString('Thank you for using The Earth App!', $html);
 
 		$bare = $this->htmlFactory->toHtml('Body', false, null, ['footer_links' => false]);
@@ -1156,4 +1155,27 @@ class HTMLFactoryUnitTest extends TestCase
 	}
 
 	// #endregion
+
+	#[Test]
+	#[TestDox('The footer never hardcodes a postal address')]
+	#[Group('mantle2/html')]
+	public function testNoHardcodedPostalAddress()
+	{
+		$source = file_get_contents(dirname(__DIR__, 3) . '/src/Service/HTMLFactory.php');
+
+		// a street address was once invented here and shipped; it must come from settings so
+		// an unset value renders nothing rather than a plausible-looking fake
+		$this->assertDoesNotMatchRegularExpression(
+			'/\d+\s+[A-Z][a-z]+\s+(Ave|Avenue|St|Street|Rd|Road|Blvd|Boulevard|Ln|Lane|Dr|Drive)\b/',
+			$source,
+			'HTMLFactory must not contain a hardcoded street address.',
+		);
+		$this->assertStringContainsString("get('mantle2.postal_address')", $source);
+
+		// with no setting configured the line is absent entirely
+		$this->assertStringNotContainsString(
+			'font-size: 11px; color: #999;">The Earth App</p>',
+			$this->htmlFactory->toHtml('Body'),
+		);
+	}
 }
