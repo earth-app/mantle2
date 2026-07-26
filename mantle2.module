@@ -9,6 +9,7 @@ use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\mantle2\Service\ReportsHelper;
+use Drupal\mantle2\Service\StagingHelper;
 use Drupal\mantle2\Service\SubscriptionsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 
@@ -730,9 +731,18 @@ function mantle2_cron()
 
 	try {
 		$tasks = [
+			// self-heal in case a deploy skipped mantle2:sync
+			'Ensure Custom Tables' => function () {
+				Drupal::moduleHandler()->loadInclude('mantle2', 'install');
+				mantle2_ensure_custom_tables();
+			},
 			'Expired Prompts' => fn() => PromptsHelper::checkExpiredPrompts(),
 			'Expired Articles' => fn() => ArticlesHelper::checkExpiredArticles(),
 			'Expired Events' => fn() => EventsHelper::checkExpiredEvents(),
+			'Staged Activity Submissions' => fn() => StagingHelper::notifyNewSubmissions(),
+			'Staged Activity Expirations' => fn() => StagingHelper::checkExpirations(),
+			'Staged Activity Digest' => fn() => StagingHelper::runDailyDigest(),
+			'Staged Activity Prune' => fn() => StagingHelper::pruneDecided(),
 			'Email Campaigns' => fn() => CampaignHelper::runEmailCampaigns(),
 			'Event Notifications' => fn() => EventsHelper::checkEventNotifications(),
 			'Fix Event Dates' => fn() => mantle2_fix_event_dates(),
