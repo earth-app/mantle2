@@ -1,5 +1,7 @@
 parameters:
     level: 5
+    bootstrapFiles:
+        - tests/drupal-root.php
     paths:
         - src
     treatPhpDocTypesAsCertain: false
