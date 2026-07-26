@@ -9,23 +9,16 @@
  * Drupal's own core/tests/bootstrap.php and KernelTestBase assume the app root is
  * two levels above core (i.e. web/), where an autoload.php and a modules/ tree
  * live. Here the effective root is vendor/drupal, so we:
- *   1. drop an autoload.php shim into vendor/drupal (KernelTestBase requires it),
- *   2. symlink the mantle2 module and every contrib Drupal module package into
- *      vendor/drupal/modules so ExtensionDiscovery can find them,
- *   3. register core's test-suite PSR-4 namespaces (Drupal\Tests, Drupal\KernelTests, ...).
+ *   1. build that root via tests/drupal-root.php (shared with phpstan.neon),
+ *   2. register core's test-suite PSR-4 namespaces (Drupal\Tests, Drupal\KernelTests, ...),
+ *   3. register each contrib module's own PSR-4 namespace.
  * All steps are idempotent so the setup self-heals after composer install wipes vendor.
  */
 
 declare(strict_types=1);
 
 $repoRoot = dirname(__DIR__);
-$drupalRoot = $repoRoot . '/vendor/drupal';
-$coreTestsDir = $drupalRoot . '/core/tests';
-
-if (!is_dir($drupalRoot . '/core')) {
-	fwrite(STDERR, "drupal/core not installed at $drupalRoot/core; run composer install\n");
-	exit(1);
-}
+$coreTestsDir = $repoRoot . '/vendor/drupal/core/tests';
 
 if (!defined('PHPUNIT_COMPOSER_INSTALL')) {
 	define('PHPUNIT_COMPOSER_INSTALL', $repoRoot . '/vendor/autoload.php');
@@ -43,44 +36,14 @@ $loader->add('Drupal\\FunctionalTests', $coreTestsDir);
 $loader->add('Drupal\\FunctionalJavascriptTests', $coreTestsDir);
 $loader->add('Drupal\\TestTools', $coreTestsDir);
 
-$autoloadShim = $drupalRoot . '/autoload.php';
-if (!file_exists($autoloadShim)) {
-	file_put_contents($autoloadShim, "<?php\n\nreturn require __DIR__ . '/../autoload.php';\n");
-}
-
-$modulesDir = $drupalRoot . '/modules';
-if (!is_dir($modulesDir)) {
-	mkdir($modulesDir, 0777, true);
-}
-
-function mantle2_link_module(string $target, string $link): void
-{
-	if (is_link($link) || file_exists($link)) {
-		return;
+// contrib module Drupal\<name>\ namespaces are registered by Drupal at kernel boot,
+// not by composer; register them here so non-kernel unit tests can mock them
+foreach (require __DIR__ . '/drupal-root.php' as $name => $pkgDir) {
+	if (is_dir($pkgDir . '/src')) {
+		$loader->addPsr4('Drupal\\' . $name . '\\', $pkgDir . '/src');
 	}
-	@symlink($target, $link);
-}
-
-// mantle2 itself (module root is the repo root)
-mantle2_link_module($repoRoot, $modulesDir . '/mantle2');
-
-// every contrib Drupal package that ships a module info.yml at its package root
-foreach (glob($drupalRoot . '/*', GLOB_ONLYDIR) as $pkgDir) {
-	$name = basename($pkgDir);
-	if (in_array($name, ['core', 'modules', 'profiles', 'themes'], true)) {
-		continue;
-	}
-	$info = $pkgDir . '/' . $name . '.info.yml';
-	if (file_exists($info)) {
-		mantle2_link_module($pkgDir, $modulesDir . '/' . $name);
-		// contrib module Drupal\<name>\ namespaces are registered by Drupal at kernel
-		// boot, not by composer; register them here so non-kernel unit tests can mock them
-		if (is_dir($pkgDir . '/src')) {
-			$loader->addPsr4('Drupal\\' . $name . '\\', $pkgDir . '/src');
-		}
-		if (is_dir($pkgDir . '/tests/src')) {
-			$loader->addPsr4('Drupal\\Tests\\' . $name . '\\', $pkgDir . '/tests/src');
-		}
+	if (is_dir($pkgDir . '/tests/src')) {
+		$loader->addPsr4('Drupal\\Tests\\' . $name . '\\', $pkgDir . '/tests/src');
 	}
 }
 
