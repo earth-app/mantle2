@@ -346,14 +346,7 @@ final class ReportsController extends ControllerBase
 
 	private function requireAdmin(Request $request): ?JsonResponse
 	{
-		$user = UsersHelper::findByRequest($request);
-		if ($user instanceof JsonResponse) {
-			return $user;
-		}
-		if (!UsersHelper::isAdmin($user)) {
-			return GeneralHelper::forbidden('Administrator access required');
-		}
-		return null;
+		return UsersHelper::requireAdmin($request);
 	}
 
 	private function cloudPatchStatus(

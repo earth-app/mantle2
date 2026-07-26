@@ -18,14 +18,59 @@ class AdminController extends ControllerBase
 {
 	private function requireAdmin(Request $request): ?JsonResponse
 	{
-		$user = UsersHelper::findByRequest($request);
-		if ($user instanceof JsonResponse) {
-			return $user;
+		return UsersHelper::requireAdmin($request);
+	}
+
+	// GET /v2/admin/verified_publishers?state=pending
+	public function listVerifiedPublisherApplications(Request $request): JsonResponse
+	{
+		if ($block = $this->requireAdmin($request)) {
+			return $block;
 		}
-		if (!UsersHelper::isAdmin($user)) {
-			return GeneralHelper::forbidden('Administrator access required');
+
+		return new JsonResponse(
+			UsersHelper::listVerifiedPublisherApplications(
+				$request->query->get('state'),
+				(int) $request->query->get('page', 1),
+				(int) $request->query->get('limit', 25),
+			),
+		);
+	}
+
+	// PATCH /v2/admin/verified_publishers/:id
+	public function patchVerifiedPublisherApplication(Request $request, string $id): JsonResponse
+	{
+		if ($block = $this->requireAdmin($request)) {
+			return $block;
 		}
-		return null;
+
+		$reviewer = UsersHelper::findByRequest($request);
+		if ($reviewer instanceof JsonResponse) {
+			return $reviewer;
+		}
+
+		$applicant = UsersHelper::findBy($id);
+		if (!$applicant) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		$body = json_decode($request->getContent() ?: '{}', true);
+		if (!is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON');
+		}
+
+		$result = UsersHelper::decideVerifiedPublisher(
+			$applicant,
+			$reviewer,
+			(string) ($body['action'] ?? ''),
+			$body['notes'] ?? null,
+		);
+
+		if ($result === 'invalid_action') {
+			return GeneralHelper::badRequest("action must be 'approve', 'deny', or 'revoke'");
+		}
+
+		return new JsonResponse($result);
 	}
 
 	// GET /v2/admin/blacklist?kind=username|email

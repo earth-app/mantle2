@@ -757,6 +757,77 @@ final class UsersController extends ControllerBase
 		);
 	}
 
+	// GET /v2/users/current/verified_publisher
+	public function getVerifiedPublisher(Request $request): JsonResponse
+	{
+		$user = UsersHelper::getOwnerOfRequest($request);
+		if (!$user) {
+			return GeneralHelper::unauthorized();
+		}
+
+		return new JsonResponse(UsersHelper::verifiedPublisherPayload($user), Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/verified_publisher
+	public function applyVerifiedPublisher(Request $request): JsonResponse
+	{
+		$user = UsersHelper::getOwnerOfRequest($request);
+		if (!$user) {
+			return GeneralHelper::unauthorized();
+		}
+
+		if ($block = UsersHelper::requireEmailVerified($user, 'apply for Verified Publisher')) {
+			return $block;
+		}
+
+		$body = json_decode((string) $request->getContent() ?: '{}', true);
+		if (json_last_error() !== JSON_ERROR_NONE || !is_array($body)) {
+			return GeneralHelper::badRequest('Invalid JSON body');
+		}
+
+		$reason = $body['reason'] ?? '';
+		if (!is_string($reason) || strlen(trim($reason)) < 40 || strlen($reason) > 1000) {
+			return GeneralHelper::badRequest('reason must be between 40 and 1000 characters');
+		}
+
+		$organization = $body['organization'] ?? '';
+		if (!is_string($organization) || strlen($organization) > 100) {
+			return GeneralHelper::badRequest('organization must be at most 100 characters');
+		}
+
+		$links = $body['links'] ?? [];
+		if (!is_array($links)) {
+			return GeneralHelper::badRequest('links must be an array');
+		}
+		foreach ($links as $link) {
+			if (!is_string($link) || strlen($link) > 200) {
+				return GeneralHelper::badRequest(
+					'each link must be a string of at most 200 characters',
+				);
+			}
+		}
+
+		$result = UsersHelper::applyForVerifiedPublisher($user, [
+			'reason' => trim($reason),
+			'organization' => $organization,
+			'links' => $links,
+		]);
+
+		return match ($result) {
+			'not_organizer' => GeneralHelper::forbidden(
+				'An Organizer account is required to apply for Verified Publisher status.',
+			),
+			'already_pending' => GeneralHelper::conflict(
+				'Your application is already under review.',
+			),
+			'already_approved' => GeneralHelper::conflict('You are already a Verified Publisher.'),
+			'cooldown' => GeneralHelper::conflict(
+				'You must wait before re-applying after a denial.',
+			),
+			default => new JsonResponse($result, Response::HTTP_CREATED),
+		};
+	}
+
 	// POST /v2/users/current/reauth/password
 	public function reauthWithPassword(Request $request): JsonResponse
 	{
