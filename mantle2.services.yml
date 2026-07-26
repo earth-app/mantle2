@@ -92,6 +92,9 @@ services:
   mantle2.helper.subscriptions:
     class: Drupal\mantle2\Service\SubscriptionsHelper
 
+  mantle2.helper.staging:
+    class: Drupal\mantle2\Service\StagingHelper
+
   # Email Verification Tempstore (deprecated - use Redis instead)
   mantle2.tempstore.email_verification:
     class: Drupal\Core\TempStore\PrivateTempStoreFactory
