@@ -562,7 +562,7 @@ class StagingHelper
 			$node = ActivityHelper::createActivity($activity, $author);
 
 			self::finalize($id, ['published_nid' => (int) $node->id()]);
-			RedisHelper::delete('request_cache:activities:list');
+			RedisHelper::delete('request_cache:activities:list:*');
 
 			$fresh = self::get($id);
 			if ($fresh) {

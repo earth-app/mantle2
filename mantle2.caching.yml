@@ -129,7 +129,7 @@ cache:
 
     - route: '^/v2/activities$'
       methods: [GET]
-      key_template: 'request_cache:activities:list'
+      key_template: 'request_cache:activities:list:p:{page}:l:{limit}:s:{search}:sort:{sort}'
       ttl: 3600
 
     - route: '^/v2/users/badges$'
@@ -158,12 +158,12 @@ cache:
     - route: '^/v2/activities$'
       methods: [POST]
       invalidate_patterns:
-        - 'request_cache:activities:list'
+        - 'request_cache:activities:list:*'
 
     - route: '^/v2/activities/staged/([0-9]+)/(approve|deny)$'
       methods: [POST]
       invalidate_patterns:
-        - 'request_cache:activities:list'
+        - 'request_cache:activities:list:*'
 
     - route: '^/v2/users/(?!quests$|badges$|cosmetics$|trails$)([0-9]+|[a-zA-Z0-9_]+)$'
       methods: [PATCH]
