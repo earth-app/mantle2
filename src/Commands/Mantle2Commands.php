@@ -27,7 +27,7 @@ class Mantle2Commands extends DrushCommands
 	 * Re-run mantle2's idempotent install routines.
 	 *
 	 * Replaces the deploy pipeline's `drush un mantle2 && drush en mantle2`, which dropped
-	 * every table returned by mantle2_schema() on each release (production data loss: push
+	 * every table hook_schema() declared on each release (production data loss: push
 	 * tokens, API keys, subscriptions, trial codes). This performs the constructive half
 	 * only, so programmatic content types and fields still appear on deploy without an
 	 * update hook.
