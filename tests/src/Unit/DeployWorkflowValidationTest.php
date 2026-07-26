@@ -63,7 +63,7 @@ class DeployWorkflowValidationTest extends TestCase
 		$this->assertStringNotContainsString(
 			'drush un mantle2',
 			self::$deployScript,
-			'`drush un mantle2` drops every table in mantle2_schema(). Use `drush mantle2:sync`.',
+			'`drush un mantle2` drops every table hook_schema() declares. Use `drush mantle2:sync`.',
 		);
 		$this->assertStringNotContainsString('drush pmu mantle2', self::$deployScript);
 		$this->assertStringNotContainsString('uninstall mantle2', self::$deployScript);

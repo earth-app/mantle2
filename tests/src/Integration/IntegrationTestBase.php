@@ -48,7 +48,7 @@ abstract class IntegrationTestBase extends KernelTestBase
 		$this->installEntitySchema('node');
 		$this->installEntitySchema('comment');
 		// exercises the same install path production uses; installSchema() cannot be used
-		// because mantle2_schema() is deliberately empty (see mantle2.install)
+		// because mantle2 deliberately declares no hook_schema (see mantle2.install)
 		$this->container->get('module_handler')->loadInclude('mantle2', 'install');
 		mantle2_ensure_custom_tables();
 		// node save/delete needs node_access; comment save needs comment_entity_statistics
