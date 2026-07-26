@@ -522,6 +522,38 @@ function mantle2_install_user_fields(): void
 		'allowed_values' => array_map(fn($case) => $case->value, AccountType::cases()),
 	]);
 
+	/// Verified Publisher
+	createField('user', 'field_verified_publisher', 'boolean', 'Verified Publisher', false, false);
+
+	// list_string stores the ORDINAL index; allowed_values is ordinal-keyed because
+	// array_map over cases() preserves keys (same convention as field_account_type)
+	createField(
+		'user',
+		'field_verified_publisher_state',
+		'list_string',
+		'Verified Publisher State',
+		false,
+		0,
+		[
+			'allowed_values' => array_map(
+				fn($case) => $case->value,
+				VerifiedPublisherState::cases(),
+			),
+		],
+	);
+
+	createField(
+		'user',
+		'field_publisher_application',
+		'json',
+		'Verified Publisher Application',
+		false,
+		json_encode([]),
+		[
+			'schema' => Mantle2Schemas::verifiedPublisherApplicationJson(),
+		],
+	);
+
 	/// Email Verified
 	createField('user', 'field_email_verified', 'boolean', 'Email Verified', false, false);
 
@@ -1839,4 +1871,47 @@ function mantle2_update_9008(): string
 	return $added
 		? 'Added redemption detail columns: ' . implode(', ', $added)
 		: 'Redemption detail columns already present';
+}
+
+/**
+ * Install: Create mantle2_staged_activities and the Verified Publisher user fields.
+ *
+ * First update hook that will actually execute in production. Until the deploy pipeline
+ * dropped `drush un mantle2`, `drush en` re-stamped system.schema at the newest hook
+ * number on every release, so `drush updb` was always a no-op and 9001-9008 never ran.
+ */
+function mantle2_update_9009(): string
+{
+	$created = mantle2_ensure_custom_tables();
+
+	createField('user', 'field_verified_publisher', 'boolean', 'Verified Publisher', false, false);
+	createField(
+		'user',
+		'field_verified_publisher_state',
+		'list_string',
+		'Verified Publisher State',
+		false,
+		0,
+		[
+			'allowed_values' => array_map(
+				fn($case) => $case->value,
+				VerifiedPublisherState::cases(),
+			),
+		],
+	);
+	createField(
+		'user',
+		'field_publisher_application',
+		'json',
+		'Verified Publisher Application',
+		false,
+		json_encode([]),
+		[
+			'schema' => Mantle2Schemas::verifiedPublisherApplicationJson(),
+		],
+	);
+
+	return $created
+		? 'Created Verified Publisher user fields and tables: ' . implode(', ', $created)
+		: 'Created Verified Publisher user fields; all tables already present';
 }

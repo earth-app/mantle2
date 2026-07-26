@@ -13,6 +13,7 @@ use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\mantle2\Custom\Notification;
 use Drupal\mantle2\Custom\Quest;
+use Drupal\mantle2\Custom\VerifiedPublisherState;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ApiKeysHelper;
 use Drupal\mantle2\Service\CampaignHelper;
@@ -524,6 +525,350 @@ class UsersHelper
 			$user->hasPermission('administer users') ||
 			$accountType === AccountType::ADMINISTRATOR;
 	}
+
+	#endregion
+
+	#region Verified Publisher
+
+	public const PUBLISHER_REAPPLY_DELAY = 30 * 86400;
+	private const PUBLISHER_HISTORY_LIMIT = 10;
+
+	/**
+	 * Whether a user may stage activities for review.
+	 *
+	 * Administrators and the cloud service account are implicitly verified. The flag is
+	 * only meaningful on an ORGANIZER account, so a downgrade revokes it implicitly
+	 * without clearing the field and an upgrade restores it.
+	 */
+	public static function isVerifiedPublisher(UserInterface $user): bool
+	{
+		if (self::isAdmin($user) || (int) $user->id() === (int) self::cloud()->id()) {
+			return true;
+		}
+
+		if (!self::isOrganizer($user)) {
+			return false;
+		}
+
+		return (bool) $user->get('field_verified_publisher')->value;
+	}
+
+	public static function requireVerifiedPublisher(
+		UserInterface $user,
+		string $action = 'stage activities',
+	): ?JsonResponse {
+		if (self::isVerifiedPublisher($user)) {
+			return null;
+		}
+
+		if (!self::isOrganizer($user)) {
+			return GeneralHelper::forbidden("An Organizer account is required to $action.");
+		}
+
+		return GeneralHelper::forbidden(
+			"Verified Publisher status is required to $action. Apply at /v2/users/current/verified_publisher.",
+		);
+	}
+
+	/**
+	 * Shared administrator gate; controllers delegate here rather than each keeping a copy.
+	 */
+	public static function requireAdmin(Request $request): ?JsonResponse
+	{
+		$user = self::findByRequest($request);
+		if ($user instanceof JsonResponse) {
+			return $user;
+		}
+
+		if (!self::isAdmin($user)) {
+			return GeneralHelper::forbidden('Administrator access required');
+		}
+
+		return null;
+	}
+
+	public static function getVerifiedPublisherState(UserInterface $user): VerifiedPublisherState
+	{
+		if (!$user->hasField('field_verified_publisher_state')) {
+			return VerifiedPublisherState::NONE;
+		}
+
+		$ordinal = $user->get('field_verified_publisher_state')->value ?? '0';
+		return VerifiedPublisherState::cases()[(int) $ordinal] ?? VerifiedPublisherState::NONE;
+	}
+
+	private static function setVerifiedPublisherState(
+		UserInterface $user,
+		VerifiedPublisherState $state,
+	): void {
+		$user->set(
+			'field_verified_publisher_state',
+			GeneralHelper::findOrdinal(VerifiedPublisherState::cases(), $state),
+		);
+	}
+
+	public static function getVerifiedPublisherApplication(UserInterface $user): array
+	{
+		if (!$user->hasField('field_publisher_application')) {
+			return [];
+		}
+
+		$raw = $user->get('field_publisher_application')->value;
+		$decoded = $raw ? json_decode($raw, true) : [];
+
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	public static function setVerifiedPublisherApplication(
+		UserInterface $user,
+		array $application,
+	): void {
+		$user->set('field_publisher_application', json_encode($application));
+	}
+
+	/**
+	 * @return array|string the stored application, or an error slug
+	 */
+	public static function applyForVerifiedPublisher(
+		UserInterface $user,
+		array $input,
+	): array|string {
+		if (!self::isOrganizer($user)) {
+			return 'not_organizer';
+		}
+
+		$state = self::getVerifiedPublisherState($user);
+		if ($state === VerifiedPublisherState::PENDING) {
+			return 'already_pending';
+		}
+		if ($state === VerifiedPublisherState::APPROVED) {
+			return 'already_approved';
+		}
+
+		$application = self::getVerifiedPublisherApplication($user);
+		if ($state === VerifiedPublisherState::DENIED) {
+			$reappliesAt = (int) ($application['reviewed_at'] ?? 0) + self::PUBLISHER_REAPPLY_DELAY;
+			if (time() < $reappliesAt) {
+				return 'cooldown';
+			}
+		}
+
+		$now = time();
+		$application = [
+			'reason' => $input['reason'] ?? '',
+			'organization' => $input['organization'] ?? '',
+			'links' => array_slice(array_values($input['links'] ?? []), 0, 5),
+			'applied_at' => $now,
+			'reviewed_at' => null,
+			'reviewer_id' => null,
+			'notes' => null,
+			'history' => self::appendPublisherHistory($application, [
+				'state' => VerifiedPublisherState::PENDING->value,
+				'at' => $now,
+				'actor_id' => (int) $user->id(),
+			]),
+		];
+
+		self::setVerifiedPublisherApplication($user, $application);
+		self::setVerifiedPublisherState($user, VerifiedPublisherState::PENDING);
+		$user->set('field_verified_publisher', false);
+		$user->save();
+
+		foreach (ReportsHelper::getAdminUsers() as $admin) {
+			self::sendEmail(
+				$admin,
+				'verified_publisher_submitted',
+				[
+					'applicant' => $user->getAccountName(),
+					'organization' => $application['organization'],
+					'time' => date(DATE_ATOM),
+				],
+				false,
+			);
+		}
+
+		return self::verifiedPublisherPayload($user);
+	}
+
+	/**
+	 * @param string $action approve|deny|revoke
+	 * @return array|string the resulting payload, or an error slug
+	 */
+	public static function decideVerifiedPublisher(
+		UserInterface $applicant,
+		UserInterface $reviewer,
+		string $action,
+		?string $notes = null,
+	): array|string {
+		$map = [
+			'approve' => VerifiedPublisherState::APPROVED,
+			'deny' => VerifiedPublisherState::DENIED,
+			'revoke' => VerifiedPublisherState::REVOKED,
+		];
+		if (!isset($map[$action])) {
+			return 'invalid_action';
+		}
+
+		$state = $map[$action];
+		$now = time();
+
+		$application = self::getVerifiedPublisherApplication($applicant);
+		$application['reviewed_at'] = $now;
+		$application['reviewer_id'] = (int) $reviewer->id();
+		$application['notes'] = $notes;
+		$application['history'] = self::appendPublisherHistory($application, [
+			'state' => $state->value,
+			'at' => $now,
+			'actor_id' => (int) $reviewer->id(),
+			'notes' => $notes,
+		]);
+
+		self::setVerifiedPublisherApplication($applicant, $application);
+		self::setVerifiedPublisherState($applicant, $state);
+		$applicant->set('field_verified_publisher', $state === VerifiedPublisherState::APPROVED);
+		$applicant->save();
+
+		$revokedStaged = 0;
+		if ($state === VerifiedPublisherState::REVOKED) {
+			$revokedStaged = StagingHelper::revokePendingFor(
+				(int) $applicant->id(),
+				'Automatically denied: the submitter is no longer a Verified Publisher.',
+				$reviewer,
+			);
+		}
+
+		$key = match ($state) {
+			VerifiedPublisherState::APPROVED => 'verified_publisher_approved',
+			VerifiedPublisherState::DENIED => 'verified_publisher_denied',
+			default => 'verified_publisher_revoked',
+		};
+
+		self::addNotification(
+			$applicant,
+			match ($state) {
+				VerifiedPublisherState::APPROVED => 'You are a Verified Publisher',
+				VerifiedPublisherState::DENIED => 'Verified Publisher Application Update',
+				default => 'Verified Publisher Status Removed',
+			},
+			$notes ?: 'Your Verified Publisher application was reviewed.',
+			'/profile',
+			$state === VerifiedPublisherState::APPROVED ? 'success' : 'warning',
+			'verified_publisher',
+		);
+		// one summary mail on revoke, never one per withdrawn submission
+		self::sendEmail(
+			$applicant,
+			$key,
+			[
+				'notes' => $notes ?? '',
+				'revoked_staged' => $revokedStaged,
+				'time' => date(DATE_ATOM),
+			],
+			false,
+		);
+
+		$payload = self::verifiedPublisherPayload($applicant);
+		$payload['revoked_staged'] = $revokedStaged;
+
+		return $payload;
+	}
+
+	public static function listVerifiedPublisherApplications(
+		?string $state = null,
+		int $page = 1,
+		int $limit = 25,
+	): array {
+		$page = max(1, $page);
+		$limit = max(1, min(100, $limit));
+
+		$storage = Drupal::entityTypeManager()->getStorage('user');
+		$query = $storage
+			->getQuery()
+			->accessCheck(false)
+			->condition('status', 1)
+			->exists('field_verified_publisher_state');
+
+		if ($state) {
+			$target = VerifiedPublisherState::tryFrom($state);
+			if (!$target) {
+				return ['items' => [], 'page' => $page, 'limit' => $limit, 'total' => 0];
+			}
+			$query->condition(
+				'field_verified_publisher_state',
+				GeneralHelper::findOrdinal(VerifiedPublisherState::cases(), $target),
+			);
+		} else {
+			// default view is "needs a decision"
+			$query->condition(
+				'field_verified_publisher_state',
+				GeneralHelper::findOrdinal(
+					VerifiedPublisherState::cases(),
+					VerifiedPublisherState::PENDING,
+				),
+			);
+		}
+
+		$uids = $query->execute();
+		$uids = array_values(array_filter($uids, fn($uid) => (int) $uid !== 1));
+		$total = count($uids);
+		$slice = array_slice($uids, ($page - 1) * $limit, $limit);
+
+		$items = [];
+		foreach (User::loadMultiple($slice) as $user) {
+			$items[] = self::verifiedPublisherPayload($user);
+		}
+
+		return ['items' => $items, 'page' => $page, 'limit' => $limit, 'total' => $total];
+	}
+
+	public static function verifiedPublisherPayload(UserInterface $user): array
+	{
+		$state = self::getVerifiedPublisherState($user);
+		$application = self::getVerifiedPublisherApplication($user);
+		$reviewedAt = $application['reviewed_at'] ?? null;
+
+		$canReapplyAt = null;
+		if ($state === VerifiedPublisherState::DENIED && $reviewedAt) {
+			$canReapplyAt = GeneralHelper::dateToIso(
+				(int) $reviewedAt + self::PUBLISHER_REAPPLY_DELAY,
+			);
+		}
+
+		return [
+			'user' => [
+				'id' => (string) $user->id(),
+				'username' => $user->getAccountName(),
+				'account_type' => self::getAccountType($user)->name,
+			],
+			'state' => $state->value,
+			'verified' => self::isVerifiedPublisher($user) && !self::isAdmin($user),
+			'reason' => $application['reason'] ?? null,
+			'organization' => $application['organization'] ?? null,
+			'links' => $application['links'] ?? [],
+			'applied_at' => isset($application['applied_at'])
+				? GeneralHelper::dateToIso((int) $application['applied_at'])
+				: null,
+			'reviewed_at' => $reviewedAt ? GeneralHelper::dateToIso((int) $reviewedAt) : null,
+			'notes' => $application['notes'] ?? null,
+			'can_reapply_at' => $canReapplyAt,
+		];
+	}
+
+	private static function appendPublisherHistory(array $application, array $entry): array
+	{
+		$history = $application['history'] ?? [];
+		if (!is_array($history)) {
+			$history = [];
+		}
+
+		$history[] = $entry;
+
+		return array_slice($history, -self::PUBLISHER_HISTORY_LIMIT);
+	}
+
+	#endregion
+
+	#region Account Tier Trials & Restrictions
 
 	public static function createTierTrial(
 		UserInterface $user,
