@@ -2,8 +2,11 @@
 
 namespace Drupal\Tests\mantle2\Integration;
 
+use Drupal\Component\FileCache\FileCacheFactory;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\Site\Settings;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\mantle2\StaticFileCacheBackend;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\SubscriptionsHelper;
 use Drupal\mantle2\Service\UsersHelper;
@@ -35,6 +38,34 @@ abstract class IntegrationTestBase extends KernelTestBase
 		'key',
 		'mantle2',
 	];
+
+	public function __construct(string $name)
+	{
+		// KernelTestBase runs one php process per test method (drupal 11.3, issue 3548485).
+		// Sharing the process instead halves a sequential run, but measured 20% SLOWER under
+		// 8 paratest workers: a worker's heap grows across tests and the gc cost outweighs
+		// the saved forks. Core's default stays; MANTLE2_TEST_ISOLATION=0 takes the fast
+		// path for a single file. phpunit's setter is write-once, so claim it first.
+		$this->setRunTestInSeparateProcess(getenv('MANTLE2_TEST_ISOLATION') !== '0');
+		parent::__construct($name);
+	}
+
+	/** @var array{default:array{cache_backend_class:class-string}} */
+	private const FILE_CACHE = [
+		'default' => ['cache_backend_class' => StaticFileCacheBackend::class],
+	];
+
+	protected function initFileCache()
+	{
+		FileCacheFactory::setConfiguration(self::FILE_CACHE);
+		FileCacheFactory::setPrefix(Settings::getApcuPrefix('file_cache', $this->root));
+	}
+
+	protected function bootEnvironment()
+	{
+		parent::bootEnvironment();
+		$this->setSetting('file_cache', self::FILE_CACHE);
+	}
 
 	protected function setUp(): void
 	{
