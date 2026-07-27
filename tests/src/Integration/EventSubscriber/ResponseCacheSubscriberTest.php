@@ -382,6 +382,61 @@ class ResponseCacheSubscriberTest extends IntegrationTestBase
 	}
 
 	#[Test]
+	#[TestDox('An alias-aware search never answers the alias-blind one')]
+	#[Group('mantle2/subscribers')]
+	public function activityAliasSearchIsPartitioned(): void
+	{
+		// include_aliases widens the result set, so the two must not share a bucket
+		$this->seedCache($this->activitiesRequest(['search' => 'jog']), [
+			'items' => [],
+			'total' => 0,
+		]);
+
+		$this->assertNull(
+			$this->cachedBody(
+				$this->activitiesRequest(['search' => 'jog', 'include_aliases' => 'true']),
+			),
+			'The alias-blind miss was served as the alias-aware answer',
+		);
+
+		$aliased = ['items' => [['id' => 'run']], 'total' => 1];
+		$this->seedCache(
+			$this->activitiesRequest(['search' => 'jog', 'include_aliases' => 'true']),
+			$aliased,
+		);
+
+		$this->assertSame(
+			$aliased,
+			$this->cachedBody(
+				$this->activitiesRequest(['search' => 'jog', 'include_aliases' => '1']),
+			),
+			'Equivalent truthy flags must resolve to one key',
+		);
+		$this->assertSame(
+			['items' => [], 'total' => 0],
+			$this->cachedBody($this->activitiesRequest(['search' => 'jog'])),
+			'The alias-aware hit leaked into the alias-blind key',
+		);
+	}
+
+	#[Test]
+	#[TestDox('A type-filtered activity list does not answer the unfiltered one')]
+	#[Group('mantle2/subscribers')]
+	public function activityTypeFilterIsPartitioned(): void
+	{
+		$this->seedCache($this->activitiesRequest(['type' => 'SPORT']), [
+			'items' => [['id' => 'run']],
+		]);
+
+		$this->assertNull($this->cachedBody($this->activitiesRequest()));
+		$this->assertNull($this->cachedBody($this->activitiesRequest(['type' => 'HOBBY'])));
+		$this->assertSame(
+			['items' => [['id' => 'run']]],
+			$this->cachedBody($this->activitiesRequest(['type' => 'SPORT'])),
+		);
+	}
+
+	#[Test]
 	#[TestDox('Publishing an activity clears every cached page and search')]
 	#[Group('mantle2/subscribers')]
 	public function publishingClearsEveryActivityKey(): void

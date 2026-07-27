@@ -177,6 +177,64 @@ class ActivityControllerTest extends IntegrationTestBase
 	}
 
 	#[Test]
+	#[TestDox('GET /v2/activities only searches aliases when include_aliases is set')]
+	#[Group('mantle2/activities')]
+	public function listAliasSearch(): void
+	{
+		$this->seed('run', ['SPORT'], ['aliases' => ['jog', 'sprint']]);
+		$this->seed('cook');
+
+		$off = $this->decode(
+			$this->controller()->activities($this->request('GET', '/v2/activities?search=jog')),
+		);
+		$this->assertSame(0, $off['total']);
+		$this->assertFalse($off['include_aliases']);
+
+		$on = $this->decode(
+			$this->controller()->activities(
+				$this->request('GET', '/v2/activities?search=jog&include_aliases=true'),
+			),
+		);
+		$this->assertSame(1, $on['total']);
+		$this->assertSame('run', $on['items'][0]['id']);
+		$this->assertTrue($on['include_aliases']);
+
+		// the rand sort path uses a separate query builder; it must resolve aliases the same way
+		$randOff = $this->decode(
+			$this->controller()->activities(
+				$this->request('GET', '/v2/activities?search=sprint&sort=rand'),
+			),
+		);
+		$this->assertSame(0, $randOff['total']);
+
+		$randOn = $this->decode(
+			$this->controller()->activities(
+				$this->request('GET', '/v2/activities?search=sprint&sort=rand&include_aliases=1'),
+			),
+		);
+		$this->assertSame(1, $randOn['total']);
+		$this->assertSame('run', $randOn['items'][0]['id']);
+
+		// the flag widens the search, it never narrows it: id/name/description still match
+		foreach (
+			['/v2/activities?search=cook&include_aliases=1', '/v2/activities?search=cook']
+			as $uri
+		) {
+			$direct = $this->decode($this->controller()->activities($this->request('GET', $uri)));
+			$this->assertSame(1, $direct['total'], "search=cook regressed for $uri");
+			$this->assertSame('cook', $direct['items'][0]['id']);
+		}
+
+		// an alias hit that no id/name/description matches must not double-count
+		$both = $this->decode(
+			$this->controller()->activities(
+				$this->request('GET', '/v2/activities?search=run&include_aliases=1'),
+			),
+		);
+		$this->assertSame(1, $both['total']);
+	}
+
+	#[Test]
 	#[TestDox('GET /v2/activities/list returns ids only, paginates, and 404s when empty')]
 	#[Group('mantle2/activities')]
 	public function listIds(): void
