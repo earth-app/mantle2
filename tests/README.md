@@ -83,6 +83,13 @@ keeps that down:
   now costs nothing on reinstall, which is also what production redeploys do.
 - **CI sharding** (below) — the only lever that scales.
 
+Coverage is the other half of the bill: pcov roughly doubles this suite (61-test
+class, sequential: 1:22 without, 2:46 with). Two INI knobs recover a little of
+it, and CI sets both — `pcov.directory` pointed at `src` (~4%, and it matches
+what `<source>` already reports on) and `pcov.initial.files=25000` so pcov does
+not keep regrowing its tables as Drupal's ~15k files compile (~5%). Neither
+changes the numbers in the report; that was checked line for line.
+
 ### Process isolation
 
 `KernelTestBase::__construct()` calls `setRunTestInSeparateProcess(TRUE)` (Drupal
