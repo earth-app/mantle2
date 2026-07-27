@@ -117,12 +117,17 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
     needs: [build, test]
 
     permissions:
       contents: read
       packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     steps:
       - uses: actions/checkout@v7
@@ -132,6 +137,7 @@ jobs:
           php-version: '8.4'
           extensions: mbstring libxml gd dom curl date hash bcmath pcov random xml zlib standard
           coverage: pcov
+          ini-values: pcov.directory=${{ github.workspace }}/src
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -144,8 +150,10 @@ jobs:
           restore-keys: composer-
       - name: Install Composer Dependencies
         run: composer install --no-progress --no-suggest --prefer-dist
+      - name: Plan Shard ${{ matrix.shard }}
+        run: bun run test:shard -- --suite=Integration --index=${{ matrix.shard }} --total=${{ strategy.job-total }}
       - name: Run Integration Tests with Coverage
-        run: bun run test:coverage:integration
+        run: bun run test:coverage:integration:shard
       - name: Upload Integration Coverage to Codecov
         if: success() || failure()
         uses: codecov/codecov-action@v7
@@ -170,18 +178,53 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-integration
+          name: coverage-integration-${{ matrix.shard }}
           path: coverage/
           retention-days: 30
+
+  integration-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: integration
+    if: ${{ !cancelled() }}
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring libxml dom xml
+      - name: Download Shard Coverage
+        uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-integration-*
+          path: coverage/shards
+      - name: Merge Shard Coverage
+        run: php tests/coverage-summary.php --in=coverage/shards --out=coverage/integration.coverage.txt
+      - name: Archive Merged Integration Coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-integration-merged
+          path: coverage/integration.coverage.txt
+          retention-days: 30
       - name: Integration Coverage to Job Summary
-        if: success() || failure()
         run: |
           echo "## Integration Coverage" >> $GITHUB_STEP_SUMMARY
-          if [ -f coverage/integration.coverage.txt ]; then
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat coverage/integration.coverage.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat coverage/integration.coverage.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+      - name: Add Integration Coverage as PR Comment
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          header: integration-coverage
+          recreate: true
+          path: coverage/integration.coverage.txt
 
   e2e:
     runs-on: ubuntu-latest

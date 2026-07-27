@@ -8,6 +8,7 @@ composer.phar
 
 # phpunit
 phpunit.xml
+phpunit.shard.xml
 coverage/
 .phpunit.cache/
 .phpunit.result.cache

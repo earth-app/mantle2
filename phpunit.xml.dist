@@ -20,9 +20,10 @@
 			name="max_execution_time"
 			value="0"
 		/>
+		<!-- in-memory sqlite; each kernel test rebuilds its schema anyway, so a file only adds io -->
 		<env
 			name="SIMPLETEST_DB"
-			value="sqlite://localhost//tmp/mantle2-test.sqlite"
+			value="sqlite://localhost/:memory:"
 		/>
 	</php>
 

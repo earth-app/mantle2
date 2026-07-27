@@ -47,8 +47,11 @@ foreach (require __DIR__ . '/drupal-root.php' as $name => $pkgDir) {
 	}
 }
 
+// paratest workers share the configured database; a file-backed one has to be split per
+// worker, an in-memory one is already private to the process
 $testToken = getenv('TEST_TOKEN');
-if ($testToken !== false && $testToken !== '') {
+$simpletestDb = (string) getenv('SIMPLETEST_DB');
+if ($testToken !== false && $testToken !== '' && !str_contains($simpletestDb, ':memory:')) {
 	putenv('SIMPLETEST_DB=sqlite://localhost//tmp/mantle2-test-' . $testToken . '.sqlite');
 }
 

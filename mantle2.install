@@ -81,15 +81,33 @@ function createField(
 		}
 	}
 
-	if (!FieldConfig::loadByName($entity, $bundle, $name)) {
+	$prepared_default = null;
+	if ($default_value !== null) {
+		$prepared_default = is_array($default_value)
+			? $default_value
+			: [['value' => $default_value]];
+	}
+
+	$field = FieldConfig::loadByName($entity, $bundle, $name);
+	if (!$field) {
+		// instance-level settings go in with the create so a new field costs one save
+		$values = [
+			'field_name' => $name,
+			'entity_type' => $entity,
+			'bundle' => $bundle,
+			'label' => $label,
+			'required' => $required,
+		];
+		if ($prepared_default !== null) {
+			$values['default_value'] = $prepared_default;
+		}
+
 		try {
-			FieldConfig::create([
-				'field_name' => $name,
-				'entity_type' => $entity,
-				'bundle' => $bundle,
-				'label' => $label,
-				'required' => $required,
-			])->save();
+			$new_field = FieldConfig::create($values);
+			if ($constraints) {
+				$new_field->setSetting('constraints', $constraints);
+			}
+			$new_field->save();
 			$field_is_new = true;
 		} catch (EntityStorageException $e) {
 			Drupal::logger('mantle2')->error(
@@ -100,30 +118,32 @@ function createField(
 				],
 			);
 		}
-	}
+	} else {
+		// existing field; only pay for a save when the stored values actually drifted
+		$field_needs_save = false;
 
-	// Ensure instance-level settings like default values and constraints are saved.
-	$field = FieldConfig::load("$entity.$bundle.$name");
-	if ($field) {
-		if ($default_value !== null) {
-			$prepared_default = is_array($default_value)
-				? $default_value
-				: [['value' => $default_value]];
+		if ($prepared_default !== null && $field->get('default_value') !== $prepared_default) {
 			$field->set('default_value', $prepared_default);
+			$field_needs_save = true;
 		}
-		if ($constraints) {
+
+		if ($constraints && $field->getSetting('constraints') !== $constraints) {
 			$field->setSetting('constraints', $constraints);
+			$field_needs_save = true;
 		}
-		try {
-			$field->save();
-		} catch (EntityStorageException $e) {
-			Drupal::logger('mantle2')->error(
-				'Failed to save field configuration for %field: %message',
-				[
-					'%field' => $name,
-					'%message' => $e->getMessage(),
-				],
-			);
+
+		if ($field_needs_save) {
+			try {
+				$field->save();
+			} catch (EntityStorageException $e) {
+				Drupal::logger('mantle2')->error(
+					'Failed to save field configuration for %field: %message',
+					[
+						'%field' => $name,
+						'%message' => $e->getMessage(),
+					],
+				);
+			}
 		}
 	}
 
