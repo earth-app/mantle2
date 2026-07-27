@@ -18,7 +18,7 @@
 		"drupal/openid_connect": "^3.0@alpha",
 		"google/auth": "^1.50",
 		"firebase/php-jwt": "^7.0.5",
-		"stripe/stripe-php": "^20.3"
+		"stripe/stripe-php": "^21.0"
 	},
 	"autoload": {
 		"psr-4": {
