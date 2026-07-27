@@ -49,6 +49,9 @@ final class ActivityController extends ControllerBase
 			$filter_type_ordinal = GeneralHelper::findOrdinal(ActivityType::cases(), $typeCase);
 		}
 
+		// opt-in alias matching, same flag name as GET /v2/activities/:id
+		$includeAliases = $request->query->getBoolean('include_aliases', false);
+
 		try {
 			// Handle random sorting separately using database query
 			if ($sort === 'rand') {
@@ -82,6 +85,16 @@ final class ActivityController extends ControllerBase
 							"%$escapedSearch%",
 							'LIKE',
 						);
+
+					// aliases live in a json field; resolve the nids with an entity query so both
+					// sort paths match aliases identically instead of guessing the storage column
+					if ($includeAliases) {
+						$aliasNids = ActivityHelper::getNodeIdsByActivityAlias($search);
+						if ($aliasNids) {
+							$group->condition('n.nid', $aliasNids, 'IN');
+						}
+					}
+
 					$query->condition($group);
 				}
 
@@ -111,8 +124,12 @@ final class ActivityController extends ControllerBase
 						->orConditionGroup()
 						->condition('field_activity_id', $search, 'CONTAINS')
 						->condition('field_activity_name', $search, 'CONTAINS')
-						->condition('field_activity_description', $search, 'CONTAINS')
-						->condition('field_activity_aliases', $search, 'CONTAINS');
+						->condition('field_activity_description', $search, 'CONTAINS');
+
+					if ($includeAliases) {
+						$group->condition('field_activity_aliases', $search, 'CONTAINS');
+					}
+
 					$query->condition($group);
 				}
 
@@ -151,6 +168,7 @@ final class ActivityController extends ControllerBase
 				'sort' => $sort,
 				'search' => $search,
 				'type' => $filter_type,
+				'include_aliases' => $includeAliases,
 			]);
 		} catch (InvalidPluginDefinitionException | PluginNotFoundException $e) {
 			return GeneralHelper::internalError(

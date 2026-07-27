@@ -129,7 +129,7 @@ cache:
 
     - route: '^/v2/activities$'
       methods: [GET]
-      key_template: 'request_cache:activities:list:p:{page}:l:{limit}:s:{search}:sort:{sort}'
+      key_template: 'request_cache:activities:list:p:{page}:l:{limit}:s:{search}:sort:{sort}:t:{type}:al:{include_aliases}'
       ttl: 3600
 
     - route: '^/v2/users/badges$'

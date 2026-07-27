@@ -52,6 +52,26 @@ class ActivityHelper
 		return Node::load($nid);
 	}
 
+	/**
+	 * Every activity node whose alias list contains $alias, as node ids.
+	 *
+	 * @return int[]
+	 */
+	public static function getNodeIdsByActivityAlias(string $alias): array
+	{
+		if ($alias === '') {
+			return [];
+		}
+
+		$nids = Drupal::entityQuery('node')
+			->condition('type', 'activity')
+			->condition('field_activity_aliases', $alias, 'CONTAINS')
+			->accessCheck(false)
+			->execute();
+
+		return array_map('intval', array_values($nids));
+	}
+
 	public static function nodeToActivity(Node $node): Activity
 	{
 		$activity_id = $node->get('field_activity_id')->value;

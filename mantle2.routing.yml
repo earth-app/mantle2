@@ -5178,6 +5178,10 @@ mantle2.activities:
     query:
       sort:
         default: asc
+      include_aliases:
+        type: boolean
+        default: false
+        description: Whether `search` also matches an activity's aliases
   methods: [GET]
 
 mantle2.activities.random:

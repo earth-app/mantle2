@@ -228,6 +228,7 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 		$params['activities'] = md5($request->query->get('activities', ''));
 		$params['type'] = $request->query->get('type', 'all');
 		$params['cosmetic'] = $request->query->get('cosmetic', '');
+		$params['include_aliases'] = $request->query->getBoolean('include_aliases', false) ? 1 : 0;
 
 		$requester = UsersHelper::findByRequest($request);
 		if ($requester instanceof UserInterface) {
