@@ -9,6 +9,12 @@ abstract class E2ETestBase extends IntegrationTestBase
 {
 	protected string $cloudEndpoint;
 
+	public function __construct(string $name)
+	{
+		$this->setRunTestInSeparateProcess(true);
+		parent::__construct($name);
+	}
+
 	protected function setUp(): void
 	{
 		$this->cloudEndpoint = getenv('MANTLE2_CLOUD_ENDPOINT') ?: 'http://127.0.0.1:9898';
