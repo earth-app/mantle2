@@ -201,7 +201,7 @@ jobs:
           php-version: '8.4'
           extensions: mbstring libxml dom xml
       - name: Download Shard Coverage
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: coverage-integration-*
           path: coverage/shards
