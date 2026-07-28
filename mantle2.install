@@ -1661,7 +1661,7 @@ function mantle2_staged_activities_table_schema(): array
 				'not null' => false,
 				'description' => 'Node id produced on publish; audit trail',
 			],
-			'warned_12h' => [
+			'warned_urgent' => [
 				'type' => 'int',
 				'size' => 'tiny',
 				'not null' => true,

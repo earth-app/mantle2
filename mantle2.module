@@ -574,7 +574,10 @@ function mantle2_mail($key, &$message, $params)
 			break;
 		case 'activity_staged_urgent':
 			$count = (int) ($params['count'] ?? 0);
-			$message['subject'] = "The Earth App - $count Staged Activities Expire Within 12 Hours";
+			$hours = (int) round(StagingHelper::URGENT_WINDOW / 3600);
+			$message[
+				'subject'
+			] = "The Earth App - $count Staged Activities Expire Within $hours Hours";
 
 			$markdown = "@$username, **{$count}** organizer submissions are about to expire.\n\n";
 			$markdown .= "If they are not approved before **{$params['deadline']}**, they will be automatically **denied** and the organizers will have to resubmit.\n\n";

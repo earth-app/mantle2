@@ -22,9 +22,9 @@ class StagingHelper
 {
 	public const TABLE = 'mantle2_staged_activities';
 
-	public const WINDOW_ORGANIZER = 48 * 3600;
-	public const WINDOW_PRIVILEGED = 24 * 3600;
-	public const URGENT_WINDOW = 12 * 3600;
+	public const WINDOW_ORGANIZER = 168 * 3600;
+	public const WINDOW_PRIVILEGED = 60 * 3600;
+	public const URGENT_WINDOW = 24 * 3600;
 	public const RETENTION = 90 * 86400;
 	public const EXPIRY_BATCH = 200;
 	public const MAX_PENDING_PER_ORGANIZER = 10;
@@ -192,7 +192,7 @@ class StagingHelper
 					'reviewer_id' => null,
 					'review_notes' => null,
 					'published_nid' => null,
-					'warned_12h' => 0,
+					'warned_urgent' => 0,
 					// organizer rows interrupt admins immediately; cloud/admin rows are
 					// batched hourly by notifyNewSubmissions() to avoid evicting the 50-slot
 					// notification history
@@ -598,7 +598,7 @@ class StagingHelper
 				'decided_at' => time(),
 				'reviewer_id' => null,
 				'review_notes' =>
-					'Automatically denied: the 48-hour review window expired without an administrator decision.',
+					'Automatically denied: the one-week review window expired without an administrator decision.',
 			])
 		) {
 			return;
@@ -731,7 +731,7 @@ class StagingHelper
 				->fields('t')
 				->condition('t.state', self::STATE_PENDING)
 				->condition('t.submitter_kind', self::KIND_ORGANIZER)
-				->condition('t.warned_12h', 0)
+				->condition('t.warned_urgent', 0)
 				->condition('t.expires_at', $now, '>')
 				->condition('t.expires_at', $now + self::URGENT_WINDOW, '<=')
 				->execute()
@@ -817,7 +817,7 @@ class StagingHelper
 
 	private static function markWarned(array $ids): void
 	{
-		self::flagRows($ids, 'warned_12h');
+		self::flagRows($ids, 'warned_urgent');
 	}
 
 	private static function flagRows(array $ids, string $column): void
