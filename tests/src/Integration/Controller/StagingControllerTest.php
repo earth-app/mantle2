@@ -112,7 +112,7 @@ class StagingControllerTest extends IntegrationTestBase
 	}
 
 	#[Test]
-	#[TestDox('A verified organizer stages successfully and gets a fail-closed 48h deadline')]
+	#[TestDox('A verified organizer stages successfully and gets a fail-closed one-week deadline')]
 	#[Group('mantle2/staging')]
 	public function testOrganizerStages(): void
 	{

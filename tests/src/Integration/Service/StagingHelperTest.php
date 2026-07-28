@@ -61,14 +61,14 @@ class StagingHelperTest extends IntegrationTestBase
 	public static function windowProvider(): array
 	{
 		return [
-			'organizer gets 48h' => ['organizer', StagingHelper::WINDOW_ORGANIZER],
-			'admin gets 24h' => ['admin', StagingHelper::WINDOW_PRIVILEGED],
-			'cloud gets 24h' => ['cloud', StagingHelper::WINDOW_PRIVILEGED],
+			'organizer gets one week' => ['organizer', StagingHelper::WINDOW_ORGANIZER],
+			'admin gets 60h' => ['admin', StagingHelper::WINDOW_PRIVILEGED],
+			'cloud gets 60h' => ['cloud', StagingHelper::WINDOW_PRIVILEGED],
 		];
 	}
 
 	#[Test]
-	#[TestDox('The review window is 48h for organizers and 24h for privileged submitters')]
+	#[TestDox('The review window is one week for organizers and 60h for privileged submitters')]
 	#[Group('mantle2/staging')]
 	#[DataProvider('windowProvider')]
 	public function testWindowFor(string $kind, int $expected): void
@@ -391,7 +391,7 @@ class StagingHelperTest extends IntegrationTestBase
 	#[Group('mantle2/staging')]
 	public function testCheckExpirationsIsIdempotent(): void
 	{
-		$past = time() - 100000;
+		$past = time() - StagingHelper::WINDOW_PRIVILEGED - 100;
 		StagingHelper::stage(
 			$this->activity('cloud_two'),
 			UsersHelper::cloud(),
@@ -427,7 +427,7 @@ class StagingHelperTest extends IntegrationTestBase
 	}
 
 	#[Test]
-	#[TestDox('The 12 hour warning fires once per row and only for organizer submissions')]
+	#[TestDox('The urgent warning fires once per row and only for organizer submissions')]
 	#[Group('mantle2/staging')]
 	public function testUrgentWarningIsStickyAndScoped(): void
 	{
@@ -448,8 +448,8 @@ class StagingHelperTest extends IntegrationTestBase
 		);
 
 		StagingHelper::checkExpirations();
-		$this->assertSame(1, (int) StagingHelper::get((int) $organizer['id'])['warned_12h']);
-		$this->assertSame(0, (int) StagingHelper::get((int) $cloud['id'])['warned_12h']);
+		$this->assertSame(1, (int) StagingHelper::get((int) $organizer['id'])['warned_urgent']);
+		$this->assertSame(0, (int) StagingHelper::get((int) $cloud['id'])['warned_urgent']);
 
 		$before = count($this->collectedMail());
 		StagingHelper::checkExpirations();
