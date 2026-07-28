@@ -196,8 +196,10 @@ class MailKeysValidationTest extends TestCase
 			if (trim($block) === '') {
 				continue;
 			}
-			$this->assertStringContainsString(
-				"\$message['subject']",
+			// prettier wraps long assignments across lines, so match tolerantly rather than
+			// coupling this test to formatting
+			$this->assertMatchesRegularExpression(
+				"/\\\$message\\s*\\[\\s*'subject'\\s*\\]/",
 				$block,
 				"Key {$keys[$index]} does not set a subject",
 			);
