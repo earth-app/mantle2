@@ -345,7 +345,7 @@ class UsersHelper
 	public static function hasScope(Request $request, string $scope): bool
 	{
 		$user = self::getOwnerOfRequest($request);
-		if (!$user instanceof UserInterface) {
+		if (!($user instanceof UserInterface)) {
 			return false;
 		}
 
@@ -361,7 +361,7 @@ class UsersHelper
 	public static function requireScope(Request $request, string $scope): ?JsonResponse
 	{
 		$user = self::getOwnerOfRequest($request);
-		if (!$user instanceof UserInterface) {
+		if (!($user instanceof UserInterface)) {
 			return GeneralHelper::unauthorized('Authentication required');
 		}
 
@@ -1450,7 +1450,7 @@ class UsersHelper
 			return false;
 		}
 
-		if (!$category instanceof MailCategory) {
+		if (!($category instanceof MailCategory)) {
 			return true;
 		}
 
@@ -3529,7 +3529,7 @@ class UsersHelper
 		}
 
 		$user = User::load($uid);
-		if (!$user instanceof UserInterface) {
+		if (!($user instanceof UserInterface)) {
 			return null; // user uid not loadable
 		}
 
@@ -3773,7 +3773,7 @@ class UsersHelper
 						'%message' => $e->getMessage(),
 					],
 				);
-				usleep((10 << $attempt - 1) * 1000 + random_int(0, 5000));
+				usleep((10 << ($attempt - 1)) * 1000 + random_int(0, 5000));
 			}
 		}
 	}
@@ -4289,7 +4289,7 @@ class UsersHelper
 		}
 
 		$user = User::load((int) $payload['user_id']);
-		if (!$user instanceof UserInterface) {
+		if (!($user instanceof UserInterface)) {
 			RedisHelper::delete($key);
 			return GeneralHelper::badRequest('Account no longer exists');
 		}
@@ -5369,7 +5369,7 @@ class UsersHelper
 		$friendsReverse = [];
 
 		foreach ($users as $u) {
-			if (!$u instanceof UserInterface) {
+			if (!($u instanceof UserInterface)) {
 				continue;
 			}
 

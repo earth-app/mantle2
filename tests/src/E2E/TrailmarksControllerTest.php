@@ -24,7 +24,7 @@ class TrailmarksControllerTest extends E2ETestBase
 	// a far-flung, unique-ish location so nearby lookups don't collide across runs
 	private function coords(): array
 	{
-		return [37.0 + mt_rand(0, 8000) / 10000, -122.0 - mt_rand(0, 8000) / 10000];
+		return [37.0 + mt_rand(0, 8000) / 10000, -(122.0 - mt_rand(0, 8000) / 10000)];
 	}
 
 	#[Test]

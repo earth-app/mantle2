@@ -305,7 +305,7 @@ final class ReportsController extends ControllerBase
 						return GeneralHelper::badRequest('Report has no content owner to ban');
 					}
 					$owner = \Drupal\user\Entity\User::load($ownerId);
-					if (!$owner instanceof UserInterface) {
+					if (!($owner instanceof UserInterface)) {
 						return GeneralHelper::notFound('Content owner not found');
 					}
 					ReportsHelper::banUser($owner);

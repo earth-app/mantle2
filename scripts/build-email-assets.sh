@@ -73,14 +73,14 @@ die() {
 }
 
 require_tools() {
-	command -v curl >/dev/null 2>&1 || die 'curl is required but was not found on PATH'
-	command -v sips >/dev/null 2>&1 ||
-		die 'sips is required and ships with macOS; this script cannot run on this platform'
+	command -v curl > /dev/null 2>&1 || die 'curl is required but was not found on PATH'
+	command -v sips > /dev/null 2>&1 \
+		|| die 'sips is required and ships with macOS; this script cannot run on this platform'
 
 	if [ "$1" = '1' ]; then
-		command -v bunx >/dev/null 2>&1 || die '--upload needs bunx (install bun) to run wrangler'
-		bunx wrangler --version >/dev/null 2>&1 ||
-			die '--upload needs wrangler; run "bunx wrangler login" or set CLOUDFLARE_API_TOKEN'
+		command -v bunx > /dev/null 2>&1 || die '--upload needs bunx (install bun) to run wrangler'
+		bunx wrangler --version > /dev/null 2>&1 \
+			|| die '--upload needs wrangler; run "bunx wrangler login" or set CLOUDFLARE_API_TOKEN'
 	fi
 }
 
@@ -95,9 +95,9 @@ px() {
 
 content_type() {
 	case "$1" in
-	*.png) printf 'image/png' ;;
-	*.jpg | *.jpeg) printf 'image/jpeg' ;;
-	*) die "unknown image type: $1" ;;
+		*.png) printf 'image/png' ;;
+		*.jpg | *.jpeg) printf 'image/jpeg' ;;
+		*) die "unknown image type: $1" ;;
 	esac
 }
 
@@ -107,8 +107,8 @@ fetch() {
 	SRC_PATH="$CACHE/$name"
 
 	if [ ! -s "$SRC_PATH" ]; then
-		curl -fsSL --retry 3 -o "$SRC_PATH.part" "$CDN/marketing/$name" ||
-			die "download failed: $CDN/marketing/$name"
+		curl -fsSL --retry 3 -o "$SRC_PATH.part" "$CDN/marketing/$name" \
+			|| die "download failed: $CDN/marketing/$name"
 		mv "$SRC_PATH.part" "$SRC_PATH"
 	fi
 }
@@ -148,9 +148,9 @@ build_banner() {
 	offset=$((height * BANNER_OFFSET_PERMILLE / 1000))
 	[ $((offset + band)) -gt "$height" ] && offset=$((height - band))
 
-	sips -c "$band" "$width" --cropOffset "$offset" 0 "$work" >/dev/null
-	sips --resampleHeightWidth $((MAX_WIDTH / BANNER_ASPECT)) "$MAX_WIDTH" "$work" >/dev/null
-	sips -s format jpeg -s formatOptions "$JPEG_QUALITY" "$work" --out "$out" >/dev/null
+	sips -c "$band" "$width" --cropOffset "$offset" 0 "$work" > /dev/null
+	sips --resampleHeightWidth $((MAX_WIDTH / BANNER_ASPECT)) "$MAX_WIDTH" "$work" > /dev/null
+	sips -s format jpeg -s formatOptions "$JPEG_QUALITY" "$work" --out "$out" > /dev/null
 	rm -f "$work"
 
 	record "$(basename "$out")" "$(bytes "$SRC_PATH")" "$(bytes "$out")" "3:1 band at y=$offset"
@@ -167,10 +167,10 @@ build_post() {
 
 	width="$(px pixelWidth "$work")"
 	if [ "$width" -gt "$MAX_WIDTH" ]; then
-		sips --resampleWidth "$MAX_WIDTH" "$work" >/dev/null
+		sips --resampleWidth "$MAX_WIDTH" "$work" > /dev/null
 	fi
 
-	sips -s format jpeg -s formatOptions "$JPEG_QUALITY" "$work" --out "$out" >/dev/null
+	sips -s format jpeg -s formatOptions "$JPEG_QUALITY" "$work" --out "$out" > /dev/null
 	rm -f "$work"
 
 	record "$(basename "$out")" "$(bytes "$SRC_PATH")" "$(bytes "$out")" "${width}w -> $(px pixelWidth "$out")w"
@@ -185,8 +185,8 @@ build_qr() {
 	work="$DIST/.work-qr.jpg"
 	cp "$SRC_PATH" "$work"
 
-	sips --resampleHeightWidth "$QR_SIDE" "$QR_SIDE" "$work" >/dev/null
-	sips -s format png "$work" --out "$out" >/dev/null
+	sips --resampleHeightWidth "$QR_SIDE" "$QR_SIDE" "$work" > /dev/null
+	sips -s format png "$work" --out "$out" > /dev/null
 	rm -f "$work"
 
 	record "$(basename "$out")" "$(bytes "$SRC_PATH")" "$(bytes "$out")" "${QR_SIDE}x${QR_SIDE} lossless"
@@ -202,7 +202,7 @@ build_motd() {
 
 	width="$(px pixelWidth "$out")"
 	if [ "$width" -gt "$MAX_WIDTH" ]; then
-		sips --resampleWidth "$MAX_WIDTH" "$out" >/dev/null
+		sips --resampleWidth "$MAX_WIDTH" "$out" > /dev/null
 	fi
 
 	# sips re-encodes to truecolor, which beats the optimized original surprisingly rarely
@@ -258,13 +258,13 @@ main() {
 	local upload=0 name
 
 	case "${1:-}" in
-	'') ;;
-	--upload) upload=1 ;;
-	-h | --help)
-		grep '^#' "$0"
-		exit 0
-		;;
-	*) die "unknown argument: $1 (expected --upload)" ;;
+		'') ;;
+		--upload) upload=1 ;;
+		-h | --help)
+			grep '^#' "$0"
+			exit 0
+			;;
+		*) die "unknown argument: $1 (expected --upload)" ;;
 	esac
 
 	require_tools "$upload"

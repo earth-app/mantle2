@@ -206,7 +206,7 @@ Symfony's event dispatcher handles cross-cutting concerns:
 
     ```bash
     cd /path/to/drupal/modules/custom
-    git clone <repository-url> mantle2
+    git clone < repository-url > mantle2
     cd mantle2
     ```
 
@@ -219,8 +219,8 @@ Symfony's event dispatcher handles cross-cutting concerns:
 3. **Enable required Drupal modules**:
 
     ```bash
-    	drush en node user comment json_field key field options datetime smtp redis \
-    		openid_connect -y
+    drush en node user comment json_field key field options datetime smtp redis \
+    	openid_connect -y
     ```
 
 4. **Enable mantle2**:
@@ -736,12 +736,12 @@ The following files should stay aligned with the code that consumes them:
 
 ```bash
 # PHP, YAML, XML, JSON
-bun run prettier          # Format all files
-bun run prettier:check    # Check formatting
+bun run prettier       # Format all files
+bun run prettier:check # Check formatting
 
 # PHP-specific
-vendor/bin/phpcbf        # Auto-fix coding standards
-vendor/bin/phpcs         # Check coding standards
+vendor/bin/phpcbf # Auto-fix coding standards
+vendor/bin/phpcs  # Check coding standards
 ```
 
 **Static Analysis:**
@@ -802,15 +802,15 @@ ini_set('display_errors', true);
 
 ```bash
 drush watchdog:show --type=mantle2
-drush ws --tail  # Live log tail
+drush ws --tail # Live log tail
 ```
 
 **Clear Caches:**
 
 ```bash
-drush cr                  # Full cache rebuild
-drush cc views            # Clear specific bin
-drush redis-cli flushall  # Clear Redis
+drush cr                 # Full cache rebuild
+drush cc views           # Clear specific bin
+drush redis-cli flushall # Clear Redis
 ```
 
 ## Testing
@@ -893,12 +893,12 @@ curl http://localhost/v2/hello
 
 # Login
 curl -X POST http://localhost/v2/users/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"testuser","password":"testpass"}'
+	-H "Content-Type: application/json" \
+	-d '{"username":"testuser","password":"testpass"}'
 
 # Get users (authenticated)
 curl http://localhost/v2/users \
-  -H "Authorization: Bearer <token>"
+	-H "Authorization: Bearer <token>"
 ```
 
 **Using Postman/Insomnia:**

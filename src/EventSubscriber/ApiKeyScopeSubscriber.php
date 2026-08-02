@@ -51,7 +51,7 @@ class ApiKeyScopeSubscriber implements EventSubscriberInterface
 		}
 
 		$key = UsersHelper::getRequestApiKey($request);
-		if (!$key instanceof ApiKey) {
+		if (!($key instanceof ApiKey)) {
 			return;
 		}
 

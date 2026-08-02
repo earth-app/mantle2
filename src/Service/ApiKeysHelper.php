@@ -673,7 +673,7 @@ class ApiKeysHelper
 		}
 
 		$user = User::load($key->getUserId());
-		if (!$user instanceof UserInterface) {
+		if (!($user instanceof UserInterface)) {
 			return null;
 		}
 
@@ -913,7 +913,7 @@ class ApiKeysHelper
 		foreach ($rows as $row) {
 			$key = ApiKey::fromRow($row);
 			$user = User::load($key->getUserId());
-			if (!$user instanceof UserInterface) {
+			if (!($user instanceof UserInterface)) {
 				continue;
 			}
 			self::notifyUpcoming($user, $key, '1 week');
@@ -942,7 +942,7 @@ class ApiKeysHelper
 		foreach ($rows as $row) {
 			$key = ApiKey::fromRow($row);
 			$user = User::load($key->getUserId());
-			if (!$user instanceof UserInterface) {
+			if (!($user instanceof UserInterface)) {
 				continue;
 			}
 			self::notifyUpcoming($user, $key, 'tomorrow');

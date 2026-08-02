@@ -74,7 +74,7 @@ class XmlContentNegotiationSubscriber implements EventSubscriberInterface
 		}
 
 		$response = $event->getResponse();
-		if (!$response instanceof JsonResponse) {
+		if (!($response instanceof JsonResponse)) {
 			return;
 		}
 

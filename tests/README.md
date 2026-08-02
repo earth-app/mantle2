@@ -131,8 +131,8 @@ shard's files. The plan is a pure function of the inventory, so every shard job
 derives the same assignment without coordinating.
 
 ```sh
-bun run test:shard -- --suite=Integration --total=10 --plan         # show the split
-bun run test:shard -- --suite=Integration --index=3 --total=10      # write phpunit.shard.xml
+bun run test:shard -- --suite=Integration --total=10 --plan    # show the split
+bun run test:shard -- --suite=Integration --index=3 --total=10 # write phpunit.shard.xml
 ```
 
 Within a shard, paratest runs in `--functional` mode so a single large class is

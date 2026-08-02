@@ -26,7 +26,7 @@ class CloverMerger
 	public static function parse(string $xml): array
 	{
 		$document = @simplexml_load_string($xml);
-		if (!$document instanceof SimpleXMLElement) {
+		if (!($document instanceof SimpleXMLElement)) {
 			throw new RuntimeException('could not parse clover report');
 		}
 

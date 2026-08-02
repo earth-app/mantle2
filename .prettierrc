@@ -1,5 +1,5 @@
 {
-	"plugins": ["@prettier/plugin-php", "@prettier/plugin-xml"],
+	"plugins": ["@prettier/plugin-php", "@prettier/plugin-xml", "prettier-plugin-sh"],
 	"printWidth": 100,
 	"singleQuote": true,
 	"semi": true,
