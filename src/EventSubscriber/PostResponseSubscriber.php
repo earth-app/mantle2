@@ -291,7 +291,10 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				$activities = $data['activities'] ?? null;
 				if (is_array($activities)) {
 					$names = array_map(fn($a) => $a['name'] ?? null, $activities);
-					$names = array_filter($names, fn($n) => $n !== null);
+
+					// array_values keeps the gaps from a nameless entry out of the payload;
+					// a sparse array json_encodes to an object, which the tracker rejects
+					$names = array_values(array_filter($names, fn($n) => $n !== null));
 					if (!empty($names)) {
 						UsersHelper::trackBadgeProgress($user, 'activities_added', $names);
 					}
