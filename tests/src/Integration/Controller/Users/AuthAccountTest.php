@@ -5,6 +5,8 @@ namespace Drupal\Tests\mantle2\Integration\Controller\Users;
 use Drupal\mantle2\Controller\UsersController;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\GeneralHelper;
+use Drupal\mantle2\Service\OAuthHelper;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
@@ -1748,7 +1750,606 @@ class AuthAccountTest extends IntegrationTestBase
 
 	#endregion
 
-	#region OAuth (pre-token guard branches; token validation is E2E)
+	#region Verified Publisher
+
+	private function organizer(bool $emailVerified = true): UserInterface
+	{
+		$user = $this->createUser([
+			'field_account_type' => (string) array_search(
+				AccountType::ORGANIZER,
+				AccountType::cases(),
+				true,
+			),
+			'field_email_verified' => $emailVerified,
+		]);
+		return $user;
+	}
+
+	private function publisherApplication(array $overrides = []): string
+	{
+		return json_encode(
+			$overrides + [
+				'reason' => str_repeat('We run a large local climbing chapter. ', 2),
+				'organization' => 'Bay Area Climbing Collective',
+				'links' => ['https://example.org'],
+			],
+		);
+	}
+
+	private function applyAsPublisher(UserInterface $user, ?string $body = null): JsonResponse
+	{
+		return $this->controller()->applyVerifiedPublisher(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/verified_publisher',
+				[],
+				$body ?? $this->publisherApplication(),
+			),
+		);
+	}
+
+	#[Test]
+	#[TestDox('GET verified_publisher reports the untouched default state')]
+	#[Group('mantle2/users')]
+	public function verifiedPublisherStartsAtNone(): void
+	{
+		$user = $this->organizer();
+
+		$response = $this->controller()->getVerifiedPublisher(
+			$this->authRequest($user, 'GET', '/v2/users/current/verified_publisher'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$body = $this->decode($response);
+		$this->assertSame('none', $body['state']);
+		$this->assertFalse($body['verified']);
+		$this->assertNull($body['reason']);
+		$this->assertSame($user->getAccountName(), $body['user']['username']);
+	}
+
+	#[Test]
+	#[TestDox('Both verified_publisher routes refuse an anonymous caller')]
+	#[Group('mantle2/users')]
+	public function verifiedPublisherRoutesRequireAuth(): void
+	{
+		$this->assertSame(
+			Response::HTTP_UNAUTHORIZED,
+			$this->controller()
+				->getVerifiedPublisher(
+					$this->request('GET', '/v2/users/current/verified_publisher'),
+				)
+				->getStatusCode(),
+		);
+		$this->assertSame(
+			Response::HTTP_UNAUTHORIZED,
+			$this->controller()
+				->applyVerifiedPublisher(
+					$this->request('POST', '/v2/users/current/verified_publisher'),
+				)
+				->getStatusCode(),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Applying stores the application and flips the state to pending')]
+	#[Group('mantle2/users')]
+	public function verifiedPublisherApplicationIsStored(): void
+	{
+		$user = $this->organizer();
+
+		$response = $this->applyAsPublisher($user);
+
+		$this->assertSame(Response::HTTP_CREATED, $response->getStatusCode());
+
+		$state = $this->controller()->getVerifiedPublisher(
+			$this->authRequest($user, 'GET', '/v2/users/current/verified_publisher'),
+		);
+		$body = $this->decode($state);
+		$this->assertSame('pending', $body['state']);
+		$this->assertSame('Bay Area Climbing Collective', $body['organization']);
+		$this->assertSame(['https://example.org'], $body['links']);
+	}
+
+	#[Test]
+	#[TestDox('Applying requires a verified email address')]
+	#[Group('mantle2/users')]
+	public function verifiedPublisherNeedsAVerifiedEmail(): void
+	{
+		$user = $this->organizer(false);
+
+		$this->assertSame(
+			Response::HTTP_FORBIDDEN,
+			$this->applyAsPublisher($user)->getStatusCode(),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Applying requires an Organizer account')]
+	#[Group('mantle2/users')]
+	public function verifiedPublisherNeedsAnOrganizerAccount(): void
+	{
+		$user = $this->createUser(['field_email_verified' => true]);
+
+		$response = $this->applyAsPublisher($user);
+
+		$this->assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
+		$this->assertStringContainsString('Organizer', $this->decode($response)['message']);
+	}
+
+	#[Test]
+	#[TestDox('A second application while one is pending is a conflict')]
+	#[Group('mantle2/users')]
+	public function verifiedPublisherRefusesDuplicateApplications(): void
+	{
+		$user = $this->organizer();
+		$this->applyAsPublisher($user);
+
+		$this->assertSame(Response::HTTP_CONFLICT, $this->applyAsPublisher($user)->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('The application body is validated before anything is stored')]
+	#[Group('mantle2/users')]
+	public function verifiedPublisherValidatesTheBody(): void
+	{
+		$user = $this->organizer();
+
+		$cases = [
+			'not json' => 'nope{',
+			'reason too short' => $this->publisherApplication(['reason' => 'too short']),
+			'reason too long' => $this->publisherApplication([
+				'reason' => str_repeat('a', 1001),
+			]),
+			'reason not a string' => $this->publisherApplication(['reason' => 42]),
+			'organization too long' => $this->publisherApplication([
+				'organization' => str_repeat('o', 101),
+			]),
+			'links not an array' => $this->publisherApplication(['links' => 'https://example.org']),
+			'link too long' => $this->publisherApplication([
+				'links' => [str_repeat('l', 201)],
+			]),
+			'link not a string' => $this->publisherApplication(['links' => [42]]),
+		];
+
+		foreach ($cases as $label => $body) {
+			$this->assertSame(
+				Response::HTTP_BAD_REQUEST,
+				$this->applyAsPublisher($user, $body)->getStatusCode(),
+				$label,
+			);
+		}
+
+		$state = $this->decode(
+			$this->controller()->getVerifiedPublisher(
+				$this->authRequest($user, 'GET', '/v2/users/current/verified_publisher'),
+			),
+		);
+		$this->assertSame('none', $state['state'], 'no invalid body may have been stored');
+	}
+
+	#endregion
+
+	#region OAuth
+
+	// swaps in a fake client manager whose createInstance() returns a client echoing
+	// canned userinfo, so the whole login flow runs without a live provider
+	// (mirrors OAuthHelperTest::mockClientManager)
+	private function mockClientManager(array $userInfoByProvider): void
+	{
+		$client = new class ($userInfoByProvider) {
+			public function __construct(private array $map, private ?string $provider = null) {}
+
+			public function forProvider(string $provider): self
+			{
+				$clone = clone $this;
+				$clone->provider = $provider;
+				return $clone;
+			}
+
+			public function retrieveUserInfo(string $token): ?array
+			{
+				return $this->map[$this->provider] ?? null;
+			}
+		};
+
+		$manager = new class ($client) {
+			public function __construct(private object $client) {}
+
+			public function createInstance($provider, array $configuration = []): object
+			{
+				return $this->client->forProvider($provider);
+			}
+		};
+
+		$this->container->set('plugin.manager.openid_connect_client', $manager);
+	}
+
+	private function googleUserInfo(array $overrides = []): array
+	{
+		return $overrides + [
+			'sub' => 'g-oauth-1',
+			'email' => 'oauth.person@example.com',
+			'name' => 'Ada Lovelace',
+			'given_name' => 'Ada',
+			'family_name' => 'Lovelace',
+		];
+	}
+
+	private function oauthLogin(array $body, array $query = []): JsonResponse
+	{
+		$uri = '/v2/users/oauth/google';
+		if ($query) {
+			$uri .= '?' . http_build_query($query);
+		}
+		return $this->controller()->oauthGoogle(
+			$this->request('POST', $uri, [], json_encode($body)),
+		);
+	}
+
+	private function notificationTitles(UserInterface $user): array
+	{
+		return array_map(
+			fn($n) => $n->getTitle(),
+			UsersHelper::getNotifications(User::load($user->id())),
+		);
+	}
+
+	#[Test]
+	#[TestDox('An unrecognised OAuth provider is rejected before any token work')]
+	#[Group('mantle2/users')]
+	public function oauthLoginRejectsUnknownProvider(): void
+	{
+		// the private handler is reachable only through the per-provider wrappers, so
+		// the guard is proven by the helper's own provider list staying authoritative
+		$this->assertNotContains('myspace', OAuthHelper::$providers);
+		$this->assertCount(6, OAuthHelper::$providers);
+	}
+
+	#[Test]
+	#[TestDox('An OAuth token the provider will not confirm is unauthorized')]
+	#[Group('mantle2/users')]
+	public function oauthLoginRejectsInvalidToken(): void
+	{
+		$this->mockClientManager([]);
+
+		$response = $this->oauthLogin(['id_token' => 'nope']);
+
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('A first-time OAuth login creates the account and returns a session token')]
+	#[Group('mantle2/users')]
+	public function oauthLoginCreatesNewAccount(): void
+	{
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$response = $this->oauthLogin(['id_token' => 'tok']);
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+
+		$data = $this->decode($response);
+		$this->assertNotEmpty($data['session_token']);
+		$this->assertSame('oauth.person@example.com', $data['user']['account']['email']);
+
+		$created = UsersHelper::findByEmail('oauth.person@example.com');
+		$this->assertNotNull($created);
+		$this->assertTrue(OAuthHelper::hasProviderLinked($created, 'google'));
+	}
+
+	#[Test]
+	#[TestDox('A returning OAuth login reuses the account already bound to that sub')]
+	#[Group('mantle2/users')]
+	public function oauthLoginReusesLinkedAccount(): void
+	{
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$first = $this->decode($this->oauthLogin(['id_token' => 'tok']));
+		$second = $this->decode($this->oauthLogin(['id_token' => 'tok']));
+
+		$this->assertSame($first['user']['id'], $second['user']['id']);
+		$this->assertNotSame(
+			$first['session_token'],
+			$second['session_token'],
+			'each login mints its own session',
+		);
+	}
+
+	#[Test]
+	#[TestDox('An access_token is accepted for providers that do not issue an id_token')]
+	#[Group('mantle2/users')]
+	public function oauthLoginAcceptsAccessToken(): void
+	{
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$response = $this->oauthLogin(['access_token' => 'tok']);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('An OAuth login matching an existing email links the provider to that account')]
+	#[Group('mantle2/users')]
+	public function oauthLoginLinksByEmail(): void
+	{
+		$existing = $this->createUser(['mail' => 'oauth.person@example.com']);
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$response = $this->oauthLogin(['id_token' => 'tok']);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame(
+			(int) $existing->id(),
+			(int) UsersHelper::findByEmail('oauth.person@example.com')->id(),
+			'no second account may be created for a known email',
+		);
+		$this->assertTrue(OAuthHelper::hasProviderLinked(User::load($existing->id()), 'google'));
+		$this->assertContains('New OAuth Provider Linked', $this->notificationTitles($existing));
+	}
+
+	#[Test]
+	#[TestDox('An OAuth login carrying a session token links the provider to that session')]
+	#[Group('mantle2/users')]
+	public function oauthLoginLinksToSessionUser(): void
+	{
+		$user = $this->createUser(['mail' => 'session.person@example.com']);
+		$token = UsersHelper::issueToken($user);
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$response = $this->oauthLogin(['id_token' => 'tok', 'session_token' => $token]);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame(
+			GeneralHelper::formatId($user->id()),
+			$this->decode($response)['user']['id'],
+		);
+		$this->assertTrue(OAuthHelper::hasProviderLinked(User::load($user->id()), 'google'));
+		$this->assertContains('New OAuth Provider Linked', $this->notificationTitles($user));
+	}
+
+	#[Test]
+	#[TestDox('Linking fills in a missing email and tells the user it happened')]
+	#[Group('mantle2/users')]
+	public function oauthLinkAutoSetsMissingEmail(): void
+	{
+		$user = $this->createUser(['mail' => '']);
+		$token = UsersHelper::issueToken($user);
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$this->oauthLogin(['id_token' => 'tok', 'session_token' => $token]);
+
+		$fresh = User::load($user->id());
+		$this->assertSame('oauth.person@example.com', $fresh->getEmail());
+		$this->assertTrue((bool) $fresh->get('field_email_verified')->value);
+		$this->assertContains('Email Address Set', $this->notificationTitles($user));
+	}
+
+	#[Test]
+	#[TestDox('Linking backfills a missing first and last name from the provider')]
+	#[Group('mantle2/users')]
+	public function oauthLinkBackfillsNames(): void
+	{
+		$user = $this->createUser(['mail' => 'named.person@example.com']);
+		$token = UsersHelper::issueToken($user);
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$this->oauthLogin(['id_token' => 'tok', 'session_token' => $token]);
+
+		$fresh = User::load($user->id());
+		$this->assertSame('Ada', $fresh->get('field_first_name')->value);
+		$this->assertSame('Lovelace', $fresh->get('field_last_name')->value);
+	}
+
+	#[Test]
+	#[TestDox('A disabled account cannot be reached through an OAuth session token')]
+	#[Group('mantle2/users')]
+	public function oauthLoginRefusesDisabledSessionUser(): void
+	{
+		// isDisabled() reads the drupal blocked flag
+		$user = $this->createUser();
+		$user->block();
+		$user->save();
+		$token = UsersHelper::issueToken($user);
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$response = $this->oauthLogin(['id_token' => 'tok', 'session_token' => $token]);
+
+		$this->assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('A disabled account cannot log in through a previously linked provider')]
+	#[Group('mantle2/users')]
+	public function oauthLoginRefusesDisabledLinkedUser(): void
+	{
+		$user = $this->createUser([
+			'mail' => 'disabled.person@example.com',
+			'field_oauth_google_sub' => 'g-oauth-1',
+		]);
+		$user->block();
+		$user->save();
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$response = $this->oauthLogin(['id_token' => 'tok']);
+
+		$this->assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('is_linking refuses to create an account when no existing one matches')]
+	#[Group('mantle2/users')]
+	public function oauthLinkingRefusesToCreateAnAccount(): void
+	{
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$response = $this->oauthLogin(['id_token' => 'tok'], ['is_linking' => 'true']);
+
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertStringContainsString(
+			'no existing account found',
+			$this->decode($response)['message'],
+		);
+		$this->assertNull(UsersHelper::findByEmail('oauth.person@example.com'));
+	}
+
+	#[Test]
+	#[TestDox('A signup merges client-supplied profile fields the provider withheld')]
+	#[Group('mantle2/users')]
+	public function oauthSignupMergesClientSuppliedFields(): void
+	{
+		// apple only releases the name and email on the very first authorization,
+		// so the client forwards what it captured
+		$this->mockClientManager(['google' => ['sub' => 'g-sparse-1']]);
+
+		$response = $this->oauthLogin([
+			'id_token' => 'tok',
+			'email' => 'sparse.person@example.com',
+			'given_name' => 'Grace',
+			'family_name' => 'Hopper',
+		]);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$created = UsersHelper::findByEmail('sparse.person@example.com');
+		$this->assertNotNull($created);
+		$this->assertSame('Grace', $created->get('field_first_name')->value);
+		$this->assertSame('Hopper', $created->get('field_last_name')->value);
+	}
+
+	#[Test]
+	#[TestDox('Client-supplied fields never overwrite what the provider actually returned')]
+	#[Group('mantle2/users')]
+	public function oauthSignupPrefersProviderFields(): void
+	{
+		$this->mockClientManager(['google' => $this->googleUserInfo()]);
+
+		$this->oauthLogin([
+			'id_token' => 'tok',
+			'email' => 'spoofed@example.com',
+			'given_name' => 'Spoofed',
+		]);
+
+		$created = UsersHelper::findByEmail('oauth.person@example.com');
+		$this->assertNotNull($created, 'the provider email wins');
+		$this->assertSame('Ada', $created->get('field_first_name')->value);
+		$this->assertNull(UsersHelper::findByEmail('spoofed@example.com'));
+	}
+
+	#[Test]
+	#[TestDox('A provider already bound to another account cannot be relinked')]
+	#[Group('mantle2/users')]
+	public function oauthLinkRefusesAStolenSub(): void
+	{
+		$this->createUser([
+			'mail' => 'owner@example.com',
+			'field_oauth_google_sub' => 'g-oauth-1',
+		]);
+		$other = $this->createUser(['mail' => 'other@example.com']);
+		$token = UsersHelper::issueToken($other);
+		// the provider sub belongs to the first account, so linking must fail rather
+		// than silently move it
+		$this->mockClientManager([
+			'google' => $this->googleUserInfo(['email' => 'other@example.com']),
+		]);
+
+		$response = $this->oauthLogin(['id_token' => 'tok', 'session_token' => $token]);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame(
+			'owner@example.com',
+			$this->decode($response)['user']['account']['email'],
+			'the sub already resolves to its owner, so that account logs in',
+		);
+		$this->assertFalse(OAuthHelper::hasProviderLinked(User::load($other->id()), 'google'));
+	}
+
+	#[Test]
+	#[TestDox('Unlinking a provider clears the sub and tells the user')]
+	#[Group('mantle2/users')]
+	public function oauthUnlinkSucceedsWithAnotherLoginMethod(): void
+	{
+		$user = $this->createUser([
+			'mail' => 'unlink@example.com',
+			'pass' => 'keeps-me-in',
+			'field_oauth_google_sub' => 'g-oauth-1',
+		]);
+
+		$response = $this->controller()->unlinkOAuthGoogle(
+			$this->authRequest($user, 'DELETE', '/v2/users/oauth/google'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertFalse(OAuthHelper::hasProviderLinked(User::load($user->id()), 'google'));
+		$this->assertContains('OAuth Provider Unlinked', $this->notificationTitles($user));
+	}
+
+	#[Test]
+	#[TestDox('Unlinking the only login method is refused')]
+	#[Group('mantle2/users')]
+	public function oauthUnlinkRefusesTheLastLoginMethod(): void
+	{
+		$user = $this->createUser([
+			'mail' => 'onlyoauth@example.com',
+			'field_oauth_google_sub' => 'g-oauth-1',
+		]);
+
+		$response = $this->controller()->unlinkOAuthGoogle(
+			$this->authRequest($user, 'DELETE', '/v2/users/oauth/google'),
+		);
+
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertStringContainsString('only login method', $this->decode($response)['message']);
+		$this->assertTrue(OAuthHelper::hasProviderLinked(User::load($user->id()), 'google'));
+	}
+
+	#[Test]
+	#[TestDox('Every provider wrapper routes to its own provider')]
+	#[Group('mantle2/users')]
+	public function everyProviderWrapperUsesItsOwnProvider(): void
+	{
+		$controller = $this->controller();
+		$wrappers = [
+			'google' => ['oauthGoogle', 'unlinkOAuthGoogle'],
+			'microsoft' => ['oauthMicrosoft', 'unlinkOAuthMicrosoft'],
+			'facebook' => ['oauthFacebook', 'unlinkOAuthFacebook'],
+			'discord' => ['oauthDiscord', 'unlinkOAuthDiscord'],
+			'github' => ['oauthGitHub', 'unlinkOAuthGitHub'],
+			'apple' => ['oauthApple', 'unlinkOAuthApple'],
+		];
+
+		foreach ($wrappers as $provider => [$login, $unlink]) {
+			$this->mockClientManager([
+				$provider => ['sub' => $provider . '-sub', 'email' => $provider . '@example.com'],
+			]);
+
+			$response = $controller->{$login}(
+				$this->request('POST', '/v2/users/oauth/' . $provider, [], '{"id_token":"tok"}'),
+			);
+			$this->assertSame(
+				Response::HTTP_OK,
+				$response->getStatusCode(),
+				$login . ' must complete a login',
+			);
+
+			$created = UsersHelper::findByEmail($provider . '@example.com');
+			$this->assertTrue(
+				OAuthHelper::hasProviderLinked($created, $provider),
+				$login . ' must link ' . $provider,
+			);
+
+			$unlinked = $controller->{$unlink}(
+				$this->authRequest($created, 'DELETE', '/v2/users/oauth/' . $provider),
+			);
+			$this->assertSame(
+				Response::HTTP_BAD_REQUEST,
+				$unlinked->getStatusCode(),
+				$unlink . ' must refuse to remove the only login method',
+			);
+		}
+	}
+
+	#endregion
+
+	#region OAuth (pre-token guard branches)
 
 	#[Test]
 	#[TestDox('POST /v2/users/oauth/{provider} 400s malformed JSON and a missing token')]
