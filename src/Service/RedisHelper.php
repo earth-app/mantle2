@@ -314,14 +314,19 @@ class RedisHelper
 			$redis = self::getRedisClient();
 			if ($redis && !self::$use_cache_fallback) {
 				return $redis->keys($pattern);
-			} else {
-				// Fallback to Drupal cache - not supported
-				Drupal::logger('mantle2')->warning(
-					'Glob pattern %pattern not supported in cache fallback mode',
-					['%pattern' => $pattern],
-				);
-				return [];
 			}
+
+			// the cache bin has no KEYS, so the tracked key index stands in (same registry
+			// delete() globs over); returning [] here silently stopped every cron sweep
+			// that scans for keys, so account trials never expired without redis
+			$matches = [];
+			foreach (self::fallbackKeyIndex() as $tracked) {
+				if (self::globMatches($pattern, $tracked) && self::exists($tracked)) {
+					$matches[] = $tracked;
+				}
+			}
+
+			return $matches;
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Redis LIST failed: %message', [
 				'%message' => $e->getMessage(),

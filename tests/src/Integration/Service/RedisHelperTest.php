@@ -160,13 +160,41 @@ class RedisHelperTest extends IntegrationTestBase
 	}
 
 	#[Test]
-	#[TestDox('list returns an empty array in fallback mode regardless of matches')]
+	#[TestDox('list resolves a glob from the tracked key index in fallback mode')]
 	#[Group('mantle2/redis')]
-	public function listIsEmptyInFallback(): void
+	public function listResolvesGlobsInFallback(): void
 	{
+		// regression: this returned [] unconditionally, which silently stopped every
+		// cron sweep that scans for keys (UsersHelper::checkAccountTrials)
 		RedisHelper::set('rk:list:1', ['v' => 1], 120);
 		RedisHelper::set('rk:list:2', ['v' => 2], 120);
+		RedisHelper::set('rk:other:1', ['v' => 3], 120);
 
-		$this->assertSame([], RedisHelper::list('rk:list:*'));
+		$matches = RedisHelper::list('rk:list:*');
+		sort($matches);
+
+		$this->assertSame(['rk:list:1', 'rk:list:2'], $matches);
+	}
+
+	#[Test]
+	#[TestDox('list omits deleted and expired keys still sitting in the index')]
+	#[Group('mantle2/redis')]
+	public function listOmitsStaleKeys(): void
+	{
+		RedisHelper::set('rk:stale:kept', ['v' => 1], 120);
+		RedisHelper::set('rk:stale:gone', ['v' => 2], 120);
+		RedisHelper::delete('rk:stale:gone');
+
+		$this->assertSame(['rk:stale:kept'], RedisHelper::list('rk:stale:*'));
+	}
+
+	#[Test]
+	#[TestDox('list returns an empty array when nothing matches')]
+	#[Group('mantle2/redis')]
+	public function listReturnsNothingWithoutAMatch(): void
+	{
+		RedisHelper::set('rk:list:1', ['v' => 1], 120);
+
+		$this->assertSame([], RedisHelper::list('rk:nomatch:*'));
 	}
 }
