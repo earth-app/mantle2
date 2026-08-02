@@ -834,8 +834,13 @@ class HTMLFactoryUnitTest extends TestCase
 		$text = 'Test content.';
 		$html = $this->htmlFactory->toHtml($text);
 
-		// Extract branding section
-		$brandingStart = strpos($html, 'margin-top: 32px; font-size: 10px; color: #999;');
+		// Extract branding section; assert the anchor exists or substr() would silently
+		// hand back the whole document and pass every check below vacuously
+		$brandingStart = strpos(
+			$html,
+			'margin-top: 32px; padding-top: 32px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #666;',
+		);
+		$this->assertNotFalse($brandingStart, 'Branding wrapper style not found in output.');
 		$brandingSection = substr($html, $brandingStart);
 
 		// Should not contain excessive whitespace between tags (outside of content)
@@ -1015,6 +1020,121 @@ class HTMLFactoryUnitTest extends TestCase
 		$this->assertStringContainsString('Tracker', $blocked);
 	}
 
+	#[Test]
+	#[TestDox('A linked image on its own line wraps the img in an anchor to the target')]
+	#[Group('mantle2/html')]
+	public function testLinkedImage()
+	{
+		$html = $this->htmlFactory->toHtml(
+			'[![Trail Badge](https://cdn.earth-app.com/badge.png)](https://app.earth-app.com/badges)',
+		);
+
+		$this->assertStringContainsString(
+			'<a href="https://app.earth-app.com/badges" style="text-decoration: none;">' .
+				'<img src="https://cdn.earth-app.com/badge.png" alt="Trail Badge"',
+			$html,
+		);
+		$this->assertStringContainsString('border-radius: 6px;"></a>', $html);
+		// no markdown residue and no fallback paragraph
+		$this->assertStringNotContainsString('](', $html);
+		$this->assertStringNotContainsString(
+			'<p style="margin: 0 0 16px 0; line-height: 1.5;">Trail Badge</p>',
+			$html,
+		);
+	}
+
+	#[Test]
+	#[TestDox('The plain image form still renders without an anchor')]
+	#[Group('mantle2/html')]
+	public function testPlainImageStillUnlinked()
+	{
+		$html = $this->htmlFactory->toHtml('![Badge](https://cdn.earth-app.com/badge.png)');
+
+		$this->assertStringContainsString(
+			'<img src="https://cdn.earth-app.com/badge.png" alt="Badge" style="max-width: 100%; height: auto; display: block; margin: 0 0 16px 0; border-radius: 6px;">',
+			$html,
+		);
+		// the image anchor is the only element carrying this bare style
+		$this->assertStringNotContainsString('style="text-decoration: none;"', $html);
+	}
+
+	#[Test]
+	#[TestDox('A linked image from a non-CDN host degrades to the alt text paragraph')]
+	#[Group('mantle2/html')]
+	public function testLinkedImageHostAllowList()
+	{
+		$html = $this->htmlFactory->toHtml(
+			'[![Tracker](https://evil.example.com/pixel.gif)](https://app.earth-app.com/go)',
+		);
+
+		$this->assertStringNotContainsString('evil.example.com', $html);
+		$this->assertStringContainsString(
+			'<p style="margin: 0 0 16px 0; line-height: 1.5;">Tracker</p>',
+			$html,
+		);
+		$this->assertStringNotContainsString('style="text-decoration: none;"', $html);
+	}
+
+	public static function unsafeImageHrefProvider(): array
+	{
+		return [
+			'javascript' => ['javascript:alert'],
+			'data uri' => ['data:text/html;base64,PHNjcmlwdD4='],
+			'vbscript' => ['vbscript:msgbox'],
+		];
+	}
+
+	#[Test]
+	#[TestDox('A linked image with an unsafe target renders the bare image')]
+	#[Group('mantle2/html')]
+	#[DataProvider('unsafeImageHrefProvider')]
+	public function testLinkedImageUnsafeHref(string $href)
+	{
+		$html = $this->htmlFactory->toHtml(
+			"[![Badge](https://cdn.earth-app.com/badge.png)]($href)",
+		);
+
+		$this->assertStringContainsString(
+			'<img src="https://cdn.earth-app.com/badge.png" alt="Badge"',
+			$html,
+		);
+		$this->assertStringNotContainsString($href, $html);
+		$this->assertStringNotContainsString('style="text-decoration: none;"', $html);
+	}
+
+	#[Test]
+	#[TestDox('A linked image target is UTM tagged while the image src is left alone')]
+	#[Group('mantle2/html')]
+	public function testLinkedImageUtm()
+	{
+		$html = $this->htmlFactory->toHtml(
+			'[![Badge](https://cdn.earth-app.com/badge.png)](https://app.earth-app.com/badges)',
+			false,
+			null,
+			['utm' => ['source' => 'email', 'medium' => 'campaign']],
+		);
+
+		$this->assertStringContainsString(
+			'<a href="https://app.earth-app.com/badges?utm_source=email&amp;utm_medium=campaign"',
+			$html,
+		);
+		$this->assertStringContainsString('<img src="https://cdn.earth-app.com/badge.png"', $html);
+	}
+
+	#[Test]
+	#[TestDox('toPlainText on a linked image keeps the alt text and the target url')]
+	#[Group('mantle2/html')]
+	public function testToPlainTextLinkedImage()
+	{
+		$plain = $this->htmlFactory->toPlainText(
+			'[![Trail Badge](https://cdn.earth-app.com/badge.png)](https://app.earth-app.com/badges)',
+		);
+
+		$this->assertSame('Trail Badge <https://app.earth-app.com/badges>', $plain);
+		$this->assertStringNotContainsString('badge.png', $plain);
+		$this->assertStringNotContainsString('](', $plain);
+	}
+
 	public static function utmProvider(): array
 	{
 		return [
@@ -1124,6 +1244,38 @@ class HTMLFactoryUnitTest extends TestCase
 		$bare = $this->htmlFactory->toHtml('Body', false, null, ['footer_links' => false]);
 		$this->assertStringNotContainsString('>Instagram</a>', $bare);
 		$this->assertStringContainsString('Thank you for using The Earth App!', $bare);
+	}
+
+	#[Test]
+	#[TestDox('The iOS download link rides on footer_links so transactional mail omits it')]
+	#[Group('mantle2/html')]
+	public function testFooterDownloadLink()
+	{
+		$marketing = $this->htmlFactory->toHtml('Body');
+		$this->assertStringContainsString(
+			'<a href="https://earth-app.com/ios" style="color: #007bff; text-decoration: none;">Get The Earth App for iOS</a>',
+			$marketing,
+		);
+
+		// Google's sender guidelines forbid promotions inside transactional mail
+		$transactional = $this->htmlFactory->toHtml('Body', false, null, ['footer_links' => false]);
+		$this->assertStringNotContainsString('earth-app.com/ios', $transactional);
+		$this->assertStringNotContainsString('Get The Earth App', $transactional);
+	}
+
+	#[Test]
+	#[TestDox('The iOS download link is UTM tagged like the rest of the footer')]
+	#[Group('mantle2/html')]
+	public function testFooterDownloadLinkUtm()
+	{
+		$html = $this->htmlFactory->toHtml('Body', false, null, [
+			'utm' => ['source' => 'email', 'medium' => 'campaign'],
+		]);
+
+		$this->assertStringContainsString(
+			'<a href="https://earth-app.com/ios?utm_source=email&amp;utm_medium=campaign"',
+			$html,
+		);
 	}
 
 	#[Test]

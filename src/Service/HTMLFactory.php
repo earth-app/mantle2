@@ -79,6 +79,8 @@ class HTMLFactory
 		$text = preg_replace('/^\s*```.*$/m', '', $text);
 		$text = preg_replace('/^\s*---+\s*$/m', '', $text);
 		$text = preg_replace('/\[\[([^\]]+)\]\]\(([^)]+)\)/', '$1 <$2>', $text);
+		// linked image keeps the target, not the image src
+		$text = preg_replace('/\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)/', '$1 <$3>', $text);
 		$text = preg_replace('/!\[([^\]]*)\]\(([^)]+)\)/', '$1', $text);
 		$text = preg_replace('/\[([^\]]+)\]\(([^)]+)\)/', '$1 <$2>', $text);
 		$text = preg_replace('/\*\*(.+?)\*\*/s', '$1', $text);
@@ -158,6 +160,14 @@ class HTMLFactory
 					$accent,
 					$utm,
 				);
+				continue;
+			}
+
+			// linked image; must precede the bare-image check and cannot go through
+			// formatInlineElements, whose link pattern will not span the nested ]
+			if (preg_match('/^\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)$/', $trimmedLine, $matches)) {
+				$html .= $this->closeBlocks($open);
+				$html .= $this->renderImage($matches[1], $matches[2], $matches[3], $utm);
 				continue;
 			}
 
@@ -445,6 +455,15 @@ class HTMLFactory
 					$appHref .
 					'" style="color: #007bff; text-decoration: none;">Open The Earth App</a></p>';
 			}
+
+			// promotional, so it is gated on $footerLinks; transactional mail passes false
+			$storeHref = $this->sanitizeUrl('https://earth-app.com/ios', $utm);
+			if ($storeHref !== null) {
+				$branding .=
+					'<p style="margin: 0 0 8px 0;"><a href="' .
+					$storeHref .
+					'" style="color: #007bff; text-decoration: none;">Get The Earth App for iOS</a></p>';
+			}
 		}
 
 		if ($includeUnsubscribe && $unsubscribeUrl) {
@@ -548,8 +567,12 @@ class HTMLFactory
 			'</pre>';
 	}
 
-	private function renderImage(string $alt, string $url): string
-	{
+	private function renderImage(
+		string $alt,
+		string $url,
+		?string $href = null,
+		array $utm = [],
+	): string {
 		$safeAlt = htmlspecialchars($alt, ENT_QUOTES, 'UTF-8');
 
 		// only our own CDN; blocks third-party tracking pixels in campaign bodies
@@ -558,11 +581,20 @@ class HTMLFactory
 			return '<p style="margin: 0 0 16px 0; line-height: 1.5;">' . $safeAlt . '</p>';
 		}
 
-		return '<img src="' .
+		$img =
+			'<img src="' .
 			htmlspecialchars($url, ENT_QUOTES, 'UTF-8') .
 			'" alt="' .
 			$safeAlt .
 			'" style="max-width: 100%; height: auto; display: block; margin: 0 0 16px 0; border-radius: 6px;">';
+
+		// an unsafe target keeps the image rather than dropping the whole block
+		$target = $href === null ? null : $this->sanitizeUrl($href, $utm);
+		if ($target === null) {
+			return $img;
+		}
+
+		return '<a href="' . $target . '" style="text-decoration: none;">' . $img . '</a>';
 	}
 
 	private function renderTable(array $rows, string $accent, array $utm): string
