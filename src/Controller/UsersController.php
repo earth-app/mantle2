@@ -11,6 +11,7 @@ use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Custom\AccountType;
+use Drupal\mantle2\Custom\MailCategory;
 use Drupal\mantle2\Custom\Notification;
 use Drupal\user\Entity\User;
 use Drupal\user\UserAuthInterface;
@@ -498,7 +499,9 @@ final class UsersController extends ControllerBase
 			}
 		}
 
-		if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+		// a disposable or reserved domain is a guaranteed bounce, and a bounce rate is what gets an
+		// account's sending paused; relay domains like privaterelay.appleid.com stay allowed
+		if ($email && !UsersHelper::isAcceptableEmail($email)) {
 			return GeneralHelper::badRequest('Invalid email address provided');
 		}
 
@@ -3205,7 +3208,7 @@ final class UsersController extends ControllerBase
 	// Public Unsubscribe
 	// GET /v2/users/unsubscribe
 	// POST /v2/users/unsubscribe
-	public function publicUnsubscribe(Request $request): JsonResponse
+	public function publicUnsubscribe(Request $request): Response
 	{
 		$token = $request->query->get('token');
 		if (!$token) {
@@ -3217,20 +3220,39 @@ final class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Invalid or expired unsubscribe token');
 		}
 
-		$wasSubscribed = UsersHelper::isSubscribed($user);
-		if (!$wasSubscribed) {
+		$category = MailCategory::tryFrom((string) $request->query->get('category', ''));
+
+		// RFC 8058 one-click is a POST, so a GET is a human following the visible link. Mutating on
+		// GET would let any link scanner that crawls the body unsubscribe somebody, so the GET only
+		// renders a confirmation that posts back.
+		if (!$request->isMethod('POST')) {
+			return $this->unsubscribeConfirmationPage((string) $token, $category);
+		}
+
+		$scope = $category instanceof MailCategory ? $category->value : 'all';
+		$alreadyOff =
+			$category instanceof MailCategory
+				? !UsersHelper::isSubscribedTo($user, $category)
+				: !UsersHelper::isSubscribed($user);
+
+		if ($alreadyOff) {
 			UsersHelper::revokeUnsubscribeToken($token);
 			return new JsonResponse(
 				[
-					'message' => 'You are already unsubscribed from email notifications',
+					'message' => 'You are already unsubscribed from these emails',
 					'subscribed' => false,
+					'scope' => $scope,
 				],
 				Response::HTTP_OK,
 			);
 		}
 
 		try {
-			UsersHelper::setSubscribed($user, false);
+			if ($category instanceof MailCategory) {
+				UsersHelper::setMessagePref($user, $category, false);
+			} else {
+				UsersHelper::setSubscribed($user, false);
+			}
 			$user->save();
 		} catch (EntityStorageException $e) {
 			Drupal::logger('mantle2')->error('Failed to unsubscribe user: %message', [
@@ -3242,11 +3264,69 @@ final class UsersController extends ControllerBase
 		UsersHelper::revokeUnsubscribeToken($token);
 		return new JsonResponse(
 			[
-				'message' => 'You have been successfully unsubscribed from email notifications',
+				'message' => 'You have been successfully unsubscribed from these emails',
 				'subscribed' => false,
+				'scope' => $scope,
 			],
 			Response::HTTP_OK,
 		);
+	}
+
+	/**
+	 * The page a human sees after clicking the unsubscribe link in a message body.
+	 *
+	 * Self-contained rather than templated: it has to render before any theme is available, and it
+	 * must never redirect, because RFC 8058 notes that redirected POSTs have historically not
+	 * worked reliably with mailbox providers.
+	 */
+	private function unsubscribeConfirmationPage(string $token, ?MailCategory $category): Response
+	{
+		$action =
+			'/v2/users/unsubscribe?token=' .
+			rawurlencode($token) .
+			($category instanceof MailCategory
+				? '&category=' . rawurlencode($category->value)
+				: '');
+
+		$scopeLine =
+			$category instanceof MailCategory
+				? 'This stops the ' .
+					htmlspecialchars($category->value, ENT_QUOTES, 'UTF-8') .
+					' emails. Other emails from The Earth App keep arriving.'
+				: 'This stops every optional email from The Earth App.';
+
+		$allAction = '/v2/users/unsubscribe?token=' . rawurlencode($token);
+		$allButton =
+			$category instanceof MailCategory
+				? '<form method="post" action="' .
+					htmlspecialchars($allAction, ENT_QUOTES, 'UTF-8') .
+					'"><button type="submit" class="secondary">Stop All Optional Emails</button></form>'
+				: '';
+
+		$html =
+			'<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' .
+			'<meta name="viewport" content="width=device-width, initial-scale=1.0">' .
+			'<title>Unsubscribe - The Earth App</title><style>' .
+			'body{margin:0;padding:40px 16px;background:#f5f5f5;font-family:Arial,sans-serif;color:#333}' .
+			'main{max-width:520px;margin:0 auto;background:#fff;border-radius:8px;padding:32px;' .
+			'box-shadow:0 2px 4px rgba(0,0,0,.1)}' .
+			'h1{margin:0 0 16px;font-size:22px;color:#222}p{line-height:1.5;margin:0 0 16px}' .
+			'button{display:inline-block;padding:14px 28px;font-size:15px;font-weight:bold;color:#fff;' .
+			'background:#2e7d32;border:0;border-radius:8px;cursor:pointer;min-height:48px}' .
+			'button.secondary{background:#fff;color:#2e7d32;border:1px solid #2e7d32;margin-top:12px}' .
+			'small{color:#666;font-size:12px}</style></head><body><main>' .
+			'<h1>Unsubscribe</h1><p>' .
+			$scopeLine .
+			'</p><form method="post" action="' .
+			htmlspecialchars($action, ENT_QUOTES, 'UTF-8') .
+			'"><button type="submit">Confirm Unsubscribe</button></form>' .
+			$allButton .
+			'<p><small>Password resets, security alerts and billing notices are not optional and ' .
+			'will still be delivered.</small></p></main></body></html>';
+
+		return new Response($html, Response::HTTP_OK, [
+			'Content-Type' => 'text/html; charset=UTF-8',
+		]);
 	}
 
 	#endregion
@@ -3355,7 +3435,14 @@ final class UsersController extends ControllerBase
 			return $user;
 		}
 
-		if (!UsersHelper::isAdmin($user)) {
+		// the admin check belongs to the CALLER, not the target; testing the target meant an admin
+		// could only ever notify other admins, and every non-admin recipient got a 403
+		$requester = UsersHelper::findByRequest($request);
+		if ($requester instanceof JsonResponse) {
+			return $requester;
+		}
+
+		if (!UsersHelper::isAdmin($requester)) {
 			return GeneralHelper::forbidden('Only admins can create notifications for other users');
 		}
 
@@ -3378,7 +3465,9 @@ final class UsersController extends ControllerBase
 			return GeneralHelper::badRequest('Missing title or description');
 		}
 
-		if (!is_string($type) || $type === '') {
+		// crust declares this union and feeds it straight into a toast colour, so an arbitrary
+		// string produced a broken toast; cloud was sending 'trailmark' here
+		if (!is_string($type) || !in_array($type, ['info', 'warning', 'error', 'success'], true)) {
 			$type = 'info';
 		}
 

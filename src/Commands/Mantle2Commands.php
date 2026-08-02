@@ -105,10 +105,63 @@ class Mantle2Commands extends DrushCommands
 		$campaigns = CampaignHelper::getCampaigns();
 		$this->output()->writeln('Available Email Campaigns:');
 		foreach ($campaigns as $i => $campaign) {
+			// most campaigns now carry a rotation pool instead of one title
+			$title = $campaign['title'] ?? ($campaign['titles'][0] ?? 'No title');
+			$variants = isset($campaign['titles'])
+				? ' (' . count($campaign['titles']) . ' variants)'
+				: '';
+
 			$this->output()->writeln(
-				"- ($i) " . ($campaign['id'] ?? '') . ': ' . ($campaign['title'] ?? 'No title'),
+				"- ($i) " . ($campaign['id'] ?? '') . ': ' . $title . $variants,
 			);
 		}
+	}
+
+	/**
+	 * Suppress one or more email addresses so nothing is ever sent to them again.
+	 *
+	 * Use for addresses the provider reports as permanently failed. A relay alias whose owner
+	 * revoked the app (errorCause mailbox_user_not_found) can never accept mail again, and retrying
+	 * it every cron cycle is what pushes an account bounce rate into the range that gets sending
+	 * paused.
+	 *
+	 * @param string $emails Comma-separated addresses.
+	 * @command mantle2:suppress-email
+	 * @aliases m2:suppress-email m2:suppress
+	 * @option reason Provider errorCause to record, e.g. mailbox_user_not_found
+	 * @usage drush m2:suppress a@privaterelay.appleid.com,b@privaterelay.appleid.com --reason=mailbox_user_not_found
+	 */
+	public function suppressEmail(string $emails, array $options = ['reason' => 'manual'])
+	{
+		$reason = (string) ($options['reason'] ?? 'manual');
+		$count = 0;
+
+		foreach (explode(',', $emails) as $email) {
+			$email = trim($email);
+			if ($email === '') {
+				continue;
+			}
+
+			UsersHelper::markEmailUndeliverable($email, $reason);
+			$this->output()->writeln("Suppressed $email ($reason)");
+			$count++;
+		}
+
+		$this->output()->writeln("Suppressed $count address(es).");
+	}
+
+	/**
+	 * Remove an address from the suppression list so sending resumes.
+	 *
+	 * @param string $email The address to release.
+	 * @command mantle2:unsuppress-email
+	 * @aliases m2:unsuppress-email m2:unsuppress
+	 * @usage drush m2:unsuppress someone@example.org
+	 */
+	public function unsuppressEmail(string $email)
+	{
+		UsersHelper::clearEmailSuppression($email);
+		$this->output()->writeln("Released $email; sending may resume.");
 	}
 
 	/**

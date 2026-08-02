@@ -41,7 +41,28 @@ class UpdateHookTest extends IntegrationTestBase
 		'mantle2_trial_codes',
 		'mantle2_trial_code_redemptions',
 		'mantle2_staged_activities',
+		'email_suppressions',
 	];
+
+	/**
+	 * Every update hook that exists, in order.
+	 *
+	 * Derived rather than a hardcoded range so adding a hook cannot silently escape the replay
+	 * tests, which is what a literal range(9001, 9009) allowed.
+	 *
+	 * @return int[]
+	 */
+	private static function updateHookNumbers(): array
+	{
+		$numbers = [];
+		for ($number = 9001; $number <= 9999; $number++) {
+			if (function_exists("mantle2_update_$number")) {
+				$numbers[] = $number;
+			}
+		}
+
+		return $numbers;
+	}
 
 	private const PUBLISHER_FIELDS = [
 		'field_verified_publisher',
@@ -88,6 +109,7 @@ class UpdateHookTest extends IntegrationTestBase
 			'mantle2_staged_activities' => array_keys(
 				mantle2_staged_activities_table_schema()['fields'],
 			),
+			'email_suppressions' => array_keys(mantle2_email_suppressions_table_schema()['fields']),
 		];
 	}
 
@@ -246,6 +268,34 @@ class UpdateHookTest extends IntegrationTestBase
 		$this->assertTrue($this->schema()->tableExists('mantle2_staged_activities'));
 	}
 
+	#[Test]
+	#[TestDox('9010 creates email_suppressions and field_message_prefs, idempotently')]
+	#[Group('mantle2/install')]
+	public function testUpdate9010(): void
+	{
+		if ($this->schema()->tableExists('email_suppressions')) {
+			$this->schema()->dropTable('email_suppressions');
+		}
+		$this->dropUserFields(['field_message_prefs']);
+
+		mantle2_update_9010();
+
+		$this->assertTrue($this->schema()->tableExists('email_suppressions'));
+		$this->assertNotNull(FieldStorageConfig::loadByName('user', 'field_message_prefs'));
+
+		// the suppression list is a table, not a cache entry, precisely so a flush cannot resume
+		// sending to an address that permanently bounced
+		foreach (['email', 'reason', 'created'] as $column) {
+			$this->assertTrue(
+				$this->schema()->fieldExists('email_suppressions', $column),
+				"email_suppressions.$column missing",
+			);
+		}
+
+		mantle2_update_9010();
+		$this->assertTrue($this->schema()->tableExists('email_suppressions'));
+	}
+
 	// #endregion
 
 	// #region Invalid and partial state
@@ -284,13 +334,17 @@ class UpdateHookTest extends IntegrationTestBase
 	// #region Sequential replay
 
 	#[Test]
-	#[TestDox('Replaying 9001 through 9009 in order rebuilds the full schema from nothing')]
+	#[TestDox('Replaying every update hook in order rebuilds the full schema from nothing')]
 	#[Group('mantle2/install')]
 	public function testSequentialReplay(): void
 	{
 		$this->dropAllCustomTables();
 		$this->dropUserFields(
-			array_merge(self::PUBLISHER_FIELDS, ['field_blocked_users', 'field_blocked_by']),
+			array_merge(self::PUBLISHER_FIELDS, [
+				'field_blocked_users',
+				'field_blocked_by',
+				'field_message_prefs',
+			]),
 		);
 
 		foreach (self::ALL_TABLES as $table) {
@@ -298,13 +352,13 @@ class UpdateHookTest extends IntegrationTestBase
 		}
 
 		$messages = [];
-		foreach (range(9001, 9009) as $number) {
+		foreach (self::updateHookNumbers() as $number) {
 			$hook = "mantle2_update_$number";
 			$this->assertTrue(function_exists($hook), "$hook is missing");
 			$messages[$number] = $hook();
 		}
 
-		$this->assertCount(9, $messages);
+		$this->assertCount(count(self::updateHookNumbers()), $messages);
 		foreach (self::ALL_TABLES as $table) {
 			$this->assertTrue($this->schema()->tableExists($table), "$table was not recreated");
 		}
@@ -329,7 +383,7 @@ class UpdateHookTest extends IntegrationTestBase
 		}
 
 		$this->dropAllCustomTables();
-		foreach (range(9001, 9009) as $number) {
+		foreach (self::updateHookNumbers() as $number) {
 			"mantle2_update_$number"();
 		}
 		$replayed = $this->snapshotColumns();
@@ -350,12 +404,12 @@ class UpdateHookTest extends IntegrationTestBase
 	{
 		$this->dropAllCustomTables();
 
-		foreach (range(9001, 9009) as $number) {
+		foreach (self::updateHookNumbers() as $number) {
 			"mantle2_update_$number"();
 		}
 		$first = $this->snapshotColumns();
 
-		foreach (range(9001, 9009) as $number) {
+		foreach (self::updateHookNumbers() as $number) {
 			"mantle2_update_$number"();
 		}
 

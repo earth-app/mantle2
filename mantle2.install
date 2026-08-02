@@ -610,7 +610,32 @@ function mantle2_install_user_fields(): void
 	/// Subscribed
 	createField('user', 'field_subscribed', 'boolean', 'Subscribed', false, true);
 
+	/// Message Preferences
+	// per-channel, per-category opt-outs layered over field_subscribed; an absent key means
+	// opted in, so an empty blob preserves existing behaviour
+	createField(
+		'user',
+		'field_message_prefs',
+		'json',
+		'Message Preferences',
+		false,
+		json_encode([]),
+		[
+			'schema' => [
+				'$schema' => 'http://json-schema.org/draft-07/schema#',
+				'type' => 'object',
+				'additionalProperties' => [
+					'type' => 'object',
+					'additionalProperties' => ['type' => 'boolean'],
+				],
+			],
+		],
+	);
+
 	/// Notifications
+	// keys mirror Notification::jsonSerialize() exactly; the previous declaration required a
+	// `timestamp` field that is actually serialized as `created_at`, so every write would have
+	// failed had json_field validation ever been enforced
 	createField('user', 'field_notifications', 'json', 'Notifications', false, json_encode([]), [
 		'schema' => [
 			'$schema' => 'http://json-schema.org/draft-07/schema#',
@@ -618,15 +643,26 @@ function mantle2_install_user_fields(): void
 			'items' => [
 				'type' => 'object',
 				'properties' => [
-					'user_id' => ['type' => 'integer'],
+					'id' => ['type' => 'string'],
+					'title' => ['type' => 'string'],
+					'user_id' => ['type' => 'string'],
 					'message' => ['type' => 'string'],
-					'timestamp' => ['type' => 'integer'],
 					'link' => ['type' => ['string', 'null']],
 					'type' => ['type' => 'string'],
 					'source' => ['type' => 'string'],
 					'read' => ['type' => 'boolean'],
+					'created_at' => ['type' => 'integer'],
 				],
-				'required' => ['user_id', 'message', 'type', 'source', 'read', 'timestamp'],
+				'required' => [
+					'id',
+					'title',
+					'user_id',
+					'message',
+					'type',
+					'source',
+					'read',
+					'created_at',
+				],
 			],
 		],
 	]);
@@ -1180,6 +1216,7 @@ function mantle2_ensure_custom_tables(): array
 		'mantle2_trial_codes' => mantle2_trial_codes_table_schema(),
 		'mantle2_trial_code_redemptions' => mantle2_trial_code_redemptions_table_schema(),
 		'mantle2_staged_activities' => mantle2_staged_activities_table_schema(),
+		'email_suppressions' => mantle2_email_suppressions_table_schema(),
 	];
 
 	foreach ($tables as $name => $definition) {
@@ -1199,6 +1236,41 @@ function mantle2_ensure_custom_tables(): array
 	}
 
 	return $created;
+}
+
+// keyed on the address rather than the user so a suppression survives an email change and can
+// hold addresses that never belonged to an account
+function mantle2_email_suppressions_table_schema(): array
+{
+	return [
+		'description' => 'Addresses that permanently failed delivery and must never be retried',
+		'fields' => [
+			'email' => [
+				'type' => 'varchar',
+				'length' => 254,
+				'not null' => true,
+				'description' => 'Lowercased recipient address',
+			],
+			'reason' => [
+				'type' => 'varchar',
+				'length' => 64,
+				'not null' => true,
+				'default' => '',
+				'description' => 'Provider errorCause, e.g. mailbox_user_not_found',
+			],
+			'created' => [
+				'type' => 'int',
+				'not null' => true,
+				'default' => 0,
+				'description' => 'Unix timestamp the suppression was recorded',
+			],
+		],
+		'primary key' => ['email'],
+		'indexes' => [
+			'created' => ['created'],
+			'reason' => ['reason'],
+		],
+	];
 }
 
 function mantle2_push_tokens_table_schema(): array
@@ -1916,4 +1988,39 @@ function mantle2_update_9009(): string
 	return $created
 		? 'Created Verified Publisher user fields and tables: ' . implode(', ', $created)
 		: 'Created Verified Publisher user fields; all tables already present';
+}
+
+/**
+ * Install: email_suppressions table and the field_message_prefs user field.
+ *
+ * The suppression list is a table rather than a cache entry on purpose: a Redis flush or cache
+ * rebuild must not resume sending to an address that permanently bounced, because that is what
+ * drives an account bounce rate into the range where the provider pauses sending.
+ */
+function mantle2_update_9010(): string
+{
+	$created = mantle2_ensure_custom_tables();
+
+	createField(
+		'user',
+		'field_message_prefs',
+		'json',
+		'Message Preferences',
+		false,
+		json_encode([]),
+		[
+			'schema' => [
+				'$schema' => 'http://json-schema.org/draft-07/schema#',
+				'type' => 'object',
+				'additionalProperties' => [
+					'type' => 'object',
+					'additionalProperties' => ['type' => 'boolean'],
+				],
+			],
+		],
+	);
+
+	return $created
+		? 'Created field_message_prefs and tables: ' . implode(', ', $created)
+		: 'Created field_message_prefs; all tables already present';
 }
