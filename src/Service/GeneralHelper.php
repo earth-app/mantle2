@@ -711,7 +711,7 @@ class GeneralHelper
 			'link' => 'https://github.com/earth-app',
 		],
 		[
-			'motd' => 'Check @cloud to peak your intellectual curiosity with novel content!',
+			'motd' => 'Check @cloud to pique your intellectual curiosity with novel content!',
 			'icon' => 'mdi:cloud',
 			'type' => 'secondary',
 			'link' => '/profile/@cloud',

@@ -2,12 +2,16 @@
 
 namespace Drupal\Tests\mantle2\Integration;
 
+use Drupal\mantle2\Custom\MailCategory;
 use Drupal\mantle2\Custom\Notification;
+use Drupal\mantle2\Service\UsersHelper;
 use Drupal\Tests\mantle2\Unit\MailKeysValidationTest;
+use Drupal\user\UserInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * In-kernel proof that every mail key ships as HTML.
@@ -19,6 +23,9 @@ use PHPUnit\Framework\Attributes\TestDox;
  */
 class MailRenderingTest extends IntegrationTestBase
 {
+	// campaign bodies expand content placeholders, which query node fields
+	protected bool $installContentTypes = true;
+
 	public static function mailKeyProvider(): array
 	{
 		$data = [];
@@ -75,13 +82,31 @@ class MailRenderingTest extends IntegrationTestBase
 			'soonest_deadline' => date(DATE_ATOM),
 			'urgent_count' => 1,
 			'reset_link' => 'https://app.earth-app.com/reset-password?token=abc',
-			'unsubscribe_url' => 'https://app.earth-app.com/unsubscribe',
-			'unsubscribe_api_url' => 'https://api.earth-app.com/v2/unsubscribe?token=abc',
 		];
 
+		// mirror sendEmail(): only an unsubscribable stream carries these, so the fixture cannot
+		// hand a transactional key an unsubscribe affordance it would never really have
+		if (MailCategory::forMailKey($key)->isUnsubscribable()) {
+			$base['unsubscribe_url'] = 'https://api.earth-app.com/v2/users/unsubscribe?token=abc';
+			$base['unsubscribe_api_url'] =
+				'https://api.earth-app.com/v2/users/unsubscribe?token=abc';
+		}
+
 		if ($key === 'unread_notifications_reminder') {
+			// constructor order is (id, userId, title, message, timestamp, link, type, source,
+			// isRead); the previous call was scrambled, so this template rendered against garbage
 			$base['notifications'] = [
-				new Notification('n1', 'Title', 'Message', time(), false, 'info', 'system', '/x'),
+				new Notification(
+					'n1',
+					'1',
+					'Title',
+					'Message',
+					time(),
+					'/x',
+					'info',
+					'system',
+					false,
+				),
 			];
 		}
 
@@ -198,38 +223,181 @@ class MailRenderingTest extends IntegrationTestBase
 		$this->assertArrayNotHasKey('Content-Type', $message['headers']);
 	}
 
+	private function sendAndCollect(string $key, UserInterface $user): array
+	{
+		$this->container->get('plugin.manager.mail')->mail(
+			'mantle2',
+			$key,
+			$user->getEmail(),
+			'en',
+			$this->paramsFor($key) + [
+				'user' => $user,
+			],
+		);
+		$sent = \Drupal::state()->get('system.test_mail_collector') ?? [];
+
+		return end($sent);
+	}
+
 	#[Test]
-	#[TestDox('An unsubscribable key gains List-Unsubscribe headers and others do not')]
+	#[TestDox('A subscribed stream gains List-Unsubscribe headers and transactional mail does not')]
 	#[Group('mantle2/email')]
 	public function testListHeaders(): void
 	{
 		$user = $this->createUser();
 
-		$this->container
-			->get('plugin.manager.mail')
-			->mail(
-				'mantle2',
-				'new_login',
-				$user->getEmail(),
-				'en',
-				$this->paramsFor('new_login') + ['user' => $user],
-			);
-		$sent = \Drupal::state()->get('system.test_mail_collector') ?? [];
-		$mail = end($sent);
-		$this->assertArrayHasKey('List-Unsubscribe', $mail['headers']);
-		$this->assertSame('List-Unsubscribe=One-Click', $mail['headers']['List-Unsubscribe-Post']);
+		// the recurring digest is the case that regressed: it is exactly the mail Google requires
+		// a working unsubscribe on, and the old hand-maintained key list omitted it
+		$digest = $this->sendAndCollect('unread_notifications_reminder', $user);
+		$this->assertArrayHasKey('List-Unsubscribe', $digest['headers']);
+		$this->assertSame(
+			'List-Unsubscribe=One-Click',
+			$digest['headers']['List-Unsubscribe-Post'],
+		);
 
-		$this->container
-			->get('plugin.manager.mail')
-			->mail(
-				'mantle2',
-				'welcome',
-				$user->getEmail(),
-				'en',
-				$this->paramsFor('welcome') + ['user' => $user],
+		foreach (['new_login', 'new_password', 'password_reset', 'welcome'] as $transactional) {
+			$mail = $this->sendAndCollect($transactional, $user);
+			$this->assertArrayNotHasKey(
+				'List-Unsubscribe',
+				$mail['headers'],
+				"$transactional is transactional and must not offer an unsubscribe.",
 			);
-		$sent = \Drupal::state()->get('system.test_mail_collector') ?? [];
-		$welcome = end($sent);
-		$this->assertArrayNotHasKey('List-Unsubscribe', $welcome['headers']);
+			$this->assertArrayNotHasKey(
+				'Precedence',
+				$mail['headers'],
+				"$transactional must not be marked bulk.",
+			);
+		}
+	}
+
+	public static function campaignProvider(): array
+	{
+		// parsed directly rather than through CampaignHelper: a data provider runs before the
+		// Drupal container exists, and getCampaigns() resolves the path through a service
+		$campaigns = Yaml::parseFile(dirname(__DIR__, 3) . '/data/email_campaigns.yml');
+
+		$data = [];
+		foreach ($campaigns as $campaign) {
+			$data[$campaign['id']] = [$campaign['id']];
+		}
+
+		return $data;
+	}
+
+	/**
+	 * Every campaign renders a button, an inbox preview line, and a body that cannot be clipped.
+	 *
+	 * Gmail truncates at roughly 102KB of raw HTML mid-tag, which can cut off the unsubscribe
+	 * footer and turn a layout problem into a compliance one, so the budget here is 90KB.
+	 */
+	#[Test]
+	#[TestDox('Campaign $id renders a CTA, a preheader, and stays well under the clip threshold')]
+	#[Group('mantle2/email')]
+	#[DataProvider('campaignProvider')]
+	public function testCampaignRendersActionably(string $id): void
+	{
+		$user = $this->createUser();
+		$message = $this->renderMail('campaign:' . $id, [
+			'user' => $user,
+			'unsubscribe_url' => 'https://api.earth-app.com/v2/users/unsubscribe?token=abc',
+			'unsubscribe_api_url' => 'https://api.earth-app.com/v2/users/unsubscribe?token=abc',
+		]);
+
+		$html = $message['body'][0] ?? '';
+		$this->assertNotEmpty($message['subject'], "Campaign $id has no subject");
+
+		// the table-based button, which is what survives Outlook's Word rendering engine
+		$this->assertStringContainsString(
+			'<table role="presentation" style="margin: 24px 0;',
+			$html,
+			"Campaign $id rendered no CTA button; the toHtml options were dropped again.",
+		);
+
+		// the hidden preheader plus its zero-width padding, or Gmail scrapes the body instead
+		$this->assertStringContainsString('mso-hide: all;', $html);
+		$this->assertStringContainsString('&#847;&zwnj;&nbsp;', $html);
+
+		// measured 4.1-5.1KB per campaign; the old insights body inlined three 1500-char articles
+		$this->assertLessThan(
+			92160,
+			strlen($html),
+			"Campaign $id renders " . strlen($html) . ' bytes and risks being clipped.',
+		);
+	}
+
+	#[Test]
+	#[TestDox('A suppressed address is never sent to again')]
+	#[Group('mantle2/email')]
+	public function testSuppressedAddressIsSkipped(): void
+	{
+		$user = $this->createUser();
+		$email = $user->getEmail();
+
+		\Drupal::state()->set('system.test_mail_collector', []);
+		UsersHelper::sendEmail($user, 'welcome', ['user' => $user]);
+		$this->assertCount(
+			1,
+			\Drupal::state()->get('system.test_mail_collector') ?? [],
+			'Control: an unsuppressed address must receive mail.',
+		);
+
+		// nothing recorded a permanent failure before, so cron retried dead addresses every cycle
+		// and the account bounce rate climbed until the provider threatened to pause sending
+		UsersHelper::markEmailUndeliverable($email, 'mailbox_user_not_found');
+		$this->assertTrue(UsersHelper::isEmailUndeliverable($email));
+
+		\Drupal::state()->set('system.test_mail_collector', []);
+		UsersHelper::sendEmail($user, 'welcome', ['user' => $user]);
+		$this->assertSame(
+			[],
+			\Drupal::state()->get('system.test_mail_collector') ?? [],
+			'A suppressed address must not be attempted again, not even for transactional mail.',
+		);
+
+		// and releasing it resumes sending, so a wrong suppression is recoverable
+		UsersHelper::clearEmailSuppression($email);
+		$this->assertFalse(UsersHelper::isEmailUndeliverable($email));
+
+		UsersHelper::sendEmail($user, 'welcome', ['user' => $user]);
+		$this->assertCount(1, \Drupal::state()->get('system.test_mail_collector') ?? []);
+	}
+
+	#[Test]
+	#[TestDox('Suppression is keyed on the address, so it survives an email change')]
+	#[Group('mantle2/email')]
+	public function testSuppressionIsAddressKeyed(): void
+	{
+		$suppressed = 'dead-relay@privaterelay.appleid.com';
+		UsersHelper::markEmailUndeliverable($suppressed, 'mailbox_user_not_found');
+
+		// case and surrounding whitespace must not create a second, unsuppressed identity
+		$this->assertTrue(UsersHelper::isEmailUndeliverable($suppressed));
+		$this->assertTrue(UsersHelper::isEmailUndeliverable('Dead-Relay@PrivateRelay.AppleID.com'));
+		$this->assertTrue(
+			UsersHelper::isEmailUndeliverable('  dead-relay@privaterelay.appleid.com '),
+		);
+		$this->assertFalse(UsersHelper::isEmailUndeliverable('someone-else@gmail.com'));
+	}
+
+	#[Test]
+	#[TestDox('Every unsubscribable key ships both the header and a visible body link')]
+	#[Group('mantle2/email')]
+	public function testUnsubscribableKeysShipBothAffordances(): void
+	{
+		$user = $this->createUser();
+
+		foreach (MailKeysValidationTest::mailKeys() as $key) {
+			if (!MailCategory::forMailKey($key)->isUnsubscribable()) {
+				continue;
+			}
+
+			$mail = $this->sendAndCollect($key, $user);
+			$this->assertArrayHasKey('List-Unsubscribe', $mail['headers'], "$key lost the header.");
+			$this->assertStringContainsString(
+				'Unsubscribe from these emails',
+				implode('', (array) $mail['body']),
+				"$key lost the visible unsubscribe link Google requires in the body.",
+			);
+		}
 	}
 }

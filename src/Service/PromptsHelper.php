@@ -90,8 +90,8 @@ class PromptsHelper
 
 	public static function createPrompt(Prompt $prompt, ?UserInterface $author = null): Node
 	{
-		// check expired prompts
-		self::checkExpiredPrompts();
+		// the expiry sweep runs on cron only; calling it here made one user's create request emit
+		// 'Prompt Expired' notifications - each with its own FCM round trip - to other users
 
 		$node = Node::create([
 			'type' => 'prompt',

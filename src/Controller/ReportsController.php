@@ -8,6 +8,7 @@ use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\ReportsHelper;
 use Drupal\mantle2\Service\UsersHelper;
+use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Exception;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -317,18 +318,25 @@ final class ReportsController extends ControllerBase
 		}
 
 		// notifications (best-effort, never block the moderation result)
-		if (($notifyAuthor || $notifyReporter) && $action !== 'dismiss') {
+		// a dismissal took no action, so neither party is told one was taken; the reporter branch
+		// used to sit outside this guard and still claimed "we have taken appropriate action"
+		if ($action !== 'dismiss') {
 			if ($notifyAuthor && $ownerId > 0) {
-				$owner = \Drupal\user\Entity\User::load($ownerId);
+				$owner = User::load($ownerId);
 				if ($owner instanceof UserInterface) {
 					ReportsHelper::notifyUser($owner, 'author', $contentType, $action, $notes);
 				}
 			}
-		}
-		if ($notifyReporter && isset($report['reporter_id']) && (int) $report['reporter_id'] > 0) {
-			$reporter = \Drupal\user\Entity\User::load((int) $report['reporter_id']);
-			if ($reporter instanceof UserInterface) {
-				ReportsHelper::notifyUser($reporter, 'reporter', $contentType, $action, null);
+
+			if (
+				$notifyReporter &&
+				isset($report['reporter_id']) &&
+				(int) $report['reporter_id'] > 0
+			) {
+				$reporter = User::load((int) $report['reporter_id']);
+				if ($reporter instanceof UserInterface) {
+					ReportsHelper::notifyUser($reporter, 'reporter', $contentType, $action, null);
+				}
 			}
 		}
 

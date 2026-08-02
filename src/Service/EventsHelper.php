@@ -890,10 +890,25 @@ class EventsHelper
 	/**
 	 * Notify attendees that an event is starting soon.
 	 */
+	/**
+	 * Everyone to notify about an event, each exactly once.
+	 *
+	 * A host who is also on the attendee list used to receive two identical notifications and two
+	 * pushes for every notice, because the two lists were merged without deduplication.
+	 *
+	 * @return int[]
+	 */
+	private static function recipientIds(Event $event): array
+	{
+		$ids = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
+
+		return array_values(array_unique(array_filter($ids, fn($id) => (int) $id > 0)));
+	}
+
 	private static function notifyEventStarting(Event $event, Node $node, int $minutes): void
 	{
 		$eventUrl = '/events/' . GeneralHelper::formatId($node->id());
-		$attendeeIds = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
+		$attendeeIds = self::recipientIds($event);
 
 		foreach ($attendeeIds as $userId) {
 			$user = User::load($userId);
@@ -921,7 +936,7 @@ class EventsHelper
 	private static function notifyEventEnding(Event $event, Node $node, int $minutes): void
 	{
 		$eventUrl = '/events/' . GeneralHelper::formatId($node->id());
-		$attendeeIds = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
+		$attendeeIds = self::recipientIds($event);
 
 		foreach ($attendeeIds as $userId) {
 			$user = User::load($userId);
@@ -949,7 +964,7 @@ class EventsHelper
 	private static function notifyEventEnded(Event $event, Node $node): void
 	{
 		$eventUrl = '/events/' . GeneralHelper::formatId($node->id());
-		$attendeeIds = array_merge($event->getAttendeeIds(), [$event->getHostId()]);
+		$attendeeIds = self::recipientIds($event);
 
 		foreach ($attendeeIds as $userId) {
 			$user = User::load($userId);
