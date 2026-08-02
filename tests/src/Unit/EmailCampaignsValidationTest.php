@@ -13,6 +13,32 @@ use Symfony\Component\Yaml\Exception\ParseException;
 
 class EmailCampaignsValidationTest extends TestCase
 {
+	private const VALID_FILTERS = [
+		'verifiedFilter',
+		'unverifiedFilter',
+		'inactiveFilter',
+		'activeFilter',
+		'activeVerifiedFilter',
+		'newUserVerifiedFilter',
+	];
+
+	private const VALID_GLOBAL_FILTERS = ['newActivitiesFilter'];
+
+	private const VALID_CATEGORIES = [
+		'digest',
+		'announcements',
+		'reengagement',
+		'lifecycle',
+		'social',
+		'quest',
+	];
+
+	/** Gmail's iOS app truncates around 38 characters, so the fixed part has to leave room */
+	private const MAX_STATIC_TITLE_LENGTH = 25;
+
+	/** Apple Mail on iOS shows roughly 48, Gmail roughly 38; 42 is the workable middle */
+	private const MAX_SUBJECT_LENGTH = 42;
+
 	private static array $campaigns;
 	private static string $campaignsFilePath;
 	private static array $mockStaticPlaceholderValues = [
@@ -26,8 +52,17 @@ class EmailCampaignsValidationTest extends TestCase
 		'{activity.recommended.title}' => 'Recommended activity title',
 		'{activity.weekly}' => 'Weekly activities',
 		'{activity.last_added}' => 'Last added activities',
+		'{activity.last_added.title}' => 'Last added activity title',
 		'{prompt.weekly}' => 'Weekly prompts',
 		'{article.weekly}' => 'Weekly articles',
+		// assets resolve from a static catalog, so they never trigger the missing-content skip
+		'{asset.motd}' => '![A banner](https://cdn.earth-app.com/marketing/email/motd_x.png)',
+		'{asset.garden}' =>
+			'![A garden](https://cdn.earth-app.com/marketing/email/circle-garden_dusk_after.jpg)',
+		'{asset.app_qr}' =>
+			'[![Scan](https://cdn.earth-app.com/marketing/email/qr_black.png)](https://earth-app.com/ios)',
+		'{asset.app_launch}' =>
+			'[![Store](https://cdn.earth-app.com/marketing/email/launch_post_landscape.jpg)](https://earth-app.com/ios)',
 	];
 	private static array $mockMissingContentPlaceholderValues = [
 		'{activity.recommended}' => 'No recommended activity found',
@@ -36,6 +71,7 @@ class EmailCampaignsValidationTest extends TestCase
 		'{activity.random.title}' => 'No random activity found',
 		'{activity.weekly}' => 'No weekly activities found',
 		'{activity.last_added}' => 'No recently added activities found',
+		'{activity.last_added.title}' => 'No recently added activities found',
 		'{prompt.random}' => 'No random prompt found',
 		'{prompt.random.title}' => 'No random prompt found',
 		'{prompt.weekly}' => 'No weekly prompts found',
@@ -320,13 +356,147 @@ class EmailCampaignsValidationTest extends TestCase
 	#[DataProvider('campaignProvider')]
 	public function testCampaignHasRequiredFields(string $campaignId, array $campaign): void
 	{
-		$requiredFields = ['id', 'title', 'interval', 'body'];
-
-		foreach ($requiredFields as $field) {
+		foreach (['id', 'interval', 'body'] as $field) {
 			$this->assertArrayHasKey(
 				$field,
 				$campaign,
 				"Campaign '$campaignId' is missing required field: $field",
+			);
+		}
+
+		// a campaign supplies either a single title or a rotation pool, never neither
+		$this->assertTrue(
+			isset($campaign['title']) || isset($campaign['titles']),
+			"Campaign '$campaignId' has neither a title nor a titles pool",
+		);
+	}
+
+	/**
+	 * Every campaign carries exactly one primary action.
+	 *
+	 * One destination means one unambiguous success metric per send, which is what makes any
+	 * later comparison valid. The famous multi-CTA effect sizes are unreplicated case studies; the
+	 * measurement argument is the real one.
+	 */
+	#[Test]
+	#[TestDox('Campaign $campaignId has one CTA with an earth-app destination')]
+	#[Group('mantle2/email-campaigns')]
+	#[DataProvider('campaignProvider')]
+	public function testCampaignHasSingleCta(string $campaignId, array $campaign): void
+	{
+		$this->assertArrayHasKey('cta', $campaign, "Campaign '$campaignId' has no cta");
+		$cta = $campaign['cta'];
+		$this->assertIsArray($cta, "Campaign '$campaignId' cta must be a map");
+		$this->assertArrayHasKey('label', $cta);
+		$this->assertArrayHasKey('url', $cta);
+		$this->assertNotEmpty($cta['label']);
+
+		$host = parse_url($cta['url'], PHP_URL_HOST);
+		$this->assertIsString($host, "Campaign '$campaignId' cta url is unparseable");
+		$this->assertTrue(
+			$host === 'earth-app.com' || str_ends_with($host, '.earth-app.com'),
+			"Campaign '$campaignId' cta points off-domain: {$cta['url']}",
+		);
+
+		// UTM tagging only applies to earth-app hosts, so an off-domain CTA is unmeasurable
+		$this->assertLessThanOrEqual(
+			30,
+			strlen($cta['label']),
+			"Campaign '$campaignId' cta label is too long for a button",
+		);
+	}
+
+	#[Test]
+	#[TestDox('Campaign $campaignId has a preheader within the inbox preview budget')]
+	#[Group('mantle2/email-campaigns')]
+	#[DataProvider('campaignProvider')]
+	public function testCampaignHasPreheader(string $campaignId, array $campaign): void
+	{
+		$this->assertArrayHasKey(
+			'preheader',
+			$campaign,
+			"Campaign '$campaignId' has no preheader, so clients will scrape the body or the alt text",
+		);
+		$this->assertIsString($campaign['preheader']);
+		$this->assertNotEmpty($campaign['preheader']);
+
+		// HTMLFactory::PREHEADER_LENGTH is 90 and clients truncate around there
+		$this->assertLessThanOrEqual(
+			90,
+			strlen($campaign['preheader']),
+			"Campaign '$campaignId' preheader exceeds the 90 character preview budget",
+		);
+	}
+
+	#[Test]
+	#[TestDox('Campaign $campaignId category and max_sends are well formed')]
+	#[Group('mantle2/email-campaigns')]
+	#[DataProvider('campaignProvider')]
+	public function testCampaignCategoryAndMaxSends(string $campaignId, array $campaign): void
+	{
+		$unsubscribable = $campaign['unsubscribable'] ?? true;
+
+		if ($unsubscribable) {
+			$this->assertArrayHasKey(
+				'category',
+				$campaign,
+				"Campaign '$campaignId' is unsubscribable so it needs a category to opt out of",
+			);
+			$this->assertContains($campaign['category'], self::VALID_CATEGORIES);
+		}
+
+		if (isset($campaign['max_sends'])) {
+			$this->assertIsInt($campaign['max_sends']);
+			$this->assertGreaterThan(0, $campaign['max_sends']);
+		}
+	}
+
+	/**
+	 * Marketing cadence floor.
+	 *
+	 * The complaint rate is the hard gate (Google: below 0.10%, never 0.30%), and daily sending
+	 * multiplies monthly complaint opportunities roughly thirtyfold while lowering per-message
+	 * engagement. Transactional campaigns are exempt because they are not competing for attention.
+	 */
+	#[Test]
+	#[TestDox('Marketing campaign $campaignId sends no more often than weekly')]
+	#[Group('mantle2/email-campaigns')]
+	#[DataProvider('campaignProvider')]
+	public function testMarketingCadenceFloor(string $campaignId, array $campaign): void
+	{
+		if (($campaign['unsubscribable'] ?? true) === false) {
+			$this->markTestSkipped("Campaign '$campaignId' is transactional");
+		}
+
+		$this->assertGreaterThanOrEqual(
+			604800,
+			(int) $campaign['interval'],
+			"Campaign '$campaignId' sends more often than weekly",
+		);
+	}
+
+	#[Test]
+	#[TestDox('Campaign $campaignId asset references are CDN-hosted with alt text')]
+	#[Group('mantle2/email-campaigns')]
+	#[DataProvider('campaignProvider')]
+	public function testCampaignAssetsAreCdnHosted(string $campaignId, array $campaign): void
+	{
+		$body = $campaign['body'] ?? '';
+		if (!preg_match_all('/!\[([^\]]*)\]\(([^)]+)\)/', $body, $matches, PREG_SET_ORDER)) {
+			$this->markTestSkipped("Campaign '$campaignId' embeds no images");
+		}
+
+		foreach ($matches as $match) {
+			// HTMLFactory renders an <img> only for this host; anything else silently degrades to
+			// the alt text, and Outlook blocks images by default regardless
+			$this->assertStringStartsWith(
+				'https://cdn.earth-app.com/',
+				$match[2],
+				"Campaign '$campaignId' embeds a non-CDN image: {$match[2]}",
+			);
+			$this->assertNotEmpty(
+				trim($match[1]),
+				"Campaign '$campaignId' embeds an image with no alt text: {$match[2]}",
 			);
 		}
 	}
@@ -344,22 +514,77 @@ class EmailCampaignsValidationTest extends TestCase
 		);
 	}
 
+	/** @return string[] the single title or every entry of the rotation pool */
+	private static function titlesOf(array $campaign): array
+	{
+		if (isset($campaign['titles']) && is_array($campaign['titles'])) {
+			return $campaign['titles'];
+		}
+
+		return isset($campaign['title']) ? [$campaign['title']] : [];
+	}
+
 	#[Test]
 	#[TestDox('Campaign $campaignId title should be valid')]
 	#[Group('mantle2/email-campaigns')]
 	#[DataProvider('campaignProvider')]
 	public function testCampaignTitleValid(string $campaignId, array $campaign): void
 	{
-		if (!isset($campaign['title'])) {
-			$this->markTestSkipped("Campaign '$campaignId' has no title");
+		$titles = self::titlesOf($campaign);
+		$this->assertNotEmpty($titles, "Campaign '$campaignId' has no usable title");
+
+		foreach ($titles as $title) {
+			$this->assertIsString($title, "Campaign '$campaignId' title is not a string");
+			$this->assertNotEmpty($title, "Campaign '$campaignId' has empty title");
+			$this->assertLessThanOrEqual(
+				100,
+				strlen($title),
+				"Campaign '$campaignId' title exceeds 100 characters",
+			);
+
+			// the load-bearing noun has to survive the Gmail iOS truncation point
+			if (str_contains($title, '{')) {
+				// a placeholder expands to unknown length, so the fixed wording around it stays
+				// short enough to leave the expansion visible
+				$static = trim(preg_replace('/\{[^}]+\}/', '', $title));
+				$this->assertLessThanOrEqual(
+					self::MAX_STATIC_TITLE_LENGTH,
+					strlen($static),
+					"Campaign '$campaignId' title has too much fixed wording to front-load: '$title'",
+				);
+				continue;
+			}
+
+			// a fully static title only has to fit the truncation point itself
+			$this->assertLessThanOrEqual(
+				self::MAX_SUBJECT_LENGTH,
+				strlen($title),
+				"Campaign '$campaignId' static title will truncate on mobile: '$title'",
+			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('Campaign $campaignId rotation pool is unique and large enough to attribute')]
+	#[Group('mantle2/email-campaigns')]
+	#[DataProvider('campaignProvider')]
+	public function testTitlePoolIsUsable(string $campaignId, array $campaign): void
+	{
+		if (!isset($campaign['titles'])) {
+			$this->markTestSkipped("Campaign '$campaignId' uses a single title");
 		}
 
-		$this->assertNotEmpty($campaign['title'], "Campaign '$campaignId' has empty title");
-		$this->assertIsString($campaign['title'], "Campaign '$campaignId' title is not a string");
-		$this->assertLessThanOrEqual(
-			100,
-			strlen($campaign['title']),
-			"Campaign '$campaignId' title exceeds 100 characters",
+		$titles = $campaign['titles'];
+		$this->assertIsArray($titles);
+		$this->assertGreaterThanOrEqual(
+			3,
+			count($titles),
+			"Campaign '$campaignId' pool is too small to learn anything from",
+		);
+		$this->assertSame(
+			count($titles),
+			count(array_unique($titles)),
+			"Campaign '$campaignId' pool has duplicate templates, which skews the variant counts",
 		);
 	}
 
@@ -426,20 +651,31 @@ class EmailCampaignsValidationTest extends TestCase
 			$this->markTestSkipped("Campaign '$campaignId' has no filter");
 		}
 
-		$validFilters = [
-			'verifiedFilter',
-			'unverifiedFilter',
-			'inactiveFilter',
-			'activeFilter',
-			'activeVerifiedFilter',
-			'allFilter',
-		];
-
 		$this->assertContains(
 			$campaign['filter'],
-			$validFilters,
+			self::VALID_FILTERS,
 			"Campaign '$campaignId' has invalid filter: {$campaign['filter']}",
 		);
+	}
+
+	/**
+	 * Every whitelisted filter must really exist on CampaignHelper.
+	 *
+	 * runEmailCampaigns() guards both filter lookups with method_exists, so a name that does not
+	 * exist is silently skipped and the campaign matches EVERY user. This whitelist previously
+	 * listed allFilter, newEventsFilter and newArticlesFilter, none of which exist.
+	 */
+	#[Test]
+	#[TestDox('Every whitelisted filter is a real CampaignHelper method')]
+	#[Group('mantle2/email-campaigns')]
+	public function testWhitelistedFiltersExist(): void
+	{
+		foreach ([...self::VALID_FILTERS, ...self::VALID_GLOBAL_FILTERS] as $filter) {
+			$this->assertTrue(
+				method_exists(CampaignHelper::class, $filter),
+				"Filter $filter is whitelisted but does not exist; a missing filter sends to everyone.",
+			);
+		}
 	}
 
 	#[Test]
@@ -453,11 +689,9 @@ class EmailCampaignsValidationTest extends TestCase
 			$this->markTestSkipped("Campaign '$campaignId' has no global_filter");
 		}
 
-		$validGlobalFilters = ['newActivitiesFilter', 'newEventsFilter', 'newArticlesFilter'];
-
 		$this->assertContains(
 			$campaign['global_filter'],
-			$validGlobalFilters,
+			self::VALID_GLOBAL_FILTERS,
 			"Campaign '$campaignId' has invalid global_filter: {$campaign['global_filter']}",
 		);
 	}
@@ -497,7 +731,7 @@ class EmailCampaignsValidationTest extends TestCase
 			$this->markTestSkipped("Campaign '$campaignId' has no placeholders");
 		}
 
-		$validPrefixes = ['user', 'activity', 'event', 'article', 'prompt'];
+		$validPrefixes = ['user', 'activity', 'event', 'article', 'prompt', 'asset'];
 
 		foreach ($placeholders as $placeholder) {
 			// Check if placeholder has valid prefix

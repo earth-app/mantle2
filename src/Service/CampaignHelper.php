@@ -7,9 +7,11 @@ use Drupal\Component\Serialization\Yaml;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\Article;
 use Drupal\mantle2\Custom\Event;
+use Drupal\mantle2\Custom\MailCategory;
 use Drupal\mantle2\Custom\Prompt;
 use Drupal\mantle2\Service\ActivityHelper;
 use Drupal\mantle2\Service\ArticlesHelper;
+use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\user\UserInterface;
@@ -90,6 +92,21 @@ class CampaignHelper
 		return self::activeFilter($user) && self::verifiedFilter($user);
 	}
 
+	/**
+	 * Verified accounts created within the onboarding window.
+	 *
+	 * Without the age bound, a first-send campaign fires immediately for the entire existing user
+	 * base: the first-send path is `created + crc32 offset`, which is long past for every account.
+	 */
+	public static function newUserVerifiedFilter(UserInterface $user): bool
+	{
+		if (!self::verifiedFilter($user)) {
+			return false;
+		}
+
+		return (int) $user->getCreatedTime() > strtotime('-14 days');
+	}
+
 	/// Global Filters
 
 	private static int $newActivityThreshold = 5;
@@ -115,6 +132,7 @@ class CampaignHelper
 			'{activity.random.title}' => $noRandomActivityFoundText,
 			'{activity.weekly}' => $noWeeklyActivitiesFoundText,
 			self::$activityLastAddedPlaceholder => self::$noRecentActivitiesFoundText,
+			'{activity.last_added.title}' => self::$noRecentActivitiesFoundText,
 			'{prompt.random}' => $noRandomPromptFoundText,
 			'{prompt.random.title}' => $noRandomPromptFoundText,
 			'{prompt.weekly}' => $noWeeklyPromptsFoundText,
@@ -154,12 +172,14 @@ class CampaignHelper
 			'{user.username}' => fn() => $user->getAccountName(),
 			'{user.email}' => fn() => $user->getEmail(),
 			// Activity
-			'{activity.recommended}' => function () use ($user) {
-				$activity = self::getRecommendedActivity($user);
+			'{activity.recommended}' => function () use ($user, $cachedObjects) {
+				$activity =
+					$cachedObjects['recommendedActivity'] ?? self::getRecommendedActivity($user);
 				return $activity ? self::formatActivity($activity) : null;
 			},
-			'{activity.recommended.title}' => function () use ($user) {
-				$activity = self::getRecommendedActivity($user);
+			'{activity.recommended.title}' => function () use ($user, $cachedObjects) {
+				$activity =
+					$cachedObjects['recommendedActivity'] ?? self::getRecommendedActivity($user);
 				return $activity ? $activity->getName() : null;
 			},
 			'{activity.random}' => function () use ($cachedObjects) {
@@ -190,6 +210,14 @@ class CampaignHelper
 				$activities = array_slice($activities, 0, 10);
 
 				return implode("\n", array_map([self::class, 'formatActivity'], $activities));
+			},
+			'{activity.last_added.title}' => function () {
+				$activities = ActivityHelper::getActivitiesCreatedInLastDays(
+					self::$newActivityThreshold,
+				);
+				$first = $activities ? reset($activities) : null;
+
+				return $first instanceof Activity ? $first->getName() : null;
 			},
 			// Prompts
 			'{prompt.random}' => function () use ($cachedObjects) {
@@ -234,8 +262,96 @@ class CampaignHelper
 				$event = $cachedObjects['randomEvent'] ?? EventsHelper::getRandomEvent(true);
 				return $event ? $event->getName() : null;
 			},
+			// Assets
+			'{asset.motd}' => fn() => self::weeklyMotdBanner(),
+			'{asset.garden}' => fn() => self::assetImage(
+				self::ASSET_GARDEN_BAND,
+				'A quiet garden at dusk, with the moon over low hills and a river',
+			),
+			'{asset.app_qr}' => fn() => self::assetImage(
+				self::ASSET_APP_QR,
+				'Scan to download The Earth App on the App Store',
+				'https://earth-app.com/ios',
+			),
+			'{asset.app_launch}' => fn() => self::assetImage(
+				self::ASSET_APP_LAUNCH,
+				'The Earth App on the App Store',
+				'https://earth-app.com/ios',
+			),
 		];
 	}
+
+	// #region Assets
+
+	// every email asset lives under one prefix, built by scripts/build-email-assets.sh
+	private const ASSET_BASE = 'https://cdn.earth-app.com/marketing/email/';
+
+	// resized derivatives; the originals are 0.7-1.3MB, far too heavy for an inbox
+	private const ASSET_GARDEN_BAND = 'circle-garden_dusk_after.jpg';
+	private const ASSET_APP_LAUNCH = 'launch_post_landscape.jpg';
+
+	// white modules on a dark field, which iOS Camera reads and some Android scanners do not;
+	// harmless while iOS is the only store listing, and the text link is the primary path anyway
+	private const ASSET_APP_QR = 'qr_black.png';
+
+	/**
+	 * Slim banner strips, rotated weekly.
+	 *
+	 * The sentence is baked into the image, so the alt text carries it verbatim - Outlook blocks
+	 * images by default and the message has to survive that. Originals are referenced directly
+	 * because each is already 6-12KB.
+	 *
+	 * Two of the fourteen strips in the bucket are deliberately absent: "Sometimes your friends
+	 * aren't really your friends." is ominous rather than encouraging, and "Cloud loves you
+	 * unconditionally." reads as parasocial toward the @cloud account. Both are fine in-app where
+	 * the user chose to look; neither belongs in an unsolicited inbox.
+	 *
+	 * Sentences are transcribed from the rendered images, so a copy change means re-rendering the
+	 * strip and updating the alt text together.
+	 */
+	public const MOTD_BANNERS = [
+		['file' => 'motd_last_outside.png', 'alt' => 'When was the last time you were outside?'],
+		['file' => 'motd_air_smell.png', 'alt' => 'What does the air smell like?'],
+		['file' => 'motd_deep_breath.png', 'alt' => 'Remember to take a deep breath.'],
+		['file' => 'motd_long_week.png', 'alt' => "It's been a long week."],
+		['file' => 'motd_doing_great.png', 'alt' => "You're doing great."],
+		['file' => 'motd_will_be_fine.png', 'alt' => 'You will be fine.'],
+		['file' => 'motd_life_not_bad.png', 'alt' => "Life isn't so bad."],
+		[
+			'file' => 'motd_ok_eventually.png',
+			'alt' => "If you're not ok now, you will be eventually.",
+		],
+		['file' => 'motd_no_wrong_answer.png', 'alt' => 'Sometimes there is no wrong answer.'],
+		['file' => 'motd_move_forward.png', 'alt' => 'Life is about moving forward.'],
+		['file' => 'motd_earth_app_has_you.png', 'alt' => 'If nobody has you, The Earth App does.'],
+		['file' => 'motd_smiling.png', 'alt' => 'A row of smiling faces'],
+	];
+
+	private static function assetImage(string $file, string $alt, ?string $href = null): string
+	{
+		$url = self::ASSET_BASE . $file;
+		$image = '![' . $alt . '](' . $url . ')';
+
+		// Apple requires the App Store badge to link to the store, and a linked image is only
+		// recognised on its own line
+		return $href === null ? $image : '[' . $image . '](' . $href . ')';
+	}
+
+	/**
+	 * The banner for the current week, shared by every recipient.
+	 *
+	 * Rotating on the week rather than per user keeps a single cacheable image per send window and
+	 * gives roughly three months before any strip repeats.
+	 */
+	private static function weeklyMotdBanner(): string
+	{
+		$week = (int) floor(Drupal::time()->getCurrentTime() / 604800);
+		$banner = self::MOTD_BANNERS[$week % count(self::MOTD_BANNERS)];
+
+		return self::assetImage($banner['file'], $banner['alt']);
+	}
+
+	// #endregion
 
 	private static array $randomPlaceholders = [
 		'{activity.random}',
@@ -273,17 +389,58 @@ class CampaignHelper
 				'randomArticle' => ArticlesHelper::getRandomArticle(),
 				'randomActivity' => ActivityHelper::getRandomActivity(),
 				'randomEvent' => EventsHelper::getRandomEvent(true),
+				// title and body are expanded by separate calls, so without sharing this the
+				// subject could name a different activity than the body
+				'recommendedActivity' => self::getRecommendedActivity($user),
 			];
 		}
 
 		$processed = $campaign;
-		if (isset($campaign['title'])) {
+
+		// a pool of framing templates rotates deterministically, and the chosen index rides along
+		// as utm_content so click-through is attributable per variant rather than per campaign
+		[$title, $variantId] = self::selectTitle($campaign, $user);
+		if ($title !== null) {
+			$processed['title'] = $title;
+			$processed['variant_id'] = $variantId;
+		}
+
+		if (isset($processed['title'])) {
 			$processed['title'] = self::replacePlaceholders(
-				$campaign['title'],
+				$processed['title'],
 				$user,
 				$repeat,
 				$cachedObjects,
 			);
+		}
+
+		foreach (['preheader', 'cta'] as $key) {
+			if (!isset($processed[$key])) {
+				continue;
+			}
+
+			if (is_string($processed[$key])) {
+				$processed[$key] = self::replacePlaceholders(
+					$processed[$key],
+					$user,
+					$repeat,
+					$cachedObjects,
+				);
+				continue;
+			}
+
+			if (is_array($processed[$key])) {
+				foreach ($processed[$key] as $field => $value) {
+					if (is_string($value)) {
+						$processed[$key][$field] = self::replacePlaceholders(
+							$value,
+							$user,
+							$repeat,
+							$cachedObjects,
+						);
+					}
+				}
+			}
 		}
 		if (isset($campaign['body'])) {
 			$processed['body'] = self::replacePlaceholders(
@@ -297,32 +454,70 @@ class CampaignHelper
 		return $processed;
 	}
 
+	private static function selectTitle(array $campaign, UserInterface $user): array
+	{
+		$titles = $campaign['titles'] ?? null;
+		if (!is_array($titles)) {
+			return [$campaign['title'] ?? null, null];
+		}
+
+		$titles = array_values(array_filter($titles, fn($t) => is_string($t) && trim($t) !== ''));
+		if ($titles === []) {
+			return [$campaign['title'] ?? null, null];
+		}
+
+		$week = (int) floor(Drupal::time()->getCurrentTime() / 604800);
+		$seed = ($campaign['id'] ?? '') . ':' . $user->id() . ':' . $week;
+		$index = crc32($seed) % count($titles);
+
+		return [$titles[$index], $index];
+	}
+
+	private static function campaignStrings(array $campaign): array
+	{
+		$strings = [];
+
+		foreach (['title', 'body', 'preheader'] as $key) {
+			if (isset($campaign[$key]) && is_string($campaign[$key])) {
+				$strings[] = $campaign[$key];
+			}
+		}
+
+		foreach (['titles', 'cta'] as $key) {
+			if (!isset($campaign[$key]) || !is_array($campaign[$key])) {
+				continue;
+			}
+
+			foreach ($campaign[$key] as $value) {
+				if (is_string($value)) {
+					$strings[] = $value;
+				}
+			}
+		}
+
+		return $strings;
+	}
+
 	private static function campaignContainsPlaceholder(array $campaign, string $placeholder): bool
 	{
-		$titleHasPlaceholder =
-			isset($campaign['title']) &&
-			is_string($campaign['title']) &&
-			str_contains($campaign['title'], $placeholder);
-		$bodyHasPlaceholder =
-			isset($campaign['body']) &&
-			is_string($campaign['body']) &&
-			str_contains($campaign['body'], $placeholder);
+		foreach (self::campaignStrings($campaign) as $string) {
+			if (str_contains($string, $placeholder)) {
+				return true;
+			}
+		}
 
-		return $titleHasPlaceholder || $bodyHasPlaceholder;
+		return false;
 	}
 
 	private static function campaignContainsText(array $campaign, string $text): bool
 	{
-		$titleHasText =
-			isset($campaign['title']) &&
-			is_string($campaign['title']) &&
-			str_contains($campaign['title'], $text);
-		$bodyHasText =
-			isset($campaign['body']) &&
-			is_string($campaign['body']) &&
-			str_contains($campaign['body'], $text);
+		foreach (self::campaignStrings($campaign) as $string) {
+			if (str_contains($string, $text)) {
+				return true;
+			}
+		}
 
-		return $titleHasText || $bodyHasText;
+		return false;
 	}
 
 	private static function shouldSkipCampaign(array $campaign, array $processedCampaign): bool
@@ -441,12 +636,32 @@ class CampaignHelper
 		'other' => '🔖',
 	];
 
+	/**
+	 * How much prose a single content block may contribute to an email body.
+	 *
+	 * Gmail clips at roughly 102KB of raw HTML, mid-tag, which can truncate the unsubscribe
+	 * footer and turn a layout problem into a compliance one. An email teases and links; it does
+	 * not inline the article.
+	 */
+	public const ACTIVITY_SUMMARY_LENGTH = 180;
+	public const ARTICLE_SUMMARY_LENGTH = 240;
+	public const EVENT_SUMMARY_LENGTH = 240;
+
+	private static function truncate(string $text, int $limit): string
+	{
+		$text = trim($text);
+		if (strlen($text) <= $limit) {
+			return $text;
+		}
+
+		return rtrim(substr($text, 0, $limit - 3)) . '...';
+	}
+
 	private static function formatActivity(Activity $activity): string
 	{
 		$name = $activity->getName();
 		$id = $activity->getId();
-		$desc = trim($activity->getDescription());
-		$desc = strlen($desc) > 250 ? substr($desc, 0, 247) . '...' : $desc;
+		$desc = self::truncate($activity->getDescription(), self::ACTIVITY_SUMMARY_LENGTH);
 
 		// find three emojis for matching types
 		$emojis = '';
@@ -463,7 +678,11 @@ class CampaignHelper
 			}
 		}
 
-		return "[**$emojis $name**](https://app.earth-app.com/activities/$id)\n*$desc*\n";
+		// each emoji already carries a trailing space, so a separator here rendered as
+		// "**  Name**" with emojis and "** Name**" with none
+		$label = trim($emojis . $name);
+
+		return "[**$label**](https://app.earth-app.com/activities/$id)\n*$desc*\n";
 	}
 
 	private static function formatPrompt(Prompt $prompt): string
@@ -483,8 +702,7 @@ class CampaignHelper
 		$author = $authorObj ? $authorObj->getAccountName() : 'Unknown';
 		$date = date('F j, Y', $article->getCreatedAt());
 		$id = $article->getId();
-		$summary = trim($article->getContent());
-		$summary = strlen($summary) > 1500 ? substr($summary, 0, 1497) . '...' : $summary;
+		$summary = self::truncate($article->getContent(), self::ARTICLE_SUMMARY_LENGTH);
 
 		return "[**$title** by @$author](https://app.earth-app.com/articles/$id)\n*$date*\n\n$summary\n";
 	}
@@ -492,9 +710,7 @@ class CampaignHelper
 	private static function formatEvent(Event $event): string
 	{
 		$name = $event->getName();
-		$description = trim($event->getDescription());
-		$description =
-			strlen($description) > 800 ? substr($description, 0, 797) . '...' : $description;
+		$description = self::truncate($event->getDescription(), self::EVENT_SUMMARY_LENGTH);
 		$id = $event->getId();
 		// Convert milliseconds to seconds for date formatting
 		$date = date('F j, Y', $event->getRawDate() / 1000);
@@ -505,6 +721,62 @@ class CampaignHelper
 	// Cron Job
 
 	public static $variation = 21600; // 6 hour variation
+
+	/**
+	 * Minimum gap between two marketing emails to the same person.
+	 *
+	 * Cron already caps one send per user per run, but nothing capped sends across runs, so a user
+	 * eligible for four campaigns received roughly one a day. Fitz et al. 2019 found the benefit of
+	 * a digest belongs to wide spacing, not to batching; tightening the cadence bought nothing.
+	 */
+	public const MARKETING_COOLDOWN = 604800;
+
+	/**
+	 * Stop all marketing to an account dormant this long.
+	 *
+	 * Google ties sending reputation to engaged recipients and Yahoo asks senders to monitor
+	 * inactives; suppression is the cheapest lever on complaint rate there is.
+	 */
+	public const SUPPRESS_AFTER = 15552000;
+
+	/**
+	 * One in this many accounts never receives marketing, permanently.
+	 *
+	 * Without a holdout there is no way to answer whether any of this is incremental, which is the
+	 * only question that actually matters about a send.
+	 */
+	public const HOLDOUT_DIVISOR = 20;
+
+	/**
+	 * Ceiling on campaign emails per cron run.
+	 *
+	 * The provider starts new accounts on a conservative daily quota (1,000/day at the time of
+	 * writing) that widens with reputation, and the send marker is written BEFORE delivery, so a
+	 * quota rejection makes users silently miss a cycle rather than retry. Capping the run keeps a
+	 * single tick from spending the day's allowance; whoever is left is picked up next hour with no
+	 * marker written. It also matches Google's own guidance to raise volume gradually.
+	 */
+	public const MAX_SENDS_PER_RUN = 40;
+
+	public static function isMarketingHoldout(UserInterface $user): bool
+	{
+		return crc32('holdout:' . $user->id()) % self::HOLDOUT_DIVISOR === 0;
+	}
+
+	private static function lastMarketingKey(int|string $userId): string
+	{
+		return "campaign:last_marketing:user:{$userId}";
+	}
+
+	private static function isInMarketingCooldown(int|string $userId, int $time): bool
+	{
+		$last = RedisHelper::get(self::lastMarketingKey($userId));
+		if (!is_array($last) || !isset($last['sent_at'])) {
+			return false;
+		}
+
+		return $time - (int) $last['sent_at'] < self::MARKETING_COOLDOWN;
+	}
 
 	// cron runs every hour according to drupal configuration
 	public static function runEmailCampaigns(): void
@@ -538,9 +810,26 @@ class CampaignHelper
 					continue;
 				}
 
+				if (count($sentThisRun) >= self::MAX_SENDS_PER_RUN) {
+					Drupal::logger('mantle2')->info(
+						'Campaign run hit the per-run cap of %cap sends; the rest continue next tick',
+						['%cap' => self::MAX_SENDS_PER_RUN],
+					);
+					break;
+				}
+
+				// a dormant account and a holdout account are both permanently marketing-silent;
+				// transactional mail is unaffected because it never routes through here
+				$lastLogin = (int) $user->getLastLoginTime();
+				$dormant = $lastLogin > 0 && $time - $lastLogin > self::SUPPRESS_AFTER;
+				$marketingSilent =
+					$dormant ||
+					self::isMarketingHoldout($user) ||
+					self::isInMarketingCooldown($userId, $time);
+
 				// find the most overdue campaign for this user and prioritize that
 				$mostOverdueCampaign = null;
-				$maxOverdueAmount = 0;
+				$maxOverdueAmount = -1;
 
 				foreach ($campaigns as $campaign) {
 					if (!isset($campaign['id']) || !isset($campaign['interval'])) {
@@ -574,12 +863,27 @@ class CampaignHelper
 
 					// skip if this campaign respects subscription and user unsubscribed
 					$unsubscribable = $campaign['unsubscribable'] ?? true;
-					if ($unsubscribable && !UsersHelper::isSubscribed($user)) {
-						continue;
+					if ($unsubscribable) {
+						// the weekly cap, the holdout and dormancy only bind marketing; a
+						// transactional campaign like verify_email keeps its own schedule
+						if ($marketingSilent) {
+							continue;
+						}
+
+						$category = MailCategory::tryFrom((string) ($campaign['category'] ?? ''));
+						if (!UsersHelper::isSubscribedTo($user, $category)) {
+							continue;
+						}
 					}
 
 					$redisKey = "campaign:{$campaignId}:user:{$userId}";
 					$lastSentData = RedisHelper::get($redisKey);
+
+					// a finite series stops nagging; without this verify_email runs forever
+					$maxSends = isset($campaign['max_sends']) ? (int) $campaign['max_sends'] : 0;
+					if ($maxSends > 0 && (int) ($lastSentData['count'] ?? 0) >= $maxSends) {
+						continue;
+					}
 
 					$shouldSend = false;
 					$overdueAmount = 0;
@@ -636,6 +940,9 @@ class CampaignHelper
 							'id' => $campaignId,
 							'interval' => $interval,
 							'redis_key' => $redisKey,
+							'max_sends' => $maxSends,
+							'sent_count' => (int) ($lastSentData['count'] ?? 0),
+							'unsubscribable' => $unsubscribable,
 						];
 					}
 				}
@@ -645,19 +952,34 @@ class CampaignHelper
 					$campaignId = $mostOverdueCampaign['id'];
 					$processedCampaign = $mostOverdueCampaign['processed_campaign'];
 
-					// Persist the send marker BEFORE attempting delivery so that if anything in
-					// the mail path throws (e.g. session/header errors from web-triggered cron,
-					// SMTP hiccup) we don't re-send on the next cron tick. A failed send means
-					// the user misses one cycle and gets the campaign on the next interval.
 					$ttl = $mostOverdueCampaign['interval'] + self::$variation * 2 + 86400;
+
+					// a capped series has to outlive its own interval or the counter resets and
+					// max_sends silently becomes a no-op; a cache flush still restarts the series
+					if ($mostOverdueCampaign['max_sends'] > 0) {
+						$ttl = max($ttl, 31536000);
+					}
+
 					RedisHelper::set(
 						$mostOverdueCampaign['redis_key'],
 						[
 							'sent_at' => $time,
 							'campaign_id' => $campaignId,
+							'count' => $mostOverdueCampaign['sent_count'] + 1,
 						],
 						$ttl,
 					);
+
+					// one shared marker across every marketing campaign is what actually caps the
+					// weekly volume; per-campaign intervals alone never could
+					if ($mostOverdueCampaign['unsubscribable']) {
+						RedisHelper::set(
+							self::lastMarketingKey($userId),
+							['sent_at' => $time, 'campaign_id' => $campaignId],
+							self::MARKETING_COOLDOWN + 86400,
+						);
+					}
+
 					$sentThisRun[$userId] = true;
 
 					try {

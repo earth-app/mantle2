@@ -1,94 +1,126 @@
 - id: verify_email
   title: Verify Your Email Address
+  preheader: One tap unlocks posting, events, and your saved activities.
   filter: unverifiedFilter
   unsubscribable: false
-  interval: 432000 # 5 days
+  max_sends: 3
+  interval: 259200 # 3 days
+  cta:
+    label: Verify My Email
+    url: https://app.earth-app.com/verify-email
   body: |-
-    Hello @{user.username},
+    @{user.username},
 
-    We've noticed you haven't verified your email yet. Please navigate to the link below to verify your email address and unlock all features of your account:
+    Your account is active, but a few things stay locked until we know the address is yours: creating prompts, posting events, and writing articles.
 
-    https://app.earth-app.com/verify-email
-
-    Verify your email to ensure you receive important updates and notifications from us, or to stop these reminders.
-- id: welcome_back
-  title: We Miss You at The Earth App!
-  filter: inactiveFilter
-  interval: 777600 # 9 days
+    Verifying takes one tap, and it means you can recover the account if you ever lose the password.
+- id: getting_started
+  titles:
+    - '{user.first_name}, start with {activity.recommended.title}'
+    - 'Try {activity.recommended.title} this week'
+    - '{activity.recommended.title} looks like you'
+    - 'A first step: {activity.recommended.title}'
+  preheader: Pick one activity and the rest of the app arranges itself around it.
+  category: lifecycle
+  repeat: false
+  filter: newUserVerifiedFilter
+  max_sends: 2
+  # a shorter interval would be clamped to the weekly marketing cooldown anyway, so this states
+  # the real cadence: two sends inside the 14 day onboarding window
+  interval: 604800 # 7 days
+  cta:
+    label: Pick Your First Activity
+    url: https://app.earth-app.com/activities
   body: |-
-    Hey @{user.username},
+    {asset.motd}
 
-    We've noticed you haven't logged into your Earth App account for a while. We miss you!
-
-    The Earth App is designed to help you learn new things, discover new activities, and learn about the world around you.
-    Come back and explore the latest features and updates we've added to enhance your experience.
-
-    Log in now: https://app.earth-app.com/login
-
-    We look forward to seeing you again soon!
-- id: insights
-  title: Insights from The Earth App
-  filter: activeVerifiedFilter
-  interval: 432000 # 5 days
-  body: |-
     {user.first_name},
 
-    Here's some interesting insights from The Earth App to brighten your day and expand your knowledge:
-
-    ## Your Activities
+    The app works best once it knows one thing you actually want to do. Here is a starting point:
 
     {activity.recommended}
-    {activity.random}
 
-    ## A Fun Prompt
+    Pick it or pick something else - either way, prompts, events, and people start lining up behind it.
 
-    {prompt.random}
-    {prompt.random}
-    {prompt.random}
-    {prompt.random}
+    ## On Your Phone
 
-    ## An Interesting Read
+    Trails, nature minutes, and expeditions only work with you outside, so they live on the phone.
 
-    {article.random}
-    {article.random}
-    {article.random}
-
-    ## New Opportunities
-
-    {event.upcoming}
-    {event.upcoming}
-- id: daily_article
-  title: '{article.random.title}'
+    [![Download The Earth App on the App Store](https://cdn.earth-app.com/marketing/email/launch_post_landscape.jpg)](https://earth-app.com/ios)
+- id: weekly_digest
+  titles:
+    - '{user.first_name}, try {activity.recommended.title}'
+    - '{activity.recommended.title} this week?'
+    - 'This week: {activity.recommended.title}'
+    - '{user.first_name} - {activity.recommended.title}'
+    - 'Your week: {activity.recommended.title}'
+    - '{activity.recommended.title}, and one question'
+  preheader: One activity, one question, one read. About four minutes.
+  category: digest
   repeat: false
   filter: activeVerifiedFilter
-  interval: 86400 # 1 day
+  interval: 604800 # 7 days
+  cta:
+    label: Plan This Week's Activity
+    url: https://app.earth-app.com/activities
   body: |-
+    {asset.motd}
+
     {user.first_name},
 
-    Here's your daily article from The Earth App:
+    ## Try This Week
 
-    {article.random}
-- id: bidaily_prompt
-  title: '{prompt.random.title}'
-  repeat: false
-  filter: activeVerifiedFilter
-  interval: 172800 # 2 days
-  body: |-
-    {user.first_name},
+    {activity.recommended}
 
-    Here's your bi-daily prompt from The Earth App:
+    ## A Question Worth Answering
 
     {prompt.random}
+
+    ## One Read
+
+    {article.random}
 - id: new_activities
-  title: Added Activities to Explore!
+  titles:
+    - 'New in the catalog: {activity.last_added.title}'
+    - '{activity.last_added.title} was just added'
+    - 'Just added: {activity.last_added.title}'
+  preheader: A few new things to do were added to the catalog this week.
+  category: announcements
+  repeat: false
   global_filter: newActivitiesFilter
   filter: verifiedFilter
-  interval: 172800 # 2 days
+  interval: 1209600 # 14 days
+  cta:
+    label: Browse New Activities
+    url: https://app.earth-app.com/activities
   body: |-
     {user.first_name},
 
-    We've added new activities to The Earth App for you to explore:
+    New activities are in the catalog:
 
     {activity.last_added}
+- id: welcome_back
+  titles:
+    - '{user.first_name}, {activity.recommended.title} is waiting'
+    - 'Still here when you are, {user.first_name}'
+    - 'Pick up at {activity.recommended.title}'
+    - 'One thing to come back for'
+  preheader: Your activities and saved places are exactly where you left them.
+  category: reengagement
+  repeat: false
+  filter: inactiveFilter
+  max_sends: 3
+  interval: 1209600 # 14 days
+  cta:
+    label: Open The Earth App
+    url: https://app.earth-app.com
+  body: |-
+    {user.first_name},
 
-    Stay curious and keep discovering!
+    Nothing has been lost - your activities, saved places, and progress are all still there.
+
+    If you want one thing to start from:
+
+    {activity.recommended}
+
+    If this is not the right time, the unsubscribe link below stops these for good and we will not take it personally.
