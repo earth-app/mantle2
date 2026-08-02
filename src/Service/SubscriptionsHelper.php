@@ -2119,9 +2119,22 @@ class SubscriptionsHelper
 		return self::getBillingStatus($user);
 	}
 
+	/** @var null|callable(string,string):?array */
+	private static $googlePurchaseOverride = null;
+
+	// test seam for the play developer api round trip (mirror setClientOverride)
+	public static function setGooglePurchaseOverride(?callable $override): void
+	{
+		self::$googlePurchaseOverride = $override;
+	}
+
 	// google play developer api purchases.subscriptionsv2.get
 	private static function googleSubscriptionState(string $packageName, string $token): ?array
 	{
+		if (self::$googlePurchaseOverride !== null) {
+			return (self::$googlePurchaseOverride)($packageName, $token);
+		}
+
 		$json = self::keyValue(self::KEY_GOOGLE_SA);
 		if (!$json) {
 			return null;

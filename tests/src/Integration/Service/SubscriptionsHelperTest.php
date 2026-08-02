@@ -10,6 +10,7 @@ use Drupal\mantle2\Service\UsersHelper;
 use Drupal\Tests\mantle2\Integration\FakeStripeClient;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\UserInterface;
+use Firebase\JWT\JWT;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
@@ -88,6 +89,7 @@ class SubscriptionsHelperTest extends IntegrationTestBase
 	protected function tearDown(): void
 	{
 		SubscriptionsHelper::setClientOverride(null);
+		SubscriptionsHelper::setGooglePurchaseOverride(null);
 		parent::tearDown();
 	}
 
@@ -1397,6 +1399,1405 @@ class SubscriptionsHelperTest extends IntegrationTestBase
 		$res = SubscriptionsHelper::lookupUsersForAdmin('novalene');
 		$hits = array_filter($res['matches'], fn($m) => $m['id'] === $id);
 		$this->assertCount(1, $hits, 'a user must appear at most once');
+	}
+
+	#endregion
+
+	#region Native IAP - certificate + JWS fixtures
+
+	/** @var array<string,string> role => pem */
+	private array $chainPems = [];
+
+	/** @var array<string,\OpenSSLAsymmetricKey> role => private key */
+	private array $chainKeys = [];
+
+	private function ecKey(): \OpenSSLAsymmetricKey
+	{
+		$key = openssl_pkey_new([
+			'private_key_type' => OPENSSL_KEYTYPE_EC,
+			'curve_name' => 'prime256v1',
+			'digest_alg' => 'sha256',
+		]);
+		$this->assertNotFalse($key, 'openssl could not generate an EC key');
+		return $key;
+	}
+
+	/** signs a cert for $key; a null issuer cert makes it self-signed */
+	private function issueCert(
+		\OpenSSLAsymmetricKey $key,
+		string $cn,
+		mixed $issuerCert,
+		?\OpenSSLAsymmetricKey $issuerKey,
+		int $serial,
+	): array {
+		$csr = openssl_csr_new(
+			['countryName' => 'US', 'organizationName' => 'mantle2 test', 'commonName' => $cn],
+			$key,
+			['digest_alg' => 'sha256'],
+		);
+		$this->assertNotFalse($csr, 'openssl could not build a CSR for ' . $cn);
+
+		$cert = openssl_csr_sign(
+			$csr,
+			$issuerCert,
+			$issuerKey ?? $key,
+			3650,
+			['digest_alg' => 'sha256'],
+			$serial,
+		);
+		$this->assertNotFalse($cert, 'openssl could not sign ' . $cn);
+
+		openssl_x509_export($cert, $pem);
+		return [$cert, $pem];
+	}
+
+	/** builds root -> intermediate -> leaf under $prefix and remembers the pems + keys */
+	private function buildChain(string $prefix, int $serialBase): void
+	{
+		$rootKey = $this->ecKey();
+		[$rootCert, $rootPem] = $this->issueCert(
+			$rootKey,
+			$prefix . ' Root',
+			null,
+			null,
+			$serialBase,
+		);
+
+		$interKey = $this->ecKey();
+		[$interCert, $interPem] = $this->issueCert(
+			$interKey,
+			$prefix . ' Intermediate',
+			$rootCert,
+			$rootKey,
+			$serialBase + 1,
+		);
+
+		$leafKey = $this->ecKey();
+		[, $leafPem] = $this->issueCert(
+			$leafKey,
+			$prefix . ' Leaf',
+			$interCert,
+			$interKey,
+			$serialBase + 2,
+		);
+
+		$this->chainPems[$prefix . ':root'] = $rootPem;
+		$this->chainPems[$prefix . ':intermediate'] = $interPem;
+		$this->chainPems[$prefix . ':leaf'] = $leafPem;
+		$this->chainKeys[$prefix . ':leaf'] = $leafKey;
+	}
+
+	private function derOf(string $pem): string
+	{
+		return preg_replace('/-----[A-Z ]+-----|\s+/', '', $pem);
+	}
+
+	/** the x5c header apple sends: leaf, intermediate, root as bare base64 DER */
+	private function x5cFor(string $prefix): array
+	{
+		return [
+			$this->derOf($this->chainPems[$prefix . ':leaf']),
+			$this->derOf($this->chainPems[$prefix . ':intermediate']),
+			$this->derOf($this->chainPems[$prefix . ':root']),
+		];
+	}
+
+	private function appleJws(array $payload, ?array $x5c = null, string $signer = 'apple'): string
+	{
+		return JWT::encode($payload, $this->chainKeys[$signer . ':leaf'], 'ES256', null, [
+			'x5c' => $x5c ?? $this->x5cFor($signer),
+		]);
+	}
+
+	/** pins the generated root so appleConfigured() is satisfied */
+	private function configureApple(): void
+	{
+		$this->buildChain('apple', 100);
+		$this->seedKey(SubscriptionsHelper::KEY_APPLE_ROOT_CA, $this->chainPems['apple:root']);
+	}
+
+	private function configureGoogle(?array $purchase = null): void
+	{
+		$this->seedKey(
+			SubscriptionsHelper::KEY_GOOGLE_SA,
+			json_encode(['type' => 'service_account', 'client_email' => 'test@example.com']),
+		);
+		SubscriptionsHelper::setGooglePurchaseOverride(fn() => $purchase);
+	}
+
+	private function appleTransactionPayload(array $overrides = []): array
+	{
+		return $overrides + [
+			'bundleId' => 'com.earthapp.sky',
+			'productId' => 'com.earthapp.sky.pro.monthly',
+			'expiresDate' => (time() + 30 * 86400) * 1000,
+			'originalTransactionId' => 'apple_tx_1',
+		];
+	}
+
+	#endregion
+
+	#region Native IAP - product maps + config
+
+	#[Test]
+	#[TestDox('Apple product ids round trip to their tier and back')]
+	#[Group('mantle2/subscriptions')]
+	public function appleProductMapRoundTrips(): void
+	{
+		foreach ([AccountType::PRO, AccountType::WRITER, AccountType::ORGANIZER] as $tier) {
+			$product = SubscriptionsHelper::appleProductForTier($tier);
+			$this->assertIsString($product);
+			$this->assertSame($tier, SubscriptionsHelper::appleTierForProduct($product));
+		}
+
+		$this->assertNull(SubscriptionsHelper::appleProductForTier(AccountType::FREE));
+		$this->assertNull(SubscriptionsHelper::appleTierForProduct('com.example.unknown'));
+		$this->assertSame('com.earthapp.sky', SubscriptionsHelper::appleBundleId());
+	}
+
+	#[Test]
+	#[TestDox('Google product ids round trip to their tier and back')]
+	#[Group('mantle2/subscriptions')]
+	public function googleProductMapRoundTrips(): void
+	{
+		foreach ([AccountType::PRO, AccountType::WRITER, AccountType::ORGANIZER] as $tier) {
+			$product = SubscriptionsHelper::googleProductForTier($tier);
+			$this->assertIsString($product);
+			$this->assertSame($tier, SubscriptionsHelper::googleTierForProduct($product));
+		}
+
+		$this->assertNull(SubscriptionsHelper::googleProductForTier(AccountType::FREE));
+		$this->assertNull(SubscriptionsHelper::googleTierForProduct('sky_unknown'));
+		$this->assertSame('com.earthapp.sky', SubscriptionsHelper::googlePackageName());
+	}
+
+	#[Test]
+	#[TestDox('A PEM pasted with its newlines collapsed is normalized back into shape')]
+	#[Group('mantle2/subscriptions')]
+	public function collapsedPemIsNormalized(): void
+	{
+		$this->buildChain('apple', 100);
+		$original = $this->chainPems['apple:root'];
+		$collapsed = str_replace("\n", ' ', $original);
+
+		$this->seedKey(SubscriptionsHelper::KEY_APPLE_ROOT_CA, $collapsed);
+		$loaded = SubscriptionsHelper::appleRootCaPem();
+
+		$this->assertNotNull($loaded);
+		$this->assertSame(
+			openssl_x509_fingerprint($original, 'sha256'),
+			openssl_x509_fingerprint($loaded, 'sha256'),
+			'a single-line paste must still parse as the same certificate',
+		);
+	}
+
+	#[Test]
+	#[TestDox('A root CA value that is not a certificate leaves Apple unconfigured')]
+	#[Group('mantle2/subscriptions')]
+	public function nonCertificateRootLeavesAppleUnconfigured(): void
+	{
+		$this->assertFalse(SubscriptionsHelper::appleConfigured(), 'no root CA seeded yet');
+
+		$this->seedKey(SubscriptionsHelper::KEY_APPLE_ROOT_CA, 'not-a-certificate');
+		$this->assertNull(SubscriptionsHelper::appleRootCaPem());
+		$this->assertFalse(SubscriptionsHelper::appleConfigured());
+	}
+
+	#[Test]
+	#[TestDox('A pinned root certificate is all Apple billing needs to go live')]
+	#[Group('mantle2/subscriptions')]
+	public function pinnedRootConfiguresApple(): void
+	{
+		$this->configureApple();
+
+		$this->assertTrue(SubscriptionsHelper::appleConfigured());
+		$this->assertNotNull(SubscriptionsHelper::appleRootCaPem());
+	}
+
+	#[Test]
+	#[TestDox('normalizeCertPem returns unparseable input untouched')]
+	#[Group('mantle2/subscriptions')]
+	public function normalizeLeavesGarbageAlone(): void
+	{
+		$this->assertSame('garbage', SubscriptionsHelper::normalizeCertPem('garbage'));
+	}
+
+	#endregion
+
+	#region Native IAP - Apple verify
+
+	#[Test]
+	#[TestDox('Apple verification is refused while the root CA is missing')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRefusesWhileUnconfigured(): void
+	{
+		$result = SubscriptionsHelper::verifyAppleTransaction($this->payingUser(), [
+			'signed_payload' => 'anything',
+		]);
+		$this->assertSame(['error' => 'unconfigured'], $result);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification rejects a missing or non-string payload')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRejectsBadPayload(): void
+	{
+		$this->configureApple();
+		$user = $this->payingUser();
+
+		$this->assertSame(
+			['error' => 'bad_payload'],
+			SubscriptionsHelper::verifyAppleTransaction($user, []),
+		);
+		$this->assertSame(
+			['error' => 'bad_payload'],
+			SubscriptionsHelper::verifyAppleTransaction($user, ['signed_payload' => '']),
+		);
+		$this->assertSame(
+			['error' => 'bad_payload'],
+			SubscriptionsHelper::verifyAppleTransaction($user, ['signed_payload' => ['nope']]),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification rejects a JWS that is not three parts')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRejectsMalformedJws(): void
+	{
+		$this->configureApple();
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyAppleTransaction($this->payingUser(), [
+				'signed_payload' => 'only.two',
+			]),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification rejects a leaf-only chain')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRejectsLeafOnlyChain(): void
+	{
+		$this->configureApple();
+
+		// a lone leaf proves nothing about who issued it
+		$jws = $this->appleJws($this->appleTransactionPayload(), [
+			$this->derOf($this->chainPems['apple:leaf']),
+		]);
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyAppleTransaction($this->payingUser(), [
+				'signed_payload' => $jws,
+			]),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification rejects a chain anchored at a foreign root')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRejectsForeignRoot(): void
+	{
+		$this->configureApple();
+		// an attacker-controlled chain: internally consistent, wrong anchor
+		$this->buildChain('rogue', 200);
+
+		$jws = $this->appleJws($this->appleTransactionPayload(), $this->x5cFor('rogue'), 'rogue');
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyAppleTransaction($this->payingUser(), [
+				'signed_payload' => $jws,
+			]),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification rejects a leaf spliced onto the real chain')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRejectsSplicedLeaf(): void
+	{
+		$this->configureApple();
+		$this->buildChain('rogue', 200);
+
+		// the anchor is genuine but the leaf was not issued by the intermediate
+		$jws = $this->appleJws(
+			$this->appleTransactionPayload(),
+			[
+				$this->derOf($this->chainPems['rogue:leaf']),
+				$this->derOf($this->chainPems['apple:intermediate']),
+				$this->derOf($this->chainPems['apple:root']),
+			],
+			'rogue',
+		);
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyAppleTransaction($this->payingUser(), [
+				'signed_payload' => $jws,
+			]),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification rejects an empty certificate slot in the chain')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRejectsEmptyChainEntry(): void
+	{
+		$this->configureApple();
+
+		$jws = $this->appleJws($this->appleTransactionPayload(), [
+			$this->derOf($this->chainPems['apple:leaf']),
+			'',
+		]);
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyAppleTransaction($this->payingUser(), [
+				'signed_payload' => $jws,
+			]),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification rejects a payload for another bundle id')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRejectsForeignBundleId(): void
+	{
+		$this->configureApple();
+
+		$jws = $this->appleJws($this->appleTransactionPayload(['bundleId' => 'com.someone.else']));
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyAppleTransaction($this->payingUser(), [
+				'signed_payload' => $jws,
+			]),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification rejects a product id that maps to no tier')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRejectsUnknownProduct(): void
+	{
+		$this->configureApple();
+
+		$jws = $this->appleJws(
+			$this->appleTransactionPayload(['productId' => 'com.earthapp.sky.mystery']),
+		);
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyAppleTransaction($this->payingUser(), [
+				'signed_payload' => $jws,
+			]),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Apple verification refuses to stack on top of an active Stripe subscription')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyRefusesCrossProvider(): void
+	{
+		$this->configureApple();
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), ['provider' => 'stripe', 'status' => 'active']);
+
+		$jws = $this->appleJws($this->appleTransactionPayload());
+
+		$this->assertSame(
+			['error' => 'cross_provider', 'provider' => 'stripe'],
+			SubscriptionsHelper::verifyAppleTransaction($user, ['signed_payload' => $jws]),
+		);
+		$this->assertSame('stripe', $this->subscriptionRow((int) $user->id())['provider']);
+	}
+
+	#[Test]
+	#[TestDox('A canceled subscription on another provider does not block a new Apple purchase')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyAllowsAfterOtherProviderEnded(): void
+	{
+		$this->configureApple();
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'provider' => 'stripe',
+			'status' => 'canceled',
+		]);
+
+		$jws = $this->appleJws($this->appleTransactionPayload());
+		$result = SubscriptionsHelper::verifyAppleTransaction($user, ['signed_payload' => $jws]);
+
+		$this->assertArrayNotHasKey('error', $result);
+		$this->assertSame('apple', $this->subscriptionRow((int) $user->id())['provider']);
+	}
+
+	#[Test]
+	#[TestDox('A valid Apple transaction grants the tier and records the store subscription')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyGrantsEntitlement(): void
+	{
+		$this->configureApple();
+		$user = $this->payingUser();
+		$expires = time() + 30 * 86400;
+
+		$jws = $this->appleJws(
+			$this->appleTransactionPayload([
+				'expiresDate' => $expires * 1000,
+				'originalTransactionId' => 'apple_orig_42',
+			]),
+		);
+
+		$result = SubscriptionsHelper::verifyAppleTransaction($user, ['signed_payload' => $jws]);
+
+		$this->assertSame('pro', $result['tier']);
+		$this->assertSame('active', $result['status']);
+		$this->assertSame('apple', $result['provider']);
+		$this->assertFalse($result['can_manage_billing'], 'store subs are managed in the store');
+		$this->assertFalse($result['refund_eligible'], 'refunds are a Stripe-only path');
+
+		$row = $this->subscriptionRow((int) $user->id());
+		$this->assertSame('apple', $row['provider']);
+		$this->assertSame('pro', $row['tier']);
+		$this->assertSame('apple_orig_42', $row['external_subscription_id']);
+		$this->assertSame($expires, (int) $row['current_period_end']);
+		$this->assertSame(AccountType::PRO, UsersHelper::getAccountType($this->reload($user)));
+	}
+
+	#[Test]
+	#[TestDox('An Apple transaction with no expiry date still grants the tier')]
+	#[Group('mantle2/subscriptions')]
+	public function appleVerifyToleratesMissingExpiry(): void
+	{
+		$this->configureApple();
+		$user = $this->payingUser();
+
+		$payload = $this->appleTransactionPayload();
+		unset($payload['expiresDate']);
+		$jws = $this->appleJws($payload);
+
+		$result = SubscriptionsHelper::verifyAppleTransaction($user, ['signed_payload' => $jws]);
+
+		$this->assertSame('pro', $result['tier']);
+		$this->assertNull($this->subscriptionRow((int) $user->id())['current_period_end']);
+	}
+
+	#[Test]
+	#[TestDox('Restoring an already active Apple subscription does not re-notify')]
+	#[Group('mantle2/subscriptions')]
+	public function appleRestoreDoesNotRenotify(): void
+	{
+		$this->configureApple();
+		$user = $this->payingUser();
+
+		$jws = $this->appleJws($this->appleTransactionPayload());
+		SubscriptionsHelper::verifyAppleTransaction($user, ['signed_payload' => $jws]);
+		SubscriptionsHelper::verifyAppleTransaction($user, ['signed_payload' => $jws]);
+
+		// the purchase itself announces once; replaying it on a new device must not
+		$this->assertCount(
+			1,
+			$this->billingNotifications($user),
+			'a restore is not a second activation event',
+		);
+	}
+
+	#endregion
+
+	#region Native IAP - Apple webhook
+
+	private function appleNotification(array $payload, array $transaction): string
+	{
+		return json_encode([
+			'signedPayload' => $this->appleJws(
+				$payload + [
+					'data' => [
+						'signedTransactionInfo' => $this->appleJws(
+							$this->appleTransactionPayload($transaction),
+						),
+					],
+				],
+			),
+		]);
+	}
+
+	// the default matches appleTransactionPayload()'s originalTransactionId so the
+	// notification resolves back to this user
+	private function appleUserWithSubscription(string $externalId = 'apple_tx_1'): UserInterface
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'provider' => 'apple',
+			'status' => 'active',
+			'external_subscription_id' => $externalId,
+			'external_customer_id' => null,
+		]);
+		return $user;
+	}
+
+	#[Test]
+	#[TestDox('An Apple webhook is acknowledged even while Apple billing is unconfigured')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookAcksWhileUnconfigured(): void
+	{
+		$response = SubscriptionsHelper::handleAppleWebhook('{"signedPayload":"x"}');
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame(['received' => true], $this->decode($response));
+	}
+
+	#[Test]
+	#[TestDox('An Apple webhook without a signed payload is a bad request')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookRejectsMissingPayload(): void
+	{
+		$this->configureApple();
+
+		$this->assertSame(
+			Response::HTTP_BAD_REQUEST,
+			SubscriptionsHelper::handleAppleWebhook('{}')->getStatusCode(),
+		);
+		$this->assertSame(
+			Response::HTTP_BAD_REQUEST,
+			SubscriptionsHelper::handleAppleWebhook('not json')->getStatusCode(),
+		);
+	}
+
+	#[Test]
+	#[TestDox('An Apple webhook signed by a foreign chain is a bad request')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookRejectsForeignSignature(): void
+	{
+		$this->configureApple();
+		$this->buildChain('rogue', 200);
+
+		$body = json_encode([
+			'signedPayload' => $this->appleJws(
+				['notificationType' => 'DID_RENEW'],
+				$this->x5cFor('rogue'),
+				'rogue',
+			),
+		]);
+
+		$response = SubscriptionsHelper::handleAppleWebhook($body);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertSame(['error' => 'invalid signature'], $this->decode($response));
+	}
+
+	#[Test]
+	#[TestDox('A DID_RENEW notification renews the tier and notifies the user')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookRenews(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription();
+		$expires = time() + 60 * 86400;
+
+		$response = SubscriptionsHelper::handleAppleWebhook(
+			$this->appleNotification(
+				['notificationType' => 'DID_RENEW', 'notificationUUID' => 'uuid-renew-1'],
+				['expiresDate' => $expires * 1000],
+			),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$row = $this->subscriptionRow((int) $user->id());
+		$this->assertSame('active', $row['status']);
+		$this->assertSame($expires, (int) $row['current_period_end']);
+
+		$titles = array_map(fn($n) => $n->getTitle(), $this->billingNotifications($user));
+		$this->assertContains('Subscription Renewed', $titles);
+	}
+
+	#[Test]
+	#[TestDox('A repeated Apple notification UUID is acknowledged without reprocessing')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookDeduplicates(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription();
+
+		$body = $this->appleNotification(
+			['notificationType' => 'DID_RENEW', 'notificationUUID' => 'uuid-dupe-1'],
+			[],
+		);
+
+		SubscriptionsHelper::handleAppleWebhook($body);
+		$before = count($this->billingNotifications($user));
+
+		$second = SubscriptionsHelper::handleAppleWebhook($body);
+
+		$this->assertSame(['received' => true, 'duplicate' => true], $this->decode($second));
+		$this->assertCount($before, $this->billingNotifications($user));
+	}
+
+	#[Test]
+	#[TestDox('AUTO_RENEW_DISABLED flags the subscription to lapse at period end')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookDisablesAutoRenew(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription();
+
+		SubscriptionsHelper::handleAppleWebhook(
+			$this->appleNotification(
+				[
+					'notificationType' => 'DID_CHANGE_RENEWAL_STATUS',
+					'subtype' => 'AUTO_RENEW_DISABLED',
+					'notificationUUID' => 'uuid-renewal-off',
+				],
+				[],
+			),
+		);
+
+		$row = $this->subscriptionRow((int) $user->id());
+		$this->assertSame(1, (int) $row['cancel_at_period_end']);
+		$this->assertSame('active', $row['status'], 'access continues until the period ends');
+	}
+
+	#[Test]
+	#[TestDox('AUTO_RENEW_ENABLED clears the pending lapse')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookReenablesAutoRenew(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription();
+		SubscriptionsHelper::upsertSubscriptionRow((int) $user->id(), [
+			'cancel_at_period_end' => 1,
+		]);
+
+		SubscriptionsHelper::handleAppleWebhook(
+			$this->appleNotification(
+				[
+					'notificationType' => 'DID_CHANGE_RENEWAL_STATUS',
+					'subtype' => 'AUTO_RENEW_ENABLED',
+					'notificationUUID' => 'uuid-renewal-on',
+				],
+				[],
+			),
+		);
+
+		$this->assertSame(
+			0,
+			(int) $this->subscriptionRow((int) $user->id())['cancel_at_period_end'],
+		);
+	}
+
+	#[Test]
+	#[TestDox('An EXPIRED notification revokes the entitlement')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookExpires(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription();
+
+		SubscriptionsHelper::handleAppleWebhook(
+			$this->appleNotification(
+				['notificationType' => 'EXPIRED', 'notificationUUID' => 'uuid-expired'],
+				[],
+			),
+		);
+
+		$this->assertSame('canceled', $this->subscriptionRow((int) $user->id())['status']);
+		$this->assertSame(AccountType::FREE, UsersHelper::getAccountType($this->reload($user)));
+	}
+
+	#[Test]
+	#[TestDox('A REFUND notification marks the subscription refunded')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookRefunds(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription();
+
+		SubscriptionsHelper::handleAppleWebhook(
+			$this->appleNotification(
+				['notificationType' => 'REFUND', 'notificationUUID' => 'uuid-refund'],
+				[],
+			),
+		);
+
+		$this->assertSame('refunded', $this->subscriptionRow((int) $user->id())['status']);
+		$this->assertSame(AccountType::FREE, UsersHelper::getAccountType($this->reload($user)));
+	}
+
+	#[Test]
+	#[TestDox('An unrecognised Apple notification type changes nothing')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookIgnoresUnknownType(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription();
+
+		SubscriptionsHelper::handleAppleWebhook(
+			$this->appleNotification(
+				['notificationType' => 'CONSUMPTION_REQUEST', 'notificationUUID' => 'uuid-x'],
+				[],
+			),
+		);
+
+		$this->assertSame('active', $this->subscriptionRow((int) $user->id())['status']);
+	}
+
+	#[Test]
+	#[TestDox('An Apple notification for an unknown transaction is acknowledged and ignored')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookIgnoresUnknownTransaction(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription('apple_orig_known');
+
+		$response = SubscriptionsHelper::handleAppleWebhook(
+			$this->appleNotification(
+				['notificationType' => 'EXPIRED', 'notificationUUID' => 'uuid-unknown-tx'],
+				['originalTransactionId' => 'apple_orig_stranger'],
+			),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame('active', $this->subscriptionRow((int) $user->id())['status']);
+	}
+
+	#[Test]
+	#[TestDox('An Apple notification with no transaction info is acknowledged and ignored')]
+	#[Group('mantle2/subscriptions')]
+	public function appleWebhookIgnoresMissingTransactionInfo(): void
+	{
+		$this->configureApple();
+		$user = $this->appleUserWithSubscription();
+
+		$body = json_encode([
+			'signedPayload' => $this->appleJws([
+				'notificationType' => 'EXPIRED',
+				'notificationUUID' => 'uuid-no-tx',
+			]),
+		]);
+
+		$this->assertSame(
+			Response::HTTP_OK,
+			SubscriptionsHelper::handleAppleWebhook($body)->getStatusCode(),
+		);
+		$this->assertSame('active', $this->subscriptionRow((int) $user->id())['status']);
+	}
+
+	#endregion
+
+	#region Native IAP - Google verify
+
+	private function googlePurchase(string $state, ?string $expiry = null): array
+	{
+		$purchase = ['subscriptionState' => $state];
+		if ($expiry !== null) {
+			$purchase['lineItems'] = [['expiryTime' => $expiry]];
+		}
+		return $purchase;
+	}
+
+	private function googlePayload(array $overrides = []): array
+	{
+		return $overrides + [
+			'purchase_token' => 'gp_token_1',
+			'product_id' => 'sky_pro_monthly',
+			'package_name' => 'com.earthapp.sky',
+		];
+	}
+
+	#[Test]
+	#[TestDox('Google verification is refused while the service account is missing')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyRefusesWhileUnconfigured(): void
+	{
+		$this->assertSame(
+			['error' => 'unconfigured'],
+			SubscriptionsHelper::verifyGoogleTransaction(
+				$this->payingUser(),
+				$this->googlePayload(),
+			),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Google verification rejects a missing purchase token or product id')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyRejectsBadPayload(): void
+	{
+		$this->configureGoogle();
+		$user = $this->payingUser();
+
+		foreach (
+			[['purchase_token' => ''], ['purchase_token' => null], ['product_id' => null]]
+			as $override
+		) {
+			$this->assertSame(
+				['error' => 'bad_payload'],
+				SubscriptionsHelper::verifyGoogleTransaction(
+					$user,
+					array_merge($this->googlePayload(), $override),
+				),
+			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('Google verification rejects a purchase from another package')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyRejectsForeignPackage(): void
+	{
+		$this->configureGoogle();
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyGoogleTransaction(
+				$this->payingUser(),
+				$this->googlePayload(['package_name' => 'com.someone.else']),
+			),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Google verification rejects a product id that maps to no tier')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyRejectsUnknownProduct(): void
+	{
+		$this->configureGoogle();
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyGoogleTransaction(
+				$this->payingUser(),
+				$this->googlePayload(['product_id' => 'sky_mystery_monthly']),
+			),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Google verification rejects a token Play will not confirm')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyRejectsUnconfirmedToken(): void
+	{
+		$this->configureGoogle(null);
+
+		$this->assertSame(
+			['error' => 'validation'],
+			SubscriptionsHelper::verifyGoogleTransaction(
+				$this->payingUser(),
+				$this->googlePayload(),
+			),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Google verification rejects a subscription that is not currently entitled')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyRejectsInactiveState(): void
+	{
+		foreach (
+			[
+				'SUBSCRIPTION_STATE_CANCELED',
+				'SUBSCRIPTION_STATE_EXPIRED',
+				'SUBSCRIPTION_STATE_PAUSED',
+			]
+			as $state
+		) {
+			$this->configureGoogle($this->googlePurchase($state));
+
+			$this->assertSame(
+				['error' => 'validation'],
+				SubscriptionsHelper::verifyGoogleTransaction(
+					$this->payingUser(),
+					$this->googlePayload(),
+				),
+				$state . ' must not entitle',
+			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('Google verification refuses to stack on top of an active Stripe subscription')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyRefusesCrossProvider(): void
+	{
+		$this->configureGoogle($this->googlePurchase('SUBSCRIPTION_STATE_ACTIVE'));
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), ['provider' => 'stripe', 'status' => 'active']);
+
+		$this->assertSame(
+			['error' => 'cross_provider', 'provider' => 'stripe'],
+			SubscriptionsHelper::verifyGoogleTransaction($user, $this->googlePayload()),
+		);
+	}
+
+	#[Test]
+	#[TestDox('A valid Google purchase grants the tier and records the purchase token')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyGrantsEntitlement(): void
+	{
+		$expiry = time() + 30 * 86400;
+		$this->configureGoogle(
+			$this->googlePurchase('SUBSCRIPTION_STATE_ACTIVE', gmdate('c', $expiry)),
+		);
+		$user = $this->payingUser();
+
+		$result = SubscriptionsHelper::verifyGoogleTransaction(
+			$user,
+			$this->googlePayload(['product_id' => 'sky_writer_monthly']),
+		);
+
+		$this->assertSame('writer', $result['tier']);
+		$this->assertSame('active', $result['status']);
+		$this->assertSame('google', $result['provider']);
+
+		$row = $this->subscriptionRow((int) $user->id());
+		$this->assertSame('gp_token_1', $row['external_subscription_id']);
+		$this->assertSame($expiry, (int) $row['current_period_end']);
+		$this->assertSame(AccountType::WRITER, UsersHelper::getAccountType($this->reload($user)));
+	}
+
+	#[Test]
+	#[TestDox('A Google subscription in its grace period still entitles')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyAcceptsGracePeriod(): void
+	{
+		$this->configureGoogle($this->googlePurchase('SUBSCRIPTION_STATE_IN_GRACE_PERIOD'));
+		$user = $this->payingUser();
+
+		$result = SubscriptionsHelper::verifyGoogleTransaction($user, $this->googlePayload());
+
+		$this->assertSame('pro', $result['tier']);
+		$this->assertNull($this->subscriptionRow((int) $user->id())['current_period_end']);
+	}
+
+	#[Test]
+	#[TestDox('The package name defaults to the configured one when the client omits it')]
+	#[Group('mantle2/subscriptions')]
+	public function googleVerifyDefaultsThePackageName(): void
+	{
+		$seen = null;
+		$this->seedKey(
+			SubscriptionsHelper::KEY_GOOGLE_SA,
+			json_encode(['type' => 'service_account']),
+		);
+		SubscriptionsHelper::setGooglePurchaseOverride(function ($package, $token) use (&$seen) {
+			$seen = [$package, $token];
+			return $this->googlePurchase('SUBSCRIPTION_STATE_ACTIVE');
+		});
+
+		$payload = $this->googlePayload();
+		unset($payload['package_name']);
+		SubscriptionsHelper::verifyGoogleTransaction($this->payingUser(), $payload);
+
+		$this->assertSame(['com.earthapp.sky', 'gp_token_1'], $seen);
+	}
+
+	#endregion
+
+	#region Native IAP - Google webhook
+
+	private function googleNotification(array $subscriptionNotification, string $messageId): string
+	{
+		return json_encode([
+			'message' => [
+				'messageId' => $messageId,
+				'data' => base64_encode(
+					json_encode(['subscriptionNotification' => $subscriptionNotification]),
+				),
+			],
+		]);
+	}
+
+	private function googleUserWithSubscription(string $token = 'gp_token_1'): UserInterface
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'provider' => 'google',
+			'status' => 'active',
+			'external_subscription_id' => $token,
+			'external_customer_id' => null,
+		]);
+		return $user;
+	}
+
+	#[Test]
+	#[TestDox('A Google webhook is acknowledged even while Google billing is unconfigured')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookAcksWhileUnconfigured(): void
+	{
+		$response = SubscriptionsHelper::handleGoogleWebhook('{"message":{}}');
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame(['received' => true], $this->decode($response));
+	}
+
+	#[Test]
+	#[TestDox('A Pub/Sub push with no message envelope is still acknowledged')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookAcksEmptyEnvelope(): void
+	{
+		$this->configureGoogle();
+
+		$this->assertSame(
+			Response::HTTP_OK,
+			SubscriptionsHelper::handleGoogleWebhook('{}')->getStatusCode(),
+		);
+		$this->assertSame(
+			Response::HTTP_OK,
+			SubscriptionsHelper::handleGoogleWebhook('not json')->getStatusCode(),
+		);
+	}
+
+	#[Test]
+	#[TestDox('A renewal notification renews the tier and notifies the user')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookRenews(): void
+	{
+		$this->configureGoogle();
+		$user = $this->googleUserWithSubscription();
+
+		$response = SubscriptionsHelper::handleGoogleWebhook(
+			$this->googleNotification(
+				[
+					'purchaseToken' => 'gp_token_1',
+					'notificationType' => 2,
+					'subscriptionId' => 'sky_pro_monthly',
+				],
+				'msg-renew-1',
+			),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame('active', $this->subscriptionRow((int) $user->id())['status']);
+
+		$titles = array_map(fn($n) => $n->getTitle(), $this->billingNotifications($user));
+		$this->assertContains('Subscription Renewed', $titles);
+	}
+
+	#[Test]
+	#[TestDox('A repeated Pub/Sub message id is acknowledged without reprocessing')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookDeduplicates(): void
+	{
+		$this->configureGoogle();
+		$user = $this->googleUserWithSubscription();
+
+		$body = $this->googleNotification(
+			[
+				'purchaseToken' => 'gp_token_1',
+				'notificationType' => 2,
+				'subscriptionId' => 'sky_pro_monthly',
+			],
+			'msg-dupe-1',
+		);
+
+		SubscriptionsHelper::handleGoogleWebhook($body);
+		$before = count($this->billingNotifications($user));
+
+		$this->assertSame(
+			['received' => true, 'duplicate' => true],
+			$this->decode(SubscriptionsHelper::handleGoogleWebhook($body)),
+		);
+		$this->assertCount($before, $this->billingNotifications($user));
+	}
+
+	#[Test]
+	#[TestDox('A cancel notification lapses the subscription at period end')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookCancels(): void
+	{
+		$this->configureGoogle();
+		$user = $this->googleUserWithSubscription();
+
+		SubscriptionsHelper::handleGoogleWebhook(
+			$this->googleNotification(
+				['purchaseToken' => 'gp_token_1', 'notificationType' => 3],
+				'msg-cancel-1',
+			),
+		);
+
+		$row = $this->subscriptionRow((int) $user->id());
+		$this->assertSame(1, (int) $row['cancel_at_period_end']);
+		$this->assertSame('active', $row['status']);
+	}
+
+	#[Test]
+	#[TestDox('Revoked and expired notifications both end the entitlement')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookRevokesAndExpires(): void
+	{
+		foreach ([12, 13] as $index => $type) {
+			$this->configureGoogle();
+			$token = 'gp_token_end_' . $type;
+			$user = $this->googleUserWithSubscription($token);
+
+			SubscriptionsHelper::handleGoogleWebhook(
+				$this->googleNotification(
+					['purchaseToken' => $token, 'notificationType' => $type],
+					'msg-end-' . $type,
+				),
+			);
+
+			$this->assertSame(
+				'canceled',
+				$this->subscriptionRow((int) $user->id())['status'],
+				'notificationType ' . $type . ' must end access',
+			);
+			$this->assertSame(AccountType::FREE, UsersHelper::getAccountType($this->reload($user)));
+		}
+	}
+
+	#[Test]
+	#[TestDox('A notification for an unknown purchase token is acknowledged and ignored')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookIgnoresUnknownToken(): void
+	{
+		$this->configureGoogle();
+		$user = $this->googleUserWithSubscription('gp_token_known');
+
+		SubscriptionsHelper::handleGoogleWebhook(
+			$this->googleNotification(
+				['purchaseToken' => 'gp_token_stranger', 'notificationType' => 13],
+				'msg-stranger',
+			),
+		);
+
+		$this->assertSame('active', $this->subscriptionRow((int) $user->id())['status']);
+	}
+
+	#[Test]
+	#[TestDox('A notification with no subscription block or token is ignored')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookIgnoresMalformedNotification(): void
+	{
+		$this->configureGoogle();
+		$user = $this->googleUserWithSubscription();
+
+		$envelope = fn(array $notification, string $id) => json_encode([
+			'message' => ['messageId' => $id, 'data' => base64_encode(json_encode($notification))],
+		]);
+
+		SubscriptionsHelper::handleGoogleWebhook($envelope(['other' => true], 'msg-a'));
+		SubscriptionsHelper::handleGoogleWebhook(
+			$envelope(['subscriptionNotification' => ['notificationType' => 13]], 'msg-b'),
+		);
+
+		$this->assertSame('active', $this->subscriptionRow((int) $user->id())['status']);
+	}
+
+	#[Test]
+	#[TestDox('An undecodable Pub/Sub data blob is acknowledged without dispatch')]
+	#[Group('mantle2/subscriptions')]
+	public function googleWebhookIgnoresUndecodableData(): void
+	{
+		$this->configureGoogle();
+		$user = $this->googleUserWithSubscription();
+
+		$response = SubscriptionsHelper::handleGoogleWebhook(
+			json_encode(['message' => ['messageId' => 'msg-bad', 'data' => '!!!not base64!!!']]),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame('active', $this->subscriptionRow((int) $user->id())['status']);
+	}
+
+	#endregion
+
+	#region Reconcile (cron)
+
+	private function billingTitles(UserInterface $user): array
+	{
+		return array_values(
+			array_map(fn($n) => $n->getTitle(), $this->billingNotifications($user)),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Reconcile revokes a canceled subscription once its period has passed')]
+	#[Group('mantle2/subscriptions')]
+	public function reconcileRevokesLapsedSubscription(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() - 86400,
+			'cancel_at_period_end' => 1,
+		]);
+
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame('canceled', $this->subscriptionRow((int) $user->id())['status']);
+		$this->assertSame(AccountType::FREE, UsersHelper::getAccountType($this->reload($user)));
+	}
+
+	#[Test]
+	#[TestDox('Reconcile leaves a lapsed subscription alone when it was set to auto-renew')]
+	#[Group('mantle2/subscriptions')]
+	public function reconcileKeepsAutoRenewingSubscription(): void
+	{
+		// the provider webhook owns the renewal; cron must not race it into a downgrade
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() - 86400,
+			'cancel_at_period_end' => 0,
+		]);
+
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame('active', $this->subscriptionRow((int) $user->id())['status']);
+	}
+
+	#[Test]
+	#[TestDox('Reconcile warns once when a renewal is within three days')]
+	#[Group('mantle2/subscriptions')]
+	public function reconcileSendsOneRenewalReminder(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() + 2 * 86400,
+			'cancel_at_period_end' => 0,
+		]);
+
+		SubscriptionsHelper::reconcile();
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame(['Subscription Renews Soon'], $this->billingTitles($user));
+	}
+
+	#[Test]
+	#[TestDox('Reconcile does not warn about a renewal that is still weeks away')]
+	#[Group('mantle2/subscriptions')]
+	public function reconcileStaysQuietOutsideTheReminderWindow(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() + 20 * 86400,
+			'cancel_at_period_end' => 0,
+		]);
+
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame([], $this->billingTitles($user));
+	}
+
+	#[Test]
+	#[TestDox('Reconcile does not warn about a renewal that will not happen')]
+	#[Group('mantle2/subscriptions')]
+	public function reconcileStaysQuietForACancelledRenewal(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() + 2 * 86400,
+			'cancel_at_period_end' => 1,
+		]);
+
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame([], $this->billingTitles($user));
+	}
+
+	#[Test]
+	#[TestDox('Reconcile skips subscriptions that are already over')]
+	#[Group('mantle2/subscriptions')]
+	public function reconcileSkipsInactiveRows(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'status' => 'canceled',
+			'current_period_end' => time() + 2 * 86400,
+		]);
+
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame([], $this->billingTitles($user));
+	}
+
+	#[Test]
+	#[TestDox('An upcoming price change is announced once per milestone')]
+	#[Group('mantle2/subscriptions')]
+	public function priceChangeNoticeFiresOncePerMilestone(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() + 60 * 86400,
+		]);
+
+		RedisHelper::set(
+			'billing:price_change:' . $user->id(),
+			[
+				'effective_at' => time() + 20 * 86400,
+				'old_cents' => 599,
+				'new_cents' => 699,
+			],
+			90 * 86400,
+		);
+
+		SubscriptionsHelper::reconcile();
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame(['Upcoming Price Change'], $this->billingTitles($user));
+		$this->assertTrue(
+			RedisHelper::exists('billing:price_change_sent:' . $user->id() . ':30'),
+			'the 30-day milestone must be marked as sent',
+		);
+	}
+
+	#[Test]
+	#[TestDox('A price change crossing into a nearer milestone is announced again')]
+	#[Group('mantle2/subscriptions')]
+	public function priceChangeNoticeRepeatsAtACloserMilestone(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() + 60 * 86400,
+		]);
+		$flagKey = 'billing:price_change:' . $user->id();
+
+		RedisHelper::set($flagKey, ['effective_at' => time() + 20 * 86400], 90 * 86400);
+		SubscriptionsHelper::reconcile();
+
+		// the change is now days away rather than weeks, which is worth saying again
+		RedisHelper::set($flagKey, ['effective_at' => time() + 5 * 86400], 90 * 86400);
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame(
+			['Upcoming Price Change', 'Upcoming Price Change'],
+			$this->billingTitles($user),
+		);
+		$this->assertTrue(RedisHelper::exists('billing:price_change_sent:' . $user->id() . ':7'));
+	}
+
+	#[Test]
+	#[TestDox('A price change further out than a month is not announced yet')]
+	#[Group('mantle2/subscriptions')]
+	public function priceChangeNoticeWaitsForTheFirstMilestone(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() + 90 * 86400,
+		]);
+
+		RedisHelper::set(
+			'billing:price_change:' . $user->id(),
+			['effective_at' => time() + 45 * 86400],
+			90 * 86400,
+		);
+
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame([], $this->billingTitles($user));
+	}
+
+	#[Test]
+	#[TestDox('A price change flag with no effective date is ignored')]
+	#[Group('mantle2/subscriptions')]
+	public function priceChangeNoticeIgnoresAFlagWithNoDate(): void
+	{
+		$user = $this->payingUser();
+		$this->seedSubscription((int) $user->id(), [
+			'current_period_end' => time() + 60 * 86400,
+		]);
+
+		RedisHelper::set('billing:price_change:' . $user->id(), ['old_cents' => 599], 86400);
+
+		SubscriptionsHelper::reconcile();
+
+		$this->assertSame([], $this->billingTitles($user));
 	}
 
 	#endregion
