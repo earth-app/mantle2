@@ -1469,4 +1469,126 @@ class AuthAccountHelperTest extends IntegrationTestBase
 	}
 
 	#endregion
+
+	#region Account Trial Expiry Sweep
+
+	private const TRIAL_GRACE = 7 * 86400;
+
+	// writes the trial key checkAccountTrials() sweeps; the stored ttl is the trial
+	// length plus a week of grace, so remaining = ttl - grace
+	private function seedTrial(UserInterface $user, int $secondsRemaining): string
+	{
+		$key = 'user:account_trial:' . $user->id();
+		RedisHelper::set(
+			$key,
+			[
+				'old_type' => 'FREE',
+				'old_type_ordinal' => array_search(AccountType::FREE, AccountType::cases(), true),
+				'new_type' => 'PRO',
+				'new_type_ordinal' => array_search(AccountType::PRO, AccountType::cases(), true),
+			],
+			self::TRIAL_GRACE + $secondsRemaining,
+		);
+		return $key;
+	}
+
+	private function trialTitles(UserInterface $user): array
+	{
+		return array_map(
+			fn($n) => $n->getTitle(),
+			UsersHelper::getNotifications(User::load($user->id())),
+		);
+	}
+
+	#[Test]
+	#[TestDox('A trial with a day left warns the user exactly once')]
+	#[Group('mantle2/users')]
+	public function trialWarnsOnceBeforeExpiry(): void
+	{
+		$user = $this->typed(AccountType::PRO);
+		$this->seedTrial($user, 43200);
+
+		UsersHelper::checkAccountTrials();
+		UsersHelper::checkAccountTrials();
+
+		$this->assertSame(['Account Trial Ending Soon'], $this->trialTitles($user));
+		$this->assertTrue(
+			RedisHelper::exists('user:account_trial_warning:' . $user->id() . ':pro'),
+		);
+		$this->assertSame(
+			AccountType::PRO,
+			UsersHelper::getAccountType(User::load($user->id())),
+			'the warning must not downgrade anyone',
+		);
+	}
+
+	#[Test]
+	#[TestDox('A trial with weeks left says nothing')]
+	#[Group('mantle2/users')]
+	public function trialStaysQuietWhileItRuns(): void
+	{
+		$user = $this->typed(AccountType::PRO);
+		$this->seedTrial($user, 10 * 86400);
+
+		UsersHelper::checkAccountTrials();
+
+		$this->assertSame([], $this->trialTitles($user));
+		$this->assertSame(AccountType::PRO, UsersHelper::getAccountType(User::load($user->id())));
+	}
+
+	#[Test]
+	#[TestDox('An expired trial downgrades the account and clears the key')]
+	#[Group('mantle2/users')]
+	public function expiredTrialDowngradesTheAccount(): void
+	{
+		// regression: RedisHelper::list() returned nothing in cache-fallback mode, so
+		// this sweep found no trials at all and every trial ran forever
+		$user = $this->typed(AccountType::PRO);
+		$key = $this->seedTrial($user, -100);
+
+		UsersHelper::checkAccountTrials();
+
+		$this->assertSame(AccountType::FREE, UsersHelper::getAccountType(User::load($user->id())));
+		$this->assertContains('Account Trial Expired', $this->trialTitles($user));
+		$this->assertNull(RedisHelper::get($key), 'the trial key is consumed');
+	}
+
+	#[Test]
+	#[TestDox('A trial key whose user is gone is skipped without throwing')]
+	#[Group('mantle2/users')]
+	public function orphanedTrialKeyIsSkipped(): void
+	{
+		RedisHelper::set(
+			'user:account_trial:999999',
+			['old_type' => 'FREE', 'old_type_ordinal' => 0, 'new_type' => 'PRO'],
+			self::TRIAL_GRACE - 100,
+		);
+
+		UsersHelper::checkAccountTrials();
+
+		$this->assertTrue(RedisHelper::exists('user:account_trial:999999'));
+	}
+
+	#[Test]
+	#[TestDox('createTierTrial and the sweep round trip an upgrade back to the old tier')]
+	#[Group('mantle2/users')]
+	public function trialRoundTripsThroughTheSweep(): void
+	{
+		$user = $this->typed(AccountType::FREE);
+		UsersHelper::createTierTrial($user, AccountType::WRITER, 7);
+
+		$this->assertSame(
+			AccountType::WRITER,
+			UsersHelper::getAccountType(User::load($user->id())),
+		);
+
+		// fast-forward by rewriting the key's ttl past the end of the trial
+		$key = 'user:account_trial:' . $user->id();
+		RedisHelper::set($key, RedisHelper::get($key), self::TRIAL_GRACE - 100);
+		UsersHelper::checkAccountTrials();
+
+		$this->assertSame(AccountType::FREE, UsersHelper::getAccountType(User::load($user->id())));
+	}
+
+	#endregion
 }

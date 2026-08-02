@@ -5,6 +5,8 @@ namespace Drupal\Tests\mantle2\Integration\Service\Users;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Service\ActivityHelper;
+use Drupal\mantle2\Service\CloudHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\Entity\Node;
@@ -28,6 +30,12 @@ class EngagementHelperTest extends IntegrationTestBase
 		// websocket fan-out in addNotification and badge/quest reads inert
 		$this->setSetting('mantle2.cloud_endpoint', 'http://127.0.0.1:1');
 		\Drupal::state()->set('system.test_mail_collector', []);
+	}
+
+	protected function tearDown(): void
+	{
+		CloudHelper::setRequestOverride(null);
+		parent::tearDown();
 	}
 
 	private function mail(): array
@@ -958,6 +966,260 @@ class EngagementHelperTest extends IntegrationTestBase
 		$user = $this->createUser();
 		$this->assertSame([], UsersHelper::getBadge($user, 'anything'));
 		$this->assertFalse(UsersHelper::isBadgeGranted($user, 'anything'));
+	}
+
+	#endregion
+
+	#region Badge Sweep (cron)
+
+	/** @var array<int,array{path:string,method:string,data:array}> */
+	private array $cloudCalls = [];
+
+	private function captureCloud(): void
+	{
+		$this->cloudCalls = [];
+		CloudHelper::setRequestOverride(function (string $path, string $method, array $data) {
+			$this->cloudCalls[] = ['path' => $path, 'method' => $method, 'data' => $data];
+			return [];
+		});
+	}
+
+	/** uid => [badge ids granted to that user] */
+	private function grantsByUser(): array
+	{
+		$grants = [];
+		foreach ($this->cloudCalls as $call) {
+			if (preg_match('#^/v1/users/badges/0*(\d+)/([^/]+)/grant$#', $call['path'], $m)) {
+				$grants[(int) $m[1]][] = $m[2];
+			}
+		}
+		return $grants;
+	}
+
+	private function grantsFor(UserInterface $user): array
+	{
+		return $this->grantsByUser()[(int) $user->id()] ?? [];
+	}
+
+	private function aged(int $secondsOld, array $values = []): UserInterface
+	{
+		return $this->createUser(['created' => time() - $secondsOld] + $values);
+	}
+
+	#[Test]
+	#[TestDox('The sweep grants verified once and marks the account for four hours')]
+	#[Group('mantle2/users')]
+	public function sweepGrantsVerifiedOnce(): void
+	{
+		$user = $this->createUser(['field_email_verified' => true]);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+		UsersHelper::checkBadges();
+
+		$this->assertSame(['verified'], $this->grantsFor($user));
+		$this->assertTrue(
+			RedisHelper::exists('badge_check_verified_' . GeneralHelper::formatId($user->id())),
+		);
+	}
+
+	#[Test]
+	#[TestDox('An unverified account is never granted the verified badge')]
+	#[Group('mantle2/users')]
+	public function sweepSkipsUnverifiedAccounts(): void
+	{
+		$user = $this->createUser();
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertNotContains('verified', $this->grantsFor($user));
+	}
+
+	#[Test]
+	#[TestDox('Account-age badges are granted cumulatively as the account gets older')]
+	#[Group('mantle2/users')]
+	public function sweepGrantsAccountAgeBadges(): void
+	{
+		$fresh = $this->aged(30 * 86400);
+		$sixMonths = $this->aged(200 * 86400);
+		$oneYear = $this->aged(400 * 86400);
+		$threeYears = $this->aged(4 * 365 * 86400);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertSame([], $this->grantsFor($fresh));
+		$this->assertSame(['early_adopter'], $this->grantsFor($sixMonths));
+		$this->assertEqualsCanonicalizing(
+			['old_account', 'early_adopter'],
+			$this->grantsFor($oneYear),
+		);
+		$this->assertEqualsCanonicalizing(
+			['old_account_2', 'old_account', 'early_adopter'],
+			$this->grantsFor($threeYears),
+		);
+	}
+
+	#[Test]
+	#[TestDox('An account-age badge is not re-granted while its daily marker stands')]
+	#[Group('mantle2/users')]
+	public function sweepDoesNotRegrantAgeBadges(): void
+	{
+		$user = $this->aged(400 * 86400);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+		UsersHelper::checkBadges();
+
+		$this->assertEqualsCanonicalizing(
+			['old_account', 'early_adopter'],
+			$this->grantsFor($user),
+		);
+	}
+
+	#[Test]
+	#[TestDox('The sweep backfills you_know_ball for an existing friendship with an admin')]
+	#[Group('mantle2/users')]
+	public function sweepBackfillsAdminFriendship(): void
+	{
+		// the live trigger only fires on a new add, so pre-existing graphs need the sweep
+		$admin = $this->createUser([
+			'field_account_type' => (string) array_search(
+				AccountType::ADMINISTRATOR,
+				AccountType::cases(),
+				true,
+			),
+		]);
+		$fan = $this->createUser(['field_friends' => json_encode([(int) $admin->id()])]);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertContains('you_know_ball', $this->grantsFor($fan));
+	}
+
+	#[Test]
+	#[TestDox('The sweep backfills you_know_ball when the admin did the adding')]
+	#[Group('mantle2/users')]
+	public function sweepBackfillsReverseAdminFriendship(): void
+	{
+		$fan = $this->createUser();
+		$this->createUser([
+			'field_account_type' => (string) array_search(
+				AccountType::ADMINISTRATOR,
+				AccountType::cases(),
+				true,
+			),
+			'field_friends' => json_encode([(int) $fan->id()]),
+		]);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertContains(
+			'you_know_ball',
+			$this->grantsFor($fan),
+			'the friendship counts in either direction',
+		);
+	}
+
+	#[Test]
+	#[TestDox('The sweep backfills outreacher for a friend in another country')]
+	#[Group('mantle2/users')]
+	public function sweepBackfillsCrossBorderFriendship(): void
+	{
+		$abroad = $this->createUser(['field_country' => 'CA']);
+		$local = $this->createUser([
+			'field_country' => 'US',
+			'field_friends' => json_encode([(int) $abroad->id()]),
+		]);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertContains('outreacher', $this->grantsFor($local));
+		$this->assertContains(
+			'outreacher',
+			$this->grantsFor($abroad),
+			'the reverse edge earns it too',
+		);
+	}
+
+	#[Test]
+	#[TestDox('A same-country friendship never earns outreacher')]
+	#[Group('mantle2/users')]
+	public function sweepSkipsSameCountryFriendship(): void
+	{
+		$other = $this->createUser(['field_country' => 'US']);
+		$local = $this->createUser([
+			'field_country' => 'US',
+			'field_friends' => json_encode([(int) $other->id()]),
+		]);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertNotContains('outreacher', $this->grantsFor($local));
+	}
+
+	#[Test]
+	#[TestDox('A user with no country never earns outreacher')]
+	#[Group('mantle2/users')]
+	public function sweepSkipsCountrylessUsers(): void
+	{
+		// field_country defaults to US, so an unknown country has to be stored empty
+		$abroad = $this->createUser(['field_country' => 'CA']);
+		$local = $this->createUser([
+			'field_country' => '',
+			'field_friends' => json_encode([(int) $abroad->id()]),
+		]);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertNotContains('outreacher', $this->grantsFor($local));
+		$this->assertNotContains(
+			'outreacher',
+			$this->grantsFor($abroad),
+			'a friend with no country on file proves nothing either way',
+		);
+	}
+
+	#[Test]
+	#[TestDox('A friendless account is marked checked without any grant')]
+	#[Group('mantle2/users')]
+	public function sweepMarksFriendlessAccounts(): void
+	{
+		$loner = $this->createUser(['field_country' => 'US']);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertSame([], $this->grantsFor($loner));
+		$this->assertTrue(
+			RedisHelper::exists(
+				'badge_check_friend_based_' . GeneralHelper::formatId($loner->id()),
+			),
+		);
+	}
+
+	#[Test]
+	#[TestDox('A malformed friends list does not break the sweep')]
+	#[Group('mantle2/users')]
+	public function sweepToleratesMalformedFriendLists(): void
+	{
+		$user = $this->createUser(['field_country' => 'US', 'field_friends' => 'not json']);
+		$selfRef = $this->createUser([
+			'field_country' => 'US',
+			'field_friends' => json_encode([0, 'abc']),
+		]);
+		$this->captureCloud();
+
+		UsersHelper::checkBadges();
+
+		$this->assertSame([], $this->grantsFor($user));
+		$this->assertSame([], $this->grantsFor($selfRef));
 	}
 
 	#endregion
