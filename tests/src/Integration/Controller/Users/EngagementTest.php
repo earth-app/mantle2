@@ -4,6 +4,7 @@ namespace Drupal\Tests\mantle2\Integration\Controller\Users;
 
 use Drupal\mantle2\Controller\UsersController;
 use Drupal\mantle2\Custom\AccountType;
+use Drupal\mantle2\Custom\MailCategory;
 use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\RedisHelper;
@@ -380,15 +381,65 @@ class EngagementTest extends IntegrationTestBase
 		$user = $this->createUser();
 		$token = UsersHelper::generateUnsubscribeToken($user);
 
-		$ok = $this->controller()->publicUnsubscribe(
+		// a GET is a human following the body link, so it renders a confirmation and mutates
+		// NOTHING; otherwise any link scanner crawling the email could unsubscribe them
+		$page = $this->controller()->publicUnsubscribe(
 			$this->request('GET', '/v2/users/unsubscribe?token=' . $token),
 		);
+		$this->assertSame(Response::HTTP_OK, $page->getStatusCode());
+		$this->assertStringContainsString(
+			'text/html',
+			(string) $page->headers->get('Content-Type'),
+		);
+		$this->assertStringContainsString('Confirm Unsubscribe', $page->getContent());
+		$this->assertTrue(
+			UsersHelper::isSubscribed(UsersHelper::findById((int) $user->id())),
+			'A GET must never change the subscription.',
+		);
+		$this->assertNotNull(
+			UsersHelper::validateUnsubscribeToken($token),
+			'A GET must not consume the token.',
+		);
+
+		// the POST is the RFC 8058 one-click path: it mutates and returns JSON with no redirect
+		$ok = $this->controller()->publicUnsubscribe(
+			$this->request('POST', '/v2/users/unsubscribe?token=' . $token),
+		);
 		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertFalse(
+			$ok->isRedirection(),
+			'RFC 8058 forbids redirecting the one-click POST.',
+		);
 		$this->assertFalse($this->decode($ok)['subscribed']);
 		$this->assertFalse(UsersHelper::isSubscribed(UsersHelper::findById((int) $user->id())));
 
 		// token is single-use: revoked after consumption
 		$this->assertNull(UsersHelper::validateUnsubscribeToken($token));
+	}
+
+	#[Test]
+	#[TestDox('A categorised unsubscribe mutes only that stream')]
+	#[Group('mantle2/users')]
+	public function publicUnsubscribeByCategory(): void
+	{
+		$user = $this->createUser();
+		$token = UsersHelper::generateUnsubscribeToken($user);
+
+		$ok = $this->controller()->publicUnsubscribe(
+			$this->request('POST', '/v2/users/unsubscribe?token=' . $token . '&category=digest'),
+		);
+		$this->assertSame(Response::HTTP_OK, $ok->getStatusCode());
+		$this->assertSame('digest', $this->decode($ok)['scope']);
+
+		$fresh = UsersHelper::findById((int) $user->id());
+		$this->assertFalse(UsersHelper::isSubscribedTo($fresh, MailCategory::DIGEST));
+
+		// muting one stream must not mute the others, or one click becomes a global opt-out
+		$this->assertTrue(UsersHelper::isSubscribedTo($fresh, MailCategory::ANNOUNCEMENTS));
+		$this->assertTrue(
+			UsersHelper::isSubscribed($fresh),
+			'A per-category opt-out must leave the global flag alone.',
+		);
 	}
 
 	#endregion

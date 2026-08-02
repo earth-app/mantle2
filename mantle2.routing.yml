@@ -194,7 +194,10 @@ mantle2.users.unsubscribe:
     _access: 'TRUE'
   options:
     tags: Users
-    description: Unsubscribe from email notifications using a secure token (no authentication required)
+    description: >-
+      Unsubscribe using a secure token (no authentication required). GET renders a confirmation
+      page and changes nothing; POST performs the unsubscribe and returns JSON, which is the
+      RFC 8058 one-click contract. Never redirects.
     schema/200: '#SubscriptionResponse'
     schema/400: Invalid or expired token
     parameters:
@@ -205,6 +208,20 @@ mantle2.users.unsubscribe:
         description: Secure unsubscribe token from email
         schema:
           type: string
+      category:
+        name: category
+        in: query
+        required: false
+        description: Mute only this message category; omit to stop every optional email
+        schema:
+          type: string
+          enum:
+            - digest
+            - announcements
+            - reengagement
+            - lifecycle
+            - social
+            - quest
   methods: [GET, POST]
 
 mantle2.users.badges:
