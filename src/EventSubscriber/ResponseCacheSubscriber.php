@@ -5,8 +5,6 @@ namespace Drupal\mantle2\EventSubscriber;
 use Drupal;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
-use Drupal\redis\ClientFactory;
-use Exception;
 use Throwable;
 use Drupal\user\UserInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -191,29 +189,7 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 				continue;
 			}
 
-			if (str_contains($keyPattern, '*')) {
-				$prefix = str_replace('*', '', $keyPattern);
-				self::deleteByPrefix($prefix);
-			} else {
-				RedisHelper::delete($keyPattern);
-			}
-		}
-	}
-
-	private static function deleteByPrefix(string $prefix): void
-	{
-		try {
-			$redis = ClientFactory::getClient();
-			if ($redis) {
-				$keys = $redis->keys($prefix . '*');
-				if (!empty($keys)) {
-					$redis->del($keys);
-				}
-			}
-		} catch (Exception $e) {
-			Drupal::logger('mantle2')->warning('Cache prefix deletion failed: @message', [
-				'@message' => $e->getMessage(),
-			]);
+			RedisHelper::delete($keyPattern);
 		}
 	}
 
@@ -315,11 +291,14 @@ class ResponseCacheSubscriber implements EventSubscriberInterface
 			return;
 		}
 
-		if (self::shouldExclude($path)) {
-			return;
-		}
-
 		if ($method === 'GET' && $response instanceof JsonResponse && $status === 200) {
+			// exclusions describe responses that must not be STORED (volatile or
+			// per-requester); applying them to writes as well silently disabled the
+			// /staged, /webhooks and /oauth/ invalidation rules
+			if (self::shouldExclude($path)) {
+				return;
+			}
+
 			// never store an elevated (admin) response into the shared cache buckets
 			if (self::isElevated($request)) {
 				return;

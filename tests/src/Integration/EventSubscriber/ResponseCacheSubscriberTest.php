@@ -452,4 +452,283 @@ class ResponseCacheSubscriberTest extends IntegrationTestBase
 	}
 
 	// #endregion
+
+	// #region Write invalidation
+
+	private function primeCache(string $key, array $payload = ['seeded' => true]): void
+	{
+		RedisHelper::set($key, $payload, 300);
+		$this->assertSame($payload, RedisHelper::get($key), "failed to prime $key");
+	}
+
+	private function write(
+		string $method,
+		string $uri,
+		int $status,
+		array $body = [],
+		?Request $request = null,
+	): void {
+		$this->onResponse(
+			$request ?? Request::create($uri, $method),
+			new JsonResponse($body, $status),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Creating an activity clears every cached page and search of the catalog')]
+	#[Group('mantle2/subscribers')]
+	public function activityCreateClearsTheCatalogGlob(): void
+	{
+		// regression: invalidation used a raw redis client, so with redis unavailable
+		// (or down in production) every glob pattern silently invalidated nothing
+		$this->seedCache($this->activitiesRequest(), ['items' => ['before']]);
+		$this->seedCache($this->activitiesRequest(['search' => 'jiu']), ['items' => []]);
+
+		$this->write('POST', '/v2/activities', 201, ['id' => 'jiujitsu']);
+
+		$this->assertNull($this->cachedBody($this->activitiesRequest()));
+		$this->assertNull($this->cachedBody($this->activitiesRequest(['search' => 'jiu'])));
+	}
+
+	#[Test]
+	#[TestDox('Approving a staged activity clears the catalog the same way a create does')]
+	#[Group('mantle2/subscribers')]
+	public function stagedApprovalClearsTheCatalogGlob(): void
+	{
+		$this->seedCache($this->activitiesRequest(), ['items' => ['before']]);
+
+		$this->write('POST', '/v2/activities/staged/12/approve', 200, ['id' => 'jiujitsu']);
+
+		$this->assertNull($this->cachedBody($this->activitiesRequest()));
+	}
+
+	#[Test]
+	#[TestDox('Patching a user clears that profile and the user list')]
+	#[Group('mantle2/subscribers')]
+	public function patchUserClearsProfileAndList(): void
+	{
+		$this->primeCache('request_cache:user:profile:42:req:0');
+		$this->primeCache('request_cache:user:profile:42:req:9');
+		$this->primeCache('request_cache:users:list:p:1:l:25');
+
+		$this->write('PATCH', '/v2/users/42', 200);
+
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:42:req:0'));
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:42:req:9'));
+		$this->assertNull(RedisHelper::get('request_cache:users:list:p:1:l:25'));
+	}
+
+	#[Test]
+	#[TestDox('Patching one user never clears another user profile')]
+	#[Group('mantle2/subscribers')]
+	public function patchUserLeavesOtherProfilesAlone(): void
+	{
+		$this->primeCache('request_cache:user:profile:42:req:0');
+		$this->primeCache('request_cache:user:profile:43:req:0');
+
+		$this->write('PATCH', '/v2/users/42', 200);
+
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:42:req:0'));
+		$this->assertSame(
+			['seeded' => true],
+			RedisHelper::get('request_cache:user:profile:43:req:0'),
+			'a neighbouring uid was collateral damage',
+		);
+	}
+
+	#[Test]
+	#[TestDox('Deleting a user clears every per-user bucket, not just the profile one')]
+	#[Group('mantle2/subscribers')]
+	public function deleteUserClearsEveryPerUserBucket(): void
+	{
+		// regression: 'request_cache:user:*:{uid}:*' was flattened to the prefix
+		// 'request_cache:user::42:' by stripping the wildcards, which matched nothing,
+		// so a deleted user's friends/notifications/photo caches outlived the account
+		$this->primeCache('request_cache:user:profile:42:req:0');
+		$this->primeCache('request_cache:user:friends:42:p:1:l:25');
+		$this->primeCache('request_cache:user:notifications:42:p:1:read:all');
+		$this->primeCache('request_cache:user:profile:430:req:0');
+
+		$this->write('DELETE', '/v2/users/42', 204);
+
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:42:req:0'));
+		$this->assertNull(RedisHelper::get('request_cache:user:friends:42:p:1:l:25'));
+		$this->assertNull(RedisHelper::get('request_cache:user:notifications:42:p:1:read:all'));
+		$this->assertSame(
+			['seeded' => true],
+			RedisHelper::get('request_cache:user:profile:430:req:0'),
+			'the uid glob must not match a longer uid that starts with the same digits',
+		);
+	}
+
+	#[Test]
+	#[TestDox('Adding a friend clears both sides when the response names the friend')]
+	#[Group('mantle2/subscribers')]
+	public function friendAddClearsBothSides(): void
+	{
+		$this->primeCache('request_cache:user:friends:42:p:1:l:25');
+		$this->primeCache('request_cache:user:friends:77:p:1:l:25');
+		$this->primeCache('request_cache:user:profile:42:req:0');
+		$this->primeCache('request_cache:user:profile:77:req:0');
+
+		$this->write('PUT', '/v2/users/42/friends', 200, ['friend_id' => 77]);
+
+		$this->assertNull(RedisHelper::get('request_cache:user:friends:42:p:1:l:25'));
+		$this->assertNull(RedisHelper::get('request_cache:user:friends:77:p:1:l:25'));
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:42:req:0'));
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:77:req:0'));
+	}
+
+	#[Test]
+	#[TestDox('An unresolved placeholder skips only its own pattern')]
+	#[Group('mantle2/subscribers')]
+	public function unresolvedPlaceholderSkipsOnlyItsPattern(): void
+	{
+		$this->primeCache('request_cache:user:friends:42:p:1:l:25');
+		$this->primeCache('request_cache:user:friends:77:p:1:l:25');
+
+		// no friend_id in the response, so {friend_uid} never resolves
+		$this->write('PUT', '/v2/users/42/friends', 200, ['ok' => true]);
+
+		$this->assertNull(RedisHelper::get('request_cache:user:friends:42:p:1:l:25'));
+		$this->assertSame(
+			['seeded' => true],
+			RedisHelper::get('request_cache:user:friends:77:p:1:l:25'),
+			'an ambiguous key pattern must be skipped, never widened',
+		);
+	}
+
+	#[Test]
+	#[TestDox('A rejected write invalidates nothing')]
+	#[Group('mantle2/subscribers')]
+	public function rejectedWriteInvalidatesNothing(): void
+	{
+		$this->primeCache('request_cache:user:profile:42:req:0');
+
+		$this->write('PATCH', '/v2/users/42', 403, ['code' => 403]);
+
+		$this->assertSame(
+			['seeded' => true],
+			RedisHelper::get('request_cache:user:profile:42:req:0'),
+		);
+	}
+
+	#[Test]
+	#[TestDox('A write to an unmapped route invalidates nothing')]
+	#[Group('mantle2/subscribers')]
+	public function unmappedWriteRouteInvalidatesNothing(): void
+	{
+		$this->primeCache('request_cache:users:list:p:1:l:25');
+
+		$this->write('POST', '/v2/info', 200, ['ok' => true]);
+
+		$this->assertSame(
+			['seeded' => true],
+			RedisHelper::get('request_cache:users:list:p:1:l:25'),
+		);
+	}
+
+	#[Test]
+	#[TestDox('A subscription webhook clears every cached subscription, across users')]
+	#[Group('mantle2/subscribers')]
+	public function webhookClearsEverySubscriptionCache(): void
+	{
+		$this->primeCache('request_cache:user:subscription:req:5');
+		$this->primeCache('request_cache:user:subscription:req:9');
+		$this->primeCache('request_cache:users:list:p:1:l:25');
+
+		$this->write('POST', '/v2/webhooks/stripe', 200, ['received' => true]);
+
+		$this->assertNull(RedisHelper::get('request_cache:user:subscription:req:5'));
+		$this->assertNull(RedisHelper::get('request_cache:user:subscription:req:9'));
+		$this->assertSame(
+			['seeded' => true],
+			RedisHelper::get('request_cache:users:list:p:1:l:25'),
+			'the subscription glob must not reach outside its own namespace',
+		);
+	}
+
+	#[Test]
+	#[TestDox('Checkout clears the requester subscription and profile, not another user')]
+	#[Group('mantle2/subscribers')]
+	public function checkoutClearsRequesterScopedKeys(): void
+	{
+		$user = $this->createUser();
+		$uid = (int) $user->id();
+
+		$this->primeCache('request_cache:user:subscription:req:' . $uid);
+		$this->primeCache('request_cache:user:profile:' . $uid . ':req:' . $uid);
+		$this->primeCache('request_cache:user:subscription:req:999999');
+
+		$this->write(
+			'POST',
+			'/v2/users/current/subscription/checkout',
+			200,
+			['url' => 'https://stripe.test/session'],
+			$this->authRequest($user, 'POST', '/v2/users/current/subscription/checkout'),
+		);
+
+		$this->assertNull(RedisHelper::get('request_cache:user:subscription:req:' . $uid));
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:' . $uid . ':req:' . $uid));
+		$this->assertSame(
+			['seeded' => true],
+			RedisHelper::get('request_cache:user:subscription:req:999999'),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Linking an OAuth provider clears the requester profile and the user list')]
+	#[Group('mantle2/subscribers')]
+	public function oauthLinkClearsRequesterProfile(): void
+	{
+		// regression: '/oauth/' is a read exclusion, and applying it to writes meant
+		// linking a provider left the stale pre-link profile cached
+		$user = $this->createUser();
+		$uid = (int) $user->id();
+
+		$this->primeCache('request_cache:user:profile:' . $uid . ':req:' . $uid);
+		$this->primeCache('request_cache:users:list:p:1:l:25');
+
+		$this->write(
+			'POST',
+			'/v2/users/oauth/google',
+			200,
+			['linked' => true],
+			$this->authRequest($user, 'POST', '/v2/users/oauth/google'),
+		);
+
+		$this->assertNull(RedisHelper::get('request_cache:user:profile:' . $uid . ':req:' . $uid));
+		$this->assertNull(RedisHelper::get('request_cache:users:list:p:1:l:25'));
+	}
+
+	#[Test]
+	#[TestDox('An excluded path is still never written to the cache')]
+	#[Group('mantle2/subscribers')]
+	public function excludedPathIsStillNeverStored(): void
+	{
+		// the exclusion list moved to the read branch; it must still hold there
+		$event = $this->onResponse(
+			Request::create('/v2/users/oauth/google', 'GET'),
+			new JsonResponse(['id' => 1]),
+		);
+		$this->assertFalse($event->getResponse()->headers->has('X-Cache'));
+	}
+
+	#[Test]
+	#[TestDox('A cached GET response never invalidates anything')]
+	#[Group('mantle2/subscribers')]
+	public function readsNeverInvalidate(): void
+	{
+		$this->primeCache('request_cache:users:list:p:1:l:25');
+		$this->primeCache('request_cache:user:profile:42:req:0');
+
+		$this->write('GET', '/v2/users/42', 200, ['id' => 42]);
+
+		$this->assertSame(
+			['seeded' => true],
+			RedisHelper::get('request_cache:users:list:p:1:l:25'),
+		);
+	}
+
+	// #endregion
 }
