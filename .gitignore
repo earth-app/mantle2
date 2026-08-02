@@ -16,6 +16,10 @@ tests/out
 
 .idea/
 
+# marketing assets (the R2 bucket is the source of truth)
+data/marketing/
+dist/
+
 # other
 .DS_Store
 .env
