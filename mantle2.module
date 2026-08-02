@@ -29,13 +29,9 @@ function mantle2_help($route_name, RouteMatchInterface $route_match)
 	}
 }
 
-// single source of truth; consumed by both mantle2_mail() and mantle2_mail_alter()
-const MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS = [
-	'new_login',
-	'new_password',
-	'oauth_provider_linked',
-	'oauth_provider_unlinked',
-];
+// whether a mail is unsubscribable is decided once, at the UsersHelper::sendEmail() callsite, and
+// travels in $params; a hand-maintained key list here silently omitted every mailing nobody
+// remembered to add (see mantle2_mail_alter)
 
 function mantle2_get_list_id_header(?string $campaignId = null): string
 {
@@ -84,6 +80,25 @@ function mantle2_apply_list_headers(
 	$message['headers']['List-Subscribe'] = '<mailto:support@earth-app.com?subject=subscribe>';
 }
 
+/**
+ * A linked App Store badge as body markdown.
+ *
+ * Apple's identity guidelines require the badge to link to the store, and HTMLFactory only
+ * recognises a linked image on its own line. The badge is baked into the artwork, so the alt text
+ * has to carry the same message for the clients that block images.
+ */
+function mantle2_app_store_badge(string $variant = 'launch'): string
+{
+	$file = $variant === 'offer' ? 'offer_post_landscape.jpg' : 'launch_post_landscape.jpg';
+	$alt = 'Download The Earth App on the App Store';
+
+	return '[![' .
+		$alt .
+		'](https://cdn.earth-app.com/marketing/email/' .
+		$file .
+		')](https://earth-app.com/ios)';
+}
+
 function mantle2_mail($key, &$message, $params)
 {
 	$message['from'] = Drupal::config('system.site')->get('mail');
@@ -102,8 +117,8 @@ function mantle2_mail($key, &$message, $params)
 	$username = $user->getAccountName();
 
 	$markdown = null;
-	$isCampaign = false;
 	$unsubscribeUrl = $params['unsubscribe_url'] ?? null; // Frontend URL for body link
+	$options = [];
 
 	// email campaigns that may include unsubscribe links
 	if (str_starts_with($key, 'campaign:')) {
@@ -120,11 +135,37 @@ function mantle2_mail($key, &$message, $params)
 
 			$message['subject'] = $campaign['title'];
 			$markdown = $campaign['body'];
-			$isCampaign = true;
+
+			$options['title'] = $campaign['title'];
+			if (isset($campaign['preheader']) && is_string($campaign['preheader'])) {
+				$options['preheader'] = $campaign['preheader'];
+			}
+			if (isset($campaign['cta'])) {
+				$options['cta'] = $campaign['cta'];
+			}
+
+			// utm_content carries the subject-variant index so click-through is attributable
+			// per variant, not just per campaign
+			$utm = [
+				'utm_source' => 'email',
+				'utm_medium' => 'campaign',
+				'utm_campaign' => $key,
+			];
+			if (isset($campaign['variant_id']) && $campaign['variant_id'] !== '') {
+				$utm['utm_content'] = (string) $campaign['variant_id'];
+			}
+			$options['utm'] = $utm;
 		}
 	}
 
-	$includeUnsubscribe = $isCampaign || in_array($key, MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS, true);
+	// trust the decision sendEmail() already made: it only supplies these params when the mail is
+	// unsubscribable, so the body link, the List-* headers and the promotional footer links all
+	// agree without a second list to forget to update
+	$includeUnsubscribe = is_string($unsubscribeUrl) && $unsubscribeUrl !== '';
+
+	// Google forbids mixing promotional content into transactional mail, so the download and
+	// social links only ride along on mail the user can actually unsubscribe from
+	$options['footer_links'] = $includeUnsubscribe;
 
 	// a campaign id never matches a case, so the switch is a no-op and $markdown survives
 	switch ($key) {
@@ -339,10 +380,12 @@ function mantle2_mail($key, &$message, $params)
 			$message['subject'] = "The Earth App - $type Trial Activated";
 
 			$days = $params['days'] ?? 7;
-			$markdown = "@$username, Your free trial for The Earth App $type has been activated.\n\n
+			$markdown =
+				"@$username, Your free trial for The Earth App $type has been activated.\n\n
 			**Trial Period:** {$days} days\n
 			**Time Remaining:** {$days} days\n\n
-			Enjoy exploring the features of The Earth App! If you have any questions or need assistance, feel free to contact our support team.";
+			Trails, nature minutes, and expeditions need you outside, so they live on the phone.\n\n" .
+				mantle2_app_store_badge();
 
 			break;
 		case 'plan_trial_warning':
@@ -445,10 +488,14 @@ function mantle2_mail($key, &$message, $params)
 			$message['subject'] = "The Earth App - Upcoming Price Change for $type";
 
 			$effectiveLine = $effectiveAt ? "**Effective:** {$effectiveAt}\n\n" : '';
-			$markdown = "@$username, The price of your The Earth App **$type** subscription is changing.\n\n
+			$markdown =
+				"@$username, The price of your The Earth App **$type** subscription is changing.\n\n
 			**Current Price:** {$oldPrice}\n
 			**New Price:** {$newPrice}\n
-			{$effectiveLine}This change applies to your next renewal on or after the effective date. If you do not wish to continue at the new price, you can cancel any time before then from your account settings.";
+			{$effectiveLine}This change applies to your next renewal on or after the effective date. If you do not wish to continue at the new price, you can cancel any time before then from your account settings.\n\n" .
+				// the neutral launch badge, never the offer artwork; a promotion on a price
+				// increase reads badly and mixes marketing into a billing notice
+				mantle2_app_store_badge();
 
 			break;
 		case 'trial_code_redeemed':
@@ -469,7 +516,7 @@ function mantle2_mail($key, &$message, $params)
 			$body = $params['body'] ?? '';
 			$message['subject'] = 'The Earth App - ' . $title;
 
-			$markdown = "@$username,\n\n{$body}";
+			$markdown = "@$username,\n\n{$body}\n\n" . mantle2_app_store_badge('offer');
 			break;
 		case 'api_key_expiring':
 			$keyName = $params['key_name'] ?? 'Unnamed key';
@@ -666,7 +713,7 @@ function mantle2_mail($key, &$message, $params)
 	$message['headers']['Content-Type'] = 'text/html; charset=UTF-8';
 	$message['headers']['MIME-Version'] = '1.0';
 	$message['params']['convert'] = false;
-	$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl);
+	$message['body'][] = $parser->toHtml($markdown, $includeUnsubscribe, $unsubscribeUrl, $options);
 }
 
 function mantle2_mail_alter(&$message)
@@ -677,16 +724,21 @@ function mantle2_mail_alter(&$message)
 		return;
 	}
 
-	if (str_starts_with($message['id'], 'mantle2_campaign:')) {
-		$campaignId = substr($message['id'], strlen('mantle2_campaign:'));
-		mantle2_apply_list_headers($message, $message['params'] ?? [], $campaignId);
-		$message['headers']['Precedence'] = 'bulk';
-		return;
-	}
+	$params = $message['params'] ?? [];
+	$isCampaign = str_starts_with($message['id'], 'mantle2_campaign:');
+	$campaignId = $isCampaign
+		? substr($message['id'], strlen('mantle2_campaign:'))
+		: substr($message['id'], strlen('mantle2_'));
 
-	$key = substr($message['id'], strlen('mantle2_'));
-	if (in_array($key, MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS, true)) {
-		mantle2_apply_list_headers($message, $message['params'] ?? [], $key);
+	// applied for every key, not a hand-maintained subset; apply_list_headers already no-ops
+	// without an unsubscribe_api_url, which is the same signal sendEmail() used
+	mantle2_apply_list_headers($message, $params, $campaignId);
+
+	// bulk is a deliverability signal for subscribed mail; on transactional mail it suppresses
+	// auto-replies and reads as marketing, so it follows the same unsubscribable test
+	$unsubscribeApiUrl = $params['unsubscribe_api_url'] ?? null;
+	if ($isCampaign && is_string($unsubscribeApiUrl) && $unsubscribeApiUrl !== '') {
+		$message['headers']['Precedence'] = 'bulk';
 	}
 }
 

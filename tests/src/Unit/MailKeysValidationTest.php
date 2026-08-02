@@ -141,20 +141,67 @@ class MailKeysValidationTest extends TestCase
 	}
 
 	#[Test]
-	#[TestDox('The unsubscribable key list exists once and both mail hooks read it')]
+	#[TestDox('Neither mail hook carries a hand-maintained unsubscribable key list')]
 	#[Group('mantle2/email')]
-	public function testUnsubscribableListIsShared(): void
+	public function testUnsubscribableDecisionTravelsInParams(): void
 	{
-		$this->assertStringContainsString('const MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS', self::$source);
-		$this->assertStringContainsString('MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS', self::$mailBody);
-		$this->assertStringContainsString('MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS', self::$alterBody);
+		// the old allow-list silently omitted every mailing nobody remembered to add, which is
+		// how the recurring digest shipped with no List-Unsubscribe and no visible link at all
+		$this->assertStringNotContainsString(
+			'MANTLE2_UNSUBSCRIBABLE_MAIL_KEYS',
+			self::$source,
+			'The key allow-list is back; classification belongs in MailCategory.',
+		);
 
-		// the literal list must not be spelled out a second time anywhere
+		// mantle2_mail derives the body affordance from the params sendEmail() already set
+		$this->assertStringContainsString('$params[\'unsubscribe_url\']', self::$mailBody);
+		$this->assertMatchesRegularExpression(
+			'/\$includeUnsubscribe\s*=\s*is_string\(\$unsubscribeUrl\)/',
+			self::$mailBody,
+			'includeUnsubscribe must follow the unsubscribe_url param, not a key list.',
+		);
+
+		// and the alter hook applies List-* for every key, letting the param presence decide
+		$this->assertStringContainsString('mantle2_apply_list_headers', self::$alterBody);
+		$this->assertStringNotContainsString('in_array($key', self::$alterBody);
+	}
+
+	#[Test]
+	#[TestDox('Precedence: bulk is only set for campaigns that carry an unsubscribe URL')]
+	#[Group('mantle2/email')]
+	public function testPrecedenceBulkIsGated(): void
+	{
+		// bulk on a transactional message suppresses auto-replies and reads as marketing
 		$this->assertSame(
 			1,
-			substr_count(self::$source, "'oauth_provider_unlinked',"),
-			'The unsubscribable keys are duplicated; there must be exactly one list.',
+			substr_count(self::$alterBody, "'Precedence'"),
+			'Precedence should be set in exactly one place.',
 		);
+		$this->assertMatchesRegularExpression(
+			'/if\s*\(\s*\$isCampaign\s*&&\s*is_string\(\$unsubscribeApiUrl\)/',
+			self::$alterBody,
+			'Precedence: bulk must be gated on the campaign carrying an unsubscribe URL.',
+		);
+	}
+
+	#[Test]
+	#[TestDox('Every rendered mail key has a MailCategory classification')]
+	#[Group('mantle2/email')]
+	public function testEveryMailKeyIsClassified(): void
+	{
+		$path = dirname(__DIR__, 3) . '/src/Custom/MailCategory.php';
+		$this->assertFileExists($path);
+		$source = file_get_contents($path);
+		$this->assertIsString($source);
+
+		foreach (self::mailKeys() as $key) {
+			// an unmapped key silently falls back to SECURITY, so the mapping must be explicit
+			$this->assertStringContainsString(
+				"'" . $key . "'",
+				$source,
+				"Mail key $key has no explicit MailCategory mapping.",
+			);
+		}
 	}
 
 	#[Test]

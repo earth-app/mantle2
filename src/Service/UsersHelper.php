@@ -11,6 +11,7 @@ use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
+use Drupal\mantle2\Custom\MailCategory;
 use Drupal\mantle2\Custom\Notification;
 use Drupal\mantle2\Custom\Quest;
 use Drupal\mantle2\Custom\VerifiedPublisherState;
@@ -949,7 +950,9 @@ class UsersHelper
 			'Account Trial Activated',
 			"Your account trial for $newType->name has been activated and will expire in $days days." .
 				($reason ? " Reason: $reason" : ''),
+			null,
 			'info',
+			'billing',
 		);
 
 		self::sendEmail(
@@ -1011,7 +1014,9 @@ class UsersHelper
 						$user,
 						'Account Trial Ending Soon',
 						"Your account trial for $newTypeName will expire in 1 day.",
+						null,
 						'warning',
+						'billing',
 					);
 
 					self::sendEmail(
@@ -1056,7 +1061,9 @@ class UsersHelper
 				$user,
 				'Account Trial Expired',
 				"Your account trial for $newTypeName has expired and your account has been downgraded to $oldTypeName.",
+				null,
 				'warning',
+				'billing',
 			);
 
 			self::sendEmail(
@@ -1396,6 +1403,259 @@ class UsersHelper
 		$user->set('field_subscribed', $subscribed);
 	}
 
+	#endregion
+
+	#region Message Preferences
+
+	public const MESSAGE_CHANNEL_EMAIL = 'email';
+	public const MESSAGE_CHANNEL_PUSH = 'push';
+
+	/**
+	 * Per-channel, per-category opt-outs layered over the global field_subscribed flag.
+	 *
+	 * An absent channel or category means opted in, so every existing account keeps its current
+	 * behaviour with an empty preference blob.
+	 */
+	public static function getMessagePrefs(UserInterface $user): array
+	{
+		if (!$user->hasField('field_message_prefs')) {
+			return [];
+		}
+
+		$raw = $user->get('field_message_prefs')->value;
+		if (is_array($raw)) {
+			return $raw;
+		}
+		if (!is_string($raw) || trim($raw) === '') {
+			return [];
+		}
+
+		$decoded = json_decode($raw, true);
+		return is_array($decoded) ? $decoded : [];
+	}
+
+	/**
+	 * Whether this user still accepts a given stream on a given channel.
+	 *
+	 * Deliberately does NOT consult MailCategory::isUnsubscribable(): the caller decides whether a
+	 * stream is opt-out-able at all, so a campaign carrying an explicit unsubscribable flag still
+	 * honours the global field_subscribed switch.
+	 */
+	public static function isSubscribedTo(
+		UserInterface $user,
+		?MailCategory $category = null,
+		string $channel = self::MESSAGE_CHANNEL_EMAIL,
+	): bool {
+		if (!self::isSubscribed($user)) {
+			return false;
+		}
+
+		if (!$category instanceof MailCategory) {
+			return true;
+		}
+
+		$prefs = self::getMessagePrefs($user);
+		$channelPrefs = $prefs[$channel] ?? null;
+		if (!is_array($channelPrefs) || !array_key_exists($category->value, $channelPrefs)) {
+			return true;
+		}
+
+		return (bool) $channelPrefs[$category->value];
+	}
+
+	public static function setMessagePref(
+		UserInterface $user,
+		MailCategory $category,
+		bool $enabled,
+		string $channel = self::MESSAGE_CHANNEL_EMAIL,
+	): void {
+		if (!$user->hasField('field_message_prefs')) {
+			return;
+		}
+
+		$prefs = self::getMessagePrefs($user);
+		$prefs[$channel][$category->value] = $enabled;
+		$user->set('field_message_prefs', json_encode($prefs));
+	}
+
+	#endregion
+
+	#region Email Deliverability
+
+	/**
+	 * Reserved TLDs that can never receive mail (RFC 2606, RFC 6761).
+	 *
+	 * `example.com/.net/.org` are reserved too, but they are deliberately NOT here: RFC 2606
+	 * reserves them so they are safe in documentation and fixtures, this suite uses them at 95
+	 * sites, and nobody signs up with them at volume. The bounce-rate protection that actually
+	 * pays is the disposable list below.
+	 */
+	public const RESERVED_EMAIL_DOMAINS = ['test', 'invalid', 'localhost', 'local'];
+
+	/**
+	 * Throwaway inbox providers; mail to these bounces or is blackholed, which is the cheapest
+	 * bounce-rate damage to prevent because it is preventable at signup.
+	 */
+	public const DISPOSABLE_EMAIL_DOMAINS = [
+		'mailinator.com',
+		'guerrillamail.com',
+		'guerrillamail.info',
+		'sharklasers.com',
+		'10minutemail.com',
+		'temp-mail.org',
+		'tempmail.com',
+		'yopmail.com',
+		'throwawaymail.com',
+		'trashmail.com',
+		'getnada.com',
+		'dispostable.com',
+		'maildrop.cc',
+		'fakeinbox.com',
+		'mytemp.email',
+	];
+
+	/**
+	 * Alias and relay providers that forward to a real inbox.
+	 *
+	 * These are legitimate addresses belonging to real users and must keep working - blocking
+	 * `privaterelay.appleid.com` would lock every Sign in with Apple account out of its own
+	 * password reset. They are listed so a relay bounce reads as a sender-configuration alarm
+	 * rather than as a reason to suppress the person.
+	 */
+	public const RELAY_EMAIL_DOMAINS = [
+		'privaterelay.appleid.com',
+		'mozmail.com',
+		'duck.com',
+		'simplelogin.io',
+		'aleeas.com',
+		'anonaddy.me',
+		'addy.io',
+	];
+
+	public static function emailDomain(string $email): string
+	{
+		$at = strrpos($email, '@');
+		if ($at === false) {
+			return '';
+		}
+
+		return strtolower(trim(substr($email, $at + 1)));
+	}
+
+	public static function isRelayEmail(string $email): bool
+	{
+		return in_array(self::emailDomain($email), self::RELAY_EMAIL_DOMAINS, true);
+	}
+
+	/**
+	 * Whether an address may be accepted at signup.
+	 *
+	 * Deliberately does NOT reject relay domains; see RELAY_EMAIL_DOMAINS.
+	 */
+	public static function isAcceptableEmail(string $email): bool
+	{
+		if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+			return false;
+		}
+
+		$domain = self::emailDomain($email);
+		if ($domain === '') {
+			return false;
+		}
+
+		foreach (self::RESERVED_EMAIL_DOMAINS as $reserved) {
+			if ($domain === $reserved || str_ends_with($domain, '.' . $reserved)) {
+				return false;
+			}
+		}
+
+		if (in_array($domain, self::DISPOSABLE_EMAIL_DOMAINS, true)) {
+			return false;
+		}
+
+		// a role address is a mailing alias, never an account owner
+		$local = strtolower(substr($email, 0, (int) strrpos($email, '@')));
+		return !in_array(
+			$local,
+			['noreply', 'no-reply', 'postmaster', 'abuse', 'mailer-daemon'],
+			true,
+		);
+	}
+
+	public static function isEmailUndeliverable(string $email): bool
+	{
+		$normalized = strtolower(trim($email));
+		if ($normalized === '') {
+			return false;
+		}
+
+		try {
+			$found = Drupal::database()
+				->select('email_suppressions', 's')
+				->fields('s', ['email'])
+				->condition('email', $normalized)
+				->range(0, 1)
+				->execute()
+				?->fetchField();
+
+			return $found !== false && $found !== null;
+		} catch (Throwable $e) {
+			// a missing table must not block every outbound mail
+			Drupal::logger('mantle2')->warning('Suppression lookup failed: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return false;
+		}
+	}
+
+	public static function markEmailUndeliverable(string $email, string $reason): void
+	{
+		$normalized = strtolower(trim($email));
+		if ($normalized === '' || strlen($normalized) > 254) {
+			return;
+		}
+
+		try {
+			Drupal::database()
+				->merge('email_suppressions')
+				->key('email', $normalized)
+				->fields([
+					'reason' => substr($reason, 0, 64),
+					'created' => Drupal::time()->getRequestTime(),
+				])
+				->execute();
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->error('Failed to record suppression for %email: %message', [
+				'%email' => $normalized,
+				'%message' => $e->getMessage(),
+			]);
+		}
+	}
+
+	public static function clearEmailSuppression(string $email): void
+	{
+		$normalized = strtolower(trim($email));
+		if ($normalized === '') {
+			return;
+		}
+
+		try {
+			Drupal::database()
+				->delete('email_suppressions')
+				->condition('email', $normalized)
+				->execute();
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->error('Failed to clear suppression for %email: %message', [
+				'%email' => $normalized,
+				'%message' => $e->getMessage(),
+			]);
+		}
+	}
+
+	#endregion
+
+	#region User Field Accessors
+
 	public static function isDisabled(UserInterface $user): bool
 	{
 		// root user and admins cannot be disabled
@@ -1674,8 +1934,8 @@ class UsersHelper
 			if ($currentEmail === $email) {
 				// no change needed, skip email processing
 			} else {
-				// first, verify email shape
-				if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+				// first, verify email shape and that it can actually receive mail
+				if (!self::isAcceptableEmail($email)) {
 					return GeneralHelper::badRequest('Invalid email format');
 				}
 
@@ -1846,6 +2106,7 @@ class UsersHelper
 					$user,
 					'Account Disabled',
 					'Your account was disabled by an administrator. Please contact support if you believe this is an error.',
+					null,
 					'warning',
 				);
 
@@ -1864,6 +2125,7 @@ class UsersHelper
 					$user,
 					'Account Re-enabled',
 					'Your account was re-enabled by an administrator. You can now sign back in.',
+					null,
 					'info',
 				);
 
@@ -3552,6 +3814,13 @@ class UsersHelper
 			false,
 		);
 
+		// a stream the user muted still belongs in their in-app list; it just must not interrupt
+		// them, so the preference gates the push and the websocket, never the record
+		$category = MailCategory::forNotificationSource($source);
+		$mayInterrupt =
+			$category->isUrgent() ||
+			self::isSubscribedTo($user, $category, self::MESSAGE_CHANNEL_PUSH);
+
 		$notifications = self::getNotifications($user);
 		$notifications[] = $notification;
 
@@ -3559,11 +3828,29 @@ class UsersHelper
 			$notifications = array_slice($notifications, -self::MAX_NOTIFICATIONS); // remove oldest notification
 		}
 
-		// notify via websocket
-		CloudHelper::sendWebsocketMessage('users', $user->id(), [
-			'type' => 'notification',
-			'data' => $notification->jsonSerialize(),
-		]);
+		// persist FIRST: sendWebsocketMessage throws on any non-2xx that is not 204/404, so a
+		// cloud 5xx used to swallow the record and the push along with it
+		self::setNotifications($user, $notifications);
+
+		if (!$mayInterrupt) {
+			return $notification;
+		}
+
+		// notify via websocket; a cloud outage must not cost the push as well
+		try {
+			CloudHelper::sendWebsocketMessage('users', $user->id(), [
+				'type' => 'notification',
+				'data' => $notification->jsonSerialize(),
+			]);
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->warning(
+				'Websocket delivery failed for notification %id: %message',
+				[
+					'%id' => $id,
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
 
 		// notify via push notifications
 		$tokens = self::getFCMTokens($user);
@@ -3589,13 +3876,12 @@ class UsersHelper
 			$body['link'] = $finalLink;
 		}
 
+		// one OAuth exchange and one kept-alive connection for all of a user's devices; the old
+		// per-token loop cost two HTTP round trips each, multiplied by every fan-out
 		if (!empty($tokens)) {
-			foreach ($tokens as $token) {
-				FCMHelper::send($token, $title, $message, $body);
-			}
+			FCMHelper::sendMulticast($tokens, $title, $message, $body);
 		}
 
-		self::setNotifications($user, $notifications);
 		return $notification;
 	}
 
@@ -3676,9 +3962,11 @@ class UsersHelper
 	public static function removeNotification(UserInterface $user, Notification $notification): bool
 	{
 		$notifications = self::getNotifications($user);
-		$notifications = array_filter(
-			$notifications,
-			fn($n) => $n->getId() !== $notification->getId(),
+
+		// array_values matters: array_filter preserves keys, and a gapped array json_encodes as an
+		// object rather than the array the field schema declares
+		$notifications = array_values(
+			array_filter($notifications, fn($n) => $n->getId() !== $notification->getId()),
 		);
 		self::setNotifications($user, $notifications);
 		return true;
@@ -4045,7 +4333,16 @@ class UsersHelper
 			$params,
 		);
 
-		self::sendEmail($user, 'campaign:' . $id, $payload, $campaign['unsubscribable'] ?? true);
+		// the YAML category, not the mail key, decides which stream a campaign belongs to
+		$category = MailCategory::tryFrom((string) ($campaign['category'] ?? ''));
+
+		self::sendEmail(
+			$user,
+			'campaign:' . $id,
+			$payload,
+			$campaign['unsubscribable'] ?? true,
+			$category,
+		);
 
 		return true;
 	}
@@ -4054,7 +4351,8 @@ class UsersHelper
 		UserInterface $user,
 		string $key,
 		array $params,
-		bool $unsubscribable = true,
+		?bool $unsubscribable = null,
+		?MailCategory $category = null,
 	): void {
 		$email = $user->getEmail();
 		if (!$email) {
@@ -4068,24 +4366,40 @@ class UsersHelper
 			return;
 		}
 
+		// a permanently-bounced address is retried forever without this, which is how an account
+		// bounce rate climbs into the range that gets sending paused
+		if (self::isEmailUndeliverable($email)) {
+			Drupal::logger('mantle2')->info(
+				'Not sending email %key to %email: address is suppressed after a permanent failure.',
+				[
+					'%key' => $key,
+					'%email' => $email,
+				],
+			);
+			return;
+		}
+
+		$category ??= MailCategory::forMailKey($key);
+		$unsubscribable ??= $category->isUnsubscribable();
+
 		if ($unsubscribable) {
-			if (!self::isSubscribed($user)) {
+			if (!self::isSubscribedTo($user, $category)) {
 				Drupal::logger('mantle2')->info(
-					'Not sending email %key to %email: user has unsubscribed.',
+					'Not sending email %key to %email: user has unsubscribed from %category.',
 					[
 						'%key' => $key,
 						'%email' => $email,
+						'%category' => $category->value,
 					],
 				);
 				return;
 			}
 
-			// Add unsubscribe URLs to params
-			// Frontend URL for visible link in email body
-			$params['unsubscribe_url'] = self::getUnsubscribeUrl();
-
-			// API URL for List-Unsubscribe header (one-click)
-			$params['unsubscribe_api_url'] = self::getUnsubscribeApiUrl($user);
+			// both links are the tokenized API endpoint; the visible one renders a confirmation
+			// page on GET while the header one mutates on POST, so a link scanner cannot
+			// unsubscribe somebody by crawling the body
+			$params['unsubscribe_url'] = self::getUnsubscribeUrl($user, $category);
+			$params['unsubscribe_api_url'] = self::getUnsubscribeApiUrl($user, $category);
 		}
 
 		if ($user->id() === self::cloud()->id()) {
@@ -4106,7 +4420,51 @@ class UsersHelper
 				'%key' => $key,
 				'%email' => $email,
 			]);
+			self::recordSendFailure($email);
+			return;
 		}
+
+		self::clearSendFailures($email);
+	}
+
+	/**
+	 * Consecutive delivery failures per address.
+	 *
+	 * The mail manager only reports a boolean, so the provider's reason is not available here. A
+	 * run of failures is still enough to stop retrying forever, which is the behaviour that drives
+	 * a bounce rate up: cron reattempts a dead address every cycle indefinitely.
+	 */
+	public const SEND_FAILURE_LIMIT = 3;
+
+	private static function sendFailureKey(string $email): string
+	{
+		return 'mail:failures:' . md5(strtolower(trim($email)));
+	}
+
+	private static function recordSendFailure(string $email): void
+	{
+		$key = self::sendFailureKey($email);
+		$count = (int) (RedisHelper::get($key)['count'] ?? 0) + 1;
+
+		if ($count >= self::SEND_FAILURE_LIMIT) {
+			self::markEmailUndeliverable($email, 'consecutive_send_failures');
+			RedisHelper::delete($key);
+			Drupal::logger('mantle2')->warning(
+				'Suppressed %email after %count consecutive delivery failures',
+				[
+					'%email' => $email,
+					'%count' => $count,
+				],
+			);
+			return;
+		}
+
+		RedisHelper::set($key, ['count' => $count], 2592000);
+	}
+
+	private static function clearSendFailures(string $email): void
+	{
+		RedisHelper::delete(self::sendFailureKey($email));
 	}
 
 	/**
@@ -4354,15 +4712,33 @@ class UsersHelper
 		RedisHelper::delete($tokenKey);
 	}
 
-	public static function getUnsubscribeApiUrl(UserInterface $user): string
-	{
+	public static function getUnsubscribeApiUrl(
+		UserInterface $user,
+		?MailCategory $category = null,
+	): string {
 		$token = self::generateUnsubscribeToken($user);
-		return 'https://api.earth-app.com/v2/users/unsubscribe?token=' . $token;
+		$url = 'https://api.earth-app.com/v2/users/unsubscribe?token=' . $token;
+
+		// one click mutes the stream it came from rather than everything
+		if ($category instanceof MailCategory) {
+			$url .= '&category=' . $category->value;
+		}
+
+		return $url;
 	}
 
-	public static function getUnsubscribeUrl(): string
-	{
-		return 'https://app.earth-app.com/api/unsubscribe';
+	/**
+	 * The unsubscribe URL shown in the message body.
+	 *
+	 * Points at the same API route as the List-Unsubscribe header, because
+	 * `app.earth-app.com/api/unsubscribe` was a 404 - crust has no such page or server route - and
+	 * Google requires the visible link to actually work.
+	 */
+	public static function getUnsubscribeUrl(
+		UserInterface $user,
+		?MailCategory $category = null,
+	): string {
+		return self::getUnsubscribeApiUrl($user, $category);
 	}
 
 	#endregion
