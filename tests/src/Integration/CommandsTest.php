@@ -7,6 +7,7 @@ use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Service\ActivityHelper;
 use Drupal\mantle2\Service\StagingHelper;
+use Drupal\mantle2\Service\SubscriptionsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\node\Entity\NodeType;
 use PHPUnit\Framework\Attributes\Group;
@@ -411,6 +412,214 @@ class CommandsTest extends IntegrationTestBase
 
 		$this->assertStringNotContainsString('Content types', $output);
 		$this->assertStringContainsString('User fields synced.', $output);
+	}
+
+	// #endregion
+
+	// #region Email Suppression
+
+	#[Test]
+	#[TestDox('suppress-email suppresses every address in the list with the given reason')]
+	#[Group('mantle2/drush')]
+	public function suppressEmailList(): void
+	{
+		$this->command->suppressEmail('a@example.com, b@example.com', [
+			'reason' => 'mailbox_user_not_found',
+		]);
+		$output = $this->flush();
+
+		$this->assertStringContainsString(
+			'Suppressed a@example.com (mailbox_user_not_found)',
+			$output,
+		);
+		$this->assertStringContainsString(
+			'Suppressed b@example.com (mailbox_user_not_found)',
+			$output,
+		);
+		$this->assertStringContainsString('Suppressed 2 address(es).', $output);
+		$this->assertTrue(UsersHelper::isEmailUndeliverable('a@example.com'));
+		$this->assertTrue(UsersHelper::isEmailUndeliverable('b@example.com'));
+	}
+
+	#[Test]
+	#[TestDox('suppress-email skips blank entries and defaults the reason to manual')]
+	#[Group('mantle2/drush')]
+	public function suppressEmailSkipsBlanks(): void
+	{
+		$this->command->suppressEmail('only@example.com,, ,');
+		$output = $this->flush();
+
+		$this->assertStringContainsString('Suppressed only@example.com (manual)', $output);
+		$this->assertStringContainsString('Suppressed 1 address(es).', $output);
+	}
+
+	#[Test]
+	#[TestDox('unsuppress-email releases an address so sending resumes')]
+	#[Group('mantle2/drush')]
+	public function unsuppressEmailReleases(): void
+	{
+		UsersHelper::markEmailUndeliverable('back@example.com', 'bounce');
+		$this->assertTrue(UsersHelper::isEmailUndeliverable('back@example.com'));
+
+		$this->command->unsuppressEmail('back@example.com');
+
+		$this->assertStringContainsString('Released back@example.com', $this->flush());
+		$this->assertFalse(UsersHelper::isEmailUndeliverable('back@example.com'));
+	}
+
+	// #endregion
+
+	// #region Trial Codes
+
+	#[Test]
+	#[TestDox('create-trial-code mints a redeemable code and echoes its terms')]
+	#[Group('mantle2/drush')]
+	public function createTrialCode(): void
+	{
+		$this->command->createTrialCode(['tier' => 'writer', 'days' => 14, 'max' => 25]);
+		$output = $this->flush();
+
+		$this->assertStringContainsString('Created trial code:', $output);
+		$this->assertStringContainsString('Tier: writer, Days: 14, Max: 25', $output);
+
+		$codes = SubscriptionsHelper::listTrialCodes();
+		$this->assertCount(1, $codes);
+		$this->assertSame('writer', $codes[0]['tier']);
+		$this->assertSame(14, $codes[0]['days']);
+	}
+
+	#[Test]
+	#[TestDox('create-trial-code rejects a tier that cannot be sold')]
+	#[Group('mantle2/drush')]
+	public function createTrialCodeRejectsBadTier(): void
+	{
+		foreach (['free', 'administrator', 'nonsense'] as $tier) {
+			$this->command->createTrialCode(['tier' => $tier, 'days' => 30, 'max' => 0]);
+			$this->assertStringContainsString("Invalid tier '$tier'", $this->flush());
+		}
+
+		$this->assertSame([], SubscriptionsHelper::listTrialCodes());
+	}
+
+	#[Test]
+	#[TestDox('create-trial-code rejects an unparseable expiry date')]
+	#[Group('mantle2/drush')]
+	public function createTrialCodeRejectsBadExpiry(): void
+	{
+		$this->command->createTrialCode([
+			'tier' => 'pro',
+			'days' => 30,
+			'max' => 0,
+			'expires' => 'not-a-date',
+		]);
+
+		$this->assertStringContainsString("Invalid expires date 'not-a-date'", $this->flush());
+		$this->assertSame([], SubscriptionsHelper::listTrialCodes());
+	}
+
+	#[Test]
+	#[TestDox('create-trial-code accepts an ISO expiry date')]
+	#[Group('mantle2/drush')]
+	public function createTrialCodeAcceptsExpiry(): void
+	{
+		$this->command->createTrialCode([
+			'tier' => 'pro',
+			'days' => 30,
+			'max' => 0,
+			'expires' => '2030-12-31',
+		]);
+
+		$this->assertStringContainsString('Created trial code:', $this->flush());
+		$codes = SubscriptionsHelper::listTrialCodes();
+		$this->assertCount(1, $codes);
+		$this->assertNotNull($codes[0]['expires_at']);
+	}
+
+	#[Test]
+	#[TestDox('list-trial-codes reports an empty list and then every minted code')]
+	#[Group('mantle2/drush')]
+	public function listTrialCodes(): void
+	{
+		$this->command->listTrialCodes();
+		$this->assertStringContainsString('No trial codes found.', $this->flush());
+
+		$this->command->createTrialCode(['tier' => 'pro', 'days' => 30, 'max' => 0]);
+		$code = SubscriptionsHelper::listTrialCodes()[0]['code'];
+		$this->flush();
+
+		$this->command->listTrialCodes();
+		$output = $this->flush();
+
+		$this->assertStringContainsString('Trial Codes:', $output);
+		$this->assertStringContainsString("- $code [active] tier=pro days=30", $output);
+		$this->assertStringContainsString('redemptions=0/unlimited', $output);
+	}
+
+	#[Test]
+	#[TestDox('list-trial-codes shows a capped code with its redemption limit')]
+	#[Group('mantle2/drush')]
+	public function listTrialCodesShowsCap(): void
+	{
+		$this->command->createTrialCode(['tier' => 'organizer', 'days' => 7, 'max' => 3]);
+		$this->flush();
+
+		$this->command->listTrialCodes();
+
+		$this->assertStringContainsString('redemptions=0/3', $this->flush());
+	}
+
+	// #endregion
+
+	// #region Refunds
+
+	#[Test]
+	#[TestDox('refund-user reports a missing user')]
+	#[Group('mantle2/drush')]
+	public function refundUserMissing(): void
+	{
+		$this->command->refundUser('999999');
+		$this->assertStringContainsString('not found', $this->flush());
+	}
+
+	#[Test]
+	#[TestDox('refund-user reports a user with nothing to refund')]
+	#[Group('mantle2/drush')]
+	public function refundUserWithoutSubscription(): void
+	{
+		$user = $this->createUser();
+
+		$this->command->refundUser('@' . $user->getAccountName());
+
+		$this->assertStringContainsString('has no active subscription to refund', $this->flush());
+	}
+
+	#[Test]
+	#[TestDox('refund-user refunds an active subscription and reverts the account to Free')]
+	#[Group('mantle2/drush')]
+	public function refundUserRefundsActiveSubscription(): void
+	{
+		$this->configureStripe();
+		SubscriptionsHelper::setClientOverride($this->newFakeStripe());
+
+		$user = $this->createUser([
+			'field_account_type' => (string) array_search(
+				AccountType::PRO,
+				AccountType::cases(),
+				true,
+			),
+		]);
+		$this->seedSubscription((int) $user->id());
+
+		$this->command->refundUser('@' . $user->getAccountName(), ['reason' => 'Support request']);
+
+		$this->assertStringContainsString('Refunded and canceled subscription', $this->flush());
+		$this->assertSame('refunded', $this->subscriptionRow((int) $user->id())['status']);
+		$this->assertSame(
+			AccountType::FREE,
+			UsersHelper::getAccountType(UsersHelper::findById((int) $user->id())),
+		);
+
+		SubscriptionsHelper::setClientOverride(null);
 	}
 
 	// #endregion

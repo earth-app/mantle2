@@ -625,4 +625,123 @@ class StagingHelperTest extends IntegrationTestBase
 	}
 
 	// #endregion
+
+	// #region New-Submission Notices
+
+	private function adminNoticeTitles(UserInterface $admin): array
+	{
+		return array_map(
+			fn($n) => $n->getTitle(),
+			UsersHelper::getNotifications(UsersHelper::findById((int) $admin->id())),
+		);
+	}
+
+	private function adminNoticeMessages(UserInterface $admin): array
+	{
+		return array_map(
+			fn($n) => $n->getMessage(),
+			UsersHelper::getNotifications(UsersHelper::findById((int) $admin->id())),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Auto-staged submissions raise one review notice for every administrator')]
+	#[Group('mantle2/staging')]
+	public function testNotifyNewSubmissionsAlertsAdmins(): void
+	{
+		$admin = $this->admin();
+		$second = $this->admin();
+		StagingHelper::stage($this->activity('bouldering'), UsersHelper::cloud(), '', 'cloud');
+
+		StagingHelper::notifyNewSubmissions();
+
+		$this->assertSame(['Activities Awaiting Review'], $this->adminNoticeTitles($admin));
+		$this->assertSame(['Activities Awaiting Review'], $this->adminNoticeTitles($second));
+		$message = $this->adminNoticeMessages($admin)[0];
+		$this->assertStringContainsString('1 new activity was staged automatically', $message);
+		$this->assertStringContainsString('bouldering', $message);
+	}
+
+	#[Test]
+	#[TestDox('A batch of submissions is summarised in one notice with a plural count')]
+	#[Group('mantle2/staging')]
+	public function testNotifyNewSubmissionsBatchesTheNotice(): void
+	{
+		$admin = $this->admin();
+		foreach (['bouldering', 'kayaking', 'birding'] as $id) {
+			StagingHelper::stage($this->activity($id), UsersHelper::cloud(), '', 'cloud');
+		}
+
+		StagingHelper::notifyNewSubmissions();
+
+		$this->assertCount(1, $this->adminNoticeTitles($admin));
+		$this->assertStringContainsString(
+			'3 new activities were staged automatically',
+			$this->adminNoticeMessages($admin)[0],
+		);
+	}
+
+	#[Test]
+	#[TestDox('A submission is only ever announced once')]
+	#[Group('mantle2/staging')]
+	public function testNotifyNewSubmissionsIsIdempotent(): void
+	{
+		$admin = $this->admin();
+		StagingHelper::stage($this->activity('bouldering'), UsersHelper::cloud(), '', 'cloud');
+
+		StagingHelper::notifyNewSubmissions();
+		StagingHelper::notifyNewSubmissions();
+
+		$this->assertCount(1, $this->adminNoticeTitles($admin));
+	}
+
+	#[Test]
+	#[TestDox('Organizer submissions are reviewed on request, so they raise no notice')]
+	#[Group('mantle2/staging')]
+	public function testNotifyNewSubmissionsSkipsOrganizerRows(): void
+	{
+		// stage() already announces an organizer submission; only cloud/admin rows
+		// auto-publish on expiry, so only those need the extra chase
+		$admin = $this->admin();
+		StagingHelper::stage($this->activity('bouldering'), $this->organizer(), '', 'api');
+		$beforeSweep = $this->adminNoticeTitles($admin);
+
+		StagingHelper::notifyNewSubmissions();
+
+		$this->assertSame($beforeSweep, $this->adminNoticeTitles($admin));
+		$this->assertNotContains('Activities Awaiting Review', $this->adminNoticeTitles($admin));
+	}
+
+	#[Test]
+	#[TestDox('An empty queue notifies nobody')]
+	#[Group('mantle2/staging')]
+	public function testNotifyNewSubmissionsWithAnEmptyQueue(): void
+	{
+		$admin = $this->admin();
+
+		StagingHelper::notifyNewSubmissions();
+
+		$this->assertSame([], $this->adminNoticeTitles($admin));
+	}
+
+	#[Test]
+	#[TestDox('A decided submission is never chased')]
+	#[Group('mantle2/staging')]
+	public function testNotifyNewSubmissionsSkipsDecidedRows(): void
+	{
+		$admin = $this->admin();
+		$row = StagingHelper::stage(
+			$this->activity('bouldering'),
+			UsersHelper::cloud(),
+			'',
+			'cloud',
+		);
+		StagingHelper::deny((int) $row['id'], $admin, 'not a fit');
+
+		StagingHelper::notifyNewSubmissions();
+
+		$this->assertSame([], $this->adminNoticeTitles($admin));
+	}
+
+	// #endregion
 }

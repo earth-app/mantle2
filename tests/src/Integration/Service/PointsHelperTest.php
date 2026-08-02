@@ -3,7 +3,13 @@
 namespace Drupal\Tests\mantle2\Integration\Service;
 
 use Drupal\mantle2\Custom\AccountType;
+use Drupal\mantle2\Custom\Activity;
+use Drupal\mantle2\Custom\ActivityType;
+use Drupal\mantle2\Custom\Event;
+use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Quest;
+use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\PointsHelper;
 use Drupal\mantle2\Service\RedisHelper;
@@ -18,6 +24,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PointsHelperTest extends IntegrationTestBase
 {
+	protected function tearDown(): void
+	{
+		CloudHelper::setRequestOverride(null);
+		parent::tearDown();
+	}
+
 	private function userOfType(AccountType $type): UserInterface
 	{
 		return $this->createUser([
@@ -468,6 +480,417 @@ class PointsHelperTest extends IntegrationTestBase
 		PointsHelper::checkQuestProgress($user, null, []);
 		PointsHelper::checkQuestProgress($user, ['text' => 'hi']);
 		$this->assertFalse(PointsHelper::hasOngoingQuest($user));
+	}
+
+	// #endregion
+
+	// #region Quest Step Progression
+
+	/** @var array<int,array{path:string,method:string,data:array}> */
+	private array $cloudCalls = [];
+
+	/**
+	 * Serves a quest-in-progress from the cloud and records every write, so the
+	 * step-matching rules can be driven without a live cloud.
+	 */
+	private function questInProgress(mixed $currentStep, int $index = 0): void
+	{
+		$this->cloudCalls = [];
+		CloudHelper::setRequestOverride(function (string $path, string $method, array $data) use (
+			$currentStep,
+			$index,
+		) {
+			$this->cloudCalls[] = ['path' => $path, 'method' => $method, 'data' => $data];
+
+			if ($method === 'GET' && str_contains($path, '/quests/progress/')) {
+				return [
+					'questId' => 'q_walkabout',
+					'currentStep' => $currentStep,
+					'currentStepIndex' => $index,
+				];
+			}
+
+			return [];
+		});
+	}
+
+	/** the step payloads inside each PATCH to the quest progress update endpoint */
+	private function questUpdates(): array
+	{
+		$updates = [];
+		foreach ($this->cloudCalls as $call) {
+			if ($call['method'] === 'PATCH' && str_ends_with($call['path'], '/update')) {
+				$updates[] = $call['data']['response'] ?? [];
+			}
+		}
+		return $updates;
+	}
+
+	private function step(string $type, array $parameters = []): array
+	{
+		return [
+			'type' => $type,
+			'description' => ucfirst(str_replace('_', ' ', $type)),
+			'parameters' => $parameters,
+		];
+	}
+
+	private function attendedEvent(array $activities = [], int $attendees = 0): Event
+	{
+		return new Event(
+			1,
+			'Trail Cleanup',
+			'A cleanup',
+			EventType::IN_PERSON,
+			$activities,
+			40.0,
+			-75.0,
+			time(),
+			null,
+			Visibility::PUBLIC,
+			array_fill(0, max(0, $attendees - 1), 99),
+			[],
+			'evt_1',
+		);
+	}
+
+	#[Test]
+	#[TestDox('Attending an event advances an attend_event step')]
+	#[Group('mantle2/points')]
+	public function attendEventStepAdvances(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress($this->step('attend_event'), 2);
+
+		PointsHelper::checkQuestProgress($user, null, ['attend_event'], $this->attendedEvent());
+
+		$this->assertSame(
+			[
+				[
+					'event_id' => 'evt_1',
+					'type' => 'attend_event',
+					'index' => 2,
+					'alt_index' => null,
+				],
+			],
+			$this->questUpdates(),
+		);
+	}
+
+	#[Test]
+	#[TestDox('The quest update carries the device envelope and the user rank')]
+	#[Group('mantle2/points')]
+	public function questUpdateCarriesRank(): void
+	{
+		$user = $this->userOfType(AccountType::WRITER);
+		$this->questInProgress($this->step('attend_event'));
+
+		PointsHelper::checkQuestProgress($user, null, ['attend_event'], $this->attendedEvent());
+
+		$patch = null;
+		foreach ($this->cloudCalls as $call) {
+			if ($call['method'] === 'PATCH') {
+				$patch = $call['data'];
+			}
+		}
+		$this->assertNotNull($patch);
+		$this->assertSame('writer', $patch['rank']);
+		$this->assertSame('@earth-app/mantle2', $patch['device']['make']);
+	}
+
+	#[Test]
+	#[TestDox('An attend_event step below its attendee minimum does not advance')]
+	#[Group('mantle2/points')]
+	public function attendEventRespectsAttendeeMinimum(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress($this->step('attend_event', [null, 5]));
+
+		// getAttendeesCount counts the host too, so two attendees is short of five
+		PointsHelper::checkQuestProgress(
+			$user,
+			null,
+			['attend_event'],
+			$this->attendedEvent([], 2),
+		);
+
+		$this->assertSame([], $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('An attend_event step at its attendee minimum advances')]
+	#[Group('mantle2/points')]
+	public function attendEventMeetsAttendeeMinimum(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress($this->step('attend_event', [null, 3]));
+
+		PointsHelper::checkQuestProgress(
+			$user,
+			null,
+			['attend_event'],
+			$this->attendedEvent([], 3),
+		);
+
+		$this->assertCount(1, $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('An attend_event step advances only for the required activity type')]
+	#[Group('mantle2/points')]
+	public function attendEventRequiresActivityType(): void
+	{
+		$user = $this->createUser();
+		$requirement = ['type' => 'activity_type', 'value' => 'SPORT'];
+
+		$this->questInProgress($this->step('attend_event', [$requirement]));
+		PointsHelper::checkQuestProgress(
+			$user,
+			null,
+			['attend_event'],
+			$this->attendedEvent([new Activity('chess', 'Chess', ['HOBBY'])]),
+		);
+		$this->assertSame([], $this->questUpdates(), 'a hobby event must not satisfy a sport step');
+
+		$this->questInProgress($this->step('attend_event', [$requirement]));
+		PointsHelper::checkQuestProgress(
+			$user,
+			null,
+			['attend_event'],
+			$this->attendedEvent([new Activity('running', 'Running', ['SPORT'])]),
+		);
+		$this->assertCount(1, $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('A bare activity type on the event satisfies an activity_type requirement')]
+	#[Group('mantle2/points')]
+	public function attendEventMatchesBareActivityType(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress(
+			$this->step('attend_event', [['type' => 'activity_type', 'value' => 'TRAVEL']]),
+		);
+
+		PointsHelper::checkQuestProgress(
+			$user,
+			null,
+			['attend_event'],
+			$this->attendedEvent([ActivityType::TRAVEL]),
+		);
+
+		$this->assertCount(1, $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('An attend_event step advances only for the required activity id')]
+	#[Group('mantle2/points')]
+	public function attendEventRequiresSpecificActivity(): void
+	{
+		$user = $this->createUser();
+		$requirement = ['type' => 'activity', 'id' => 'birding'];
+
+		$this->questInProgress($this->step('attend_event', [$requirement]));
+		PointsHelper::checkQuestProgress(
+			$user,
+			null,
+			['attend_event'],
+			$this->attendedEvent([new Activity('running', 'Running', ['SPORT'])]),
+		);
+		$this->assertSame([], $this->questUpdates());
+
+		$this->questInProgress($this->step('attend_event', [$requirement]));
+		PointsHelper::checkQuestProgress(
+			$user,
+			null,
+			['attend_event'],
+			$this->attendedEvent([new Activity('birding', 'Birding', ['HOBBY'])]),
+		);
+		$this->assertCount(1, $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('A step of another type is left alone by the attend_event check')]
+	#[Group('mantle2/points')]
+	public function attendEventIgnoresOtherStepTypes(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress($this->step('respond_to_prompt'));
+
+		PointsHelper::checkQuestProgress($user, null, ['attend_event'], $this->attendedEvent());
+
+		$this->assertSame([], $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('Responding to a prompt advances a respond_to_prompt step')]
+	#[Group('mantle2/points')]
+	public function respondToPromptStepAdvances(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress($this->step('respond_to_prompt'), 1);
+
+		PointsHelper::checkQuestProgress($user, ['text' => 'I saw a heron'], ['respond_to_prompt']);
+
+		$updates = $this->questUpdates();
+		$this->assertCount(1, $updates);
+		$this->assertSame('respond_to_prompt', $updates[0]['type']);
+		$this->assertSame(1, $updates[0]['index']);
+		$this->assertNull($updates[0]['alt_index']);
+		$this->assertSame(['text' => 'I saw a heron'], $updates[0]['response_data']);
+	}
+
+	#[Test]
+	#[TestDox('A respond_to_prompt keyword match is case-insensitive')]
+	#[Group('mantle2/points')]
+	public function respondToPromptMatchesKeywordIgnoringCase(): void
+	{
+		$user = $this->createUser();
+
+		$this->questInProgress($this->step('respond_to_prompt', ['heron']));
+		PointsHelper::checkQuestProgress(
+			$user,
+			['response' => 'A HERON flew past'],
+			['respond_to_prompt'],
+		);
+		$this->assertCount(1, $this->questUpdates());
+
+		$this->questInProgress($this->step('respond_to_prompt', ['heron']));
+		PointsHelper::checkQuestProgress(
+			$user,
+			['content' => 'just a sparrow'],
+			['respond_to_prompt'],
+		);
+		$this->assertSame([], $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('A respond_to_prompt step scoped to an author accepts every author field shape')]
+	#[Group('mantle2/points')]
+	public function respondToPromptMatchesAuthorInAnyShape(): void
+	{
+		$user = $this->createUser();
+		$step = $this->step('respond_to_prompt', [null, 42]);
+
+		foreach (
+			[
+				['text' => 'hi', 'author_id' => 42],
+				['text' => 'hi', 'owner_id' => 42],
+				['text' => 'hi', 'owner' => ['id' => 42]],
+			]
+			as $data
+		) {
+			$this->questInProgress($step);
+			PointsHelper::checkQuestProgress($user, $data, ['respond_to_prompt']);
+			$this->assertCount(1, $this->questUpdates(), json_encode($data));
+		}
+
+		$this->questInProgress($step);
+		PointsHelper::checkQuestProgress(
+			$user,
+			['text' => 'hi', 'author_id' => 7],
+			['respond_to_prompt'],
+		);
+		$this->assertSame([], $this->questUpdates(), 'another author must not count');
+	}
+
+	#[Test]
+	#[TestDox('A respond_to_prompt step with no response data does not advance')]
+	#[Group('mantle2/points')]
+	public function respondToPromptNeedsData(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress($this->step('respond_to_prompt'));
+
+		PointsHelper::checkQuestProgress($user, null, ['respond_to_prompt']);
+
+		$this->assertSame([], $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('Alternative steps are each checked and reported with their own alt index')]
+	#[Group('mantle2/points')]
+	public function alternativeStepsCarryTheirAltIndex(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress([$this->step('attend_event'), $this->step('respond_to_prompt')], 4);
+
+		PointsHelper::checkQuestProgress(
+			$user,
+			['text' => 'done'],
+			['attend_event', 'respond_to_prompt'],
+			$this->attendedEvent(),
+		);
+
+		$updates = $this->questUpdates();
+		$this->assertCount(2, $updates);
+		$this->assertSame(
+			['attend_event', 0, 4],
+			[$updates[0]['type'], $updates[0]['alt_index'], $updates[0]['index']],
+		);
+		$this->assertSame(
+			['respond_to_prompt', 1, 4],
+			[$updates[1]['type'], $updates[1]['alt_index'], $updates[1]['index']],
+		);
+	}
+
+	#[Test]
+	#[TestDox('The step-type filter decides which checks run at all')]
+	#[Group('mantle2/points')]
+	public function stepTypeFilterSelectsTheCheck(): void
+	{
+		$user = $this->createUser();
+
+		$this->questInProgress($this->step('respond_to_prompt'));
+		PointsHelper::checkQuestProgress($user, ['text' => 'hello'], ['attend_event']);
+		$this->assertSame([], $this->questUpdates(), 'only the attend_event check was requested');
+
+		$this->questInProgress($this->step('respond_to_prompt'));
+		PointsHelper::checkQuestProgress($user, ['text' => 'hello'], ['respond_to_prompt']);
+		$this->assertCount(1, $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('A quest with no current step never writes progress')]
+	#[Group('mantle2/points')]
+	public function questWithoutACurrentStepDoesNothing(): void
+	{
+		$user = $this->createUser();
+		$this->questInProgress(null);
+
+		PointsHelper::checkQuestProgress(
+			$user,
+			['text' => 'hello'],
+			['attend_event', 'respond_to_prompt'],
+			$this->attendedEvent(),
+		);
+
+		$this->assertSame([], $this->questUpdates());
+	}
+
+	#[Test]
+	#[TestDox('getQuestForUser scopes the catalog read to the requesting user')]
+	#[Group('mantle2/points')]
+	public function getQuestForUserScopesTheRead(): void
+	{
+		$captured = null;
+		CloudHelper::setRequestOverride(function (string $path, string $method, array $data) use (
+			&$captured,
+		) {
+			$captured = [$path, $data];
+			return [
+				'id' => 'q1',
+				'title' => 'Walkabout',
+				'description' => 'A walk',
+				'icon' => 'boot',
+			];
+		});
+
+		$quest = PointsHelper::getQuestForUser('q1', '7');
+
+		$this->assertInstanceOf(Quest::class, $quest);
+		$this->assertSame('/v1/users/quests/q1', $captured[0]);
+		$this->assertSame(GeneralHelper::formatId('7'), $captured[1]['user_id']);
 	}
 
 	// #endregion

@@ -1484,4 +1484,281 @@ class EngagementTest extends IntegrationTestBase
 	}
 
 	#endregion
+
+	#region Onboarding
+
+	/** serves canned onboarding responses and records what mantle2 forwarded */
+	private function onboardingCloud(array &$captured, mixed $response = ['ok' => true]): void
+	{
+		CloudHelper::setRequestOverride(function (string $path, string $method, array $data) use (
+			&$captured,
+			$response,
+		) {
+			$captured[] = ['path' => $path, 'method' => $method, 'data' => $data];
+			if ($response instanceof Exception) {
+				throw $response;
+			}
+			return $response;
+		});
+	}
+
+	#[Test]
+	#[TestDox('GET onboarding proxies the cloud state for the authorized user')]
+	#[Group('mantle2/users')]
+	public function onboardingStateIsProxied(): void
+	{
+		$user = $this->createUser();
+		$captured = [];
+		$this->onboardingCloud($captured, ['steps' => ['profile'], 'dismissed' => false]);
+
+		$response = $this->controller()->getOnboarding(
+			$this->authRequest($user, 'GET', '/v2/users/current/onboarding'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame(['steps' => ['profile'], 'dismissed' => false], $this->decode($response));
+		$this->assertSame('/v1/users/onboarding/' . $user->id(), $captured[0]['path']);
+	}
+
+	#[Test]
+	#[TestDox('Every onboarding route refuses an anonymous caller')]
+	#[Group('mantle2/users')]
+	public function onboardingRoutesRequireAuth(): void
+	{
+		$controller = $this->controller();
+		$calls = [
+			fn() => $controller->getOnboarding(
+				$this->request('GET', '/v2/users/current/onboarding'),
+			),
+			fn() => $controller->completeOnboardingStep(
+				$this->request('POST', '/v2/users/current/onboarding/step', [], '{"step":"a"}'),
+			),
+			fn() => $controller->setOnboardingPersona(
+				$this->request(
+					'POST',
+					'/v2/users/current/onboarding/persona',
+					[],
+					'{"persona":"a"}',
+				),
+			),
+			fn() => $controller->dismissOnboarding(
+				$this->request('POST', '/v2/users/current/onboarding/dismiss'),
+			),
+		];
+
+		foreach ($calls as $index => $call) {
+			$this->assertSame(
+				Response::HTTP_UNAUTHORIZED,
+				$call()->getStatusCode(),
+				'onboarding route ' . $index . ' must require a session',
+			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('Completing an onboarding step forwards the step name')]
+	#[Group('mantle2/users')]
+	public function onboardingStepIsForwarded(): void
+	{
+		$user = $this->createUser();
+		$captured = [];
+		$this->onboardingCloud($captured, ['completed' => ['profile']]);
+
+		$response = $this->controller()->completeOnboardingStep(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/onboarding/step',
+				[],
+				json_encode(['step' => 'profile']),
+			),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame('POST', $captured[0]['method']);
+		$this->assertSame(['step' => 'profile'], $captured[0]['data']);
+	}
+
+	#[Test]
+	#[TestDox('An onboarding step needs a non-empty string name')]
+	#[Group('mantle2/users')]
+	public function onboardingStepValidatesTheName(): void
+	{
+		$user = $this->createUser();
+
+		foreach (['{}', '{"step":""}', '{"step":123}', 'not json'] as $body) {
+			$response = $this->controller()->completeOnboardingStep(
+				$this->authRequest($user, 'POST', '/v2/users/current/onboarding/step', [], $body),
+			);
+			$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode(), $body);
+		}
+	}
+
+	#[Test]
+	#[TestDox('Saving a persona trims the interest list to strings and caps it at twenty')]
+	#[Group('mantle2/users')]
+	public function onboardingPersonaNormalizesInterests(): void
+	{
+		$user = $this->createUser();
+		$captured = [];
+		$this->onboardingCloud($captured, ['persona' => 'explorer']);
+
+		$interests = array_map(fn($i) => 'interest_' . $i, range(1, 25));
+		$interests[] = '';
+		$interests[] = 42;
+		$interests[] = str_repeat('x', 65);
+
+		$response = $this->controller()->setOnboardingPersona(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/onboarding/persona',
+				[],
+				json_encode(['persona' => 'explorer', 'interests' => $interests]),
+			),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$sent = $captured[0]['data'];
+		$this->assertSame('explorer', $sent['persona']);
+		$this->assertCount(20, $sent['interests']);
+		$this->assertSame('interest_1', $sent['interests'][0]);
+		$this->assertNotContains('', $sent['interests']);
+		$this->assertNotContains(42, $sent['interests']);
+	}
+
+	#[Test]
+	#[TestDox('A persona must be a string of at most 64 characters')]
+	#[Group('mantle2/users')]
+	public function onboardingPersonaValidatesTheName(): void
+	{
+		$user = $this->createUser();
+
+		$bodies = [
+			'{}',
+			'{"persona":""}',
+			'{"persona":123}',
+			json_encode(['persona' => str_repeat('p', 65)]),
+		];
+		foreach ($bodies as $body) {
+			$this->assertSame(
+				Response::HTTP_BAD_REQUEST,
+				$this->controller()
+					->setOnboardingPersona(
+						$this->authRequest(
+							$user,
+							'POST',
+							'/v2/users/current/onboarding/persona',
+							[],
+							$body,
+						),
+					)
+					->getStatusCode(),
+				$body,
+			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('A persona with a non-array interests field is rejected')]
+	#[Group('mantle2/users')]
+	public function onboardingPersonaRejectsScalarInterests(): void
+	{
+		$user = $this->createUser();
+
+		$response = $this->controller()->setOnboardingPersona(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/onboarding/persona',
+				[],
+				json_encode(['persona' => 'explorer', 'interests' => 'hiking']),
+			),
+		);
+
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+		$this->assertStringContainsString('interests', $this->decode($response)['message']);
+	}
+
+	#[Test]
+	#[TestDox('Dismissing onboarding forwards the dismissal')]
+	#[Group('mantle2/users')]
+	public function onboardingDismissIsForwarded(): void
+	{
+		$user = $this->createUser();
+		$captured = [];
+		$this->onboardingCloud($captured, ['dismissed' => true]);
+
+		$response = $this->controller()->dismissOnboarding(
+			$this->authRequest($user, 'POST', '/v2/users/current/onboarding/dismiss'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame(['dismissed' => true], $this->decode($response));
+		$this->assertStringEndsWith('/dismiss', $captured[0]['path']);
+	}
+
+	#[Test]
+	#[TestDox('A cloud failure on any onboarding route surfaces as a 500')]
+	#[Group('mantle2/users')]
+	public function onboardingCloudFailureIsAnInternalError(): void
+	{
+		$user = $this->createUser();
+		$captured = [];
+		$this->onboardingCloud($captured, new Exception('cloud down'));
+
+		$controller = $this->controller();
+		$calls = [
+			fn() => $controller->getOnboarding(
+				$this->authRequest($user, 'GET', '/v2/users/current/onboarding'),
+			),
+			fn() => $controller->completeOnboardingStep(
+				$this->authRequest(
+					$user,
+					'POST',
+					'/v2/users/current/onboarding/step',
+					[],
+					'{"step":"a"}',
+				),
+			),
+			fn() => $controller->setOnboardingPersona(
+				$this->authRequest(
+					$user,
+					'POST',
+					'/v2/users/current/onboarding/persona',
+					[],
+					'{"persona":"a"}',
+				),
+			),
+			fn() => $controller->dismissOnboarding(
+				$this->authRequest($user, 'POST', '/v2/users/current/onboarding/dismiss'),
+			),
+		];
+
+		foreach ($calls as $index => $call) {
+			$this->assertSame(
+				Response::HTTP_INTERNAL_SERVER_ERROR,
+				$call()->getStatusCode(),
+				'onboarding route ' . $index . ' must not leak the cloud exception',
+			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('Onboarding for another user is refused')]
+	#[Group('mantle2/users')]
+	public function onboardingRefusesAnotherUser(): void
+	{
+		$user = $this->createUser();
+		$other = $this->createUser();
+
+		$response = $this->controller()->getOnboarding(
+			$this->authRequest($user, 'GET', '/v2/users/' . $other->id() . '/onboarding'),
+			(string) $other->id(),
+		);
+
+		$this->assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
+	}
+
+	#endregion
 }
