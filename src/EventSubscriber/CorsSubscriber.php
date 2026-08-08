@@ -26,6 +26,9 @@ class CorsSubscriber implements EventSubscriberInterface
 		'http://127.0.0.1:3000',
 		'http://localhost:3001',
 		'http://127.0.0.1:3001',
+		// crust binds its e2e server here so it never collides with a running dev server
+		'http://localhost:3002',
+		'http://127.0.0.1:3002',
 	];
 
 	private array $allowedOriginPatterns = [
