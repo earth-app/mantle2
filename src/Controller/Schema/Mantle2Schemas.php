@@ -1874,7 +1874,7 @@ class Mantle2Schemas
 				'fails_open' => [
 					'type' => 'boolean',
 					'description' =>
-						'True when an unreviewed submission auto-publishes; false when it auto-denies. Clients must read this rather than deriving it from submitter_kind. Deadlines resolve on the hourly cron, so a submission can read as expired for up to an hour before it resolves.',
+						'True when an unreviewed submission auto-publishes; false when it auto-denies. Always false today: nothing reaches the catalog without an administrator decision. Clients must read this rather than deriving it from submitter_kind. Deadlines resolve on the hourly cron, so a submission can read as expired for up to an hour before it resolves.',
 				],
 				'decided_at' => ['type' => ['string', 'null'], 'format' => 'date-time'],
 				'reviewer' => [

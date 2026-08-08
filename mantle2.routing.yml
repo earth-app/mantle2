@@ -5338,8 +5338,8 @@ mantle2.activities.stage:
   options:
     tags: Activities,Staging
     description: Submits an activity for administrator review. Requires Verified Publisher status.
-      Administrator and cloud submissions auto-publish after 24 hours; organizer
-      submissions are auto-denied after 48 hours.
+      Nothing auto-publishes; an unreviewed submission is auto-denied after 7 days for
+      administrator and cloud submissions, or 14 days for organizer submissions.
     schema/201: '#StagedActivity'
     schema/400: Bad Request
     schema/401: Unauthorized
@@ -5358,7 +5358,8 @@ mantle2.activities.staged.list:
     _access: 'TRUE'
   options:
     tags: Activities,Staging,Admin
-    description: Retrieves staged activities awaiting or past review
+    description: Retrieves staged activities awaiting or past review. state, submitter_kind
+      and source each accept a comma-separated list; unknown values are ignored.
     schema/200: '#StagedActivityList'
     schema/401: Unauthorized
     schema/403: 403

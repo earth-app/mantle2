@@ -61,14 +61,14 @@ class StagingHelperTest extends IntegrationTestBase
 	public static function windowProvider(): array
 	{
 		return [
-			'organizer gets one week' => ['organizer', StagingHelper::WINDOW_ORGANIZER],
-			'admin gets 60h' => ['admin', StagingHelper::WINDOW_PRIVILEGED],
-			'cloud gets 60h' => ['cloud', StagingHelper::WINDOW_PRIVILEGED],
+			'organizer gets two weeks' => ['organizer', 336 * 3600],
+			'admin gets one week' => ['admin', 168 * 3600],
+			'cloud gets one week' => ['cloud', 168 * 3600],
 		];
 	}
 
 	#[Test]
-	#[TestDox('The review window is one week for organizers and 60h for privileged submitters')]
+	#[TestDox('The review window is two weeks for organizers, one week for privileged')]
 	#[Group('mantle2/staging')]
 	#[DataProvider('windowProvider')]
 	public function testWindowFor(string $kind, int $expected): void
@@ -90,15 +90,16 @@ class StagingHelperTest extends IntegrationTestBase
 	}
 
 	#[Test]
-	#[TestDox('failsOpen is a deny-list, so an unknown submitter kind fails CLOSED')]
+	#[TestDox('Every submitter kind fails CLOSED, including an unknown one')]
 	#[Group('mantle2/staging')]
-	public function testFailsOpenIsADenyList(): void
+	public function testEveryKindFailsClosed(): void
 	{
-		$this->assertTrue(StagingHelper::failsOpen(StagingHelper::KIND_ADMIN));
-		$this->assertTrue(StagingHelper::failsOpen(StagingHelper::KIND_CLOUD));
-		$this->assertFalse(StagingHelper::failsOpen(StagingHelper::KIND_ORGANIZER));
-		// anything corrupt must not auto-publish
-		$this->assertFalse(StagingHelper::failsOpen('organizer'));
+		foreach (StagingHelper::KINDS as $kind) {
+			$this->assertFalse(StagingHelper::failsOpen($kind), "$kind must not auto-publish");
+		}
+
+		// anything corrupt must not auto-publish either
+		$this->assertFalse(StagingHelper::failsOpen('nonsense'));
 	}
 
 	#[Test]
@@ -142,9 +143,9 @@ class StagingHelperTest extends IntegrationTestBase
 	}
 
 	#[Test]
-	#[TestDox('A cloud submission is marked fails_open with a 24 hour window')]
+	#[TestDox('A cloud submission is fail-closed with a one week window')]
 	#[Group('mantle2/staging')]
-	public function testCloudSubmissionFailsOpen(): void
+	public function testCloudSubmissionFailsClosed(): void
 	{
 		$now = 1_800_000_000;
 		$row = StagingHelper::stage(
@@ -158,7 +159,7 @@ class StagingHelperTest extends IntegrationTestBase
 		$this->assertSame(StagingHelper::KIND_CLOUD, $row['submitter_kind']);
 		$this->assertSame('cloud_discovery', $row['source']);
 		$this->assertSame($now + StagingHelper::WINDOW_PRIVILEGED, (int) $row['expires_at']);
-		$this->assertTrue(StagingHelper::rowToArray($row)['fails_open']);
+		$this->assertFalse(StagingHelper::rowToArray($row)['fails_open']);
 	}
 
 	#[Test]
@@ -337,9 +338,9 @@ class StagingHelperTest extends IntegrationTestBase
 	// #region Expiry
 
 	#[Test]
-	#[TestDox('Expiry publishes admin and cloud rows and denies organizer rows')]
+	#[TestDox('Expiry denies every kind and publishes nothing to the catalog')]
 	#[Group('mantle2/staging')]
-	public function testCheckExpirationsSplitsByKind(): void
+	public function testCheckExpirationsAlwaysFailsClosed(): void
 	{
 		// must clear the longest window so the organizer row is due too
 		$past = time() - StagingHelper::WINDOW_ORGANIZER - 100;
@@ -368,22 +369,52 @@ class StagingHelperTest extends IntegrationTestBase
 
 		StagingHelper::checkExpirations();
 
-		$this->assertSame(
-			StagingHelper::STATE_EXPIRED_PUBLISHED,
-			StagingHelper::get((int) $cloud['id'])['state'],
+		foreach ([$cloud, $admin, $organizer] as $row) {
+			$fresh = StagingHelper::get((int) $row['id']);
+			$this->assertSame(StagingHelper::STATE_EXPIRED_DENIED, $fresh['state']);
+			$this->assertStringContainsString('Automatically denied', $fresh['review_notes']);
+		}
+
+		// the whole point: an unreviewed row never reaches the public catalog
+		foreach (['cloud_one', 'admin_one', 'org_one'] as $id) {
+			$this->assertNull(
+				ActivityHelper::getNodeByActivityId($id),
+				"$id must not be published",
+			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('The auto-deny note names the window that actually lapsed')]
+	#[Group('mantle2/staging')]
+	public function testExpiryNoteNamesTheWindow(): void
+	{
+		$past = time() - StagingHelper::WINDOW_ORGANIZER - 100;
+		$cloud = StagingHelper::stage(
+			$this->activity('note_cloud'),
+			UsersHelper::cloud(),
+			null,
+			'cloud_discovery',
+			$past,
 		);
-		$this->assertSame(
-			StagingHelper::STATE_EXPIRED_PUBLISHED,
-			StagingHelper::get((int) $admin['id'])['state'],
-		);
-		$this->assertSame(
-			StagingHelper::STATE_EXPIRED_DENIED,
-			StagingHelper::get((int) $organizer['id'])['state'],
+		$organizer = StagingHelper::stage(
+			$this->activity('note_org'),
+			$this->organizer(),
+			null,
+			'api',
+			$past,
 		);
 
-		$this->assertNotNull(ActivityHelper::getNodeByActivityId('cloud_one'));
-		$this->assertNotNull(ActivityHelper::getNodeByActivityId('admin_one'));
-		$this->assertNull(ActivityHelper::getNodeByActivityId('org_one'));
+		StagingHelper::checkExpirations();
+
+		$this->assertStringContainsString(
+			'7-day',
+			StagingHelper::get((int) $cloud['id'])['review_notes'],
+		);
+		$this->assertStringContainsString(
+			'14-day',
+			StagingHelper::get((int) $organizer['id'])['review_notes'],
+		);
 	}
 
 	#[Test]
@@ -392,7 +423,7 @@ class StagingHelperTest extends IntegrationTestBase
 	public function testCheckExpirationsIsIdempotent(): void
 	{
 		$past = time() - StagingHelper::WINDOW_PRIVILEGED - 100;
-		StagingHelper::stage(
+		$row = StagingHelper::stage(
 			$this->activity('cloud_two'),
 			UsersHelper::cloud(),
 			null,
@@ -401,14 +432,20 @@ class StagingHelperTest extends IntegrationTestBase
 		);
 
 		StagingHelper::checkExpirations();
+		$decidedAt = StagingHelper::get((int) $row['id'])['decided_at'];
 		StagingHelper::checkExpirations();
+
+		$fresh = StagingHelper::get((int) $row['id']);
+		$this->assertSame(StagingHelper::STATE_EXPIRED_DENIED, $fresh['state']);
+		// the compare-and-swap must refuse the second tick rather than restamp the decision
+		$this->assertSame($decidedAt, $fresh['decided_at']);
 
 		$nids = \Drupal::entityQuery('node')
 			->accessCheck(false)
 			->condition('type', 'activity')
 			->condition('field_activity_id', 'cloud_two')
 			->execute();
-		$this->assertCount(1, $nids);
+		$this->assertCount(0, $nids);
 	}
 
 	#[Test]
@@ -427,18 +464,19 @@ class StagingHelperTest extends IntegrationTestBase
 	}
 
 	#[Test]
-	#[TestDox('The urgent warning fires once per row and only for organizer submissions')]
+	#[TestDox('The urgent warning fires once per row and now covers every submitter kind')]
 	#[Group('mantle2/staging')]
-	public function testUrgentWarningIsStickyAndScoped(): void
+	public function testUrgentWarningIsStickyAndCoversEveryKind(): void
 	{
-		$soon = time() - StagingHelper::WINDOW_ORGANIZER + 6 * 3600;
+		$this->admin();
 		$organizer = StagingHelper::stage(
 			$this->activity('urgent_one'),
 			$this->organizer(),
 			null,
 			'api',
-			$soon,
+			time() - StagingHelper::WINDOW_ORGANIZER + 6 * 3600,
 		);
+		// cloud rows auto-deny too now, so they need the same chase before the deadline
 		$cloud = StagingHelper::stage(
 			$this->activity('urgent_cloud'),
 			UsersHelper::cloud(),
@@ -446,14 +484,51 @@ class StagingHelperTest extends IntegrationTestBase
 			'cloud_discovery',
 			time() - StagingHelper::WINDOW_PRIVILEGED + 6 * 3600,
 		);
+		$future = StagingHelper::stage($this->activity('urgent_later'), $this->organizer());
 
 		StagingHelper::checkExpirations();
 		$this->assertSame(1, (int) StagingHelper::get((int) $organizer['id'])['warned_urgent']);
-		$this->assertSame(0, (int) StagingHelper::get((int) $cloud['id'])['warned_urgent']);
+		$this->assertSame(1, (int) StagingHelper::get((int) $cloud['id'])['warned_urgent']);
+		// well outside URGENT_WINDOW, so it must not be warned yet
+		$this->assertSame(0, (int) StagingHelper::get((int) $future['id'])['warned_urgent']);
 
 		$before = count($this->collectedMail());
 		StagingHelper::checkExpirations();
 		$this->assertCount($before, $this->collectedMail());
+	}
+
+	#[Test]
+	#[TestDox('The urgent warning caps the id list so a day of discovery cannot flood the mail')]
+	#[Group('mantle2/staging')]
+	public function testUrgentWarningCapsTheActivityList(): void
+	{
+		$this->admin();
+		$soon = time() - StagingHelper::WINDOW_PRIVILEGED + 6 * 3600;
+		$total = StagingHelper::URGENT_MAIL_NAMES + 5;
+
+		for ($index = 0; $index < $total; $index++) {
+			StagingHelper::stage(
+				$this->activity("flood_$index"),
+				UsersHelper::cloud(),
+				null,
+				'cloud_discovery',
+				$soon,
+			);
+		}
+
+		StagingHelper::checkExpirations();
+
+		$mail = $this->collectedMail();
+		$this->assertNotEmpty($mail);
+		$listed = $mail[0]['params']['activities'];
+
+		$this->assertSame($total, $mail[0]['params']['count']);
+		$this->assertStringContainsString('and 5 more', $listed);
+		$this->assertSame(
+			StagingHelper::URGENT_MAIL_NAMES,
+			substr_count($listed, 'flood_'),
+			'the mail must name at most URGENT_MAIL_NAMES activities',
+		);
 	}
 
 	private function collectedMail(): array
@@ -562,6 +637,46 @@ class StagingHelperTest extends IntegrationTestBase
 		$this->assertSame(3, StagingHelper::countPending());
 		$this->assertSame(1, StagingHelper::countPending(StagingHelper::KIND_CLOUD));
 		$this->assertNotNull(StagingHelper::soonestDeadline());
+	}
+
+	#[Test]
+	#[TestDox('A comma-separated state filter matches every listed state and ignores junk')]
+	#[Group('mantle2/staging')]
+	public function testListingAcceptsMultipleStates(): void
+	{
+		$admin = $this->admin();
+		$denied = StagingHelper::stage($this->activity('multi_denied'), $this->organizer());
+		$approved = StagingHelper::stage($this->activity('multi_approved'), $this->organizer());
+		StagingHelper::stage(
+			$this->activity('multi_expired'),
+			UsersHelper::cloud(),
+			null,
+			'cloud_discovery',
+			time() - StagingHelper::WINDOW_PRIVILEGED - 100,
+		);
+
+		StagingHelper::deny((int) $denied['id'], $admin);
+		StagingHelper::approve((int) $approved['id'], $admin);
+		StagingHelper::checkExpirations();
+
+		// the query cloud runs to keep discovery from re-proposing a denied id
+		$both = StagingHelper::listStaged(['state' => 'denied,expired_denied']);
+		$ids = array_map(fn(array $item) => $item['activity']['id'], $both['items']);
+
+		$this->assertSame(2, $both['total']);
+		$this->assertContains('multi_denied', $ids);
+		$this->assertContains('multi_expired', $ids);
+		$this->assertNotContains('multi_approved', $ids);
+
+		// an unknown value drops out of the list rather than poisoning the whole filter
+		$this->assertSame(1, StagingHelper::listStaged(['state' => 'denied,not_a_state'])['total']);
+		// nothing valid left means no filter at all, not a silently empty page
+		$this->assertSame(3, StagingHelper::listStaged(['state' => 'not_a_state'])['total']);
+		$this->assertSame(
+			1,
+			StagingHelper::listStaged(['submitter_kind' => 'cloud,bogus'])['total'],
+		);
+		$this->assertSame(1, StagingHelper::listStaged(['source' => 'cloud_discovery'])['total']);
 	}
 
 	#[Test]
@@ -700,8 +815,8 @@ class StagingHelperTest extends IntegrationTestBase
 	#[Group('mantle2/staging')]
 	public function testNotifyNewSubmissionsSkipsOrganizerRows(): void
 	{
-		// stage() already announces an organizer submission; only cloud/admin rows
-		// auto-publish on expiry, so only those need the extra chase
+		// stage() already announces an organizer submission, so the batch sweep would only
+		// duplicate it; cloud/admin rows arrive unannounced and need the extra chase
 		$admin = $this->admin();
 		StagingHelper::stage($this->activity('bouldering'), $this->organizer(), '', 'api');
 		$beforeSweep = $this->adminNoticeTitles($admin);

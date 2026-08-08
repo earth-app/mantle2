@@ -112,7 +112,7 @@ class StagingControllerTest extends IntegrationTestBase
 	}
 
 	#[Test]
-	#[TestDox('A verified organizer stages successfully and gets a fail-closed one-week deadline')]
+	#[TestDox('A verified organizer stages successfully and gets a fail-closed two-week deadline')]
 	#[Group('mantle2/staging')]
 	public function testOrganizerStages(): void
 	{
@@ -148,8 +148,8 @@ class StagingControllerTest extends IntegrationTestBase
 		$this->assertSame(Response::HTTP_CREATED, $viaBearer->getStatusCode());
 		$data = $this->decode($viaBearer);
 		$this->assertSame('cloud', $data['submitter_kind']);
-		// the contract cloud relies on to know it will auto-publish
-		$this->assertTrue($data['fails_open']);
+		// nothing fails open any more, cloud rows included
+		$this->assertFalse($data['fails_open']);
 
 		$header = Request::create(
 			'/v2/activities/staged',
@@ -489,6 +489,137 @@ class StagingControllerTest extends IntegrationTestBase
 				->withdrawStaged($this->authRequest($owner, 'DELETE', $uri), $id)
 				->getStatusCode(),
 		);
+	}
+
+	// #endregion
+
+	// #region Cloud discovery contract
+
+	/**
+	 * The request cloud's postStagedActivity() actually builds, byte for byte.
+	 *
+	 * @see cloud/src/util/mantle2.ts
+	 */
+	private function cloudStageRequest(string $id): Request
+	{
+		$request = Request::create(
+			'/v2/activities/staged',
+			'POST',
+			[],
+			[],
+			[],
+			[],
+			json_encode([
+				'id' => $id,
+				'name' => ucfirst(str_replace('_', ' ', $id)),
+				'description' => 'A generated description of the proposed activity.',
+				'aliases' => [],
+				'types' => ['SPORT'],
+				'fields' => ['icon' => 'mdi:run'],
+				'source' => 'cloud_discovery',
+			]),
+		);
+		$request->headers->set('Authorization', 'Bearer test_admin_key');
+		$request->headers->set('Content-Type', 'application/json');
+
+		return $request;
+	}
+
+	#[Test]
+	#[TestDox('A cloud discovery submission persists, queues, expires closed, and blocklists')]
+	#[Group('mantle2/staging')]
+	#[Group('mantle2/cloud')]
+	public function testCloudDiscoveryLifecycle(): void
+	{
+		$admin = $this->user(AccountType::ADMINISTRATOR);
+
+		// 1. cloud stages. an insert naming a column production does not have is caught and
+		// turned into a 500, which is exactly how the queue went silently empty
+		$created = $this->controller()->stageActivity($this->cloudStageRequest('sea_kayaking'));
+		$this->assertSame(Response::HTTP_CREATED, $created->getStatusCode());
+
+		$staged = $this->decode($created);
+		$this->assertSame('cloud', $staged['submitter_kind']);
+		$this->assertSame('cloud_discovery', $staged['source']);
+		$this->assertFalse($staged['fails_open']);
+
+		// 2. the row is really on disk, with every column the helper writes
+		$row = StagingHelper::get((int) $staged['id']);
+		$this->assertIsArray($row, 'the staged row was never persisted');
+		foreach (['warned_urgent', 'notified_pending', 'dedup_hash', 'payload'] as $column) {
+			$this->assertArrayHasKey($column, $row, "the staged row has no $column");
+		}
+		$this->assertSame(0, (int) $row['warned_urgent']);
+
+		// 3. it shows up in the queue crust renders
+		$queue = $this->authRequest($admin, 'GET', '/v2/activities/staged');
+		$queue->query->set('state', StagingHelper::STATE_PENDING);
+		$pending = $this->decode($this->controller()->listStaged($queue));
+		$this->assertSame(1, $pending['total']);
+		$this->assertSame('sea_kayaking', $pending['items'][0]['activity']['id']);
+
+		// 4. restaging the same id is a 409, which cloud treats as an idempotent skip
+		$this->assertSame(
+			Response::HTTP_CONFLICT,
+			$this->controller()
+				->stageActivity($this->cloudStageRequest('sea_kayaking'))
+				->getStatusCode(),
+		);
+
+		// 5. unreviewed, it auto-denies and publishes nothing
+		$this->container
+			->get('database')
+			->update(StagingHelper::TABLE)
+			->fields(['expires_at' => time() - 10])
+			->condition('id', (int) $staged['id'])
+			->execute();
+		StagingHelper::checkExpirations();
+
+		$this->assertSame(
+			StagingHelper::STATE_EXPIRED_DENIED,
+			StagingHelper::get((int) $staged['id'])['state'],
+		);
+		$this->assertNull(ActivityHelper::getNodeByActivityId('sea_kayaking'));
+
+		// 6. cloud's blocklist poll must see the auto-denial, or discovery re-proposes it
+		// on the next hourly run forever
+		$poll = $this->authRequest($admin, 'GET', '/v2/activities/staged');
+		$poll->query->set('state', 'denied,expired_denied');
+		$poll->query->set('sort', 'desc');
+		$denied = $this->decode($this->controller()->listStaged($poll));
+
+		$this->assertSame(1, $denied['total']);
+		$this->assertSame('sea_kayaking', $denied['items'][0]['activity']['id']);
+	}
+
+	#[Test]
+	#[TestDox('An approved cloud submission publishes and drops out of the blocklist poll')]
+	#[Group('mantle2/staging')]
+	#[Group('mantle2/cloud')]
+	public function testCloudSubmissionApprovalPath(): void
+	{
+		$admin = $this->user(AccountType::ADMINISTRATOR);
+		$staged = $this->decode(
+			$this->controller()->stageActivity($this->cloudStageRequest('sea_kayaking')),
+		);
+
+		$approve = $this->authRequest(
+			$admin,
+			'POST',
+			'/v2/activities/staged/' . $staged['id'] . '/approve',
+			[],
+			'{}',
+		);
+		$approved = $this->controller()->approveStaged($approve, (string) $staged['id']);
+
+		$this->assertSame(Response::HTTP_OK, $approved->getStatusCode());
+		$this->assertSame('sea_kayaking', $this->decode($approved)['published_activity_id']);
+		$this->assertNotNull(ActivityHelper::getNodeByActivityId('sea_kayaking'));
+
+		// approved is not denied, so discovery must not blocklist it
+		$poll = $this->authRequest($admin, 'GET', '/v2/activities/staged');
+		$poll->query->set('state', 'denied,expired_denied');
+		$this->assertSame(0, $this->decode($this->controller()->listStaged($poll))['total']);
 	}
 
 	// #endregion

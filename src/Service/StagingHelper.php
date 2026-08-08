@@ -15,19 +15,21 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 /**
  * Review queue for activities proposed by verified publishers and the cloud worker.
  *
- * Submissions resolve automatically when their window closes: admin and cloud rows fail
- * OPEN (auto-publish), organizer rows fail CLOSED (auto-deny).
+ * Every submission fails CLOSED: when its window closes without an administrator decision
+ * it is auto-denied, never auto-published. Nothing reaches the public catalog that a human
+ * did not approve.
  */
 class StagingHelper
 {
 	public const TABLE = 'mantle2_staged_activities';
 
-	public const WINDOW_ORGANIZER = 168 * 3600;
-	public const WINDOW_PRIVILEGED = 60 * 3600;
+	public const WINDOW_ORGANIZER = 336 * 3600;
+	public const WINDOW_PRIVILEGED = 168 * 3600;
 	public const URGENT_WINDOW = 24 * 3600;
 	public const RETENTION = 90 * 86400;
 	public const EXPIRY_BATCH = 200;
 	public const MAX_PENDING_PER_ORGANIZER = 10;
+	public const URGENT_MAIL_NAMES = 20;
 
 	public const KIND_ORGANIZER = 'organizer';
 	public const KIND_ADMIN = 'admin';
@@ -75,11 +77,14 @@ class StagingHelper
 	}
 
 	/**
-	 * Written as a deny-list so an unknown or corrupted kind fails CLOSED.
+	 * Always false; kept as the single place the expiry policy is stated, and surfaced on
+	 * every row so clients never re-derive it from submitter_kind.
+	 *
+	 * @noinspection PhpUnusedParameterInspection
 	 */
 	public static function failsOpen(string $kind): bool
 	{
-		return $kind !== self::KIND_ORGANIZER;
+		return false;
 	}
 
 	public static function dedupHash(string $activityId): string
@@ -362,6 +367,25 @@ class StagingHelper
 		return $row ?: null;
 	}
 
+	private static function enumFilter(mixed $value, array $allowed): string|array|null
+	{
+		$values = is_array($value) ? $value : explode(',', (string) $value);
+		$values = array_values(
+			array_unique(
+				array_filter(
+					array_map(fn($entry) => trim((string) $entry), $values),
+					fn(string $entry) => in_array($entry, $allowed, true),
+				),
+			),
+		);
+
+		return match (count($values)) {
+			0 => null,
+			1 => $values[0],
+			default => $values,
+		};
+	}
+
 	public static function listStaged(
 		array $filters = [],
 		int $page = 1,
@@ -371,15 +395,30 @@ class StagingHelper
 		$page = max(1, $page);
 		$limit = max(1, min(100, $limit));
 
+		$allowed = [
+			'state' => self::STATES,
+			'submitter_kind' => self::KINDS,
+			'source' => self::SOURCES,
+		];
+
 		try {
 			$query = self::db()->select(self::TABLE, 't')->fields('t');
 			$countQuery = self::db()->select(self::TABLE, 't');
 
-			foreach (['state', 'submitter_kind', 'source'] as $column) {
-				if (!empty($filters[$column])) {
-					$query->condition("t.$column", $filters[$column]);
-					$countQuery->condition("t.$column", $filters[$column]);
+			foreach ($allowed as $column => $values) {
+				if (empty($filters[$column])) {
+					continue;
 				}
+
+				$filter = self::enumFilter($filters[$column], $values);
+				if ($filter === null) {
+					continue;
+				}
+
+				// condition() defaults to '=', which silently matches nothing for an array
+				$operator = is_array($filter) ? 'IN' : '=';
+				$query->condition("t.$column", $filter, $operator);
+				$countQuery->condition("t.$column", $filter, $operator);
 			}
 			if (!empty($filters['submitter_id'])) {
 				$query->condition('t.submitter_id', (int) $filters['submitter_id']);
@@ -591,14 +630,14 @@ class StagingHelper
 	private static function expireDenied(array $row): void
 	{
 		$id = (int) $row['id'];
+		$days = (int) round(self::windowFor($row['submitter_kind']) / 86400);
 
 		if (
 			!self::claim($id, [
 				'state' => self::STATE_EXPIRED_DENIED,
 				'decided_at' => time(),
 				'reviewer_id' => null,
-				'review_notes' =>
-					'Automatically denied: the one-week review window expired without an administrator decision.',
+				'review_notes' => "Automatically denied: the $days-day review window expired without an administrator decision.",
 			])
 		) {
 			return;
@@ -663,7 +702,7 @@ class StagingHelper
 		$names = array_slice(array_map(fn(array $row) => $row['activity_id'], $rows), 0, 5);
 
 		$message = sprintf(
-			'%d new %s staged automatically (%s). Unreviewed submissions publish themselves after %s.',
+			'%d new %s staged automatically (%s). Unreviewed submissions are denied automatically after %s.',
 			$count,
 			$count === 1 ? 'activity was' : 'activities were',
 			implode(', ', $names),
@@ -707,13 +746,8 @@ class StagingHelper
 
 		foreach ($rows as $row) {
 			try {
-				// the decision is a pure function of the kind captured at stage time, never
-				// recomputed from the submitter's current role
-				if (self::failsOpen($row['submitter_kind'])) {
-					self::publish($row, null, self::STATE_EXPIRED_PUBLISHED);
-				} else {
-					self::expireDenied($row);
-				}
+				// fail closed regardless of kind; cron never publishes to the public catalog
+				self::expireDenied($row);
 			} catch (\Throwable $e) {
 				Drupal::logger('mantle2')->error('[staging] Row %id failed to resolve: %m', [
 					'%id' => $row['id'],
@@ -730,7 +764,6 @@ class StagingHelper
 				->select(self::TABLE, 't')
 				->fields('t')
 				->condition('t.state', self::STATE_PENDING)
-				->condition('t.submitter_kind', self::KIND_ORGANIZER)
 				->condition('t.warned_urgent', 0)
 				->condition('t.expires_at', $now, '>')
 				->condition('t.expires_at', $now + self::URGENT_WINDOW, '<=')
@@ -748,10 +781,14 @@ class StagingHelper
 		self::markWarned(array_map(fn(array $row) => (int) $row['id'], $rows));
 
 		$soonest = min(array_map(fn(array $row) => (int) $row['expires_at'], $rows));
+		$names = array_map(fn(array $row) => $row['activity_id'], $rows);
+		$listed = array_slice($names, 0, self::URGENT_MAIL_NAMES);
+		$overflow = count($names) - count($listed);
+
 		$params = [
 			'count' => count($rows),
 			'deadline' => GeneralHelper::dateToIso($soonest),
-			'activities' => implode(', ', array_map(fn(array $row) => $row['activity_id'], $rows)),
+			'activities' => implode(', ', $listed) . ($overflow > 0 ? ", and $overflow more" : ''),
 			'time' => date(DATE_ATOM),
 		];
 
