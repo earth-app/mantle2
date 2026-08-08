@@ -48,6 +48,13 @@ class Mantle2Commands extends DrushCommands
 				: 'All custom tables already present.',
 		);
 
+		$columns = mantle2_reconcile_custom_columns();
+		$this->output()->writeln(
+			$columns
+				? 'Added missing columns: ' . implode(', ', $columns)
+				: 'All custom columns already present.',
+		);
+
 		mantle2_install_user_fields();
 		$this->output()->writeln('User fields synced.');
 

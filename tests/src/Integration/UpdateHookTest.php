@@ -296,6 +296,241 @@ class UpdateHookTest extends IntegrationTestBase
 		$this->assertTrue($this->schema()->tableExists('email_suppressions'));
 	}
 
+	#[Test]
+	#[TestDox('9011 renames warned_12h to warned_urgent and keeps the warned rows warned')]
+	#[Group('mantle2/install')]
+	public function testUpdate9011RenamesWarnedColumn(): void
+	{
+		$table = 'mantle2_staged_activities';
+		$schema = $this->schema();
+
+		// rebuild production's shape: the table as 9009 created it, before the rename
+		if ($schema->tableExists($table)) {
+			$schema->dropTable($table);
+		}
+		$definition = mantle2_staged_activities_table_schema();
+		$spec = $definition['fields']['warned_urgent'];
+		unset($definition['fields']['warned_urgent']);
+		$definition['fields']['warned_12h'] = $spec;
+		$schema->createTable($table, $definition);
+
+		$database = $this->container->get('database');
+		$database
+			->insert($table)
+			->fields([
+				'activity_id' => 'legacy_row',
+				'dedup_hash' => str_repeat('a', 64),
+				'payload' => '{}',
+				'submitter_id' => 1,
+				'submitter_kind' => 'cloud',
+				'source' => 'cloud_discovery',
+				'state' => 'pending',
+				'submitted_at' => time(),
+				'expires_at' => time() + 3600,
+				'warned_12h' => 1,
+				'notified_pending' => 1,
+			])
+			->execute();
+
+		$message = mantle2_update_9011();
+
+		$this->assertStringContainsString('warned_urgent', $message);
+		$this->assertTrue($schema->fieldExists($table, 'warned_urgent'));
+		$this->assertFalse($schema->fieldExists($table, 'warned_12h'));
+
+		// a rename, not a drop-and-add; a re-add would unwarn every row and re-mail everyone
+		$this->assertSame(
+			'1',
+			(string) $database
+				->select($table, 't')
+				->fields('t', ['warned_urgent'])
+				->condition('activity_id', 'legacy_row')
+				->execute()
+				->fetchField(),
+		);
+
+		// the insert StagingHelper::stage() actually performs must now succeed
+		$database
+			->insert($table)
+			->fields([
+				'activity_id' => 'new_row',
+				'dedup_hash' => str_repeat('b', 64),
+				'payload' => '{}',
+				'submitter_id' => 1,
+				'submitter_kind' => 'cloud',
+				'source' => 'cloud_discovery',
+				'state' => 'pending',
+				'submitted_at' => time(),
+				'expires_at' => time() + 3600,
+				'warned_urgent' => 0,
+				'notified_pending' => 0,
+			])
+			->execute();
+
+		$this->assertStringContainsStringIgnoringCase('nothing to repair', mantle2_update_9011());
+	}
+
+	#[Test]
+	#[TestDox('Reconciling columns restores a column a schema function gained after create')]
+	#[Group('mantle2/install')]
+	public function testReconcileCustomColumns(): void
+	{
+		mantle2_ensure_custom_tables();
+		$this->schema()->dropField('mantle2_staged_activities', 'warned_urgent');
+		$this->assertFalse(
+			$this->schema()->fieldExists('mantle2_staged_activities', 'warned_urgent'),
+		);
+
+		$added = mantle2_reconcile_custom_columns();
+
+		$this->assertContains('mantle2_staged_activities.warned_urgent', $added);
+		$this->assertTrue(
+			$this->schema()->fieldExists('mantle2_staged_activities', 'warned_urgent'),
+		);
+		// second pass has nothing left to do
+		$this->assertSame([], mantle2_reconcile_custom_columns());
+	}
+
+	#[Test]
+	#[TestDox('Reconciling columns leaves a fresh install untouched and skips missing tables')]
+	#[Group('mantle2/install')]
+	public function testReconcileIsANoOpOnAFreshInstall(): void
+	{
+		mantle2_ensure_custom_tables();
+		$this->assertSame([], mantle2_reconcile_custom_columns());
+
+		$this->dropAllCustomTables();
+		$this->assertSame([], mantle2_reconcile_custom_columns());
+	}
+
+	// #endregion
+
+	// #region Column round-trip
+
+	/**
+	 * A writable sample for one column, chosen from its declared type.
+	 *
+	 * Deliberately fails on a type it has not been taught: a new column type silently
+	 * skipped here would put that column back outside the round-trip below.
+	 */
+	private function sampleValue(array $spec, int $seed): string|int|float
+	{
+		$length = (int) ($spec['length'] ?? 8);
+
+		return match ($spec['type']) {
+			'int', 'serial' => $seed,
+			'float', 'numeric' => $seed + 0.5,
+			'varchar', 'varchar_ascii', 'char', 'text', 'blob' => substr(
+				str_repeat("v$seed", 16),
+				0,
+				max(1, min(8, $length)),
+			),
+			default => self::fail(
+				"sampleValue() has no case for column type '{$spec['type']}'; add one",
+			),
+		};
+	}
+
+	public static function customTableProvider(): array
+	{
+		return array_combine(
+			self::ALL_TABLES,
+			array_map(fn(string $table) => [$table], self::ALL_TABLES),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Every declared column survives an insert, read, update and delete')]
+	#[Group('mantle2/install')]
+	#[DataProvider('customTableProvider')]
+	public function testEveryDeclaredColumnRoundTrips(string $table): void
+	{
+		// this is the check that was missing when warned_urgent shipped: the column existed
+		// in the schema function, so snapshot tests passed, but no write ever named it
+		mantle2_ensure_custom_tables();
+		$definition = mantle2_custom_table_schemas()[$table];
+		$database = $this->container->get('database');
+
+		$serial = [];
+		$insert = [];
+		foreach ($definition['fields'] as $column => $spec) {
+			if ($spec['type'] === 'serial') {
+				$serial[] = $column;
+				continue;
+			}
+			$insert[$column] = $this->sampleValue($spec, 1);
+		}
+
+		$this->assertNotEmpty($insert, "$table declares no writable column");
+		$database->insert($table)->fields($insert)->execute();
+
+		$stored = $database->select($table, 't')->fields('t')->execute()->fetchAssoc();
+
+		$this->assertIsArray($stored, "$table returned no row after insert");
+		foreach (array_keys($definition['fields']) as $column) {
+			$this->assertArrayHasKey($column, $stored, "$table.$column is missing from the row");
+		}
+		foreach ($insert as $column => $value) {
+			$this->assertEquals($value, $stored[$column], "$table.$column did not round-trip");
+		}
+
+		// primary key columns identify the row, so update everything else
+		$keys = array_merge($definition['primary key'], $serial);
+		$update = array_diff_key($insert, array_flip($keys));
+
+		if ($update) {
+			$updated = [];
+			foreach ($update as $column => $ignored) {
+				$updated[$column] = $this->sampleValue($definition['fields'][$column], 2);
+			}
+
+			$this->assertSame(
+				1,
+				(int) $database->update($table)->fields($updated)->execute(),
+				"$table did not update exactly one row",
+			);
+
+			$fresh = $database->select($table, 't')->fields('t')->execute()->fetchAssoc();
+			foreach ($updated as $column => $value) {
+				$this->assertEquals($value, $fresh[$column], "$table.$column did not update");
+			}
+		}
+
+		$this->assertSame(1, (int) $database->delete($table)->execute());
+		$this->assertSame(
+			0,
+			(int) $database->select($table, 't')->countQuery()->execute()->fetchField(),
+		);
+	}
+
+	#[Test]
+	#[TestDox('Every declared index and unique key points at a column that exists')]
+	#[Group('mantle2/install')]
+	#[DataProvider('customTableProvider')]
+	public function testDeclaredKeysReferenceRealColumns(string $table): void
+	{
+		$definition = mantle2_custom_table_schemas()[$table];
+		$columns = array_keys($definition['fields']);
+
+		foreach (['indexes', 'unique keys'] as $section) {
+			foreach ($definition[$section] ?? [] as $name => $members) {
+				foreach ($members as $member) {
+					// a prefix-length index is declared as [column, length]
+					$column = is_array($member) ? $member[0] : $member;
+					$this->assertContains(
+						$column,
+						$columns,
+						"$table.$section.$name references unknown column $column",
+					);
+				}
+			}
+		}
+
+		foreach ($definition['primary key'] as $column) {
+			$this->assertContains($column, $columns, "$table primary key references $column");
+		}
+	}
+
 	// #endregion
 
 	// #region Invalid and partial state

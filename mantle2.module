@@ -613,8 +613,10 @@ function mantle2_mail($key, &$message, $params)
 			$message['subject'] = "The Earth App - $count Activities Awaiting Review";
 
 			$markdown = "@$username, there are **{$count}** activities awaiting review on The Earth App.\n\n";
-			$markdown .= "- **{$params['count_organizer']}** from organizers, which are **denied automatically** if the window closes\n";
-			$markdown .= "- **{$params['count_automated']}** discovered automatically, which **publish themselves** if the window closes\n\n";
+			$markdown .= "- **{$params['count_organizer']}** from organizers\n";
+			$markdown .= "- **{$params['count_automated']}** discovered automatically\n\n";
+			$markdown .=
+				"Nothing publishes on its own: anything left unreviewed is **denied automatically** when its window closes.\n\n";
 			$markdown .= "The next deadline is **{$params['soonest_deadline']}**.\n\n";
 			$markdown .=
 				'[[Open the Approvals Queue]](https://app.earth-app.com/admin?tab=approvals)';
@@ -626,8 +628,8 @@ function mantle2_mail($key, &$message, $params)
 				'subject'
 			] = "The Earth App - $count Staged Activities Expire Within $hours Hours";
 
-			$markdown = "@$username, **{$count}** organizer submissions are about to expire.\n\n";
-			$markdown .= "If they are not approved before **{$params['deadline']}**, they will be automatically **denied** and the organizers will have to resubmit.\n\n";
+			$markdown = "@$username, **{$count}** staged submissions are about to expire.\n\n";
+			$markdown .= "If they are not approved before **{$params['deadline']}**, they will be automatically **denied** and will have to be resubmitted.\n\n";
 			$markdown .= "Awaiting review: {$params['activities']}\n\n";
 			$markdown .= '[[Review Them Now]](https://app.earth-app.com/admin?tab=approvals)';
 			break;
@@ -790,6 +792,7 @@ function mantle2_cron()
 			'Ensure Custom Tables' => function () {
 				Drupal::moduleHandler()->loadInclude('mantle2', 'install');
 				mantle2_ensure_custom_tables();
+				mantle2_reconcile_custom_columns();
 			},
 			'Expired Prompts' => fn() => PromptsHelper::checkExpiredPrompts(),
 			'Expired Articles' => fn() => ArticlesHelper::checkExpiredArticles(),

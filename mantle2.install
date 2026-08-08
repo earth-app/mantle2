@@ -391,6 +391,7 @@ function getWidgetType(string $field_type): string
 function mantle2_install(): void
 {
 	mantle2_ensure_custom_tables();
+	mantle2_reconcile_custom_columns();
 	mantle2_install_user_fields();
 	mantle2_install_content();
 }
@@ -1204,12 +1205,9 @@ function mantle2_install_content(): void
 
 // every mantle2-owned table lives here, never in hook_schema (uninstall drops those);
 // idempotent, so hook_install, `drush mantle2:sync`, cron and tests all call it
-function mantle2_ensure_custom_tables(): array
+function mantle2_custom_table_schemas(): array
 {
-	$schema = Database::getConnection()->schema();
-	$created = [];
-
-	$tables = [
+	return [
 		'push_tokens' => mantle2_push_tokens_table_schema(),
 		'mantle2_api_keys' => mantle2_api_keys_table_schema(),
 		'mantle2_subscriptions' => mantle2_subscriptions_table_schema(),
@@ -1218,8 +1216,14 @@ function mantle2_ensure_custom_tables(): array
 		'mantle2_staged_activities' => mantle2_staged_activities_table_schema(),
 		'email_suppressions' => mantle2_email_suppressions_table_schema(),
 	];
+}
 
-	foreach ($tables as $name => $definition) {
+function mantle2_ensure_custom_tables(): array
+{
+	$schema = Database::getConnection()->schema();
+	$created = [];
+
+	foreach (mantle2_custom_table_schemas() as $name => $definition) {
 		if ($schema->tableExists($name)) {
 			continue;
 		}
@@ -1236,6 +1240,61 @@ function mantle2_ensure_custom_tables(): array
 	}
 
 	return $created;
+}
+
+/**
+ * Add columns a *_table_schema() gained after its table was already created.
+ *
+ * mantle2_ensure_custom_tables() only ever creates, so a column added to a schema function
+ * later never reaches an existing production table; every INSERT naming it then throws.
+ * That is exactly how mantle2_staged_activities.warned_urgent shipped broken for a release.
+ * Add-only on purpose: renames and drops still need an explicit update hook.
+ *
+ * @return string[] the 'table.column' pairs added
+ */
+function mantle2_reconcile_custom_columns(): array
+{
+	$schema = Database::getConnection()->schema();
+	$added = [];
+
+	foreach (mantle2_custom_table_schemas() as $table => $definition) {
+		if (!$schema->tableExists($table)) {
+			continue;
+		}
+
+		foreach ($definition['fields'] as $column => $spec) {
+			// serial columns are part of the primary key and cannot be bolted on afterwards
+			if ($spec['type'] === 'serial' || $schema->fieldExists($table, $column)) {
+				continue;
+			}
+
+			// addField refuses a NOT NULL column on a populated table unless it is told what
+			// the existing rows should hold
+			if (!empty($spec['not null']) && !array_key_exists('default', $spec)) {
+				$spec['initial'] = in_array($spec['type'], ['int', 'float', 'numeric'], true)
+					? 0
+					: '';
+			}
+
+			try {
+				$schema->addField($table, $column, $spec);
+				$added[] = "$table.$column";
+			} catch (\Throwable $e) {
+				Drupal::logger('mantle2')->error('Failed to add column %column: %message', [
+					'%column' => "$table.$column",
+					'%message' => $e->getMessage(),
+				]);
+			}
+		}
+	}
+
+	if ($added) {
+		Drupal::logger('mantle2')->notice('Reconciled missing columns: %columns', [
+			'%columns' => implode(', ', $added),
+		]);
+	}
+
+	return $added;
 }
 
 // keyed on the address rather than the user so a suppression survives an email change and can
@@ -2023,4 +2082,42 @@ function mantle2_update_9010(): string
 	return $created
 		? 'Created field_message_prefs and tables: ' . implode(', ', $created)
 		: 'Created field_message_prefs; all tables already present';
+}
+
+/**
+ * Repair: rename mantle2_staged_activities.warned_12h to warned_urgent.
+ *
+ * The rename shipped in the schema function alone. mantle2_ensure_custom_tables() skips a
+ * table that already exists, so production kept warned_12h while StagingHelper::stage()
+ * insisted on warned_urgent; every insert threw and the review queue took no new rows at
+ * all. mantle2_reconcile_custom_columns() closes the additive half of that hole, but a
+ * rename still has to be spelled out or the warned state would be silently reset.
+ */
+function mantle2_update_9011(): string
+{
+	$table = 'mantle2_staged_activities';
+	$schema = Database::getConnection()->schema();
+
+	if (!$schema->tableExists($table)) {
+		mantle2_ensure_custom_tables();
+		return "$table did not exist; created it with warned_urgent";
+	}
+
+	$spec = mantle2_staged_activities_table_schema()['fields']['warned_urgent'];
+
+	if ($schema->fieldExists($table, 'warned_12h')) {
+		if ($schema->fieldExists($table, 'warned_urgent')) {
+			$schema->dropField($table, 'warned_12h');
+			return 'Dropped the leftover warned_12h column';
+		}
+
+		$schema->changeField($table, 'warned_12h', 'warned_urgent', $spec);
+		return 'Renamed warned_12h to warned_urgent, preserving the warned state';
+	}
+
+	$added = mantle2_reconcile_custom_columns();
+
+	return $added
+		? 'Added missing columns: ' . implode(', ', $added)
+		: 'warned_urgent already present; nothing to repair';
 }
