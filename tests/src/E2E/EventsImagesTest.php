@@ -20,8 +20,9 @@ class EventsImagesTest extends E2ETestBase
 {
 	protected bool $installContentTypes = true;
 
-	// 1x1 png data url
-	private const PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+	// 1x1 png data url. cloud decodes this for real (Images binding -> libpng), so the bytes
+	// have to be a valid png, not just png-shaped; testPhotoFixtureIsAValidPng guards that
+	private const PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP4/x8AAwAB/2+Bq7YAAAAASUVORK5CYII=';
 
 	private function controller(): EventsController
 	{
@@ -56,6 +57,76 @@ class EventsImagesTest extends E2ETestBase
 		EventsHelper::deleteImageSubmission(null, null, (int) $node->id());
 
 		return $node;
+	}
+
+	/**
+	 * Walk the PNG chunk table and verify every CRC.
+	 *
+	 * `file` and any header sniffer only read IHDR, so a truncated IDAT still looks like a
+	 * png to them. libpng checks the CRC and refuses, which is what a bad paste costs here.
+	 *
+	 * @return string[] the problems found, empty when the image is sound
+	 */
+	private function pngProblems(string $binary): array
+	{
+		if (substr($binary, 0, 8) !== "\x89PNG\r\n\x1a\n") {
+			return ['missing png signature'];
+		}
+
+		$problems = [];
+		$offset = 8;
+		$types = [];
+
+		while ($offset + 8 <= strlen($binary)) {
+			$length = unpack('N', substr($binary, $offset, 4))[1];
+			$type = substr($binary, $offset + 4, 4);
+			$data = substr($binary, $offset + 8, $length);
+
+			if (strlen($data) < $length) {
+				$problems[] =
+					"chunk $type is truncated ($length declared, " . strlen($data) . ' present)';
+				break;
+			}
+
+			$stored = substr($binary, $offset + 8 + $length, 4);
+			if (strlen($stored) < 4) {
+				$problems[] = "chunk $type has no CRC";
+				break;
+			}
+
+			if (unpack('N', $stored)[1] !== crc32($type . $data)) {
+				$problems[] = "chunk $type has a bad CRC";
+			}
+
+			$types[] = $type;
+			$offset += 12 + $length;
+		}
+
+		if (!in_array('IEND', $types, true)) {
+			$problems[] = 'no IEND chunk';
+		}
+		if ($offset !== strlen($binary)) {
+			$problems[] = 'trailing bytes after the last chunk';
+		}
+
+		return $problems;
+	}
+
+	#[Test]
+	#[TestDox('The photo fixture is a real png, not just png-shaped')]
+	#[Group('mantle2/events')]
+	public function photoFixtureIsAValidPng(): void
+	{
+		$binary = base64_decode(explode(',', self::PHOTO, 2)[1], true);
+		$this->assertIsString($binary, 'PHOTO is not valid base64');
+
+		// a corrupt fixture surfaces as an opaque cloud 500 ("vipspng: libpng read error"),
+		// which costs a whole CI round-trip to diagnose; say it plainly here instead
+		$this->assertSame(
+			[],
+			$this->pngProblems($binary),
+			'PHOTO is a corrupt png: ' . implode('; ', $this->pngProblems($binary)),
+		);
 	}
 
 	#[Test]
