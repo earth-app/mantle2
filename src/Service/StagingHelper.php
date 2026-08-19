@@ -25,7 +25,8 @@ class StagingHelper
 
 	public const WINDOW_ORGANIZER = 336 * 3600;
 	public const WINDOW_PRIVILEGED = 168 * 3600;
-	public const URGENT_WINDOW = 24 * 3600;
+	// two daily warning runs must both see a row, or a submission can expire un-chased
+	public const URGENT_WINDOW = 48 * 3600;
 	public const RETENTION = 90 * 86400;
 	public const EXPIRY_BATCH = 200;
 	public const MAX_PENDING_PER_ORGANIZER = 10;
@@ -54,6 +55,7 @@ class StagingHelper
 	public const SOURCES = ['api', 'cloud_discovery', 'admin_panel', 'drush'];
 
 	public const DIGEST_STATE_KEY = 'mantle2.staging.last_digest';
+	public const URGENT_STATE_KEY = 'mantle2.staging.last_urgent';
 
 	private static function db(): Connection
 	{
@@ -757,8 +759,21 @@ class StagingHelper
 		}
 	}
 
+	/**
+	 * One mail a day naming everything about to auto-deny.
+	 *
+	 * Cron runs hourly and cloud stages activities continuously, so rows cross the urgent threshold
+	 * at all hours. Warning per-run meant an admin mail almost every hour, each about the handful of
+	 * rows that had just crossed - real email credits for no extra information. The throttle holds
+	 * them until one daily mail can name the whole set; expiry enforcement below stays hourly.
+	 */
 	private static function warnExpiringSoon(int $now): void
 	{
+		$last = (int) Drupal::state()->get(self::URGENT_STATE_KEY, 0);
+		if ($now - $last < 86400) {
+			return;
+		}
+
 		try {
 			$rows = self::db()
 				->select(self::TABLE, 't')
@@ -776,6 +791,9 @@ class StagingHelper
 		if (!$rows) {
 			return;
 		}
+
+		// stamped only when mail is actually going out, so a quiet day does not spend the window
+		Drupal::state()->set(self::URGENT_STATE_KEY, $now);
 
 		// mark before sending so a mail failure cannot loop
 		self::markWarned(array_map(fn(array $row) => (int) $row['id'], $rows));

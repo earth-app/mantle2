@@ -498,6 +498,78 @@ class StagingHelperTest extends IntegrationTestBase
 	}
 
 	#[Test]
+	#[TestDox('The urgent warning is throttled to one combined mail a day')]
+	#[Group('mantle2/staging')]
+	public function testUrgentWarningIsThrottledToDaily(): void
+	{
+		$this->admin();
+		$soon = time() - StagingHelper::WINDOW_PRIVILEGED + 6 * 3600;
+		StagingHelper::stage(
+			$this->activity('urgent_first'),
+			UsersHelper::cloud(),
+			null,
+			'cloud_discovery',
+			$soon,
+		);
+
+		StagingHelper::checkExpirations();
+		$first = count($this->urgentMail());
+		$this->assertSame(1, $first);
+
+		// an hour later cloud has staged more; the next cron run must stay silent
+		$later = StagingHelper::stage(
+			$this->activity('urgent_second'),
+			UsersHelper::cloud(),
+			null,
+			'cloud_discovery',
+			$soon,
+		);
+		StagingHelper::checkExpirations();
+		$this->assertCount($first, $this->urgentMail());
+		$this->assertSame(0, (int) StagingHelper::get((int) $later['id'])['warned_urgent']);
+
+		// once the day rolls over, the held row is warned in the same mail as anything new
+		\Drupal::state()->set(StagingHelper::URGENT_STATE_KEY, 0);
+		StagingHelper::checkExpirations();
+		$this->assertCount($first + 1, $this->urgentMail());
+		$this->assertSame(1, (int) StagingHelper::get((int) $later['id'])['warned_urgent']);
+	}
+
+	#[Test]
+	#[TestDox('A quiet day does not spend the urgent warning window')]
+	#[Group('mantle2/staging')]
+	public function testQuietDayKeepsTheUrgentWindowOpen(): void
+	{
+		$this->admin();
+
+		// nothing pending: the run must not stamp the throttle
+		StagingHelper::checkExpirations();
+		$this->assertSame(0, (int) \Drupal::state()->get(StagingHelper::URGENT_STATE_KEY, 0));
+		$this->assertCount(0, $this->urgentMail());
+
+		StagingHelper::stage(
+			$this->activity('urgent_after_quiet'),
+			UsersHelper::cloud(),
+			null,
+			'cloud_discovery',
+			time() - StagingHelper::WINDOW_PRIVILEGED + 6 * 3600,
+		);
+
+		StagingHelper::checkExpirations();
+		$this->assertCount(1, $this->urgentMail());
+	}
+
+	private function urgentMail(): array
+	{
+		return array_values(
+			array_filter(
+				\Drupal::state()->get('system.test_mail_collector') ?? [],
+				fn(array $mail) => $mail['id'] === 'mantle2_activity_staged_urgent',
+			),
+		);
+	}
+
+	#[Test]
 	#[TestDox('The urgent warning caps the id list so a day of discovery cannot flood the mail')]
 	#[Group('mantle2/staging')]
 	public function testUrgentWarningCapsTheActivityList(): void
