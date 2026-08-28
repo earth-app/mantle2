@@ -5,6 +5,7 @@ namespace Drupal\Tests\mantle2\Integration\Controller\Users;
 use Drupal\mantle2\Controller\UsersController;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\OAuthHelper;
 use Drupal\mantle2\Service\RedisHelper;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\Attributes\TestDox;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Exception;
 use Throwable;
 
 class AuthAccountTest extends IntegrationTestBase
@@ -418,6 +420,56 @@ class AuthAccountTest extends IntegrationTestBase
 
 	#endregion
 
+	#region recordSignupView
+
+	#[Test]
+	#[TestDox('POST /v2/analytics/signup_view bumps the funnel once per client per day')]
+	#[Group('mantle2/users')]
+	public function signupViewCountsOncePerClient(): void
+	{
+		$calls = [];
+		CloudHelper::setRequestOverride(function (string $path, string $method) use (&$calls) {
+			$calls[] = $path;
+			return [];
+		});
+
+		$request = $this->request('POST', '/v2/analytics/signup_view');
+		$request->server->set('REMOTE_ADDR', '198.51.100.7');
+		$request->headers->set('User-Agent', 'signup-view-spec');
+
+		$first = $this->decode($this->controller()->recordSignupView($request));
+		$this->assertTrue($first['counted']);
+		$this->assertSame(['/v1/admin/funnel/signup_views'], $calls);
+
+		// the same client again inside the window spends no request
+		$second = $this->decode($this->controller()->recordSignupView($request));
+		$this->assertFalse($second['counted']);
+		$this->assertCount(1, $calls);
+
+		CloudHelper::setRequestOverride(null);
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/analytics/signup_view reports uncounted when cloud is down')]
+	#[Group('mantle2/users')]
+	public function signupViewToleratesCloudOutage(): void
+	{
+		CloudHelper::setRequestOverride(function () {
+			throw new Exception('cloud is down');
+		});
+
+		$request = $this->request('POST', '/v2/analytics/signup_view');
+		$request->server->set('REMOTE_ADDR', '198.51.100.8');
+		$request->headers->set('User-Agent', 'signup-view-outage-spec');
+
+		$body = $this->decode($this->controller()->recordSignupView($request));
+		$this->assertFalse($body['counted']);
+
+		CloudHelper::setRequestOverride(null);
+	}
+
+	#endregion
+
 	#region getUser
 
 	#[Test]
@@ -432,19 +484,29 @@ class AuthAccountTest extends IntegrationTestBase
 			(string) $user->id(),
 		);
 		$this->assertSame(Response::HTTP_OK, $byId->getStatusCode());
-		$this->assertSame((int) $user->id(), (int) $this->decode($byId)['id']);
+		// `id` is the 32-hex public id now; `nid` carries the numeric one
+		$this->assertSame(GeneralHelper::publicId($user), $this->decode($byId)['id']);
+		$this->assertSame((int) $user->id(), (int) $this->decode($byId)['nid']);
 
 		$byName = $this->controller()->getUser(
 			$this->request('GET', '/v2/users'),
 			null,
 			'@' . $user->getAccountName(),
 		);
-		$this->assertSame((int) $user->id(), (int) $this->decode($byName)['id']);
+		$this->assertSame(GeneralHelper::publicId($user), $this->decode($byName)['id']);
 
 		$current = $this->controller()->getUser(
 			$this->authRequest($user, 'GET', '/v2/users/current'),
 		);
-		$this->assertSame((int) $user->id(), (int) $this->decode($current)['id']);
+		$this->assertSame(GeneralHelper::publicId($user), $this->decode($current)['id']);
+
+		// the public id is a read path too: fetching by it returns the same account
+		$byPublicId = $this->controller()->getUser(
+			$this->request('GET', '/v2/users'),
+			GeneralHelper::publicId($user),
+		);
+		$this->assertSame(Response::HTTP_OK, $byPublicId->getStatusCode());
+		$this->assertSame((int) $user->id(), (int) $this->decode($byPublicId)['nid']);
 
 		$missing = $this->controller()->getUser($this->request('GET', '/v2/users'), '99999');
 		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
@@ -2099,9 +2161,10 @@ class AuthAccountTest extends IntegrationTestBase
 		$response = $this->oauthLogin(['id_token' => 'tok', 'session_token' => $token]);
 
 		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame(GeneralHelper::publicId($user), $this->decode($response)['user']['id']);
 		$this->assertSame(
 			GeneralHelper::formatId($user->id()),
-			$this->decode($response)['user']['id'],
+			$this->decode($response)['user']['nid'],
 		);
 		$this->assertTrue(OAuthHelper::hasProviderLinked(User::load($user->id()), 'google'));
 		$this->assertContains('New OAuth Provider Linked', $this->notificationTitles($user));

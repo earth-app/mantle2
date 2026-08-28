@@ -597,6 +597,35 @@ final class UsersController extends ControllerBase
 		return new JsonResponse($data, Response::HTTP_CREATED);
 	}
 
+	// how long one client counts as the same signup view
+	private const SIGNUP_VIEW_WINDOW = 86400;
+
+	// POST /v2/analytics/signup_view
+	public function recordSignupView(Request $request): JsonResponse
+	{
+		$fingerprint = md5(
+			($request->getClientIp() ?? 'unknown') .
+				'|' .
+				($request->headers->get('User-Agent') ?? ''),
+		);
+		$key = 'signup_view_' . $fingerprint;
+
+		if (RedisHelper::exists($key)) {
+			return new JsonResponse(['counted' => false]);
+		}
+
+		RedisHelper::set($key, ['at' => time()], self::SIGNUP_VIEW_WINDOW);
+
+		try {
+			CloudHelper::sendRequest('/v1/admin/funnel/signup_views', 'POST');
+		} catch (Exception $e) {
+			// analytics is non-critical; the dedupe key stays set either way
+			return new JsonResponse(['counted' => false]);
+		}
+
+		return new JsonResponse(['counted' => true]);
+	}
+
 	#region User Routes
 
 	// GET /v2/users/current
@@ -1212,6 +1241,124 @@ final class UsersController extends ControllerBase
 		} catch (UnexpectedValueException $e) {
 			return GeneralHelper::badRequest('Invalid pool_limit parameter: ' . $e->getMessage());
 		}
+	}
+
+	// GET /v2/users/current/activities/surprise
+	// GET /v2/users/{id}/activities/surprise
+	// GET /v2/users/{username}/activities/surprise
+	public function surpriseUserActivity(
+		Request $request,
+		?string $id = null,
+		?string $username = null,
+	): JsonResponse {
+		$resolved = $this->resolveAuthorizedUser($request, $id, $username);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		$poolLimit = $request->query->getInt('pool_limit', 100);
+		if ($poolLimit <= 0 || $poolLimit > 250) {
+			return GeneralHelper::badRequest(
+				'Invalid pool_limit; must be an integer between 1 and 250',
+			);
+		}
+
+		$surprise = UsersHelper::surpriseActivity($resolved, $poolLimit);
+		if (!$surprise) {
+			return GeneralHelper::notFound('No unexpected activity available');
+		}
+
+		return new JsonResponse(
+			[
+				'activity' => $surprise['activity'],
+				'unrelated' => $surprise['unrelated'],
+				'pool' => $surprise['pool'],
+			],
+			Response::HTTP_OK,
+		);
+	}
+
+	// POST /v2/users/current/plan/menu
+	public function planMenu(Request $request): JsonResponse
+	{
+		$resolved = $this->resolveAuthorizedUser($request, null, null);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		$body = json_decode($request->getContent() ?: '[]', true);
+		$places = is_array($body) && is_array($body['places'] ?? null) ? $body['places'] : [];
+
+		$menu = UsersHelper::planMenu($resolved, $places);
+		if (!$menu) {
+			return GeneralHelper::badRequest('Set your activities before making a plan');
+		}
+
+		return new JsonResponse($menu, Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/plan
+	public function formPlan(Request $request): JsonResponse
+	{
+		$resolved = $this->resolveAuthorizedUser($request, null, null);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		$body = json_decode($request->getContent() ?: '[]', true);
+		$cueId = is_array($body) ? $body['cue_id'] ?? null : null;
+		$responseId = is_array($body) ? $body['response_id'] ?? null : null;
+
+		if (!is_string($cueId) || !is_string($responseId) || $cueId === '' || $responseId === '') {
+			return GeneralHelper::badRequest('cue_id and response_id are required');
+		}
+
+		$plan = UsersHelper::formPlan($resolved, $cueId, $responseId);
+		if (!$plan) {
+			return GeneralHelper::badRequest('Could not form that plan');
+		}
+
+		return new JsonResponse($plan, Response::HTTP_CREATED);
+	}
+
+	// GET /v2/users/current/plan/status
+	public function planStatus(Request $request): JsonResponse
+	{
+		$resolved = $this->resolveAuthorizedUser($request, null, null);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		return new JsonResponse(UsersHelper::planStatus($resolved), Response::HTTP_OK);
+	}
+
+	// POST /v2/users/current/plan/rehearsed
+	public function rehearsePlan(Request $request): JsonResponse
+	{
+		$resolved = $this->resolveAuthorizedUser($request, null, null);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		if (!UsersHelper::rehearsePlan($resolved)) {
+			return GeneralHelper::notFound('No active plan');
+		}
+
+		return new JsonResponse(['rehearsed' => true], Response::HTTP_OK);
+	}
+
+	// GET /v2/users/current/memories
+	public function userMemories(Request $request): JsonResponse
+	{
+		$resolved = $this->resolveAuthorizedUser($request, null, null);
+		if ($resolved instanceof JsonResponse) {
+			return $resolved;
+		}
+
+		return new JsonResponse(
+			['memories' => UsersHelper::memories($resolved)],
+			Response::HTTP_OK,
+		);
 	}
 
 	// GET /v2/users/current/friends
@@ -2710,7 +2857,7 @@ final class UsersController extends ControllerBase
 			($challenge['recipient_id'] ?? null) === $selfId
 				? $challenge['challenger_id'] ?? null
 				: $challenge['recipient_id'] ?? null;
-		$otherUser = $otherIdRaw ? UsersHelper::findById((int) ltrim($otherIdRaw, '0')) : null;
+		$otherUser = $otherIdRaw ? UsersHelper::findBy((string) $otherIdRaw) : null;
 
 		$questDef = PointsHelper::getQuest($questId);
 		$totalSteps = $questDef ? count($questDef->steps) : 0;
@@ -2950,12 +3097,15 @@ final class UsersController extends ControllerBase
 			return $user;
 		}
 
+		$imageQuery = $request->query->get('image') === 'first' ? '?image=first' : '';
+
 		try {
 			$data = CloudHelper::sendRequest(
 				'/v1/users/quests/history/' .
 					GeneralHelper::formatId($user->id()) .
 					'/' .
-					$quest_id,
+					$quest_id .
+					$imageQuery,
 			);
 		} catch (Exception $e) {
 			return CloudHelper::mapCloudException($e, 'Failed to fetch quest history entry');
@@ -5071,6 +5221,13 @@ final class UsersController extends ControllerBase
 		if (isset($body['title']) && is_string($body['title']) && trim($body['title']) !== '') {
 			$payload['title'] = trim($body['title']);
 		}
+		if (
+			isset($body['activity_id']) &&
+			is_string($body['activity_id']) &&
+			trim($body['activity_id']) !== ''
+		) {
+			$payload['activity_id'] = trim($body['activity_id']);
+		}
 
 		try {
 			$data = CloudHelper::sendRequest(
@@ -5083,6 +5240,38 @@ final class UsersController extends ControllerBase
 		}
 
 		return new JsonResponse($data, Response::HTTP_CREATED);
+	}
+
+	// GET /v2/activities/{id}/expeditions
+	public function activityExpeditions(Request $request, string $id): JsonResponse
+	{
+		$viewer = UsersHelper::findByRequest($request);
+		if ($viewer instanceof JsonResponse) {
+			return $viewer;
+		}
+
+		$activity = ActivityHelper::getActivity($id);
+		if (!$activity) {
+			return GeneralHelper::notFound("Activity '$id' not found");
+		}
+
+		$query = [];
+		$limit = $request->query->get('limit');
+		if (is_numeric($limit) && (int) $limit > 0) {
+			$query['limit'] = (int) $limit;
+		}
+
+		try {
+			$data = CloudHelper::sendRequest(
+				'/v1/activities/' . $activity->getId() . '/expeditions',
+				'GET',
+				$query,
+			);
+		} catch (Exception $e) {
+			return CloudHelper::mapCloudException($e, 'Failed to fetch expeditions');
+		}
+
+		return new JsonResponse($data, Response::HTTP_OK);
 	}
 
 	// GET /v2/users/current/expedition
@@ -5576,7 +5765,7 @@ final class UsersController extends ControllerBase
 	// crawlers can fetch it for link previews
 	public function shareQuestCard(Request $request, string $id, string $questId): Response
 	{
-		$user = UsersHelper::findById((int) $id);
+		$user = UsersHelper::findBy($id);
 		if (!$user || UsersHelper::isDisabled($user)) {
 			return GeneralHelper::notFound('User not found');
 		}
