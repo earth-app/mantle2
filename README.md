@@ -366,12 +366,28 @@ curl https://your-domain.com/v2/hello
 - `validateJson(string)`: JSON validation
 - Various format converters and validators
 
+**Public IDs:**
+
+The API issues the entity uuid with its dashes stripped (32 hex) as `id`, and carries the legacy
+padded numeric id alongside it as `nid`. Both shapes are accepted on input.
+
+- `publicId(EntityInterface)`: The 32-hex form of an entity's uuid
+- `publicIdOfNode(int|string)` / `publicIdOfUser(int|string)`: The same from a bare id
+- `formatId(int|string)`: The legacy numeric id, left-padded to 24 characters
+- `isPublicId(string)` / `isInternalId(string)`: Tell the two shapes apart
+- `resolveNodeId(?string, string $bundle)`: The node id behind either shape, or null
+
+Send `nid`, not `id`, to anything that talks to the Cloud service directly: cloud keys its KV on the
+numeric id. Cloud will resolve a public id through `/v2/admin/{bundle}/{uuid}/internal_id` and cache
+the pair, so a public id costs one extra round trip rather than failing.
+
 #### UsersHelper
 
 **User Operations:**
 
 - `getOwnerOfRequest(Request)`: Extract authenticated user from request
-- `findBy(string)`: Flexible user lookup by ID/username/email
+- `findBy(string)`: Flexible user lookup by public id, numeric id, or `@username`
+- `findByPublicId(string)`: Lookup by the 32-hex public id
 - `issueToken(UserInterface)`: Create bearer token with bounded session count
 - `getUserByToken(string)`: Resolve and validate bearer tokens (with sliding expiry)
 - `revokeToken(string)`: Revoke active authentication token
