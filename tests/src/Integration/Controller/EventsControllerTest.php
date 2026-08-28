@@ -6,7 +6,9 @@ use Drupal\mantle2\Controller\EventsController;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\EventType;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Service\CloudHelper;
 use Drupal\mantle2\Service\EventsHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\UserInterface;
@@ -124,7 +126,9 @@ class EventsControllerTest extends IntegrationTestBase
 		$this->assertSame('HYBRID', $body['type']);
 		$this->assertTrue($body['can_edit']);
 
-		$nid = (int) ltrim($body['id'], '0');
+		// `id` is the public hex now; `nid` carries the numeric one
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $body['id']);
+		$nid = (int) ltrim($body['nid'], '0');
 		$node = Node::load($nid);
 		$this->assertNotNull($node);
 		$this->assertSame('event', $node->getType());
@@ -1422,8 +1426,100 @@ class EventsControllerTest extends IntegrationTestBase
 		$this->assertSame(Response::HTTP_NOT_FOUND, $deleteEventImage->getStatusCode());
 	}
 
+	#[Test]
+	#[TestDox('An image listing reached by public id still asks cloud for the numeric one')]
+	#[Group('mantle2/events')]
+	public function imageListingSendsNumericIdToCloud(): void
+	{
+		$sent = [];
+		CloudHelper::setRequestOverride(function (string $path, string $method, array $data) use (
+			&$sent,
+		) {
+			if ($path === '/v1/events/retrieve_image') {
+				$sent[] = $data;
+			}
+			return [];
+		});
+
+		$host = $this->verifiedUser();
+		$node = $this->makeEventNode($host);
+		$publicId = GeneralHelper::publicId($node);
+
+		$response = $this->controller()->getEventImages(
+			$publicId,
+			$this->authRequest($host, 'GET', '/v2/events/' . $publicId . '/images'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertNotEmpty($sent, 'the controller should have asked cloud for the images');
+		// cloud rejects a hex event_id outright, so the public form must not survive to here
+		$this->assertSame((string) $node->id(), (string) $sent[0]['event_id']);
+
+		CloudHelper::setRequestOverride(null);
+	}
+
 	#endregion
 
 	// real image submission round-trips (success payloads from the cloud) live in E2E;
 	// the integration tier covers the controller bodies via the degraded-cloud contract above
+
+	#region public id
+
+	#[Test]
+	#[TestDox('GET /v2/events/{id} resolves the public id and the legacy numeric id alike')]
+	#[Group('mantle2/events')]
+	public function eventResolvesEitherIdShape(): void
+	{
+		$host = $this->createUser();
+		$node = $this->makeEventNode($host, Visibility::PUBLIC);
+		$publicId = GeneralHelper::publicId($node);
+
+		$byPublic = $this->controller()->getEvent(
+			$publicId,
+			$this->request('GET', '/v2/events/' . $publicId),
+		);
+		$this->assertSame(Response::HTTP_OK, $byPublic->getStatusCode());
+
+		$byNumeric = $this->controller()->getEvent(
+			(string) $node->id(),
+			$this->request('GET', '/v2/events/' . $node->id()),
+		);
+		$this->assertSame(Response::HTTP_OK, $byNumeric->getStatusCode());
+
+		$a = $this->decode($byPublic);
+		$this->assertSame($publicId, $a['id']);
+		$this->assertSame(GeneralHelper::formatId($node->id()), $a['nid']);
+		$this->assertSame($a['id'], $this->decode($byNumeric)['id']);
+	}
+
+	#[Test]
+	#[TestDox('An id of the wrong bundle is a bad request, and an unknown one is a 404')]
+	#[Group('mantle2/events')]
+	public function eventRejectsWrongBundleAndUnknownId(): void
+	{
+		$missing = $this->controller()->getEvent(
+			'ffffffffffffffffffffffffffffffff',
+			$this->request('GET', '/v2/events/ffffffffffffffffffffffffffffffff'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		// a real node that is not an event still reads as a bad request, as it did before
+		$author = $this->createUser();
+		$article = \Drupal\mantle2\Service\ArticlesHelper::createArticle(
+			'Not An Event',
+			'An article',
+			['x'],
+			str_repeat('Body text here. ', 5),
+			$author,
+			'#112233',
+			null,
+		);
+		$wrongType = $this->controller()->getEvent(
+			(string) $article->id(),
+			$this->request('GET', '/v2/events/' . $article->id()),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $wrongType->getStatusCode());
+	}
+
+	#endregion
 }

@@ -416,8 +416,9 @@ final class ArticlesController extends ControllerBase
 	}
 
 	// GET /v2/articles/{articleId}
-	public function getArticle(int $articleId, Request $request): JsonResponse
+	public function getArticle(string $articleId, Request $request): JsonResponse
 	{
+		$articleId = GeneralHelper::resolveNodeId($articleId, 'article') ?? (int) $articleId;
 		$requester = UsersHelper::getOwnerOfRequest($request);
 
 		$node = Node::load($articleId);
@@ -448,8 +449,9 @@ final class ArticlesController extends ControllerBase
 	}
 
 	// GET /v2/articles/{articleId}/quiz
-	public function getArticleQuiz(int $articleId): JsonResponse
+	public function getArticleQuiz(string $articleId): JsonResponse
 	{
+		$articleId = GeneralHelper::resolveNodeId($articleId, 'article') ?? (int) $articleId;
 		$node = Node::load($articleId);
 		if (!$node) {
 			return GeneralHelper::notFound('Article not found');
@@ -468,8 +470,9 @@ final class ArticlesController extends ControllerBase
 	}
 
 	// PATCH /v2/articles/{articleId}
-	public function updateArticle(int $articleId, Request $request): JsonResponse
+	public function updateArticle(string $articleId, Request $request): JsonResponse
 	{
+		$articleId = GeneralHelper::resolveNodeId($articleId, 'article') ?? (int) $articleId;
 		$node = Node::load($articleId);
 		if (!$node) {
 			return GeneralHelper::notFound('Article not found');
@@ -614,8 +617,9 @@ final class ArticlesController extends ControllerBase
 	}
 
 	// DELETE /v2/articles/{articleId}
-	public function deleteArticle(int $articleId, Request $request): JsonResponse
+	public function deleteArticle(string $articleId, Request $request): JsonResponse
 	{
+		$articleId = GeneralHelper::resolveNodeId($articleId, 'article') ?? (int) $articleId;
 		$node = Node::load($articleId);
 		if (!$node) {
 			return GeneralHelper::notFound('Article not found');
@@ -649,8 +653,9 @@ final class ArticlesController extends ControllerBase
 	}
 
 	// POST /v2/articles/{articleId}/quiz
-	public function createOrUpdateArticleQuiz(int $articleId, Request $request): JsonResponse
+	public function createOrUpdateArticleQuiz(string $articleId, Request $request): JsonResponse
 	{
+		$articleId = GeneralHelper::resolveNodeId($articleId, 'article') ?? (int) $articleId;
 		$node = Node::load($articleId);
 		if (!$node) {
 			return GeneralHelper::notFound('Article not found');
@@ -897,8 +902,9 @@ final class ArticlesController extends ControllerBase
 	}
 
 	// DELETE /v2/articles/{articleId}/quiz
-	public function deleteArticleQuiz(int $articleId, Request $request): JsonResponse
+	public function deleteArticleQuiz(string $articleId, Request $request): JsonResponse
 	{
+		$articleId = GeneralHelper::resolveNodeId($articleId, 'article') ?? (int) $articleId;
 		$node = Node::load($articleId);
 		if (!$node) {
 			return GeneralHelper::notFound('Article not found');

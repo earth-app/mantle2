@@ -169,6 +169,8 @@ class PromptsHelper
 		?UserInterface $requester = null,
 	): array {
 		$result = $prompt->jsonSerialize();
+		$result['id'] = GeneralHelper::publicId($node);
+		$result['nid'] = GeneralHelper::formatId($node->id());
 		$result['owner'] = UsersHelper::serializeUser($prompt->getOwner(), $requester);
 		$result['responses_count'] = self::getCommentsCount($node);
 		$result['has_responded'] = $requester ? self::hasResponded($requester, $node) : null;

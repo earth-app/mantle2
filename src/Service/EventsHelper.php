@@ -18,18 +18,19 @@ use Exception;
 
 class EventsHelper
 {
-	public static function loadEventContentNode(int $nid): Node|JsonResponse
+	// takes either id shape; every event route reaches a node through here
+	public static function loadEventContentNode(int|string $nid): Node|JsonResponse
 	{
-		$node = Node::load($nid);
-		if (!$node) {
-			return GeneralHelper::notFound('Event not found');
+		$resolved = GeneralHelper::resolveNodeId((string) $nid, 'event');
+		if (!$resolved) {
+			$node = GeneralHelper::isInternalId((string) $nid) ? Node::load((int) $nid) : null;
+			// a real node of the wrong type is a bad request, not a miss
+			return $node
+				? GeneralHelper::badRequest('ID does not point to an event')
+				: GeneralHelper::notFound('Event not found');
 		}
 
-		if ($node->getType() !== 'event') {
-			return GeneralHelper::badRequest('ID does not point to an event');
-		}
-
-		return $node;
+		return Node::load($resolved);
 	}
 
 	public static function nodeToEvent(Node $node): Event
@@ -736,7 +737,8 @@ class EventsHelper
 	public static function serializeEvent(Event $event, Node $node, ?UserInterface $user): array
 	{
 		$result = $event->jsonSerialize();
-		$result['id'] = GeneralHelper::formatId($node->id());
+		$result['id'] = GeneralHelper::publicId($node);
+		$result['nid'] = GeneralHelper::formatId($node->id());
 		$result['host'] = UsersHelper::serializeUser($event->getHost(), $user);
 		$result['created_at'] = GeneralHelper::dateToIso($node->getCreatedTime());
 		$result['updated_at'] = GeneralHelper::dateToIso($node->getChangedTime());

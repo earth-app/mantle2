@@ -2,10 +2,12 @@
 
 namespace Drupal\Tests\mantle2\Integration\Controller;
 
+use Drupal\mantle2\Controller\AdminController;
 use Drupal\mantle2\Controller\ArticlesController;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ArticlesHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\UserInterface;
@@ -129,7 +131,9 @@ class ArticlesControllerTest extends IntegrationTestBase
 		$this->assertSame(['ocean', 'earth'], $body['tags']);
 		$this->assertTrue($body['can_edit']);
 
-		$nid = (int) ltrim($body['id'], '0');
+		// `id` is the public hex now; `nid` carries the numeric one
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $body['id']);
+		$nid = (int) ltrim($body['nid'], '0');
 		$node = Node::load($nid);
 		$this->assertNotNull($node);
 		$this->assertSame('article', $node->getType());
@@ -978,6 +982,95 @@ class ArticlesControllerTest extends IntegrationTestBase
 			$this->authRequest($author, 'DELETE', '/'),
 		);
 		$this->assertSame(Response::HTTP_NOT_FOUND, $delEmpty->getStatusCode());
+	}
+
+	#endregion
+
+	#region public id
+
+	#[Test]
+	#[TestDox('GET /v2/articles/{id} resolves the public id and the legacy numeric id alike')]
+	#[Group('mantle2/articles')]
+	public function articleResolvesEitherIdShape(): void
+	{
+		$author = $this->createUser([
+			'field_account_type' => $this->ordinal(AccountType::WRITER),
+			'field_email_verified' => true,
+		]);
+		$node = $this->makeArticleNode($author);
+		$publicId = GeneralHelper::publicId($node);
+
+		$byPublic = $this->controller()->getArticle(
+			$publicId,
+			$this->request('GET', '/v2/articles/' . $publicId),
+		);
+		$this->assertSame(Response::HTTP_OK, $byPublic->getStatusCode());
+
+		$byNumeric = $this->controller()->getArticle(
+			(string) $node->id(),
+			$this->request('GET', '/v2/articles/' . $node->id()),
+		);
+		$this->assertSame(Response::HTTP_OK, $byNumeric->getStatusCode());
+
+		$a = $this->decode($byPublic);
+		$b = $this->decode($byNumeric);
+		$this->assertSame($a['id'], $b['id']);
+		$this->assertSame($publicId, $a['id']);
+		$this->assertSame(GeneralHelper::formatId($node->id()), $a['nid']);
+	}
+
+	#[Test]
+	#[TestDox('An unknown or malformed id is a 404 rather than a resolved article')]
+	#[Group('mantle2/articles')]
+	public function articleRejectsUnknownId(): void
+	{
+		$missing = $this->controller()->getArticle(
+			'ffffffffffffffffffffffffffffffff',
+			$this->request('GET', '/v2/articles/ffffffffffffffffffffffffffffffff'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		$garbage = $this->controller()->getArticle(
+			'not-an-id',
+			$this->request('GET', '/v2/articles/not-an-id'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $garbage->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox("Cloud's admin lookup turns a public article id into the node id it keys KV on")]
+	#[Group('mantle2/articles')]
+	public function adminLookupResolvesPublicArticleId(): void
+	{
+		$admin = $this->createUser([
+			'field_account_type' => $this->ordinal(AccountType::ADMINISTRATOR),
+		]);
+		$author = $this->createUser([
+			'field_account_type' => $this->ordinal(AccountType::WRITER),
+			'field_email_verified' => true,
+		]);
+		$node = $this->makeArticleNode($author);
+		$hex = GeneralHelper::publicId($node);
+
+		$controller = AdminController::create($this->container);
+		$response = $controller->contentInternalId(
+			$this->authRequest($admin, 'GET', '/v2/admin/article/' . $hex . '/internal_id'),
+			'article',
+			$hex,
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$body = $this->decode($response);
+		$this->assertSame($hex, $body['uuid']);
+		$this->assertSame(GeneralHelper::formatId($node->id()), $body['id']);
+
+		// the same uuid under another bundle must not resolve
+		$wrongBundle = $controller->contentInternalId(
+			$this->authRequest($admin, 'GET', '/v2/admin/event/' . $hex . '/internal_id'),
+			'event',
+			$hex,
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $wrongBundle->getStatusCode());
 	}
 
 	#endregion

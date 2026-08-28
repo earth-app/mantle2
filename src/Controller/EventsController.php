@@ -404,13 +404,16 @@ final class EventsController extends ControllerBase
 	}
 
 	// GET /v2/events/{eventId}
-	public function getEvent(int $eventId, Request $request): JsonResponse
+	public function getEvent(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::getOwnerOfRequest($request);
 		$node = EventsHelper::loadEventContentNode($eventId);
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		try {
 			$event = EventsHelper::nodeToEvent($node);
@@ -444,7 +447,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// PATCH /v2/events/{eventId}
-	public function updateEvent(int $eventId, Request $request): JsonResponse
+	public function updateEvent(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -455,6 +458,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 		$host = $event->getHost();
@@ -489,7 +495,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// DELETE /v2/events/{eventId}
-	public function deleteEvent(int $eventId, Request $request): JsonResponse
+	public function deleteEvent(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -500,6 +506,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 		$host = $event->getHost();
@@ -519,7 +528,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// GET /v2/events/{eventId}/attendees
-	public function getEventAttendees(int $eventId, Request $request): JsonResponse
+	public function getEventAttendees(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -530,6 +539,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 
@@ -592,7 +604,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// POST /v2/events/{eventId}/signup
-	public function signUpForEvent(int $eventId, Request $request): JsonResponse
+	public function signUpForEvent(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -603,6 +615,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 
@@ -642,7 +657,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// POST /v2/events/{eventId}/leave
-	public function leaveEvent(int $eventId, Request $request): JsonResponse
+	public function leaveEvent(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -653,6 +668,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 
@@ -748,7 +766,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// POST /v2/events/{eventId}/cancel
-	public function cancelEvent(int $eventId, Request $request): JsonResponse
+	public function cancelEvent(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -759,6 +777,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 		$host = $event->getHost();
@@ -798,7 +819,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// POST /v2/events/{eventId}/uncancel
-	public function uncancelEvent(int $eventId, Request $request): JsonResponse
+	public function uncancelEvent(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -809,6 +830,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 		$host = $event->getHost();
@@ -961,7 +985,7 @@ final class EventsController extends ControllerBase
 	// GET /v2/users/{id}/events/images/{eventId}
 	// GET /v2/users/{username}/events/images/{eventId}
 	public function getUserEventImage(
-		int $eventId,
+		string $eventId,
 		Request $request,
 		?string $id = null,
 		?string $username = null,
@@ -1033,7 +1057,7 @@ final class EventsController extends ControllerBase
 	// DELETE /v2/users/{id}/events/images/{eventId}
 	// DELETE /v2/users/{username}/events/images/{eventId}
 	public function deleteUserEventImage(
-		int $eventId,
+		string $eventId,
 		Request $request,
 		?string $id = null,
 		?string $username = null,
@@ -1066,7 +1090,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// GET /v2/events/{eventId}/images
-	public function getEventImages(int $eventId, Request $request): JsonResponse
+	public function getEventImages(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -1077,6 +1101,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 
@@ -1124,7 +1151,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// GET /v2/events/{eventId}/images/{imageId}
-	public function getEventImage(int $eventId, int $imageId, Request $request): JsonResponse
+	public function getEventImage(string $eventId, int $imageId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -1135,6 +1162,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 
@@ -1165,7 +1195,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// POST /v2/events/{eventId}/images
-	public function submitEventImage(int $eventId, Request $request): JsonResponse
+	public function submitEventImage(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -1176,6 +1206,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 
@@ -1221,7 +1254,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// DELETE /v2/events/{eventId}/images
-	public function deleteEventImages(int $eventId, Request $request): JsonResponse
+	public function deleteEventImages(string $eventId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -1232,6 +1265,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 
@@ -1264,7 +1300,7 @@ final class EventsController extends ControllerBase
 	}
 
 	// DELETE /v2/events/{eventId}/images/{imageId}
-	public function deleteEventImage(int $eventId, int $imageId, Request $request): JsonResponse
+	public function deleteEventImage(string $eventId, int $imageId, Request $request): JsonResponse
 	{
 		$user = UsersHelper::findByRequest($request);
 		if ($user instanceof JsonResponse) {
@@ -1275,6 +1311,9 @@ final class EventsController extends ControllerBase
 		if ($node instanceof JsonResponse) {
 			return $node;
 		}
+
+		// cloud and the helpers below key on the numeric id, so drop the public form here
+		$eventId = (string) $node->id();
 
 		$event = EventsHelper::nodeToEvent($node);
 

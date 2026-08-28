@@ -371,8 +371,9 @@ final class PromptsController extends ControllerBase
 	}
 
 	// GET /v2/prompts/{prompt}
-	public function getPrompt(int $prompt, Request $request)
+	public function getPrompt(string $prompt, Request $request)
 	{
+		$prompt = GeneralHelper::resolveNodeId($prompt, 'prompt') ?? (int) $prompt;
 		$node = Node::load($prompt);
 		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
@@ -405,8 +406,9 @@ final class PromptsController extends ControllerBase
 	}
 
 	// PATCH /v2/prompts/{prompt}
-	public function updatePrompt(int $prompt, Request $request)
+	public function updatePrompt(string $prompt, Request $request)
 	{
+		$prompt = GeneralHelper::resolveNodeId($prompt, 'prompt') ?? (int) $prompt;
 		$node = Node::load($prompt);
 		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
@@ -491,8 +493,9 @@ final class PromptsController extends ControllerBase
 	}
 
 	// DELETE /v2/prompts/{prompt}
-	public function deletePrompt(int $prompt, Request $request)
+	public function deletePrompt(string $prompt, Request $request)
 	{
+		$prompt = GeneralHelper::resolveNodeId($prompt, 'prompt') ?? (int) $prompt;
 		$node = Node::load($prompt);
 		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
@@ -518,8 +521,9 @@ final class PromptsController extends ControllerBase
 	}
 
 	// GET /v2/prompts/{prompt}/responses
-	public function getPromptResponses(int $prompt, Request $request)
+	public function getPromptResponses(string $prompt, Request $request)
 	{
+		$prompt = GeneralHelper::resolveNodeId($prompt, 'prompt') ?? (int) $prompt;
 		$node = Node::load($prompt);
 		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
@@ -565,8 +569,9 @@ final class PromptsController extends ControllerBase
 	}
 
 	// POST /v2/prompts/{prompt}/responses
-	public function createPromptResponse(int $prompt, Request $request)
+	public function createPromptResponse(string $prompt, Request $request)
 	{
+		$prompt = GeneralHelper::resolveNodeId($prompt, 'prompt') ?? (int) $prompt;
 		$node = Node::load($prompt);
 		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
@@ -654,8 +659,9 @@ final class PromptsController extends ControllerBase
 	}
 
 	// GET /v2/prompts/{prompt}/responses/{response}
-	public function getPromptResponse(int $prompt, int $response, Request $request)
+	public function getPromptResponse(string $prompt, int $response, Request $request)
 	{
+		$prompt = GeneralHelper::resolveNodeId($prompt, 'prompt') ?? (int) $prompt;
 		$node = Node::load($prompt);
 		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
@@ -693,8 +699,9 @@ final class PromptsController extends ControllerBase
 	}
 
 	// PATCH /v2/prompts/{prompt}/responses/{response}
-	public function updatePromptResponse(int $prompt, int $response, Request $request)
+	public function updatePromptResponse(string $prompt, int $response, Request $request)
 	{
+		$prompt = GeneralHelper::resolveNodeId($prompt, 'prompt') ?? (int) $prompt;
 		$node = Node::load($prompt);
 		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');
@@ -785,8 +792,9 @@ final class PromptsController extends ControllerBase
 	}
 
 	// DELETE /v2/prompts/{prompt}/responses/{response}
-	public function deletePromptResponse(int $prompt, int $response, Request $request)
+	public function deletePromptResponse(string $prompt, int $response, Request $request)
 	{
+		$prompt = GeneralHelper::resolveNodeId($prompt, 'prompt') ?? (int) $prompt;
 		$node = Node::load($prompt);
 		if (!$node || $node->getType() !== 'prompt') {
 			return GeneralHelper::notFound('Prompt not found');

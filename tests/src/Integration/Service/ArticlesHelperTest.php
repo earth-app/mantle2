@@ -119,7 +119,9 @@ class ArticlesHelperTest extends IntegrationTestBase
 		$article = ArticlesHelper::nodeToArticle(Node::load($node->id()));
 
 		$authorView = ArticlesHelper::serializeArticle($article, $author);
-		$this->assertSame(24, strlen($authorView['id']));
+		// `id` is the public hex now; `nid` carries the padded numeric one
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $authorView['id']);
+		$this->assertSame(24, strlen($authorView['nid']));
 		$this->assertSame('On Tides', $authorView['title']);
 		$this->assertIsArray($authorView['author']);
 		$this->assertTrue($authorView['can_edit']);

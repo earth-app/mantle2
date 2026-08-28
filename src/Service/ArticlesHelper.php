@@ -62,6 +62,8 @@ class ArticlesHelper
 	public static function serializeArticle(Article $article, ?UserInterface $user): array
 	{
 		$result = $article->jsonSerialize();
+		$result['id'] = GeneralHelper::publicIdOfNode($article->getId());
+		$result['nid'] = GeneralHelper::formatId($article->getId());
 		$result['author'] = UsersHelper::serializeUser($article->getAuthor(), $user);
 		$result['created_at'] = GeneralHelper::dateToIso($article->getCreatedAt());
 		$result['updated_at'] = GeneralHelper::dateToIso($article->getUpdatedAt());

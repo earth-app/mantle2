@@ -6,7 +6,9 @@ use Drupal\mantle2\Controller\PromptsController;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Prompt;
 use Drupal\mantle2\Custom\Visibility;
+use Drupal\mantle2\Controller\TrailmarksController;
 use Drupal\mantle2\Service\CloudHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\node\Entity\Node;
 use Exception;
@@ -786,4 +788,82 @@ class PromptsControllerTest extends IntegrationTestBase
 		);
 		$this->assertSame(Response::HTTP_BAD_REQUEST, $badJson->getStatusCode());
 	}
+
+	#region public id
+
+	#[Test]
+	#[TestDox('GET /v2/prompts/{id} resolves the public id and the legacy numeric id alike')]
+	#[Group('mantle2/prompts')]
+	public function promptResolvesEitherIdShape(): void
+	{
+		$owner = $this->createUser();
+		$node = $this->seedPrompt($owner);
+		$publicId = GeneralHelper::publicId($node);
+
+		$byPublic = $this->controller()->getPrompt($publicId, $this->request('GET', '/'));
+		$this->assertSame(Response::HTTP_OK, $byPublic->getStatusCode());
+
+		$byNumeric = $this->controller()->getPrompt(
+			(string) $node->id(),
+			$this->request('GET', '/'),
+		);
+		$this->assertSame(Response::HTTP_OK, $byNumeric->getStatusCode());
+
+		$a = $this->decode($byPublic);
+		$this->assertSame($publicId, $a['id']);
+		$this->assertSame(GeneralHelper::formatId($node->id()), $a['nid']);
+		$this->assertSame($a['id'], $this->decode($byNumeric)['id']);
+	}
+
+	#[Test]
+	#[TestDox('An unknown public prompt id is a 404')]
+	#[Group('mantle2/prompts')]
+	public function promptRejectsUnknownPublicId(): void
+	{
+		$missing = $this->controller()->getPrompt(
+			'ffffffffffffffffffffffffffffffff',
+			$this->request('GET', '/'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('A trailmark filed under a public prompt id is canonicalised to the numeric one')]
+	#[Group('mantle2/prompts')]
+	public function trailmarkPromptIdIsCanonicalised(): void
+	{
+		$captured = [];
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			if ($path === '/v1/trailmarks') {
+				$captured = $data;
+			}
+			return ['id' => 'tm1'];
+		});
+
+		$owner = $this->createUser();
+		$node = $this->seedPrompt($owner);
+		$publicId = GeneralHelper::publicId($node);
+
+		$response = TrailmarksController::create($this->container)->createTrailmark(
+			$this->authRequest(
+				$owner,
+				'POST',
+				'/v2/trailmarks',
+				[],
+				json_encode([
+					'geo' => ['lat' => 41.8781, 'lng' => -87.6298],
+					'note' => 'A calm place to breathe.',
+					'prompt_id' => $publicId,
+				]),
+			),
+		);
+
+		$this->assertSame(Response::HTTP_CREATED, $response->getStatusCode());
+		// otherwise a note filed under the public id is invisible to a numeric read
+		$this->assertSame((string) $node->id(), $captured['prompt_id']);
+
+		CloudHelper::setRequestOverride(null);
+	}
+
+	#endregion
 }

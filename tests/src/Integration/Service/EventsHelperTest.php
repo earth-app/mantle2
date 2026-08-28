@@ -567,7 +567,9 @@ class EventsHelperTest extends IntegrationTestBase
 		$node = $this->persist($event, $host);
 
 		$serialized = EventsHelper::serializeEvent($event, $node, $host);
-		$this->assertSame(24, strlen($serialized['id']));
+		// `id` is the public hex now; `nid` carries the padded numeric one
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $serialized['id']);
+		$this->assertSame(24, strlen($serialized['nid']));
 		$this->assertSame('Beach Cleanup', $serialized['name']);
 		$this->assertIsArray($serialized['host']);
 		$this->assertTrue($serialized['can_edit']);
