@@ -8,6 +8,8 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionMethod;
 
 class CosmeticsUnitTest extends TestCase
 {
@@ -43,6 +45,29 @@ class CosmeticsUnitTest extends TestCase
 		}
 
 		return $imagePaths;
+	}
+
+	#[Test]
+	#[TestDox('Impact points stay a closed, non-transferable sink')]
+	#[Group('mantle2/cosmetics')]
+	public function testPointsAreAClosedSink(): void
+	{
+		$reflection = new ReflectionClass(PointsHelper::class);
+
+		// avatar cosmetics are the only sink on purpose; a path out of it would make points
+		// tradeable, which is the incentive-salience problem rather than the incentive itself
+		foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+			$this->assertDoesNotMatchRegularExpression(
+				'/transfer|gift|refund|resell|cashout|withdraw|redeem/i',
+				$method->getName(),
+				"PointsHelper::{$method->getName()}() would open the impact-points sink",
+			);
+		}
+
+		foreach (PointsHelper::cosmetics() as $key => $cosmetic) {
+			$this->assertArrayNotHasKey('refundable', $cosmetic, "Cosmetic '$key' is refundable");
+			$this->assertArrayNotHasKey('tradeable', $cosmetic, "Cosmetic '$key' is tradeable");
+		}
 	}
 
 	#[Test]

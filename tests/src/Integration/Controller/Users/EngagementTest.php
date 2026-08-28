@@ -418,6 +418,31 @@ class EngagementTest extends IntegrationTestBase
 	}
 
 	#[Test]
+	#[TestDox('A fresh account starts opted in on every channel and category')]
+	#[Group('mantle2/users')]
+	public function freshAccountIsNeverAtZeroNotifications(): void
+	{
+		// silence backfires (Fitz 2019: anxiety d=0.56, FoMO d=0.59), so an absent preference has
+		// to read as opted in rather than as off
+		$user = $this->createUser();
+
+		$this->assertTrue(UsersHelper::isSubscribed($user));
+		$this->assertSame([], UsersHelper::getMessagePrefs($user));
+
+		foreach (MailCategory::cases() as $category) {
+			foreach (
+				[UsersHelper::MESSAGE_CHANNEL_EMAIL, UsersHelper::MESSAGE_CHANNEL_PUSH]
+				as $channel
+			) {
+				$this->assertTrue(
+					UsersHelper::isSubscribedTo($user, $category, $channel),
+					"A new account must default to opted in for {$category->value} on {$channel}.",
+				);
+			}
+		}
+	}
+
+	#[Test]
 	#[TestDox('A categorised unsubscribe mutes only that stream')]
 	#[Group('mantle2/users')]
 	public function publicUnsubscribeByCategory(): void
@@ -1761,4 +1786,258 @@ class EngagementTest extends IntegrationTestBase
 	}
 
 	#endregion
+
+	// #region If-then plans
+
+	private function planUser(): UserInterface
+	{
+		$user = $this->createUser([
+			'field_activities' => json_encode([
+				[
+					'id' => 'hiking',
+					'name' => 'Hiking',
+					'description' => 'Walking outdoors',
+					'types' => ['NATURE'],
+					'aliases' => [],
+					'fields' => ['icon' => 'mdi:hiking'],
+				],
+			]),
+		]);
+		$user->save();
+		return $user;
+	}
+
+	#[Test]
+	#[TestDox('POST plan menu refuses a user with no activities')]
+	#[Group('mantle2/users')]
+	public function planMenuWithoutActivities(): void
+	{
+		$user = $this->createUser();
+
+		$response = $this->controller()->planMenu(
+			$this->authRequest($user, 'POST', '/v2/users/current/plan/menu', [], '{"places":[]}'),
+		);
+
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('POST plan menu forwards activities and places to cloud')]
+	#[Group('mantle2/users')]
+	public function planMenuForwardsContext(): void
+	{
+		$captured = null;
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = ['path' => $path, 'method' => $method, 'data' => $data];
+			return [
+				'goal' => 'spend more time outside',
+				'cues' => [
+					['id' => 'juncture_0', 'kind' => 'juncture', 'text' => 'I close this app'],
+				],
+				'responses' => [['id' => 'response_0', 'text' => 'walk one loop around the block']],
+			];
+		});
+
+		$response = $this->controller()->planMenu(
+			$this->authRequest(
+				$this->planUser(),
+				'POST',
+				'/v2/users/current/plan/menu',
+				[],
+				'{"places":["Sycamore Park"]}',
+			),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame('POST', $captured['method']);
+		$this->assertStringEndsWith('/plan/menu', $captured['path']);
+		$this->assertSame(['Sycamore Park'], $captured['data']['places']);
+		$this->assertSame('hiking', $captured['data']['activities'][0]['id']);
+
+		$body = $this->decode($response);
+		$this->assertCount(1, $body['cues']);
+	}
+
+	#[Test]
+	#[TestDox('POST plan requires both selections and returns the sentence once')]
+	#[Group('mantle2/users')]
+	public function formPlanValidatesAndReturnsSentence(): void
+	{
+		$user = $this->planUser();
+
+		$missing = $this->controller()->formPlan(
+			$this->authRequest($user, 'POST', '/v2/users/current/plan', [], '{"cue_id":"a"}'),
+		);
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $missing->getStatusCode());
+
+		CloudHelper::setRequestOverride(
+			fn() => [
+				'sentence' => 'If I close this app, then I will walk one loop around the block.',
+				'expires_at' => 1787856000000,
+			],
+		);
+
+		$response = $this->controller()->formPlan(
+			$this->authRequest(
+				$user,
+				'POST',
+				'/v2/users/current/plan',
+				[],
+				'{"cue_id":"juncture_0","response_id":"response_0"}',
+			),
+		);
+
+		$this->assertSame(Response::HTTP_CREATED, $response->getStatusCode());
+		$body = $this->decode($response);
+		$this->assertStringStartsWith('If ', $body['sentence']);
+		$this->assertSame(1787856000000, $body['expires_at']);
+	}
+
+	#[Test]
+	#[TestDox('POST plan fails cleanly when cloud returns no sentence')]
+	#[Group('mantle2/users')]
+	public function formPlanRejectsEmptyCloudResponse(): void
+	{
+		CloudHelper::setRequestOverride(fn() => ['message' => 'A plan is already active']);
+
+		$response = $this->controller()->formPlan(
+			$this->authRequest(
+				$this->planUser(),
+				'POST',
+				'/v2/users/current/plan',
+				[],
+				'{"cue_id":"juncture_0","response_id":"response_0"}',
+			),
+		);
+
+		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET plan status never carries the plan text')]
+	#[Group('mantle2/users')]
+	public function planStatusCarriesNoText(): void
+	{
+		CloudHelper::setRequestOverride(
+			fn() => ['active' => true, 'expires_at' => 1787856000000, 'rehearsed' => false],
+		);
+
+		$response = $this->controller()->planStatus(
+			$this->authRequest($this->planUser(), 'GET', '/v2/users/current/plan/status'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$body = $this->decode($response);
+		$this->assertTrue($body['active']);
+		$this->assertFalse($body['rehearsed']);
+		$this->assertArrayNotHasKey('sentence', $body);
+	}
+
+	#[Test]
+	#[TestDox('POST plan rehearsed marks once and 404s with no active plan')]
+	#[Group('mantle2/users')]
+	public function rehearsePlanMarksOnce(): void
+	{
+		$user = $this->planUser();
+
+		CloudHelper::setRequestOverride(fn() => ['rehearsed' => false]);
+		$missing = $this->controller()->rehearsePlan(
+			$this->authRequest($user, 'POST', '/v2/users/current/plan/rehearsed'),
+		);
+		$this->assertSame(Response::HTTP_NOT_FOUND, $missing->getStatusCode());
+
+		CloudHelper::setRequestOverride(fn() => ['rehearsed' => true]);
+		$marked = $this->controller()->rehearsePlan(
+			$this->authRequest($user, 'POST', '/v2/users/current/plan/rehearsed'),
+		);
+		$this->assertSame(Response::HTTP_OK, $marked->getStatusCode());
+		$this->assertTrue($this->decode($marked)['rehearsed']);
+	}
+
+	// #endregion
+
+	// #region Memories
+
+	#[Test]
+	#[TestDox('GET memories requires auth')]
+	#[Group('mantle2/users')]
+	public function memoriesRequiresAuth(): void
+	{
+		$response = $this->controller()->userMemories(
+			$this->request('GET', '/v2/users/current/memories'),
+		);
+
+		$this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('GET memories forwards the rank cloud caps the journal with')]
+	#[Group('mantle2/users')]
+	public function memoriesForwardsRank(): void
+	{
+		$captured = null;
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = ['path' => $path, 'method' => $method, 'data' => $data];
+			return [
+				'memories' => [
+					[
+						'kind' => 'quest',
+						'id' => 'first_light_walk',
+						'title' => 'First Light',
+						'completedAt' => 1756209600000,
+						'yearsAgo' => 1,
+						'photo' => true,
+					],
+				],
+			];
+		});
+
+		$response = $this->controller()->userMemories(
+			$this->authRequest($this->createUser(), 'GET', '/v2/users/current/memories'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame('GET', $captured['method']);
+		$this->assertStringEndsWith('/memories', $captured['path']);
+		$this->assertSame('free', $captured['data']['rank']);
+
+		$body = $this->decode($response);
+		$this->assertCount(1, $body['memories']);
+		$this->assertSame('first_light_walk', $body['memories'][0]['id']);
+	}
+
+	// most days have no memory on them, and that is a 200 with nothing in it
+	#[Test]
+	#[TestDox('GET memories returns an empty list rather than a 404')]
+	#[Group('mantle2/users')]
+	public function memoriesEmptyIsNotAnError(): void
+	{
+		CloudHelper::setRequestOverride(fn() => ['memories' => []]);
+
+		$response = $this->controller()->userMemories(
+			$this->authRequest($this->createUser(), 'GET', '/v2/users/current/memories'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame([], $this->decode($response)['memories']);
+	}
+
+	#[Test]
+	#[TestDox('GET memories survives a cloud failure')]
+	#[Group('mantle2/users')]
+	public function memoriesSurvivesCloudFailure(): void
+	{
+		CloudHelper::setRequestOverride(function () {
+			throw new Exception('cloud down');
+		});
+
+		$response = $this->controller()->userMemories(
+			$this->authRequest($this->createUser(), 'GET', '/v2/users/current/memories'),
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$this->assertSame([], $this->decode($response)['memories']);
+	}
+
+	// #endregion
 }
