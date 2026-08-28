@@ -38,13 +38,24 @@ class UsersHelper
 		return User::load(1);
 	}
 
+	/**
+	 * Resolves any id shape the API has ever issued, plus `@username`.
+	 *
+	 * The public id is a stripped uuid; the legacy id is the zero-padded integer, still returned as
+	 * `nid`. Both must keep resolving to the same account - a hex string cast to int is 0, so
+	 * without the branch a public id would silently 404.
+	 */
 	public static function findBy(string $identifier): ?UserInterface
 	{
 		if (str_starts_with($identifier, '@')) {
 			return self::findByUsername(substr($identifier, 1));
-		} else {
-			return self::findById((int) $identifier);
 		}
+
+		if (GeneralHelper::isPublicId($identifier)) {
+			return self::findByPublicId($identifier);
+		}
+
+		return self::findById((int) $identifier);
 	}
 
 	public static function findByAuthorized(
@@ -77,6 +88,44 @@ class UsersHelper
 	public static function findById(int $id): ?UserInterface
 	{
 		return User::load($id);
+	}
+
+	/**
+	 * Loads a user by the 32-hex public id (`GeneralHelper::publicId`).
+	 *
+	 * The stored uuid keeps its dashes, so the lookup restores them before querying rather than
+	 * scanning every account.
+	 */
+	public static function findByPublicId(string $publicId): ?UserInterface
+	{
+		$hex = strtolower(trim($publicId));
+		if (!GeneralHelper::isPublicId($hex)) {
+			return null;
+		}
+
+		$uuid = implode('-', [
+			substr($hex, 0, 8),
+			substr($hex, 8, 4),
+			substr($hex, 12, 4),
+			substr($hex, 16, 4),
+			substr($hex, 20, 12),
+		]);
+
+		try {
+			$ids = Drupal::entityQuery('user')
+				->accessCheck(false)
+				->condition('uuid', $uuid)
+				->range(0, 1)
+				->execute();
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to look up user by uuid: %message', [
+				'%message' => $e->getMessage(),
+			]);
+			return null;
+		}
+
+		$id = reset($ids);
+		return $id ? self::findById((int) $id) : null;
 	}
 
 	public static function findByUsername(string $username): ?UserInterface
@@ -1745,7 +1794,11 @@ class UsersHelper
 			$cacheKey,
 			function () use ($user, $requester, $privacy) {
 				return [
-					'id' => GeneralHelper::formatId($user->id()),
+					'id' => GeneralHelper::publicId($user),
+					// backwards-compatibility point for the id migration: `id` is the 32-hex public
+					// id, `nid` keeps the padded numeric one. anything that hands an id straight to
+					// cloud must send `nid`, because cloud keys its storage on it.
+					'nid' => GeneralHelper::formatId($user->id()),
 					'username' => $user->getAccountName(),
 					'full_name' => self::getName($user, $requester),
 					'created_at' => date('c', $user->getCreatedTime()),
@@ -1753,10 +1806,13 @@ class UsersHelper
 					'last_login' => date('c', $user->getLastLoginTime()),
 					'is_admin' => self::isAdmin($user),
 					'account' => [
-						'id' => GeneralHelper::formatId($user->id()),
+						'id' => GeneralHelper::publicId($user),
+						'nid' => GeneralHelper::formatId($user->id()),
+						// the route resolves either shape; the public one keeps the integer id out of a
+						// url that gets shared around
 						'avatar_url' =>
 							'https://api.earth-app.com/v2/users/' .
-							GeneralHelper::formatId($user->id()) .
+							GeneralHelper::publicId($user) .
 							'/profile_photo',
 						'avatar_cosmetic' => PointsHelper::getAvatarCosmetic($user),
 						'username' => $user->getAccountName(),
@@ -3435,6 +3491,217 @@ class UsersHelper
 		}
 
 		return [];
+	}
+
+	#region If-then plans
+
+	/**
+	 * Builds the menu the user links one cue to one response from.
+	 *
+	 * Activities come from our own record rather than the request: they are the app's evidence that
+	 * the user actually wants this, and cloud refuses to build a menu without them. Places are
+	 * client-supplied context (cloud sanitizes them) because only the device knows what is nearby.
+	 *
+	 * @param array<string> $places
+	 * @return array<string, mixed>|null
+	 */
+	public static function planMenu(UserInterface $user, array $places = []): ?array
+	{
+		try {
+			$activities = self::getActivities($user);
+			if (empty($activities)) {
+				return null;
+			}
+
+			return CloudHelper::sendRequest('/v1/users/' . $user->id() . '/plan/menu', 'POST', [
+				'places' => array_values(array_filter($places, 'is_string')),
+				'activities' => array_map(
+					fn(Activity $activity) => self::serializeForCloud($activity),
+					$activities,
+				),
+			]);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to build a plan menu: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Links the chosen cue to the chosen response and returns the sentence once.
+	 *
+	 * @return array{sentence: string, expires_at: int}|null
+	 */
+	public static function formPlan(UserInterface $user, string $cueId, string $responseId): ?array
+	{
+		try {
+			$response = CloudHelper::sendRequest('/v1/users/' . $user->id() . '/plan', 'POST', [
+				'cue_id' => $cueId,
+				'response_id' => $responseId,
+			]);
+
+			$sentence = $response['sentence'] ?? null;
+			if (!is_string($sentence) || $sentence === '') {
+				return null;
+			}
+
+			return [
+				'sentence' => $sentence,
+				'expires_at' => (int) ($response['expires_at'] ?? 0),
+			];
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to form a plan: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Whether a plan is running. Never carries the plan text; there is nothing to re-read.
+	 *
+	 * @return array<string, mixed>
+	 */
+	public static function planStatus(UserInterface $user): array
+	{
+		try {
+			$response = CloudHelper::sendRequest(
+				'/v1/users/' . $user->id() . '/plan/status',
+				'GET',
+			);
+			return [
+				'active' => (bool) ($response['active'] ?? false),
+				'expires_at' => isset($response['expires_at'])
+					? (int) $response['expires_at']
+					: null,
+				'rehearsed' => isset($response['rehearsed']) ? (bool) $response['rehearsed'] : null,
+			];
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to read plan status: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return ['active' => false, 'expires_at' => null, 'rehearsed' => null];
+	}
+
+	/** One tap; a designed rehearsal exercise measured no better than none. */
+	public static function rehearsePlan(UserInterface $user): bool
+	{
+		try {
+			$response = CloudHelper::sendRequest(
+				'/v1/users/' . $user->id() . '/plan/rehearsed',
+				'POST',
+			);
+			return (bool) ($response['rehearsed'] ?? false);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to mark a plan rehearsed: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return false;
+	}
+
+	#endregion
+
+	#region Memories
+
+	/**
+	 * What the user did on this month/day in an earlier year.
+	 *
+	 * Cloud reads only the two stores that outlive a year (quest history and the trail journal);
+	 * rank is forwarded because it sets the journal cap. Nothing is written and nothing is sent -
+	 * an empty list is the normal answer on most days.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function memories(UserInterface $user): array
+	{
+		try {
+			$response = CloudHelper::sendRequest('/v1/users/' . $user->id() . '/memories', 'GET', [
+				'rank' => self::getAccountType($user)->value,
+			]);
+
+			$memories = $response['memories'] ?? null;
+			return is_array($memories) ? array_values(array_filter($memories, 'is_array')) : [];
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to read memories: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return [];
+	}
+
+	#endregion
+
+	/**
+	 * One activity the user would probably never have picked.
+	 *
+	 * Deliberately uncached: the whole point is that a re-roll lands somewhere else. The pool is
+	 * larger than the recommendation pool because surprise scales with how much of the catalog is
+	 * on the table.
+	 *
+	 * @return array{activity: Activity, unrelated: bool, pool: int}|null
+	 */
+	public static function surpriseActivity(UserInterface $user, int $poolLimit = 100): ?array
+	{
+		try {
+			$connection = Drupal::database();
+			$nids = $connection
+				->select('node_field_data', 'n')
+				->fields('n', ['nid'])
+				->condition('status', 1)
+				->condition('type', 'activity')
+				->orderRandom()
+				->range(0, $poolLimit)
+				->execute()
+				->fetchCol();
+
+			$pool = array_values(
+				array_filter(array_map(fn($nid) => ActivityHelper::getActivityByNid($nid), $nids)),
+			);
+			if (empty($pool)) {
+				return null;
+			}
+
+			$response = CloudHelper::sendRequest('/v1/users/surprise_activity', 'POST', [
+				'all' => array_map(
+					fn(Activity $activity) => self::serializeForCloud($activity),
+					$pool,
+				),
+				'user' => array_map(
+					fn(Activity $activity) => self::serializeForCloud($activity),
+					self::getActivities($user),
+				),
+			]);
+
+			$id = $response['activity']['id'] ?? null;
+			if (!is_string($id) || $id === '') {
+				return null;
+			}
+
+			$activity = ActivityHelper::getActivity($id);
+			if (!$activity) {
+				return null;
+			}
+
+			return [
+				'activity' => $activity,
+				'unrelated' => (bool) ($response['unrelated'] ?? false),
+				'pool' => (int) ($response['pool'] ?? 0),
+			];
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->error('Failed to draw a surprise activity: %message', [
+				'%message' => $e->getMessage(),
+			]);
+		}
+
+		return null;
 	}
 
 	#endregion
@@ -5250,6 +5517,64 @@ class UsersHelper
 			},
 			3600,
 		);
+	}
+
+	/**
+	 * Consequences of a user's activity list changing.
+	 *
+	 * Activities are the one standing statement of who a user is, and until now editing them changed
+	 * nothing but a recommendation weighting. Cloud owns the slow half (regenerating the avatar the
+	 * activities condition, surfacing the quests that exist for the new ones, reseeding the shared
+	 * garden); this side records badge progress and drops the avatar cache the old image sits in.
+	 *
+	 * Best-effort throughout: a cloud outage must not fail a PATCH the user already saw succeed.
+	 *
+	 * @param array $activities serialized activities from the response body
+	 */
+	public static function onActivitiesChanged(UserInterface $user, array $activities): void
+	{
+		if ($user->id() === self::cloud()->id()) {
+			return; // skip root user
+		}
+
+		$names = array_values(
+			array_filter(
+				array_map(fn($a) => is_array($a) ? $a['name'] ?? null : null, $activities),
+				fn($n) => is_string($n) && $n !== '',
+			),
+		);
+		if (!empty($names)) {
+			self::trackBadgeProgress($user, 'activities_added', $names);
+		}
+
+		PointsHelper::clearUserPhotoCache((string) $user->id());
+
+		$ids = array_values(
+			array_filter(
+				array_map(fn($a) => is_array($a) ? $a['id'] ?? null : null, $activities),
+				fn($id) => is_string($id) && $id !== '',
+			),
+		);
+
+		try {
+			$payload = self::buildUserProfilePromptData($user);
+			$payload['activity_ids'] = $ids;
+
+			CloudHelper::sendRequest(
+				'/v1/users/' . GeneralHelper::formatId($user->id()) . '/activities/changed',
+				'POST',
+				$payload,
+				15,
+			);
+		} catch (Exception $e) {
+			Drupal::logger('mantle2')->warning(
+				'Failed to apply activity-change consequences for user %uid: %message',
+				[
+					'%uid' => $user->id(),
+					'%message' => $e->getMessage(),
+				],
+			);
+		}
 	}
 
 	public static function trackBadgeProgress(
