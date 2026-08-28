@@ -850,6 +850,31 @@ mantle2.users.id.activities.recommend:
         type: string
   methods: [GET]
 
+mantle2.users.id.activities.surprise:
+  path: '/v2/users/{id}/activities/surprise'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::surpriseUserActivity'
+    _title: 'Surprise Activity for User by ID'
+  requirements:
+    _access: 'TRUE'
+    id: '\d+'
+  options:
+    tags: Users,Activities
+    description: Draws one activity the user would probably never have picked
+    schema/200: '#SurpriseActivity'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: No unexpected activity available
+    query:
+      pool_limit:
+        type: integer
+        required: false
+        description: How many catalog activities to draw from (1-250, default 100)
+    parameters:
+      id:
+        type: string
+  methods: [GET]
+
 mantle2.users.id.friends:
   path: '/v2/users/{id}/friends'
   defaults:
@@ -1561,7 +1586,7 @@ mantle2.users.id.events.images.get:
   requirements:
     _access: 'TRUE'
     id: '\d+'
-    eventId: '\d+'
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for a specific event the user is hosting or attending
@@ -1584,7 +1609,7 @@ mantle2.users.id.events.images.delete:
   requirements:
     _access: 'TRUE'
     id: '\d+'
-    eventId: '\d+'
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Users,Events,Event Images
     description: Deletes a specific image submission for a specific event the user is hosting or attending
@@ -2447,6 +2472,30 @@ mantle2.users.username.activities.recommend:
         type: string
   methods: [GET]
 
+mantle2.users.username.activities.surprise:
+  path: '/v2/users/{username}/activities/surprise'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::surpriseUserActivity'
+    _title: 'Surprise Activity for User by Username'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Activities
+    description: Draws one activity the user would probably never have picked
+    schema/200: '#SurpriseActivity'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: No unexpected activity available
+    query:
+      pool_limit:
+        type: integer
+        required: false
+        description: How many catalog activities to draw from (1-250, default 100)
+    parameters:
+      username:
+        type: string
+  methods: [GET]
+
 mantle2.users.username.friends:
   path: '/v2/users/{username}/friends'
   defaults:
@@ -3157,7 +3206,7 @@ mantle2.users.username.events.images.get:
   requirements:
     _access: 'TRUE'
     username: '@[\w.]+'
-    eventId: '\d+'
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for a specific event the user is hosting or attending
@@ -3180,7 +3229,7 @@ mantle2.users.username.events.images.delete:
   requirements:
     _access: 'TRUE'
     username: '@[\w.]+'
-    eventId: '\d+'
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Users,Events,Event Images
     description: Deletes a specific image submission for a specific event the user is hosting or attending
@@ -4041,6 +4090,114 @@ mantle2.users.current.activities.recommend:
         description: The number of activities to consider for recommendation
   methods: [GET]
 
+mantle2.users.current.activities.surprise:
+  path: '/v2/users/current/activities/surprise'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::surpriseUserActivity'
+    _title: 'Surprise Activity for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Activities
+    description: Draws one activity the user would probably never have picked
+    schema/200: '#SurpriseActivity'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: No unexpected activity available
+    query:
+      pool_limit:
+        type: integer
+        required: false
+        description: How many catalog activities to draw from (1-250, default 100)
+  methods: [GET]
+
+mantle2.users.current.plan.menu:
+  path: '/v2/users/current/plan/menu'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::planMenu'
+    _title: 'Plan Menu for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Plans
+    description: Builds the cue and response menu the user links one if-then plan from
+    schema/200: '#PlanMenu'
+    schema/400: Set your activities before making a plan
+    schema/401: Unauthorized
+    body:
+      places:
+        type: array
+        required: false
+        description: Nearby place names resolved on the device
+  methods: [POST]
+
+mantle2.users.current.plan.form:
+  path: '/v2/users/current/plan'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::formPlan'
+    _title: 'Form a Plan for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Plans
+    description: Links one cue to one response and returns the plan sentence once
+    schema/201: '#PlanFormed'
+    schema/400: cue_id and response_id are required
+    schema/401: Unauthorized
+    body:
+      cue_id:
+        type: string
+        required: true
+        description: Identifier of the chosen cue from the menu
+      response_id:
+        type: string
+        required: true
+        description: Identifier of the chosen response from the menu
+  methods: [POST]
+
+mantle2.users.current.plan.status:
+  path: '/v2/users/current/plan/status'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::planStatus'
+    _title: 'Plan Status for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Plans
+    description: Whether a plan is running; never carries the plan text
+    schema/200: '#PlanStatus'
+    schema/401: Unauthorized
+  methods: [GET]
+
+mantle2.users.current.plan.rehearsed:
+  path: '/v2/users/current/plan/rehearsed'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::rehearsePlan'
+    _title: 'Mark Plan Rehearsed for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Plans
+    description: Records the single rehearsal of the plan
+    schema/200: '#PlanRehearsed'
+    schema/401: Unauthorized
+    schema/404: No active plan
+  methods: [POST]
+
+mantle2.users.current.memories:
+  path: '/v2/users/current/memories'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::userMemories'
+    _title: 'Memories for Current User'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Memories
+    description: What the user did on this month and day in an earlier year
+    schema/200: '#Memories'
+    schema/401: Unauthorized
+  methods: [GET]
+
 mantle2.users.current.friends:
   path: '/v2/users/current/friends'
   defaults:
@@ -4629,7 +4786,7 @@ mantle2.users.current.events.images.get:
     _title: 'Get User Event Images for Event by Current User'
   requirements:
     _access: 'TRUE'
-    eventId: '\d+'
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for a specific event the user is hosting or attending
@@ -4649,7 +4806,7 @@ mantle2.users.current.events.images.delete:
     _title: 'Delete User Event Images for Event by Current User'
   requirements:
     _access: 'TRUE'
-    eventId: '\d+'
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Users,Events,Event Images
     description: Deletes a specific image submission for a specific event the user is hosting or attending
@@ -5176,7 +5333,61 @@ mantle2.admin.polls.get:
     description: Admin-only. Returns aggregate counts across every poll that has at least one vote.
   methods: [GET]
 
+mantle2.admin.users.internal_id:
+  path: '/v2/admin/users/{uuid}/internal_id'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::userInternalId'
+    _title: 'Resolve Internal User ID [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Users,Admin
+    description: Translates a public 32-hex user id into the internal numeric id cloud keys its
+      storage on. Used by the Cloud service, cached there per account.
+    schema/200: '#UserInternalId'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: User not found
+  methods: [GET]
+
+mantle2.admin.content.internal_id:
+  path: '/v2/admin/{bundle}/{uuid}/internal_id'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\AdminController::contentInternalId'
+    _title: 'Resolve Internal Content ID [Admin Only]'
+  requirements:
+    _access: 'TRUE'
+    bundle: 'article|event|prompt'
+    uuid: '[0-9a-f]{32}'
+  options:
+    tags: Admin
+    description: Translates a public 32-hex content id into the internal node id cloud keys its
+      storage on. Used by the Cloud service, cached there per entity.
+    schema/200: '#UserInternalId'
+    schema/401: Unauthorized
+    schema/403: 403
+    schema/404: Not found
+  methods: [GET]
+
 #endregion
+
+# region Analytics
+
+mantle2.analytics.signup_view:
+  path: '/v2/analytics/signup_view'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::recordSignupView'
+    _title: 'Record Signup View'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: General,Admin
+    description: Counts one view of the signup screen, the denominator of the admin dashboard's
+      signup conversion rate. Anonymous by necessity, deduplicated per client per day.
+    schema/200: '#SignupViewResponse'
+  methods: [POST]
+
+# endregion
 
 # region Activity Routes
 mantle2.activities:
@@ -5327,6 +5538,29 @@ mantle2.activities.list:
 
 # endregion
 # region Activity Staging Routes
+
+mantle2.activities.expeditions:
+  path: '/v2/activities/{id}/expeditions'
+  defaults:
+    _controller: '\Drupal\mantle2\Controller\UsersController::activityExpeditions'
+    _title: 'Expeditions Gathered Around an Activity'
+  requirements:
+    _access: 'TRUE'
+  options:
+    tags: Activities,Users
+    description: Lists open expeditions gathered around this activity, so people who share it can join one
+    schema/200: '#ActivityExpeditions'
+    schema/401: Unauthorized
+    schema/404: Activity not found
+    query:
+      limit:
+        type: integer
+        required: false
+        description: Maximum expeditions to return (default 25)
+    parameters:
+      id:
+        type: string
+  methods: [GET]
 
 mantle2.activities.stage:
   path: '/v2/activities/staged'
@@ -5610,7 +5844,7 @@ mantle2.events.get:
     _title: 'Get Event'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events
     description: Retrieves a specific event by ID
@@ -5629,7 +5863,7 @@ mantle2.events.update:
     _title: 'Update Event'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events
     description: Updates an existing event
@@ -5654,7 +5888,7 @@ mantle2.events.delete:
     _title: 'Delete Event'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events
     description: Deletes an existing event
@@ -5676,7 +5910,7 @@ mantle2.events.get.attendees:
     _title: 'Get Event Attendees'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events
     description: Retrieves a list of attendees for a specific event
@@ -5711,7 +5945,7 @@ mantle2.events.signup:
     _title: 'Sign Up for Event'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events
     description: Signs up the logged in user for a specific event
@@ -5733,7 +5967,7 @@ mantle2.events.leave:
     _title: 'Cancel Signup for Event'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events
     description: Cancels the logged in user's signup for a specific event
@@ -5755,7 +5989,7 @@ mantle2.events.cancel:
     _title: 'Cancel Event'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events
     description: Cancels an event (only accessible by the host or admin)
@@ -5776,7 +6010,7 @@ mantle2.events.uncancel:
     _title: 'Uncancel Event'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events
     description: Reinstates a cancelled event (only accessible by the host or admin)
@@ -5845,7 +6079,7 @@ mantle2.events.current.images.get:
     _title: 'Get Current User Event Image Submissions by Event ID'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events,Event Images,Users
     description: Retrieves a specific image submission for events the current user is hosting or attending by image ID
@@ -5884,7 +6118,7 @@ mantle2.events.images:
     _title: 'Get Event Image Submissions'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events,Event Images
     description: Retrieves image submissions for a specific event
@@ -5906,7 +6140,7 @@ mantle2.events.images.get:
     _title: 'Get Event Image Submission by ID'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
     imageId: '^[0-9a-f]{32}$'
   options:
     tags: Events,Event Images
@@ -5931,7 +6165,7 @@ mantle2.events.images.post:
     _title: 'Submit Event Image'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Events,Event Images
     description: Submits an image for a specific event
@@ -5955,7 +6189,7 @@ mantle2.events.images.delete:
     _title: 'Delete Event Image'
   requirements:
     _access: 'TRUE'
-    eventId: \d+
+    eventId: '\d+|[0-9a-f]{32}'
     imageId: '^[0-9a-f]{32}$'
   options:
     tags: Events,Event Images
@@ -6037,7 +6271,7 @@ mantle2.prompts.get:
     _title: 'Get Prompt'
   requirements:
     _access: 'TRUE'
-    prompt: \d+
+    prompt: '\d+|[0-9a-f]{32}'
   options:
     tags: Prompts
     description: Retrieves a specific prompt
@@ -6055,7 +6289,7 @@ mantle2.prompts.update:
     _title: 'Update Prompt'
   requirements:
     _access: 'TRUE'
-    prompt: \d+
+    prompt: '\d+|[0-9a-f]{32}'
   options:
     tags: Prompts
     description: Updates a specific prompt
@@ -6078,7 +6312,7 @@ mantle2.prompts.delete:
     _title: 'Delete Prompt'
   requirements:
     _access: 'TRUE'
-    prompt: \d+
+    prompt: '\d+|[0-9a-f]{32}'
   options:
     tags: Prompts
     description: Deletes a specific prompt
@@ -6099,7 +6333,7 @@ mantle2.prompts.responses:
     _title: 'Get Prompt Responses'
   requirements:
     _access: 'TRUE'
-    prompt: \d+
+    prompt: '\d+|[0-9a-f]{32}'
   options:
     tags: Prompts
     description: Retrieves responses for a specific prompt
@@ -6117,7 +6351,7 @@ mantle2.prompts.responses.create:
     _title: 'Create Prompt Response'
   requirements:
     _access: 'TRUE'
-    prompt: \d+
+    prompt: '\d+|[0-9a-f]{32}'
   options:
     tags: Prompts
     description: Creates a new response for a specific prompt
@@ -6140,7 +6374,7 @@ mantle2.prompts.responses.get:
     _title: 'Get Prompt Response'
   requirements:
     _access: 'TRUE'
-    prompt: \d+
+    prompt: '\d+|[0-9a-f]{32}'
     response: \d+
   options:
     tags: Prompts
@@ -6161,7 +6395,7 @@ mantle2.prompts.responses.update:
     _title: 'Update Prompt Response'
   requirements:
     _access: 'TRUE'
-    prompt: \d+
+    prompt: '\d+|[0-9a-f]{32}'
     response: \d+
   options:
     tags: Prompts
@@ -6187,7 +6421,7 @@ mantle2.prompts.responses.delete:
     _title: 'Delete Prompt Response'
   requirements:
     _access: 'TRUE'
-    prompt: \d+
+    prompt: '\d+|[0-9a-f]{32}'
     response: \d+
   options:
     tags: Prompts
@@ -6288,7 +6522,7 @@ mantle2.articles.get:
     _title: 'Get Article'
   requirements:
     _access: 'TRUE'
-    articleId: \d+
+    articleId: '\d+|[0-9a-f]{32}'
   options:
     tags: Articles
     description: Retrieves a specific article
@@ -6306,7 +6540,7 @@ mantle2.articles.get.quiz:
     _title: 'Get Article Quiz'
   requirements:
     _access: 'TRUE'
-    articleId: \d+
+    articleId: '\d+|[0-9a-f]{32}'
   options:
     tags: Articles
     description: Retrieves the quiz associated with a specific article
@@ -6324,7 +6558,7 @@ mantle2.articles.create.quiz:
     _title: 'Create or Update Article Quiz'
   requirements:
     _access: 'TRUE'
-    articleId: \d+
+    articleId: '\d+|[0-9a-f]{32}'
   options:
     tags: Articles
     description: Creates or updates a quiz for a specific article. Requires Organizer account type.
@@ -6349,7 +6583,7 @@ mantle2.articles.delete.quiz:
     _title: 'Delete Article Quiz'
   requirements:
     _access: 'TRUE'
-    articleId: \d+
+    articleId: '\d+|[0-9a-f]{32}'
   options:
     tags: Articles
     description: Deletes the quiz associated with a specific article
@@ -6371,7 +6605,7 @@ mantle2.articles.update:
     _title: 'Update Article'
   requirements:
     _access: 'TRUE'
-    articleId: \d+
+    articleId: '\d+|[0-9a-f]{32}'
   options:
     tags: Articles
     description: Updates a specific article
@@ -6394,7 +6628,7 @@ mantle2.articles.delete:
     _title: 'Delete Article'
   requirements:
     _access: 'TRUE'
-    articleId: \d+
+    articleId: '\d+|[0-9a-f]{32}'
   options:
     tags: Articles
     description: Deletes a specific article
@@ -7659,7 +7893,7 @@ mantle2.prompts.trailmarks:
     _title: 'List Trailmarks for a Prompt'
   requirements:
     _access: 'TRUE'
-    prompt: '\d+'
+    prompt: '\d+|[0-9a-f]{32}'
   options:
     tags: Trailmarks,Prompts
     description: Lists the 'from outside' trailmarks left as answers to a daily prompt (most-recent first).

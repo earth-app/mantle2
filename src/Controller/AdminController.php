@@ -21,6 +21,47 @@ class AdminController extends ControllerBase
 		return UsersHelper::requireAdmin($request);
 	}
 
+	// GET /v2/admin/users/{uuid}/internal_id
+	public function userInternalId(Request $request, ?string $uuid = null): JsonResponse
+	{
+		if ($block = $this->requireAdmin($request)) {
+			return $block;
+		}
+
+		$user = GeneralHelper::isPublicId($uuid ?? '')
+			? UsersHelper::findByPublicId($uuid ?? '')
+			: null;
+		if (!$user) {
+			return GeneralHelper::notFound('User not found');
+		}
+
+		return new JsonResponse([
+			'uuid' => GeneralHelper::publicId($user),
+			'id' => GeneralHelper::formatId($user->id()),
+		]);
+	}
+
+	// GET /v2/admin/{bundle}/{uuid}/internal_id
+	public function contentInternalId(
+		Request $request,
+		?string $bundle = null,
+		?string $uuid = null,
+	): JsonResponse {
+		if ($block = $this->requireAdmin($request)) {
+			return $block;
+		}
+
+		$id = GeneralHelper::resolveNodeId($uuid, (string) $bundle);
+		if (!$id) {
+			return GeneralHelper::notFound(ucfirst((string) $bundle) . ' not found');
+		}
+
+		return new JsonResponse([
+			'uuid' => GeneralHelper::publicIdOfNode($id),
+			'id' => GeneralHelper::formatId($id),
+		]);
+	}
+
 	// GET /v2/admin/verified_publishers?state=pending
 	public function listVerifiedPublisherApplications(Request $request): JsonResponse
 	{

@@ -4,6 +4,7 @@ namespace Drupal\Tests\mantle2\Integration\Controller;
 
 use Drupal\mantle2\Controller\AdminController;
 use Drupal\mantle2\Custom\AccountType;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\Entity\User;
@@ -66,6 +67,115 @@ class AdminControllerTest extends IntegrationTestBase
 			$id,
 		);
 	}
+
+	#region userInternalId
+
+	#[Test]
+	#[TestDox('Resolves a public uuid to the internal numeric id')]
+	#[Group('mantle2/admin')]
+	public function userInternalIdResolvesBothWays(): void
+	{
+		$admin = $this->admin();
+		$target = $this->userOf(AccountType::FREE);
+		$hex = GeneralHelper::publicId($target);
+
+		$response = $this->controller()->userInternalId(
+			$this->authRequest($admin, 'GET', '/v2/admin/users/' . $hex . '/internal_id'),
+			$hex,
+		);
+
+		$this->assertSame(Response::HTTP_OK, $response->getStatusCode());
+		$body = $this->decode($response);
+		$this->assertSame($hex, $body['uuid']);
+		$this->assertSame(GeneralHelper::formatId($target->id()), $body['id']);
+
+		// the round trip is what cloud depends on: hex in, the same account back out
+		$this->assertSame((int) $target->id(), (int) UsersHelper::findByPublicId($hex)?->id());
+	}
+
+	#[Test]
+	#[TestDox('Rejects a malformed or unknown public id')]
+	#[Group('mantle2/admin')]
+	public function userInternalIdRejectsBadInput(): void
+	{
+		$admin = $this->admin();
+
+		foreach (
+			['a1b2c3d4-e5f6-0718-293a-4b5c6d7e8f90', 'nope', '', str_repeat('f', 32)]
+			as $candidate
+		) {
+			$response = $this->controller()->userInternalId(
+				$this->authRequest($admin, 'GET', '/v2/admin/users/' . $candidate . '/internal_id'),
+				$candidate,
+			);
+			$this->assertSame(
+				Response::HTTP_NOT_FOUND,
+				$response->getStatusCode(),
+				"'$candidate' must not resolve to a user.",
+			);
+		}
+	}
+
+	#[Test]
+	#[TestDox('Only an administrator may translate an id')]
+	#[Group('mantle2/admin')]
+	public function userInternalIdRequiresAdmin(): void
+	{
+		$target = $this->userOf(AccountType::FREE);
+		$hex = GeneralHelper::publicId($target);
+
+		$response = $this->controller()->userInternalId(
+			$this->authRequest($target, 'GET', '/v2/admin/users/' . $hex . '/internal_id'),
+			$hex,
+		);
+
+		$this->assertSame(Response::HTTP_FORBIDDEN, $response->getStatusCode());
+	}
+
+	#[Test]
+	#[TestDox('The user payload carries nid as the legacy id compatibility point')]
+	#[Group('mantle2/admin')]
+	public function serializedUserCarriesNid(): void
+	{
+		$user = $this->userOf(AccountType::FREE);
+		$payload = UsersHelper::serializeUser($user, $user);
+
+		// `nid` is what a client must hand to anything talking to cloud directly, because cloud
+		// keys its storage on the numeric id and `id` is going to become the 32-hex public one
+		$this->assertSame(GeneralHelper::formatId($user->id()), $payload['nid']);
+		$this->assertSame(GeneralHelper::formatId($user->id()), $payload['account']['nid']);
+		$this->assertTrue(GeneralHelper::isInternalId($payload['nid']));
+
+		// `id` is the public shape now and the two are no longer interchangeable
+		$this->assertSame(GeneralHelper::publicId($user), $payload['id']);
+		$this->assertSame(GeneralHelper::publicId($user), $payload['account']['id']);
+		$this->assertTrue(GeneralHelper::isPublicId($payload['id']));
+		$this->assertNotSame($payload['id'], $payload['nid']);
+
+		// both shapes still resolve to the same account on every read path
+		$this->assertSame((int) $user->id(), (int) UsersHelper::findBy($payload['id'])?->id());
+		$this->assertSame((int) $user->id(), (int) UsersHelper::findBy($payload['nid'])?->id());
+		$this->assertSame(
+			(int) $user->id(),
+			(int) UsersHelper::findBy((string) $user->id())?->id(),
+		);
+	}
+
+	#[Test]
+	#[TestDox('A public id is a stripped uuid and is stable for the account')]
+	#[Group('mantle2/admin')]
+	public function publicIdIsAStrippedUuid(): void
+	{
+		$user = $this->userOf(AccountType::FREE);
+		$hex = GeneralHelper::publicId($user);
+
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $hex);
+		$this->assertSame(str_replace('-', '', strtolower($user->uuid())), $hex);
+		// re-reading the account cannot change it
+		$this->assertSame($hex, GeneralHelper::publicId(User::load($user->id())));
+	}
+
+	#endregion
 
 	#region listVerifiedPublisherApplications
 
@@ -252,6 +362,39 @@ class AdminControllerTest extends IntegrationTestBase
 		);
 
 		$this->assertSame(Response::HTTP_BAD_REQUEST, $response->getStatusCode());
+	}
+
+	#endregion
+
+	#region contentInternalId
+
+	#[Test]
+	#[TestDox('Only an administrator may translate a content id')]
+	#[Group('mantle2/admin')]
+	public function contentInternalIdRequiresAdmin(): void
+	{
+		$member = $this->userOf(AccountType::FREE);
+		$hex = str_repeat('a', 32);
+
+		$anon = $this->controller()->contentInternalId(
+			$this->request('GET', '/v2/admin/article/' . $hex . '/internal_id'),
+			'article',
+			$hex,
+		);
+		$this->assertContains($anon->getStatusCode(), [
+			Response::HTTP_UNAUTHORIZED,
+			Response::HTTP_FORBIDDEN,
+		]);
+
+		$asMember = $this->controller()->contentInternalId(
+			$this->authRequest($member, 'GET', '/v2/admin/article/' . $hex . '/internal_id'),
+			'article',
+			$hex,
+		);
+		$this->assertContains($asMember->getStatusCode(), [
+			Response::HTTP_UNAUTHORIZED,
+			Response::HTTP_FORBIDDEN,
+		]);
 	}
 
 	#endregion

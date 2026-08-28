@@ -1639,7 +1639,16 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => ['$ref' => '#/components/schemas/Id'],
+				'id' => [
+					'type' => 'string',
+					'pattern' => '^[0-9a-f]{32}$',
+					'description' => 'Public id: the entity uuid with the dashes stripped.',
+				],
+				'nid' => [
+					'$ref' => '#/components/schemas/Id',
+					'description' =>
+						'Legacy numeric id. Send this, not `id`, to anything that talks to the Cloud service directly.',
+				],
 				'hostId' => ['$ref' => '#/components/schemas/Id'],
 				'host' => ['$ref' => '#/components/schemas/User'],
 				'name' => self::text(50),
@@ -1894,6 +1903,178 @@ class Mantle2Schemas
 	{
 		return self::paginated(['$ref' => '#/components/schemas/StagedActivity']);
 	}
+	public static function userInternalId(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'uuid' => [
+					'type' => 'string',
+					'pattern' => '^[0-9a-f]{32}$',
+					'description' => 'The public id, a uuid with the dashes stripped',
+				],
+				'id' => [
+					'type' => 'string',
+					'description' => 'The internal numeric id, left-padded to 24 characters',
+				],
+			],
+			'required' => ['uuid', 'id'],
+		];
+	}
+	public static function signupViewResponse(): array
+	{
+		return [
+			'type' => 'object',
+			'properties' => [
+				'counted' => [
+					'type' => 'boolean',
+					'description' =>
+						'False when this client already counted today, or cloud was down',
+				],
+			],
+			'required' => ['counted'],
+		];
+	}
+	public static function activityExpeditions(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'total' => ['type' => 'integer'],
+				'expeditions' => [
+					'type' => 'array',
+					'items' => ['$ref' => '#/components/schemas/Expedition'],
+				],
+			],
+			'required' => ['total', 'expeditions'],
+		];
+	}
+	public static function surpriseActivity(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'activity' => ['$ref' => '#/components/schemas/Activity'],
+				'unrelated' => ['type' => 'boolean'],
+				'pool' => ['type' => 'integer'],
+			],
+			'required' => ['activity', 'unrelated', 'pool'],
+		];
+	}
+	public static function planMenu(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'goal' => ['type' => 'string', 'examples' => ['spend more time outside']],
+				'cues' => [
+					'type' => 'array',
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'id' => ['type' => 'string', 'examples' => ['juncture_0']],
+							'kind' => ['type' => 'string', 'enum' => ['time_place', 'juncture']],
+							'text' => [
+								'type' => 'string',
+								'examples' => ['I get home and put my bag down'],
+							],
+							'place' => ['type' => 'string', 'examples' => ['Sycamore Park']],
+						],
+						'required' => ['id', 'kind', 'text'],
+					],
+				],
+				'responses' => [
+					'type' => 'array',
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'id' => ['type' => 'string', 'examples' => ['response_0']],
+							'text' => [
+								'type' => 'string',
+								'examples' => ['walk one loop around the block'],
+							],
+							'activity_id' => ['type' => 'string', 'examples' => ['hiking']],
+						],
+						'required' => ['id', 'text'],
+					],
+				],
+			],
+			'required' => ['goal', 'cues', 'responses'],
+		];
+	}
+	public static function planFormed(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'sentence' => [
+					'type' => 'string',
+					'examples' => [
+						'If I get home and put my bag down, then I will walk one loop around the block.',
+					],
+				],
+				'expires_at' => ['type' => 'integer', 'examples' => [1787856000000]],
+			],
+			'required' => ['sentence', 'expires_at'],
+		];
+	}
+	public static function planStatus(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'active' => ['type' => 'boolean'],
+				'expires_at' => ['type' => ['integer', 'null']],
+				'rehearsed' => ['type' => ['boolean', 'null']],
+			],
+			'required' => ['active'],
+		];
+	}
+	public static function planRehearsed(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => ['rehearsed' => ['type' => 'boolean']],
+			'required' => ['rehearsed'],
+		];
+	}
+	public static function memories(): array
+	{
+		return [
+			'$schema' => 'http://json-schema.org/draft-07/schema#',
+			'type' => 'object',
+			'properties' => [
+				'memories' => [
+					'type' => 'array',
+					'items' => [
+						'type' => 'object',
+						'properties' => [
+							'kind' => ['type' => 'string', 'enum' => ['quest', 'trail']],
+							'id' => ['type' => 'string', 'examples' => ['first_light_walk']],
+							'title' => ['type' => 'string', 'examples' => ['First Light']],
+							'icon' => ['type' => 'string', 'examples' => ['mdi:weather-sunset-up']],
+							'completedAt' => ['type' => 'integer', 'examples' => [1756209600000]],
+							'yearsAgo' => ['type' => 'integer', 'examples' => [1]],
+							'photo' => ['type' => 'boolean'],
+							'note' => [
+								'type' => 'string',
+								'examples' => ['the light on the water'],
+							],
+							'mood' => ['type' => 'string', 'examples' => ['calm']],
+						],
+						'required' => ['kind', 'id', 'title', 'completedAt', 'yearsAgo'],
+					],
+				],
+			],
+			'required' => ['memories'],
+		];
+	}
 	public static function verifiedPublisherApplication(): array
 	{
 		return [
@@ -1973,7 +2154,16 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => ['$ref' => '#/components/schemas/Id'],
+				'id' => [
+					'type' => 'string',
+					'pattern' => '^[0-9a-f]{32}$',
+					'description' => 'Public id: the entity uuid with the dashes stripped.',
+				],
+				'nid' => [
+					'$ref' => '#/components/schemas/Id',
+					'description' =>
+						'Legacy numeric id. Send this, not `id`, to anything that talks to the Cloud service directly.',
+				],
 				'prompt' => ['$ref' => '#/components/schemas/Text'],
 				'visibility' => ['$ref' => '#/components/schemas/UserPrivacy'],
 				'responses_count' => ['$ref' => '#/components/schemas/Number'],
@@ -2031,7 +2221,16 @@ class Mantle2Schemas
 		return [
 			'type' => 'object',
 			'properties' => [
-				'id' => ['$ref' => '#/components/schemas/Id'],
+				'id' => [
+					'type' => 'string',
+					'pattern' => '^[0-9a-f]{32}$',
+					'description' => 'Public id: the entity uuid with the dashes stripped.',
+				],
+				'nid' => [
+					'$ref' => '#/components/schemas/Id',
+					'description' =>
+						'Legacy numeric id. Send this, not `id`, to anything that talks to the Cloud service directly.',
+				],
 				'title' => ['type' => 'string', 'example' => 'Hello World', 'maxLength' => 100],
 				'description' => [
 					'type' => 'string',
@@ -4648,10 +4847,19 @@ class Mantle2Schemas
 			'Activities' => self::activities(),
 			'StagedActivity' => self::stagedActivity(),
 			'StagedActivityList' => self::stagedActivityList(),
+			'UserInternalId' => self::userInternalId(),
+			'SignupViewResponse' => self::signupViewResponse(),
 			'VerifiedPublisherApplication' => self::verifiedPublisherApplication(),
 			'VerifiedPublisherApplicationList' => self::verifiedPublisherApplicationList(),
 			'ActivitiesJson' => self::activitiesJson(),
 			'ActivitiesList' => self::activitiesList(),
+			'SurpriseActivity' => self::surpriseActivity(),
+			'ActivityExpeditions' => self::activityExpeditions(),
+			'PlanMenu' => self::planMenu(),
+			'PlanFormed' => self::planFormed(),
+			'PlanStatus' => self::planStatus(),
+			'PlanRehearsed' => self::planRehearsed(),
+			'Memories' => self::memories(),
 			'ActivitiesIds' => self::activitiesIds(),
 			'Prompt' => self::prompt(),
 			'Prompts' => self::prompts(),
