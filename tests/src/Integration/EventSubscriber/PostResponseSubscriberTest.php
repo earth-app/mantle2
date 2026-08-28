@@ -6,6 +6,7 @@ use DateTime;
 use DateTimeZone;
 use Drupal\mantle2\EventSubscriber\PostResponseSubscriber;
 use Drupal\mantle2\Service\CloudHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
@@ -55,12 +56,27 @@ class PostResponseSubscriberTest extends IntegrationTestBase
 		string $uri,
 		?UserInterface $user = null,
 		string $body = '{}',
+		array $attributes = [],
 	): Request {
 		$request = $user
 			? $this->authRequest($user, $method, $uri, [], null)
 			: $this->request($method, $uri);
 		$request->attributes->set('_route', $route);
+		foreach ($attributes as $name => $value) {
+			$request->attributes->set($name, $value);
+		}
 		return $request;
+	}
+
+	/** every content-analytics event pushed to /v1/content_analytics/log_event */
+	private function analyticsCalls(): array
+	{
+		return array_values(
+			array_filter(
+				$this->cloudCalls,
+				fn($call) => $call['path'] === '/v1/content_analytics/log_event',
+			),
+		);
 	}
 
 	#region Cloud Call Assertions
@@ -583,6 +599,98 @@ class PostResponseSubscriberTest extends IntegrationTestBase
 		$this->assertSame([], $this->trackedProgress());
 	}
 
+	/** @return array<int,array{path:string,method:string,data:array}> */
+	private function activityChangeCalls(): array
+	{
+		return array_values(
+			array_filter(
+				$this->cloudCalls,
+				fn($call) => str_ends_with($call['path'], '/activities/changed'),
+			),
+		);
+	}
+
+	#[Test]
+	#[TestDox('An activity change tells cloud to apply the consequences, with ids')]
+	#[Group('mantle2/subscribers')]
+	public function activityChangeNotifiesCloud(): void
+	{
+		$user = $this->createUser();
+		$this->terminate(
+			$this->routed(
+				'PATCH',
+				'mantle2.users.current.activities.set',
+				'/v2/users/current/activities',
+				$user,
+			),
+			new JsonResponse([
+				'activities' => [
+					['id' => 'hiking', 'name' => 'Hiking'],
+					['id' => 'running', 'name' => 'Running'],
+				],
+			]),
+		);
+
+		$calls = $this->activityChangeCalls();
+		$this->assertCount(1, $calls);
+		$this->assertSame('POST', $calls[0]['method']);
+		$this->assertStringContainsString(
+			GeneralHelper::formatId((string) $user->id()),
+			$calls[0]['path'],
+		);
+		$this->assertSame(['hiking', 'running'], $calls[0]['data']['activity_ids']);
+		// the payload doubles as the photo prompt, so the activities have to travel with it
+		$this->assertArrayHasKey('activities', $calls[0]['data']);
+	}
+
+	#[Test]
+	#[TestDox('Adding and removing activities fire the consequences on every addressing form')]
+	#[Group('mantle2/subscribers')]
+	public function everyActivityRouteFiresConsequences(): void
+	{
+		$routes = [
+			['PATCH', 'mantle2.users.id.activities.set'],
+			['PATCH', 'mantle2.users.username.activities.set'],
+			['PUT', 'mantle2.users.current.activities.add'],
+			['PUT', 'mantle2.users.id.activities.add'],
+			['PUT', 'mantle2.users.username.activities.add'],
+			['DELETE', 'mantle2.users.current.activities.remove'],
+			['DELETE', 'mantle2.users.id.activities.remove'],
+			['DELETE', 'mantle2.users.username.activities.remove'],
+		];
+
+		$user = $this->createUser();
+		foreach ($routes as [$method, $route]) {
+			$this->terminate(
+				$this->routed($method, $route, '/v2/users/current/activities', $user),
+				new JsonResponse(['activities' => [['id' => 'hiking', 'name' => 'Hiking']]]),
+			);
+		}
+
+		// the by-id and by-username forms used to be silent, so a client PATCHing by id got
+		// no badge progress and no consequences at all
+		$this->assertCount(count($routes), $this->activityChangeCalls());
+	}
+
+	#[Test]
+	#[TestDox('A response without an activities array asks cloud for nothing')]
+	#[Group('mantle2/subscribers')]
+	public function activityChangeWithoutActivitiesSkipsCloud(): void
+	{
+		$user = $this->createUser();
+		$this->terminate(
+			$this->routed(
+				'PATCH',
+				'mantle2.users.current.activities.set',
+				'/v2/users/current/activities',
+				$user,
+			),
+			new JsonResponse(['id' => 1]),
+		);
+
+		$this->assertSame([], $this->activityChangeCalls());
+	}
+
 	#endregion
 
 	#region Signup Time-of-Day Badges
@@ -678,6 +786,203 @@ class PostResponseSubscriberTest extends IntegrationTestBase
 			default => [],
 		};
 		$this->assertSame($expected, $this->grantedBadges());
+	}
+
+	#endregion
+
+	#region Content Analytics
+
+	#[Test]
+	#[TestDox('Signing up for an event logs event_attended against the event')]
+	#[Group('mantle2/subscribers')]
+	public function eventSignupLogsAttendance(): void
+	{
+		$user = $this->createUser();
+		$this->terminate(
+			$this->routed('POST', 'mantle2.events.signup', '/v2/events/44/signup', $user, '{}', [
+				'eventId' => '44',
+			]),
+			new JsonResponse(['id' => 44]),
+		);
+
+		$calls = $this->analyticsCalls();
+		$this->assertCount(1, $calls);
+		$this->assertSame('event_attended', $calls[0]['data']['category']);
+		$this->assertSame('44', $calls[0]['data']['contentId']);
+		$this->assertSame((string) $user->id(), $calls[0]['data']['userId']);
+	}
+
+	#[Test]
+	#[TestDox('Leaving an event logs event_left')]
+	#[Group('mantle2/subscribers')]
+	public function eventLeaveLogsDeparture(): void
+	{
+		$user = $this->createUser();
+		$this->terminate(
+			$this->routed('POST', 'mantle2.events.leave', '/v2/events/44/leave', $user, '{}', [
+				'eventId' => '44',
+			]),
+			new JsonResponse(['id' => 44]),
+		);
+
+		$calls = $this->analyticsCalls();
+		$this->assertCount(1, $calls);
+		$this->assertSame('event_left', $calls[0]['data']['category']);
+	}
+
+	#[Test]
+	#[TestDox('Viewing an event logs events_clicked')]
+	#[Group('mantle2/subscribers')]
+	public function eventViewLogsClick(): void
+	{
+		$user = $this->createUser();
+		$this->terminate(
+			$this->routed('GET', 'mantle2.events.get', '/v2/events/7', $user, '{}', [
+				'eventId' => '7',
+			]),
+			new JsonResponse(['id' => 7]),
+		);
+
+		$calls = $this->analyticsCalls();
+		$this->assertCount(1, $calls);
+		$this->assertSame('events_clicked', $calls[0]['data']['category']);
+		$this->assertSame('7', $calls[0]['data']['contentId']);
+	}
+
+	#[Test]
+	#[TestDox('An anonymous view logs nothing, since cloud keys every event on a user')]
+	#[Group('mantle2/subscribers')]
+	public function anonymousViewLogsNothing(): void
+	{
+		$this->terminate(
+			$this->routed('GET', 'mantle2.events.get', '/v2/events/7', null, '{}', [
+				'eventId' => '7',
+			]),
+			new JsonResponse(['id' => 7]),
+		);
+
+		$this->assertSame([], $this->analyticsCalls());
+	}
+
+	#[Test]
+	#[TestDox('Responding to a prompt logs prompt_response_received against the prompt')]
+	#[Group('mantle2/subscribers')]
+	public function promptResponseLogsReceipt(): void
+	{
+		$user = $this->createUser();
+		$this->terminate(
+			$this->routed(
+				'POST',
+				'mantle2.prompts.responses.create',
+				'/v2/prompts/12/responses',
+				$user,
+				'{}',
+				['prompt' => '12'],
+			),
+			new JsonResponse(['id' => '99']),
+		);
+
+		$calls = $this->analyticsCalls();
+		$this->assertCount(1, $calls);
+		$this->assertSame('prompt_response_received', $calls[0]['data']['category']);
+		$this->assertSame('12', $calls[0]['data']['contentId']);
+		$this->assertSame('99', $calls[0]['data']['metadata']['response_id']);
+	}
+
+	#[Test]
+	#[TestDox('Deleting a prompt response logs prompt_response_deleted')]
+	#[Group('mantle2/subscribers')]
+	public function promptResponseDeleteLogsRemoval(): void
+	{
+		$user = $this->createUser();
+		$this->terminate(
+			$this->routed(
+				'DELETE',
+				'mantle2.prompts.responses.delete',
+				'/v2/prompts/12/responses/99',
+				$user,
+				'{}',
+				['prompt' => '12', 'response' => '99'],
+			),
+			new JsonResponse(null, Response::HTTP_NO_CONTENT),
+		);
+
+		$calls = $this->analyticsCalls();
+		$this->assertCount(1, $calls);
+		$this->assertSame('prompt_response_deleted', $calls[0]['data']['category']);
+		$this->assertSame('99', $calls[0]['data']['metadata']['response_id']);
+	}
+
+	#[Test]
+	#[TestDox("Viewing another user's profile logs profile_viewed against their numeric id")]
+	#[Group('mantle2/subscribers')]
+	public function profileViewLogsView(): void
+	{
+		$viewer = $this->createUser();
+		$viewed = $this->createUser();
+
+		$this->terminate(
+			$this->routed('GET', 'mantle2.users.id.get', '/v2/users/1', $viewer),
+			new JsonResponse([
+				'id' => GeneralHelper::publicId($viewed),
+				'nid' => GeneralHelper::formatId($viewed->id()),
+			]),
+		);
+
+		$calls = $this->analyticsCalls();
+		$this->assertCount(1, $calls);
+		$this->assertSame('profile_viewed', $calls[0]['data']['category']);
+		$this->assertSame(GeneralHelper::formatId($viewed->id()), $calls[0]['data']['contentId']);
+		$this->assertSame((string) $viewer->id(), $calls[0]['data']['userId']);
+	}
+
+	#[Test]
+	#[TestDox('Viewing your own profile is not a profile view')]
+	#[Group('mantle2/subscribers')]
+	public function selfProfileViewLogsNothing(): void
+	{
+		$viewer = $this->createUser();
+
+		$this->terminate(
+			$this->routed('GET', 'mantle2.users.username.get', '/v2/users/@self', $viewer),
+			new JsonResponse([
+				'id' => GeneralHelper::publicId($viewer),
+				'nid' => GeneralHelper::formatId($viewer->id()),
+			]),
+		);
+
+		$this->assertSame([], $this->analyticsCalls());
+	}
+
+	#[Test]
+	#[TestDox('A cloud outage during an analytics write never surfaces')]
+	#[Group('mantle2/subscribers')]
+	public function analyticsFailureIsSwallowed(): void
+	{
+		CloudHelper::setRequestOverride(function (string $path) {
+			throw new \Exception('cloud is down');
+		});
+
+		$user = $this->createUser();
+		$this->terminate(
+			$this->routed('GET', 'mantle2.events.get', '/v2/events/7', $user, '{}', [
+				'eventId' => '7',
+			]),
+			new JsonResponse(['id' => 7]),
+		);
+
+		$this->assertTrue(true, 'onTerminate returned without throwing');
+	}
+
+	#[Test]
+	#[TestDox('An unknown analytics category never reaches cloud')]
+	#[Group('mantle2/subscribers')]
+	public function unknownCategoryIsRejectedLocally(): void
+	{
+		$this->assertFalse(CloudHelper::logContentEvent('not_a_category', '1', '2'));
+		$this->assertFalse(CloudHelper::logContentEvent('events_clicked', '', '2'));
+		$this->assertFalse(CloudHelper::logContentEvent('events_clicked', '1', ''));
+		$this->assertSame([], $this->analyticsCalls());
 	}
 
 	#endregion

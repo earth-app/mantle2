@@ -222,6 +222,68 @@ class CloudHelper
 		return '';
 	}
 
+	/**
+	 * Every content-analytics category cloud accepts.
+	 *
+	 * Mirrors `AnalyticsCategory` in cloud/src/content/analytics.ts; cloud rejects anything else
+	 * with a 400, so the list is kept here to reject it before spending a request.
+	 */
+	public const ANALYTICS_CATEGORIES = [
+		'profile_viewed',
+		'articles_clicked',
+		'prompts_clicked',
+		'events_clicked',
+		'prompt_read_time',
+		'article_read_time',
+		'prompt_response_received',
+		'prompt_response_deleted',
+		'article_quiz_completed',
+		'article_recommended_clicked',
+		'event_attended',
+		'event_left',
+		'quests_started',
+		'quests_completed',
+	];
+
+	/**
+	 * Record one content-analytics event in cloud, fire and forget.
+	 *
+	 * Analytics is a reporting side effect; a cloud blip must never surface to the caller, so
+	 * every failure is swallowed. Call it from PostResponseSubscriber rather than inline, so the
+	 * request has already been sent by the time this runs.
+	 *
+	 * @param string $category one of self::ANALYTICS_CATEGORIES
+	 * @param string $contentId the id of the content the event is about
+	 * @param string $userId the numeric id of the user who caused it
+	 * @param array $metadata extra fields; cloud caps these at 16 keys
+	 */
+	public static function logContentEvent(
+		string $category,
+		string $contentId,
+		string $userId,
+		array $metadata = [],
+	): bool {
+		if (
+			!in_array($category, self::ANALYTICS_CATEGORIES, true) ||
+			$contentId === '' ||
+			$userId === ''
+		) {
+			return false;
+		}
+
+		try {
+			self::sendRequest('/v1/content_analytics/log_event', 'POST', [
+				'category' => $category,
+				'contentId' => $contentId,
+				'userId' => $userId,
+				'metadata' => $metadata,
+			]);
+			return true;
+		} catch (Exception $e) {
+			return false;
+		}
+	}
+
 	private static function cloudStringField(array $data, string $key): ?string
 	{
 		if (isset($data[$key]) && is_string($data[$key])) {

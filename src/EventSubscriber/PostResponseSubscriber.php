@@ -5,6 +5,8 @@ namespace Drupal\mantle2\EventSubscriber;
 use DateTime;
 use DateTimeZone;
 use Drupal\mantle2\Service\ArticlesHelper;
+use Drupal\mantle2\Service\CloudHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\PointsHelper;
 use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
@@ -12,6 +14,7 @@ use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
 
@@ -124,8 +127,57 @@ class PostResponseSubscriber implements EventSubscriberInterface
 		];
 	}
 
+	/**
+	 * Record a content-analytics event for the user who caused it.
+	 *
+	 * Anonymous traffic is dropped rather than bucketed: cloud keys every event on a user id, and
+	 * an "anonymous" bucket would dominate every read surface it feeds.
+	 */
+	private static function logAnalytics(
+		?UserInterface $user,
+		string $category,
+		?string $contentId,
+		array $metadata = [],
+	): void {
+		if ($user === null || $contentId === null || trim($contentId) === '') {
+			return;
+		}
+
+		CloudHelper::logContentEvent($category, trim($contentId), (string) $user->id(), $metadata);
+	}
+
 	private static function callbacks(): array
 	{
+		// every activity mutation, on all three addressing forms; the response body is a serialized
+		// user either way, so one closure covers set/add/remove
+		$activitiesChanged = function (?UserInterface $user, array $data) {
+			if ($user == null) {
+				return;
+			}
+
+			$activities = $data['activities'] ?? null;
+			if (!is_array($activities)) {
+				return;
+			}
+
+			UsersHelper::onActivitiesChanged($user, $activities);
+		};
+
+		// cloud keys analytics on the numeric id, so prefer `nid` over the public `id`
+		$profileViewed = function (?UserInterface $user, array $data) {
+			$viewed = $data['nid'] ?? ($data['id'] ?? null);
+			if ($user === null || !is_string($viewed)) {
+				return;
+			}
+
+			// your own profile is not a profile view
+			if (GeneralHelper::formatId($user->id()) === $viewed) {
+				return;
+			}
+
+			self::logAnalytics($user, 'profile_viewed', $viewed);
+		};
+
 		return [
 			'POST mantle2.articles.create' => function (?UserInterface $user, array $data) {
 				if ($user == null) {
@@ -179,6 +231,7 @@ class PostResponseSubscriber implements EventSubscriberInterface
 			'POST mantle2.prompts.responses.create' => function (
 				?UserInterface $user,
 				array $data,
+				Request $request,
 			) {
 				if ($user == null) {
 					return;
@@ -188,8 +241,43 @@ class PostResponseSubscriber implements EventSubscriberInterface
 					UsersHelper::trackBadgeProgress($user, 'prompts_responded', $id);
 				}
 
+				self::logAnalytics(
+					$user,
+					'prompt_response_received',
+					$request->attributes->get('prompt'),
+					['response_id' => (string) ($id ?? '')],
+				);
+
 				// check quest progress for responding to prompts
 				PointsHelper::checkQuestProgress($user, $data, ['respond_to_prompt']);
+			},
+			'DELETE mantle2.prompts.responses.delete' => function (
+				?UserInterface $user,
+				array $data,
+				Request $request,
+			) {
+				self::logAnalytics(
+					$user,
+					'prompt_response_deleted',
+					$request->attributes->get('prompt'),
+					['response_id' => (string) $request->attributes->get('response')],
+				);
+			},
+			// articles_clicked, prompts_clicked and the recommendation attribution all come from
+			// cloud's read timer, which knows the read actually happened
+			'GET mantle2.events.get' => function (
+				?UserInterface $user,
+				array $data,
+				Request $request,
+			) {
+				self::logAnalytics($user, 'events_clicked', $request->attributes->get('eventId'));
+			},
+			'POST mantle2.events.leave' => function (
+				?UserInterface $user,
+				array $data,
+				Request $request,
+			) {
+				self::logAnalytics($user, 'event_left', $request->attributes->get('eventId'));
 			},
 			'POST mantle2.events.create' => function (?UserInterface $user, array $data) {
 				if ($user == null) {
@@ -258,10 +346,16 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				// close_friends: add someone to your close friends
 				UsersHelper::grantBadge($user, 'close_friends');
 			},
-			'POST mantle2.events.signup' => function (?UserInterface $user, array $data) {
+			'POST mantle2.events.signup' => function (
+				?UserInterface $user,
+				array $data,
+				Request $request,
+			) {
 				if ($user == null) {
 					return;
 				}
+
+				self::logAnalytics($user, 'event_attended', $request->attributes->get('eventId'));
 
 				$tz = self::userTimezone($user);
 				try {
@@ -281,25 +375,17 @@ class PostResponseSubscriber implements EventSubscriberInterface
 					UsersHelper::grantBadge($user, 'early_bird');
 				}
 			},
-			'PATCH mantle2.users.current.activities.set' => function (
-				?UserInterface $user,
-				array $data,
-			) {
-				if ($user == null) {
-					return;
-				}
-				$activities = $data['activities'] ?? null;
-				if (is_array($activities)) {
-					$names = array_map(fn($a) => $a['name'] ?? null, $activities);
-
-					// array_values keeps the gaps from a nameless entry out of the payload;
-					// a sparse array json_encodes to an object, which the tracker rejects
-					$names = array_values(array_filter($names, fn($n) => $n !== null));
-					if (!empty($names)) {
-						UsersHelper::trackBadgeProgress($user, 'activities_added', $names);
-					}
-				}
-			},
+			'GET mantle2.users.id.get' => $profileViewed,
+			'GET mantle2.users.username.get' => $profileViewed,
+			'PATCH mantle2.users.current.activities.set' => $activitiesChanged,
+			'PATCH mantle2.users.id.activities.set' => $activitiesChanged,
+			'PATCH mantle2.users.username.activities.set' => $activitiesChanged,
+			'PUT mantle2.users.current.activities.add' => $activitiesChanged,
+			'PUT mantle2.users.id.activities.add' => $activitiesChanged,
+			'PUT mantle2.users.username.activities.add' => $activitiesChanged,
+			'DELETE mantle2.users.current.activities.remove' => $activitiesChanged,
+			'DELETE mantle2.users.id.activities.remove' => $activitiesChanged,
+			'DELETE mantle2.users.username.activities.remove' => $activitiesChanged,
 		];
 	}
 
@@ -316,12 +402,13 @@ class PostResponseSubscriber implements EventSubscriberInterface
 
 		foreach ($keys as $key) {
 			if (isset($callbacks[$key])) {
-				/** @var callable(?UserInterface, array): void */
+				/** @var callable(?UserInterface, array, Request): void */
 				$callback = $callbacks[$key];
 				$user = UsersHelper::getOwnerOfRequest($request);
 				$data = json_decode($response->getContent(), true);
 				$data = is_array($data) ? $data : [];
-				$callback($user, $data);
+				// closures that only declare two parameters ignore the third
+				$callback($user, $data, $request);
 			}
 		}
 	}
