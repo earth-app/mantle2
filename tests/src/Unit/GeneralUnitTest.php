@@ -15,6 +15,55 @@ use Symfony\Component\HttpFoundation\Request;
 class GeneralUnitTest extends TestCase
 {
 	#[Test]
+	#[TestDox('Public and internal id shapes are told apart')]
+	#[Group('mantle2/util')]
+	public function testIdShapes()
+	{
+		$hex = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+		$this->assertTrue(GeneralHelper::isPublicId($hex));
+		$this->assertFalse(GeneralHelper::isPublicId(strtoupper($hex)));
+		$this->assertFalse(GeneralHelper::isPublicId('a1b2c3d4-e5f6-0718-293a-4b5c6d7e8f90'));
+		$this->assertFalse(GeneralHelper::isPublicId(substr($hex, 0, 31)));
+		$this->assertFalse(GeneralHelper::isPublicId($hex . '0'));
+		$this->assertFalse(GeneralHelper::isPublicId(''));
+
+		// the internal shape is the padded form and its canonical unpadded equivalent
+		$this->assertTrue(GeneralHelper::isInternalId('000000000000000000000042'));
+		$this->assertTrue(GeneralHelper::isInternalId('42'));
+		$this->assertFalse(GeneralHelper::isInternalId($hex));
+		$this->assertFalse(GeneralHelper::isInternalId(''));
+		$this->assertFalse(GeneralHelper::isInternalId(str_repeat('9', 51)));
+
+		// the two shapes never overlap, so a resolver can always tell which it was handed
+		$this->assertFalse(
+			GeneralHelper::isPublicId('000000000000000000000042') &&
+				GeneralHelper::isInternalId('000000000000000000000042') &&
+				GeneralHelper::isPublicId($hex),
+		);
+	}
+
+	#[Test]
+	#[TestDox('resolveNodeId refuses a shape that is neither id form, without touching storage')]
+	#[Group('mantle2/util')]
+	public function testResolveNodeIdRejectsJunk()
+	{
+		// the entity-backed paths are covered per bundle in the controller integration tests;
+		// these branches return before any storage call, so they belong here
+		foreach (
+			['', '   ', 'not-an-id', 'A1B2C3D4E5F60718293A4B5C6D7E8F90', str_repeat('9', 51)]
+			as $bad
+		) {
+			$this->assertNull(
+				GeneralHelper::resolveNodeId($bad, 'article'),
+				"'$bad' must not resolve to a node.",
+			);
+		}
+
+		$this->assertNull(GeneralHelper::resolveNodeId(null, 'article'));
+	}
+
+	#[Test]
 	#[TestDox('Test ID formatting to 24 characters')]
 	#[Group('mantle2/util')]
 	public function testFormatId()

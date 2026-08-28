@@ -6,6 +6,9 @@ use Drupal;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\node\Entity\Node;
+use Drupal\user\Entity\User;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
 class GeneralHelper
@@ -88,6 +91,125 @@ class GeneralHelper
 			$s = str_pad($s, 24, '0', STR_PAD_LEFT);
 		}
 		return substr($s, 0, 24);
+	}
+
+	// `publicId` for a bare node id; the node is already in drupal's static cache wherever a
+	// serialiser holds only the id, so the load is free
+	public static function publicIdOfNode(int|string $id): string
+	{
+		if (!class_exists(Node::class)) {
+			return self::formatId($id);
+		}
+
+		try {
+			$node = Node::load((int) $id);
+			return $node ? self::publicId($node) : self::formatId($id);
+		} catch (\Throwable) {
+			return self::formatId($id);
+		}
+	}
+
+	/**
+	 * The 32-hex form of an entity's uuid, dashes stripped.
+	 *
+	 * This is the id shape the public API is moving to. `formatId` stays as it is and keeps its job:
+	 * it is the INTERNAL id, and every `/v1/...` path sent to cloud must keep using it, because
+	 * cloud keys its KV on the numeric form and nothing here re-keys it.
+	 */
+	public static function publicId(EntityInterface $entity): string
+	{
+		return str_replace('-', '', strtolower((string) $entity->uuid()));
+	}
+
+	/**
+	 * `publicId` for a bare integer user id, memoised for the request.
+	 *
+	 * Serialisers that hold only an id would otherwise load an entity per row, which is N+1 on any
+	 * list. Falls back to the padded id when the account is gone, so a stale reference stays
+	 * readable rather than becoming null.
+	 */
+	private static array $publicIdCache = [];
+
+	public static function publicIdOfUser(int|string $id): string
+	{
+		$key = (string) $id;
+		if (isset(self::$publicIdCache[$key])) {
+			return self::$publicIdCache[$key];
+		}
+
+		// a serialiser must not explode because entity storage is unavailable (unit tests run
+		// without a bootstrapped container), so an unresolvable id degrades to the padded form
+		$resolved = self::formatId($key);
+		if (class_exists(User::class)) {
+			try {
+				$user = User::load((int) $key);
+				if ($user) {
+					$resolved = self::publicId($user);
+				}
+			} catch (\Throwable) {
+				// keep the padded form
+			}
+		}
+		self::$publicIdCache[$key] = $resolved;
+
+		return $resolved;
+	}
+
+	/** Whether a value has the shape `publicId` produces. */
+	public static function isPublicId(string $value): bool
+	{
+		return preg_match('/^[0-9a-f]{32}$/', $value) === 1;
+	}
+
+	/** Whether a value has the shape `formatId` produces, or its canonical unpadded form. */
+	public static function isInternalId(string $value): bool
+	{
+		return preg_match('/^\d{1,50}$/', $value) === 1;
+	}
+
+	/**
+	 * The node id behind either id shape, or null when nothing of that bundle answers to it.
+	 *
+	 * Single inbound choke point for content entities, the way `UsersHelper::findBy` is for
+	 * accounts. Every controller that used to take `int $articleId` takes a string and calls this.
+	 *
+	 * @param string|null $identifier a numeric node id or a 32-hex uuid
+	 * @param string $bundle the node type the id must belong to
+	 */
+	public static function resolveNodeId(?string $identifier, string $bundle): ?int
+	{
+		$value = trim((string) $identifier);
+		if ($value === '') {
+			return null;
+		}
+
+		if (self::isInternalId($value)) {
+			$node = Node::load((int) $value);
+			return $node && $node->bundle() === $bundle ? (int) $node->id() : null;
+		}
+
+		if (!self::isPublicId($value)) {
+			return null;
+		}
+
+		// uuids are stored with dashes, so put them back before querying
+		$uuid = implode('-', [
+			substr($value, 0, 8),
+			substr($value, 8, 4),
+			substr($value, 12, 4),
+			substr($value, 16, 4),
+			substr($value, 20, 12),
+		]);
+
+		$ids = Drupal::entityQuery('node')
+			->accessCheck(false)
+			->condition('type', $bundle)
+			->condition('uuid', $uuid)
+			->range(0, 1)
+			->execute();
+
+		$id = reset($ids);
+		return $id ? (int) $id : null;
 	}
 
 	public static function dateToIso(int $timestamp): string
