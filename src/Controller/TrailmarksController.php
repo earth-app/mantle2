@@ -37,6 +37,14 @@ class TrailmarksController extends ControllerBase
 			$query['radius'] = (float) $radius;
 		}
 
+		$activity = $request->query->get('activity');
+		if (is_string($activity) && $activity !== '') {
+			$query['activity'] = $activity;
+		}
+		if ($request->query->get('shared') === 'true') {
+			$query['shared'] = 'true';
+		}
+
 		try {
 			$data = CloudHelper::sendRequest('/v1/trailmarks', 'GET', $query);
 		} catch (Exception $e) {
@@ -100,7 +108,16 @@ class TrailmarksController extends ControllerBase
 			is_string($body['prompt_id']) &&
 			$body['prompt_id'] !== ''
 		) {
-			$payload['prompt_id'] = $body['prompt_id'];
+			// canonicalise, so a note filed under a public id is still found by a numeric one
+			$resolved = GeneralHelper::resolveNodeId($body['prompt_id'], 'prompt');
+			$payload['prompt_id'] = $resolved ? (string) $resolved : $body['prompt_id'];
+		}
+		if (
+			isset($body['activity_id']) &&
+			is_string($body['activity_id']) &&
+			$body['activity_id'] !== ''
+		) {
+			$payload['activity_id'] = $body['activity_id'];
 		}
 
 		try {
@@ -144,6 +161,11 @@ class TrailmarksController extends ControllerBase
 		$promptId = trim($prompt);
 		if ($promptId === '') {
 			return GeneralHelper::badRequest('Invalid prompt id');
+		}
+
+		$resolved = GeneralHelper::resolveNodeId($promptId, 'prompt');
+		if ($resolved) {
+			$promptId = (string) $resolved;
 		}
 
 		try {

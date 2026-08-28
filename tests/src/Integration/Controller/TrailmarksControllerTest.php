@@ -4,6 +4,7 @@ namespace Drupal\Tests\mantle2\Integration\Controller;
 
 use Drupal\mantle2\Controller\TrailmarksController;
 use Drupal\mantle2\Service\CloudHelper;
+use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\UserInterface;
 use Exception;
@@ -187,6 +188,82 @@ class TrailmarksControllerTest extends IntegrationTestBase
 		$this->assertSame(Response::HTTP_CREATED, $ok->getStatusCode());
 		$this->assertSame('/v1/trailmarks', $captured['path']);
 		$this->assertSame('482', $captured['data']['prompt_id']);
+	}
+
+	#[Test]
+	#[TestDox('POST /v2/trailmarks forwards an optional activity_id to cloud')]
+	#[Group('mantle2/trailmarks')]
+	public function createForwardsActivityId(): void
+	{
+		$captured = [];
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = ['path' => $path, 'data' => $data];
+			return ['id' => 'tm1', 'activity_id' => $data['activity_id'] ?? null];
+		});
+
+		$ok = $this->controller()->createTrailmark(
+			$this->authRequest(
+				$this->user(),
+				'POST',
+				'/v2/trailmarks',
+				[],
+				json_encode([
+					'geo' => ['lat' => 41.8781, 'lng' => -87.6298],
+					'note' => 'Good handholds on the north face.',
+					'activity_id' => 'bouldering',
+				]),
+			),
+		);
+		$this->assertSame(Response::HTTP_CREATED, $ok->getStatusCode());
+		$this->assertSame('bouldering', $captured['data']['activity_id']);
+
+		// an empty activity is simply absent, never forwarded as a blank
+		$captured = [];
+		$this->controller()->createTrailmark(
+			$this->authRequest(
+				$this->user(),
+				'POST',
+				'/v2/trailmarks',
+				[],
+				json_encode([
+					'geo' => ['lat' => 41.8781, 'lng' => -87.6298],
+					'note' => 'Just a note.',
+					'activity_id' => '',
+				]),
+			),
+		);
+		$this->assertArrayNotHasKey('activity_id', $captured['data']);
+	}
+
+	#[Test]
+	#[TestDox('GET /v2/trailmarks passes the activity scoping through to cloud')]
+	#[Group('mantle2/trailmarks')]
+	public function nearbyPassesActivityScoping(): void
+	{
+		$captured = [];
+		CloudHelper::setRequestOverride(function ($path, $method, $data) use (&$captured) {
+			$captured = ['path' => $path, 'data' => $data];
+			return [];
+		});
+
+		$this->controller()->nearby(
+			$this->authRequest(
+				$this->user(),
+				'GET',
+				'/v2/trailmarks?lat=41.8781&lng=-87.6298&activity=bouldering&shared=true',
+			),
+		);
+
+		$this->assertSame('bouldering', $captured['data']['activity']);
+		$this->assertSame('true', $captured['data']['shared']);
+
+		// absent by default, so an untagged client keeps the old behaviour
+		$captured = [];
+		$this->controller()->nearby(
+			$this->authRequest($this->user(), 'GET', '/v2/trailmarks?lat=41.8781&lng=-87.6298'),
+		);
+		$this->assertArrayNotHasKey('activity', $captured['data']);
+		$this->assertArrayNotHasKey('shared', $captured['data']);
 	}
 
 	#[Test]
