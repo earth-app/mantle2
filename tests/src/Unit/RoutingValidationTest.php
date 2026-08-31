@@ -189,7 +189,7 @@ class RoutingValidationTest extends TestCase
 			str_starts_with($routeName, 'mantle2.users.id')
 		) {
 			$this->assertEquals(
-				'\d+',
+				'[0-9a-f]{32}|\d+',
 				$route['requirements']['id'],
 				"Route '$routeName' has invalid id requirement",
 			);
@@ -241,6 +241,149 @@ class RoutingValidationTest extends TestCase
 				);
 			}
 		}
+	}
+
+	public static function publishedIdShapeProvider(): array
+	{
+		// exactly what the serialiser hands clients: `account.id` / `avatar_url` carry the 32-hex
+		// public id, `nid` carries the padded internal one, and older clients still send the bare uid
+		return [
+			'public id (account.id and avatar_url)' => ['5158c6be3ef44b5681d2c150e0e806da'],
+			'padded internal id (nid)' => ['000000000000000000000002'],
+			'bare numeric id' => ['2'],
+		];
+	}
+
+	#[Test]
+	#[TestDox('Every published id shape resolves against the user routes')]
+	#[Group('mantle2/routing')]
+	#[DataProvider('publishedIdShapeProvider')]
+	public function testPublishedIdShapesMatchUserRouteRequirements(string $sample): void
+	{
+		$checked = 0;
+
+		foreach (self::$routes as $routeName => $route) {
+			if (
+				!str_starts_with($routeName, 'mantle2.users.id') &&
+				!str_starts_with($routeName, 'mantle2.admin.users')
+			) {
+				continue;
+			}
+
+			$requirement = $route['requirements']['id'] ?? null;
+			if ($requirement === null) {
+				continue;
+			}
+
+			$checked++;
+			$this->assertMatchesRegularExpression(
+				'/^(?:' . $requirement . ')$/',
+				$sample,
+				"Route '$routeName' rejects an id shape the API itself publishes ('$sample'), " .
+					'so every client built from that id gets "No route found"',
+			);
+		}
+
+		$this->assertGreaterThan(50, $checked, 'Expected the user id routes to be discovered');
+	}
+
+	#[Test]
+	#[TestDox('The serialised avatar_url is built from an id the photo route accepts')]
+	#[Group('mantle2/routing')]
+	public function testSerialisedAvatarUrlIsRoutable(): void
+	{
+		$helper = file_get_contents(dirname(__DIR__, 3) . '/src/Service/UsersHelper.php');
+		$this->assertIsString($helper);
+
+		// pin the two halves of the contract together: the id helper the serialiser spends on
+		// avatar_url, and the requirement on the route that url points at
+		$this->assertMatchesRegularExpression(
+			"/'avatar_url' =>.{0,200}GeneralHelper::(publicId|formatId)\(/s",
+			$helper,
+			'avatar_url is no longer built from a known id helper; update this contract test',
+		);
+
+		preg_match("/'avatar_url' =>.{0,200}GeneralHelper::(publicId|formatId)\(/s", $helper, $m);
+		$sample =
+			$m[1] === 'publicId' ? '5158c6be3ef44b5681d2c150e0e806da' : '000000000000000000000002';
+
+		$requirement = self::$routes['mantle2.users.id.get_profile_photo']['requirements']['id'];
+		$this->assertMatchesRegularExpression(
+			'/^(?:' . $requirement . ')$/',
+			$sample,
+			'avatar_url is serialised with an id the profile_photo route will not match',
+		);
+	}
+
+	private const RESERVED_REQUIREMENTS = [
+		'_access',
+		'_method',
+		'_format',
+		'_scheme',
+		'_host',
+		'_locale',
+		'_controller',
+	];
+
+	#[Test]
+	#[TestDox('Requirements only constrain variables that exist in the route path')]
+	#[Group('mantle2/routing')]
+	public function testRequirementsOnlyConstrainPathVariables(): void
+	{
+		$dead = [];
+
+		foreach (self::$routes as $routeName => $route) {
+			preg_match_all('/\{(\w+)\}/', $route['path'] ?? '', $matches);
+			$pathVariables = $matches[1];
+
+			foreach (array_keys($route['requirements'] ?? []) as $key) {
+				if (in_array($key, self::RESERVED_REQUIREMENTS, true)) {
+					continue;
+				}
+				if (!in_array($key, $pathVariables, true)) {
+					$dead[] = "$routeName constrains '$key' but its path is '{$route['path']}'";
+				}
+			}
+		}
+
+		// symfony only applies requirements to path variables, so one named after a query
+		// parameter is silently ignored - it reads as a constraint while enforcing nothing
+		$this->assertSame([], $dead, "Requirements that Symfony ignores:\n" . implode("\n", $dead));
+	}
+
+	#[Test]
+	#[TestDox('Every requirement is a valid regex that agrees with its documented type')]
+	#[Group('mantle2/routing')]
+	public function testRequirementRegexesAreValidAndTyped(): void
+	{
+		$invalid = [];
+		$contradictory = [];
+
+		foreach (self::$routes as $routeName => $route) {
+			$parameters = $route['options']['parameters'] ?? [];
+
+			foreach ($route['requirements'] ?? [] as $key => $pattern) {
+				if (in_array($key, self::RESERVED_REQUIREMENTS, true)) {
+					continue;
+				}
+
+				if (@preg_match('#^(?:' . $pattern . ')$#', '') === false) {
+					$invalid[] = "$routeName: $key = $pattern";
+				}
+
+				// a digits-only constraint on something the docs call a string is how
+				// `activityId: '\d+'` outlived activity ids becoming slugs like `mud_wrestling`
+				if (
+					($parameters[$key]['type'] ?? null) === 'string' &&
+					in_array($pattern, ['\d+', '[0-9]+'], true)
+				) {
+					$contradictory[] = "$routeName: $key documented as string but constrained to $pattern";
+				}
+			}
+		}
+
+		$this->assertSame([], $invalid, implode("\n", $invalid));
+		$this->assertSame([], $contradictory, implode("\n", $contradictory));
 	}
 
 	#[Test]

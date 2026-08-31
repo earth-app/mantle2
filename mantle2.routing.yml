@@ -494,7 +494,7 @@ mantle2.users.id.get:
     _title: 'Retrieve User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Retrieves user information by their identifier
@@ -512,7 +512,7 @@ mantle2.users.id.patch:
     _title: 'Update User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Updates user information by their identifier
@@ -534,7 +534,7 @@ mantle2.users.id.delete:
     _title: 'Delete User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     schema/204: User deleted successfully
@@ -553,7 +553,7 @@ mantle2.users.id.patch_field_privacy:
     _title: 'Edit User Field Privacy by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Updates user field privacy settings by their identifier
@@ -575,7 +575,7 @@ mantle2.users.id.get_profile_photo:
     _title: 'Get User Profile Photo by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Retrieves the profile photo of a user by their identifier
@@ -600,7 +600,7 @@ mantle2.users.id.set_profile_photo:
     _title: 'Set User Profile Photo by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Updates the profile photo of a user by their identifier
@@ -620,7 +620,7 @@ mantle2.users.id.profile_photo.cosmetic.get:
     _title: 'Get User Cosmetics by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Get unlocked cosmetics and currently selected cosmetic for user
@@ -636,7 +636,7 @@ mantle2.users.id.profile_photo.cosmetic.set:
     _title: 'Set User Cosmetic by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Set the currently selected profile photo cosmetic
@@ -655,7 +655,7 @@ mantle2.users.id.profile_photo.purchase_cosmetic:
     _title: 'Purchase Cosmetic by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Purchase a profile photo cosmetic with impact points
@@ -676,7 +676,7 @@ mantle2.users.id.profile_photo.cache.clear:
     _title: 'Clear Profile Photo Cache by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users
     description: Flush cached profile photo entries (base + every cosmetic variant) for the user.
@@ -693,7 +693,7 @@ mantle2.users.id.set_account_type:
     _title: 'Set User Account Type by ID [Admin Only]'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Admin
     description: Updates user account type by their identifier
@@ -719,7 +719,7 @@ mantle2.users.id.create_account_type_trial:
     _title: 'Create User Account Type Trial by ID [Admin Only]'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Admin
     description: Creates a temporary account type trial by user identifier
@@ -749,7 +749,7 @@ mantle2.users.id.activities:
     _title: 'Get User Activities by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Activities
     description: Retrieves user activities by their identifier
@@ -767,7 +767,7 @@ mantle2.users.id.activities.set:
     _title: 'Set User Activities by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Activities
     description: Updates user activities by their identifier
@@ -789,7 +789,7 @@ mantle2.users.id.activities.add:
     _title: 'Add User Activity by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Activities
     description: Updates user activities by their identifier
@@ -814,8 +814,7 @@ mantle2.users.id.activities.remove:
     _title: 'Remove User Activity by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
-    activityId: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Activities
     description: Removes a user activity by their identifier
@@ -839,7 +838,7 @@ mantle2.users.id.activities.recommend:
     _title: 'Recommend Activities for User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Activities
     description: Recommends activities for the user by their identifier
@@ -857,7 +856,7 @@ mantle2.users.id.activities.surprise:
     _title: 'Surprise Activity for User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Activities
     description: Draws one activity the user would probably never have picked
@@ -882,7 +881,7 @@ mantle2.users.id.friends:
     _title: 'Get User Friends by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Friends
     description: Retrieves user friends by their identifier
@@ -921,7 +920,7 @@ mantle2.users.id.friends.add:
     _title: 'Add User Friend by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Friends
     description: Adds a friend for the user by their identifier
@@ -947,7 +946,7 @@ mantle2.users.id.friends.remove:
     _title: 'Remove User Friend by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Friends
     description: Removes a friend for the user by their identifier
@@ -973,7 +972,7 @@ mantle2.users.id.blocked:
     _title: 'Get Blocked Users by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Blocking
     description: Retrieves the list of users blocked by this user (self or admin only)
@@ -993,7 +992,7 @@ mantle2.users.id.blocked.add:
     _title: 'Block User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Blocking
     description: Blocks a user for this user by their identifier (self or admin only)
@@ -1019,7 +1018,7 @@ mantle2.users.id.blocked.remove:
     _title: 'Unblock User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Blocking
     description: Unblocks a user for this user by their identifier (self or admin only)
@@ -1045,7 +1044,7 @@ mantle2.users.id.moderation:
     _title: 'Get Moderation Status by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Moderation
     description: Retrieves the account moderation status and strike history (self or admin only)
@@ -1065,7 +1064,7 @@ mantle2.users.id.circle:
     _title: "Get User's Circle by ID"
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Friends
     description: Retrieves a user's circle (their close friends) by their identifier
@@ -1100,7 +1099,7 @@ mantle2.users.id.circle.add:
     _title: "Add User to Circle by User's ID"
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Friends
     description: Adds a user to their circle by their identifier
@@ -1126,7 +1125,7 @@ mantle2.users.id.circle.remove:
     _title: "Remove User from Circle by User's ID"
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Friends
     description: Removes a user from their circle by their identifier
@@ -1152,7 +1151,7 @@ mantle2.users.id.send_email_verification:
     _title: 'Send Email Verification for User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Email Verification
     description: Sends an email verification code to the specified user's email address
@@ -1174,7 +1173,7 @@ mantle2.users.id.verify_email:
     _title: 'Verify Email for User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Email Verification
     description: Verifies the specified user's email using an 8-digit verification code
@@ -1202,7 +1201,7 @@ mantle2.users.id.change_password:
     _title: 'Change Password for User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Password
     description: 'Changes password for a user using either a reset token or current password verification. OAuth-only users (without existing passwords) can set their first password without providing old_password or token.'
@@ -1233,7 +1232,7 @@ mantle2.users.id.subscribe:
     _title: 'Subscribe User to Marketing Emails by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Subscription
     description: Subscribes a user to marketing emails. Returns 200 if already subscribed, 201 if newly subscribed.
@@ -1254,7 +1253,7 @@ mantle2.users.id.unsubscribe:
     _title: 'Unsubscribe User from Marketing Emails by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Subscription
     description: Unsubscribes a user from marketing emails. Returns 200 if already unsubscribed, 201 if newly unsubscribed.
@@ -1275,7 +1274,7 @@ mantle2.users.id.notifications:
     _title: 'Get User Notifications by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,User Notifications
     description: Retrieves a list of notifications for a user by their ID
@@ -1293,7 +1292,7 @@ mantle2.users.id.notifications.get:
     _title: 'Get User Notification by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
@@ -1314,7 +1313,7 @@ mantle2.users.id.notifications.create:
     _title: 'Create User Notification by ID (Admin Only)'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,User Notifications
     description: Creates a new notification for a user by their ID (Admin Only)
@@ -1336,7 +1335,7 @@ mantle2.users.id.notifications.mark_all_read:
     _title: 'Mark All User Notifications as Read by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,User Notifications
     description: Marks all notifications for a user as read
@@ -1356,7 +1355,7 @@ mantle2.users.id.notifications.mark_all_unread:
     _title: 'Mark All User Notifications as Unread by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,User Notifications
     description: Marks all notifications for a user as unread
@@ -1376,7 +1375,7 @@ mantle2.users.id.notifications.mark_read:
     _title: 'Mark User Notification as Read by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
@@ -1399,7 +1398,7 @@ mantle2.users.id.notifications.mark_unread:
     _title: 'Mark User Notification as Unread by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
@@ -1422,7 +1421,7 @@ mantle2.users.id.notifications.delete:
     _title: 'Delete User Notification by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     notificationId: '^[0-9a-f]{32}$'
   options:
     tags: Users,User Notifications
@@ -1445,7 +1444,7 @@ mantle2.users.id.notifications.clear:
     _title: 'Clear User Notifications by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,User Notifications
     description: Clears all notifications for a user by their ID
@@ -1465,7 +1464,7 @@ mantle2.users.id.prompts:
     _title: 'Get User Prompts by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Prompts
     description: Retrieves a list of prompts created by the user
@@ -1485,7 +1484,7 @@ mantle2.users.id.articles:
     _title: 'Get User Articles by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Articles
     description: Retrieves a list of articles created by the user
@@ -1505,7 +1504,7 @@ mantle2.users.id.events:
     _title: 'Get User Hosted Events by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Events
     description: Retrieves a list of events hosted by the user
@@ -1525,7 +1524,7 @@ mantle2.users.id.events.attending:
     _title: 'Get User Attending Events by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Events
     description: 'Retrieves events the user is hosting or attending, filtered by event visibility'
@@ -1545,7 +1544,7 @@ mantle2.users.id.events.images:
     _title: 'Get User Event Images by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Events,Event Images
     description: Retrieves a list of image submissions for events the user is hosting or attending
@@ -1565,7 +1564,7 @@ mantle2.users.id.events.images.delete_all:
     _title: 'Delete All User Event Images by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Events,Event Images
     description: Deletes all image submissions the user has ever made
@@ -1585,7 +1584,7 @@ mantle2.users.id.events.images.get:
     _title: 'Get User Event Images for Event by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Users,Events,Event Images
@@ -1608,7 +1607,7 @@ mantle2.users.id.events.images.delete:
     _title: 'Delete User Event Images for Event by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     eventId: '\d+|[0-9a-f]{32}'
   options:
     tags: Users,Events,Event Images
@@ -1631,7 +1630,7 @@ mantle2.users.id.badges:
     _title: 'Get User Badges by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Badges
     description: Retrieves a list of badges earned by the user
@@ -1649,7 +1648,7 @@ mantle2.users.id.badges.get:
     _title: 'Get User Badge by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges
@@ -1670,7 +1669,7 @@ mantle2.users.id.badges.mastery:
     _title: 'Get Badge Mastery Status by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges
@@ -1693,7 +1692,7 @@ mantle2.users.id.badges.mastery.generate:
     _title: 'Generate Badge Mastery Quest by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     badgeId: '[a-z0-9_]+'
   options:
     tags: Users,Badges,Quests
@@ -1719,7 +1718,7 @@ mantle2.users.id.badges.masteries:
     _title: 'List User Active Badge Masteries by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Badges,Quests
     description: Lists the user's stored mastery quests (active + within ttl) plus cap state
@@ -1739,7 +1738,7 @@ mantle2.users.id.impact_points:
     _title: 'Get User Impact Points by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Impact Points
     description: Retrieves the total impact points accumulated by the user
@@ -1757,7 +1756,7 @@ mantle2.users.id.referral:
     _title: 'Get User Referral Code by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Referral
     description: Retrieves the referral code for the user (self or admin only)
@@ -1777,7 +1776,7 @@ mantle2.users.id.referral.stats:
     _title: 'Get User Referral Stats by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Referral
     description: Retrieves referral stats (clicks, conversions) for the user (self or admin only)
@@ -1797,7 +1796,7 @@ mantle2.users.id.leaderboard:
     _title: 'Get User Leaderboard by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Leaderboards
     description: Retrieves a friendly-competition leaderboard scoped to global, friends, or circle
@@ -1834,7 +1833,7 @@ mantle2.users.id.quest:
     _title: 'Get User Quest by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Quests
     description: Retrieves the current quest progress for the user
@@ -1853,7 +1852,7 @@ mantle2.users.id.quest.step:
     _title: 'Get User Quest Step by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     step: '\d+'
   options:
     tags: Users,Quests
@@ -1876,7 +1875,7 @@ mantle2.users.id.quest.start:
     _title: 'Start Quest by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Quests
     description: Start a new quest for the user. Use override=true to discard any ongoing quest
@@ -1906,7 +1905,7 @@ mantle2.users.id.quest.challenge:
     _title: 'Challenge Friend to Quest by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Quests
     description: Challenge a friend to a quest; sends a templated notification (friends only) and creates a co-op challenge record
@@ -1937,7 +1936,7 @@ mantle2.users.id.quest.challenge.get:
     _title: 'Get Quest Challenge by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Quests
     description: Get the active or pending co-op challenge for the user on a quest, enriched with the other participant's progress
@@ -1962,7 +1961,7 @@ mantle2.users.id.quest.challenge.accept:
     _title: 'Accept Quest Challenge by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Quests
     description: Accept a co-op quest challenge as the recipient
@@ -1985,7 +1984,7 @@ mantle2.users.id.quest.challenge.decline:
     _title: 'Decline Quest Challenge by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Quests
     description: Decline a co-op quest challenge as the recipient
@@ -2008,7 +2007,7 @@ mantle2.users.id.quest.cancel:
     _title: 'Cancel Quest by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Quests
     description: Cancel the current quest for the user
@@ -2028,7 +2027,7 @@ mantle2.users.id.quest.history:
     _title: 'Get User Quest History by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Quests
     description: Retrieves the paginated list of completed quests for the user
@@ -2051,7 +2050,7 @@ mantle2.users.id.quest.history.id:
     _title: 'Get Completed Quest Progress by Quest ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     quest_id: '[a-z0-9_-]+'
   options:
     tags: Users,Quests
@@ -2073,7 +2072,7 @@ mantle2.users.id.poll.get:
     _title: 'List User Polls by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Polls
     description: Returns poll votes recorded for the user (self or admin only).
@@ -2086,7 +2085,7 @@ mantle2.users.id.poll.post:
     _title: 'Submit Poll Vote by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Polls
     description: Records a vote for a poll on behalf of the user (self only).
@@ -2099,7 +2098,7 @@ mantle2.users.id.poll.delete:
     _title: 'Retract Poll Vote by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Users,Polls
     description: Retracts the user's vote on a poll (self only).
@@ -2436,7 +2435,6 @@ mantle2.users.username.activities.remove:
   requirements:
     _access: 'TRUE'
     username: '@[\w.]+'
-    activityId: '\d+'
   options:
     tags: Users,Activities
     description: Removes a user activity by their identifier
@@ -2479,6 +2477,7 @@ mantle2.users.username.activities.surprise:
     _title: 'Surprise Activity for User by Username'
   requirements:
     _access: 'TRUE'
+    username: '@[\w.]+'
   options:
     tags: Users,Activities
     description: Draws one activity the user would probably never have picked
@@ -4055,7 +4054,6 @@ mantle2.users.current.activities.remove:
     _title: 'Remove Activity from Current User'
   requirements:
     _access: 'TRUE'
-    activityId: '\d+'
   options:
     tags: Users,Activities
     description: Removes a user activity by their identifier
@@ -6697,7 +6695,7 @@ mantle2.api_keys.list_by_user:
     _title: 'List API Keys by User [Admin Only]'
   requirements:
     _access: 'TRUE'
-    id: '\d+|@[\w.]+'
+    id: '[0-9a-f]{32}|\d+|@[\w.]+'
   options:
     tags: ApiKeys,Admin
     description: Admin view of another user's API keys.
@@ -6839,7 +6837,7 @@ mantle2.users.id.share.quest:
     _title: 'Quest Share Card'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     questId: '[A-Za-z0-9_\-]+'
   methods: [GET]
   options:
@@ -7262,7 +7260,7 @@ mantle2.admin.users.refund:
     _title: 'Refund User Subscription'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Subscriptions,Admin
     description: Refunds and cancels a user's subscription, reverting them to Free (admin only).
@@ -7462,7 +7460,7 @@ mantle2.users.id.nature_minutes.get:
     _title: 'Get Nature Minutes by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Trails,Users
     description: Retrieves a user's weekly nature-minutes ring (self or admin only).
@@ -7482,7 +7480,7 @@ mantle2.users.id.nature_minutes.post:
     _title: 'Credit Nature Minutes by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Trails,Users
     description: Credits nature minutes to a user's weekly ring (self or admin only).
@@ -7503,7 +7501,7 @@ mantle2.users.id.trails.start:
     _title: 'Start a Curiosity Trail Run by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     trailId: '[A-Za-z0-9_\-]+'
   options:
     tags: Trails
@@ -7529,7 +7527,7 @@ mantle2.users.id.trails.complete:
     _title: 'Complete a Curiosity Trail Run by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
     trailId: '[A-Za-z0-9_\-]+'
   options:
     tags: Trails
@@ -7554,7 +7552,7 @@ mantle2.users.id.trail_journal:
     _title: 'Get Trail Journal by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Trails
     description: Retrieves a user's private trail journal (self or admin only).
@@ -7573,7 +7571,7 @@ mantle2.users.id.expedition.get:
     _title: 'Get Circle Expedition by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Circles
     description: Retrieves a circle owner's active expedition (owner or circle member only).
@@ -7593,7 +7591,7 @@ mantle2.users.id.expedition.contribute:
     _title: 'Contribute to Circle Expedition by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Circles
     description: Credits an outdoor action to a circle owner's expedition (owner or circle member only).
@@ -7616,7 +7614,7 @@ mantle2.users.id.garden:
     _title: 'Get Circle Garden by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Circles
     description: Retrieves a circle owner's shared garden projection (owner or circle member only).
@@ -7635,7 +7633,7 @@ mantle2.users.id.kudos:
     _title: 'Send Kudos to User by ID'
   requirements:
     _access: 'TRUE'
-    id: '\d+'
+    id: '[0-9a-f]{32}|\d+'
   options:
     tags: Circles
     description: Sends counter-free kudos to a friend or circle member; fires a warm private notification and never returns a tally.
