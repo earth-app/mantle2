@@ -44,6 +44,7 @@ class AppleClientTest extends IntegrationTestBase
 		$config->setValue($client, [
 			'client_id' => 'cid',
 			'client_secret' => 'secret',
+			'provider_slug' => '',
 			'iss_allowed_domains' => '',
 			'prompt' => [],
 		]);
