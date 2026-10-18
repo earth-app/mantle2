@@ -5,6 +5,7 @@ namespace Drupal\mantle2\Service;
 use Drupal;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Database;
+use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
@@ -167,11 +168,6 @@ class SubscriptionsHelper
 	public static function stripeWebhookSecret(): ?string
 	{
 		return self::keyValue(self::KEY_STRIPE_WEBHOOK);
-	}
-
-	public static function stripePublishableKey(): ?string
-	{
-		return self::setting('mantle2.stripe_publishable_key', 'MANTLE2_STRIPE_PUBLISHABLE_KEY');
 	}
 
 	public static function getPriceIdForTier(AccountType $t): ?string
@@ -1114,7 +1110,7 @@ class SubscriptionsHelper
 			->fields('c')
 			->orderBy('created', 'DESC')
 			->execute()
-			->fetchAll(\PDO::FETCH_ASSOC);
+			->fetchAll(FetchAs::Associative);
 
 		return array_map(fn(array $r) => self::formatTrialCode($r), $rows ?: []);
 	}
@@ -1290,7 +1286,7 @@ class SubscriptionsHelper
 			->fields('r', ['user_id', 'redeemed_at', 'tier', 'expires_at'])
 			->condition('code', $code)
 			->execute()
-			->fetchAll(\PDO::FETCH_ASSOC);
+			->fetchAll(FetchAs::Associative);
 
 		$now = time();
 		$entries = [];
@@ -1349,7 +1345,7 @@ class SubscriptionsHelper
 			->fields('r', ['user_id', 'expires_at'])
 			->condition('code', $code)
 			->execute()
-			->fetchAll(\PDO::FETCH_ASSOC);
+			->fetchAll(FetchAs::Associative);
 
 		$now = time();
 		$count = 0;
@@ -2301,7 +2297,7 @@ class SubscriptionsHelper
 				->condition('provider', ['stripe', 'apple', 'google'], 'IN')
 				->condition('status', ['active', 'trialing', 'past_due'], 'IN')
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
+				->fetchAll(FetchAs::Associative);
 		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Reconcile query failed: %m', [
 				'%m' => $e->getMessage(),

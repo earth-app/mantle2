@@ -5,12 +5,14 @@ namespace Drupal\mantle2\Service;
 use Drupal;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Database;
+use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\ApiKey;
 use Drupal\mantle2\Custom\ApiKeyScope;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Throwable;
 
 /**
  * The token format is:
@@ -396,7 +398,7 @@ class ApiKeysHelper
 				->countQuery()
 				->execute()
 				->fetchField();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to count API keys: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -586,7 +588,7 @@ class ApiKeysHelper
 					'expired_notified' => 0,
 				])
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to insert API key: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -649,7 +651,7 @@ class ApiKeysHelper
 				->condition('t.token_hash', $hash)
 				->execute()
 				->fetchAssoc();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to load API key by hash: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -694,7 +696,7 @@ class ApiKeysHelper
 				])
 				->condition('id', $key->getId())
 				->execute();
-		} catch (\Throwable) {
+		} catch (Throwable) {
 			// best-effort
 		}
 
@@ -720,8 +722,8 @@ class ApiKeysHelper
 				->condition('t.user_id', $userId)
 				->orderBy('t.created_at', 'DESC')
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
-		} catch (\Throwable $e) {
+				->fetchAll(FetchAs::Associative);
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to list API keys: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -741,7 +743,7 @@ class ApiKeysHelper
 				->condition('t.user_id', $userId)
 				->execute()
 				->fetchAssoc();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to load API key: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -816,7 +818,7 @@ class ApiKeysHelper
 				->fields($fields)
 				->condition('id', $existing->getId())
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to update API key: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -843,7 +845,7 @@ class ApiKeysHelper
 				->fields(['revoked_at' => time()])
 				->condition('id', $key->getId())
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to revoke API key: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -871,7 +873,7 @@ class ApiKeysHelper
 				->condition('user_id', $userId)
 				->isNull('revoked_at')
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to revoke all API keys for %u: %m', [
 				'%u' => $userId,
 				'%m' => $e->getMessage(),
@@ -905,8 +907,8 @@ class ApiKeysHelper
 				->condition('t.expires_at', $now, '>')
 				->condition('t.expires_at', $now + 7 * 86400, '<=')
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
-		} catch (\Throwable) {
+				->fetchAll(FetchAs::Associative);
+		} catch (Throwable) {
 			$rows = [];
 		}
 
@@ -934,8 +936,8 @@ class ApiKeysHelper
 				->condition('t.expires_at', $now, '>')
 				->condition('t.expires_at', $now + 86400, '<=')
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
-		} catch (\Throwable) {
+				->fetchAll(FetchAs::Associative);
+		} catch (Throwable) {
 			$rows = [];
 		}
 
@@ -962,8 +964,8 @@ class ApiKeysHelper
 				->condition('t.expired_notified', 0)
 				->condition('t.expires_at', $now, '<=')
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
-		} catch (\Throwable) {
+				->fetchAll(FetchAs::Associative);
+		} catch (Throwable) {
 			$rows = [];
 		}
 
@@ -997,7 +999,7 @@ class ApiKeysHelper
 						),
 				)
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('Failed to prune old API keys: %m', [
 				'%m' => $e->getMessage(),
 			]);

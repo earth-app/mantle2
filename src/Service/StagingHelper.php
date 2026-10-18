@@ -5,12 +5,14 @@ namespace Drupal\mantle2\Service;
 use Drupal;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Database;
+use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
 use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Throwable;
 
 /**
  * Review queue for activities proposed by verified publishers and the cloud worker.
@@ -206,7 +208,7 @@ class StagingHelper
 					'notified_pending' => $kind === self::KIND_ORGANIZER ? 1 : 0,
 				])
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('[staging] Failed to stage %a: %m', [
 				'%a' => $activity->getId(),
 				'%m' => $e->getMessage(),
@@ -322,7 +324,7 @@ class StagingHelper
 				->condition('state', self::STATE_PENDING)
 				->condition('submitter_kind', self::KIND_ORGANIZER)
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('[staging] Failed to revoke pending for %u: %m', [
 				'%u' => $submitterId,
 				'%m' => $e->getMessage(),
@@ -344,7 +346,7 @@ class StagingHelper
 				->condition('t.id', $id)
 				->execute()
 				?->fetchAssoc();
-		} catch (\Throwable) {
+		} catch (Throwable) {
 			return null;
 		}
 
@@ -362,7 +364,7 @@ class StagingHelper
 				->range(0, 1)
 				->execute()
 				?->fetchAssoc();
-		} catch (\Throwable) {
+		} catch (Throwable) {
 			return null;
 		}
 
@@ -437,8 +439,8 @@ class StagingHelper
 				->orderBy('t.expires_at', strtolower($sort) === 'desc' ? 'DESC' : 'ASC')
 				->range(($page - 1) * $limit, $limit)
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
-		} catch (\Throwable $e) {
+				->fetchAll(FetchAs::Associative);
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('[staging] Failed to list staged: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -479,7 +481,7 @@ class StagingHelper
 			}
 
 			return (int) $query->countQuery()->execute()->fetchField();
-		} catch (\Throwable) {
+		} catch (Throwable) {
 			return 0;
 		}
 	}
@@ -494,7 +496,7 @@ class StagingHelper
 				->countQuery()
 				->execute()
 				->fetchField();
-		} catch (\Throwable) {
+		} catch (Throwable) {
 			return 0;
 		}
 	}
@@ -510,7 +512,7 @@ class StagingHelper
 				->range(0, 1)
 				->execute()
 				?->fetchField();
-		} catch (\Throwable) {
+		} catch (Throwable) {
 			return null;
 		}
 
@@ -521,10 +523,6 @@ class StagingHelper
 
 	// #region Publishing
 
-	/**
-	 * Compare-and-swap on state='pending'; makes double-publish impossible without
-	 * wrapping the whole flow in a transaction.
-	 */
 	private static function claim(int $id, array $fields): bool
 	{
 		try {
@@ -534,7 +532,7 @@ class StagingHelper
 				->condition('id', $id)
 				->condition('state', self::STATE_PENDING)
 				->execute()) === 1;
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('[staging] Failed to claim row %id: %m', [
 				'%id' => $id,
 				'%m' => $e->getMessage(),
@@ -611,7 +609,7 @@ class StagingHelper
 			}
 
 			return $fresh ?: false;
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			// never leave the row terminal on failure, and never leave it pending with a
 			// past deadline or it re-fires every tick
 			self::finalize($id, [
@@ -655,14 +653,11 @@ class StagingHelper
 		}
 	}
 
-	/**
-	 * Unconditional update, used after a row has already been claimed.
-	 */
 	private static function finalize(int $id, array $fields): void
 	{
 		try {
 			self::db()->update(self::TABLE)->fields($fields)->condition('id', $id)->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('[staging] Failed to finalize row %id: %m', [
 				'%id' => $id,
 				'%m' => $e->getMessage(),
@@ -687,8 +682,8 @@ class StagingHelper
 				->condition('t.notified_pending', 0)
 				->condition('t.submitter_kind', [self::KIND_CLOUD, self::KIND_ADMIN], 'IN')
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
-		} catch (\Throwable) {
+				->fetchAll(FetchAs::Associative);
+		} catch (Throwable) {
 			return;
 		}
 
@@ -738,8 +733,8 @@ class StagingHelper
 				->orderBy('t.expires_at', 'ASC')
 				->range(0, self::EXPIRY_BATCH)
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
-		} catch (\Throwable $e) {
+				->fetchAll(FetchAs::Associative);
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('[staging] Failed to load expirations: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -750,7 +745,7 @@ class StagingHelper
 			try {
 				// fail closed regardless of kind; cron never publishes to the public catalog
 				self::expireDenied($row);
-			} catch (\Throwable $e) {
+			} catch (Throwable $e) {
 				Drupal::logger('mantle2')->error('[staging] Row %id failed to resolve: %m', [
 					'%id' => $row['id'],
 					'%m' => $e->getMessage(),
@@ -759,14 +754,6 @@ class StagingHelper
 		}
 	}
 
-	/**
-	 * One mail a day naming everything about to auto-deny.
-	 *
-	 * Cron runs hourly and cloud stages activities continuously, so rows cross the urgent threshold
-	 * at all hours. Warning per-run meant an admin mail almost every hour, each about the handful of
-	 * rows that had just crossed - real email credits for no extra information. The throttle holds
-	 * them until one daily mail can name the whole set; expiry enforcement below stays hourly.
-	 */
 	private static function warnExpiringSoon(int $now): void
 	{
 		$last = (int) Drupal::state()->get(self::URGENT_STATE_KEY, 0);
@@ -783,8 +770,8 @@ class StagingHelper
 				->condition('t.expires_at', $now, '>')
 				->condition('t.expires_at', $now + self::URGENT_WINDOW, '<=')
 				->execute()
-				->fetchAll(\PDO::FETCH_ASSOC);
-		} catch (\Throwable) {
+				->fetchAll(FetchAs::Associative);
+		} catch (Throwable) {
 			return;
 		}
 
@@ -858,7 +845,7 @@ class StagingHelper
 				->isNotNull('decided_at')
 				->condition('decided_at', $now - self::RETENTION, '<')
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('[staging] Failed to prune decided rows: %m', [
 				'%m' => $e->getMessage(),
 			]);
@@ -887,7 +874,7 @@ class StagingHelper
 				->fields([$column => 1])
 				->condition('id', $ids, 'IN')
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error('[staging] Failed to set %c: %m', [
 				'%c' => $column,
 				'%m' => $e->getMessage(),
