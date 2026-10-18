@@ -5,6 +5,8 @@ namespace Drupal\Tests\mantle2\Integration\Service\Users;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Service\ActivityHelper;
+use Drupal\mantle2\Service\CloudHelper;
+use Drupal\mantle2\Service\RedisHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\Tests\mantle2\Integration\IntegrationTestBase;
 use Drupal\user\Entity\User;
@@ -646,6 +648,45 @@ class SocialHelperTest extends IntegrationTestBase
 		$user = $this->user();
 		$this->assertSame('', UsersHelper::getProfilePhoto($user));
 		$this->assertSame('', UsersHelper::getProfilePhoto($user, 512));
+	}
+
+	#[Test]
+	#[TestDox('getProfilePhoto does not cache a failed cloud fetch')]
+	#[Group('mantle2/users')]
+	public function getProfilePhotoSkipsEmptyCache(): void
+	{
+		$user = $this->user();
+		CloudHelper::setRequestOverride(fn() => []);
+		try {
+			$this->assertSame('', UsersHelper::getProfilePhoto($user, 128));
+			$this->assertNull(RedisHelper::get('cloud:user:photo:' . $user->id() . ':128'));
+		} finally {
+			CloudHelper::setRequestOverride(null);
+		}
+	}
+
+	#[Test]
+	#[TestDox('regenerateProfilePhoto clears every cached photo variant')]
+	#[Group('mantle2/users')]
+	public function regenerateProfilePhotoClearsCache(): void
+	{
+		$user = $this->user();
+		$base = 'cloud:user:photo:' . $user->id();
+		RedisHelper::set($base . ':128', ['photo' => 'old'], 1800);
+		RedisHelper::set($base . ':1024:grayscale', ['photo' => 'old'], 1800);
+
+		CloudHelper::setRequestOverride(fn() => ['data' => 'data:image/png;base64,AAAA']);
+		try {
+			$this->assertSame(
+				'data:image/png;base64,AAAA',
+				UsersHelper::regenerateProfilePhoto($user),
+			);
+		} finally {
+			CloudHelper::setRequestOverride(null);
+		}
+
+		$this->assertNull(RedisHelper::get($base . ':128'));
+		$this->assertNull(RedisHelper::get($base . ':1024:grayscale'));
 	}
 
 	// #endregion

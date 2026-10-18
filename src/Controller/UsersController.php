@@ -27,6 +27,7 @@ use Drupal\mantle2\Service\OAuthHelper;
 use Drupal\mantle2\Service\PointsHelper;
 use Drupal\mantle2\Service\ReferralHelper;
 use Drupal\mantle2\Service\SubscriptionsHelper;
+use InvalidArgumentException;
 use Stripe\Exception\CardException;
 use Exception;
 use Throwable;
@@ -1009,8 +1010,12 @@ final class UsersController extends ControllerBase
 
 		if ($cosmeticKey) {
 			$availableCosmetics = PointsHelper::getAvailableCosmetics($visible);
-			if (in_array($cosmeticKey, $availableCosmetics)) {
-				$dataUrl = PointsHelper::applyCosmetic($dataUrl, $cosmeticKey);
+			// the selected cosmetic is already baked in by getProfilePhoto
+			if (
+				in_array($cosmeticKey, $availableCosmetics) &&
+				$cosmeticKey !== PointsHelper::getAvatarCosmetic($visible)
+			) {
+				$dataUrl = PointsHelper::applyCosmetic($dataUrl, $cosmeticKey) ?? $dataUrl;
 			}
 		}
 
@@ -2396,8 +2401,8 @@ final class UsersController extends ControllerBase
 
 		try {
 			PointsHelper::clearUserPhotoCache((string) $user->id());
-		} catch (\Throwable $e) {
-			\Drupal::logger('mantle2')->warning(
+		} catch (Throwable $e) {
+			Drupal::logger('mantle2')->warning(
 				'Failed to clear profile photo cache for user %uid: %message',
 				[
 					'%uid' => $user->id(),
@@ -3422,13 +3427,6 @@ final class UsersController extends ControllerBase
 		);
 	}
 
-	/**
-	 * The page a human sees after clicking the unsubscribe link in a message body.
-	 *
-	 * Self-contained rather than templated: it has to render before any theme is available, and it
-	 * must never redirect, because RFC 8058 notes that redirected POSTs have historically not
-	 * worked reliably with mailbox providers.
-	 */
 	private function unsubscribeConfirmationPage(string $token, ?MailCategory $category): Response
 	{
 		$action =
@@ -3840,7 +3838,7 @@ final class UsersController extends ControllerBase
 					'updated' => time(),
 				])
 				->execute();
-		} catch (\Throwable $e) {
+		} catch (Throwable $e) {
 			Drupal::logger('mantle2')->error(
 				'registerPushToken db merge failed (uid %uid, platform %platform, token_length %len): %class :: %message',
 				[
@@ -4806,7 +4804,7 @@ final class UsersController extends ControllerBase
 				$question,
 				$options,
 			);
-		} catch (\InvalidArgumentException $e) {
+		} catch (InvalidArgumentException $e) {
 			return GeneralHelper::badRequest($e->getMessage());
 		}
 

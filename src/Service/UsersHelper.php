@@ -7,10 +7,12 @@ use Drupal;
 use Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Entity\EntityStorageException;
+use Drupal\Core\Mail\MailManagerInterface;
 use Drupal\mantle2\Controller\Schema\Mantle2Schemas;
 use Drupal\mantle2\Custom\AccountType;
 use Drupal\mantle2\Custom\Activity;
 use Drupal\mantle2\Custom\ActivityType;
+use Drupal\mantle2\Custom\ApiKey;
 use Drupal\mantle2\Custom\MailCategory;
 use Drupal\mantle2\Custom\Notification;
 use Drupal\mantle2\Custom\Quest;
@@ -19,6 +21,7 @@ use Drupal\mantle2\Custom\Visibility;
 use Drupal\mantle2\Service\ApiKeysHelper;
 use Drupal\mantle2\Service\CampaignHelper;
 use Drupal\node\Entity\Node;
+use Drupal\node\NodeInterface;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Exception;
@@ -255,7 +258,7 @@ class UsersHelper
 		if (!$session->isStarted()) {
 			try {
 				$session->start();
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 				// If session start fails, return null
 				return null;
 			}
@@ -268,7 +271,7 @@ class UsersHelper
 			$session->setId($currentSessionId);
 			try {
 				$session->start();
-			} catch (\Exception $e) {
+			} catch (Exception $e) {
 				// Ignore restore errors
 			}
 		}
@@ -378,12 +381,12 @@ class UsersHelper
 
 	#region User Scope Permissions
 
-	public static function getRequestApiKey(Request $request): ?\Drupal\mantle2\Custom\ApiKey
+	public static function getRequestApiKey(Request $request): ?ApiKey
 	{
 		// Ensure findByRequest has run so the attribute is populated.
 		self::findByRequest($request);
 		$key = $request->attributes->get('_mantle2_api_key');
-		return $key instanceof \Drupal\mantle2\Custom\ApiKey ? $key : null;
+		return $key instanceof ApiKey ? $key : null;
 	}
 
 	public static function isApiKeyRequest(Request $request): bool
@@ -2277,7 +2280,10 @@ class UsersHelper
 				$data = PointsHelper::applyCosmetic($data, $selectedCosmetic) ?: $data;
 			}
 
-			RedisHelper::set($cacheKey, ['photo' => $data], 1800);
+			// a failed fetch comes back empty and must not be pinned for the ttl
+			if ($data) {
+				RedisHelper::set($cacheKey, ['photo' => $data], 1800);
+			}
 			return $data ?: '';
 		} catch (Exception $e) {
 			Drupal::logger('mantle2')->error('Failed to retrieve profile photo: %message', [
@@ -2323,6 +2329,8 @@ class UsersHelper
 		) {
 			throw new Exception('Avatar generation timed out - please try again in a moment.');
 		}
+
+		PointsHelper::clearUserPhotoCache((string) $user->id());
 
 		return $res['data'];
 	}
@@ -3708,9 +3716,6 @@ class UsersHelper
 
 	#region User Token Authentication
 
-	/**
-	 * Lifetime for API bearer tokens (seconds).
-	 */
 	private const TOKEN_TTL = 2592000; // 30 days
 	private const MAX_SESSIONS = 5;
 
@@ -3892,10 +3897,6 @@ class UsersHelper
 		]);
 	}
 
-	/**
-	 * Prune tokens for a user to ensure at most $keep remain (by created ASC),
-	 * and remove any expired or orphaned tokens.
-	 */
 	private static function pruneUserTokens(int $uid, int $keep): void
 	{
 		$tokenStore = Drupal::service('keyvalue')->get('mantle2_tokens');
@@ -4013,11 +4014,6 @@ class UsersHelper
 		RedisHelper::delete('request_cache:user:notifications:' . $user->id() . ':*');
 	}
 
-	/**
-	 * Saves the user, retrying on transient Postgres deadlocks (SQLSTATE 40P01)
-	 * that surface from concurrent cache_entity invalidations. Reraises after
-	 * exhausting retries or on any non-deadlock error.
-	 */
 	private static function saveUserWithDeadlockRetry(
 		UserInterface $user,
 		int $maxAttempts = 3,
@@ -4676,7 +4672,7 @@ class UsersHelper
 
 		$params['user'] = $user; // Pass user object for mail headers
 
-		/** @var \Drupal\Core\Mail\MailManagerInterface $mailManager */
+		/** @var MailManagerInterface $mailManager */
 		$mailManager = Drupal::service('plugin.manager.mail');
 		$module = 'mantle2';
 		$to = $email;
@@ -5410,7 +5406,7 @@ class UsersHelper
 				shuffle($nodes);
 			} else {
 				$sortDirection = $sort === 'desc' ? -1 : 1;
-				/** @var \Drupal\node\NodeInterface[] $nodes */
+				/** @var NodeInterface[] $nodes */
 				usort($nodes, function ($a, $b) use ($sortDirection) {
 					return ($a->getCreatedTime() - $b->getCreatedTime()) * $sortDirection;
 				});
@@ -5907,7 +5903,7 @@ class UsersHelper
 			$cleanOptions[] = mb_substr(trim($opt), 0, 80);
 		}
 		if (count($cleanOptions) < 2 || $optionIndex < 0 || $optionIndex >= count($cleanOptions)) {
-			throw new \InvalidArgumentException('Invalid options or option_index');
+			throw new InvalidArgumentException('Invalid options or option_index');
 		}
 
 		$existing = self::getUserVote($userId, $pollId);
