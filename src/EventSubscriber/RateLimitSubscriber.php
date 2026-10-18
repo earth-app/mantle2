@@ -132,10 +132,6 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		}
 	}
 
-	/**
-	 * Check and increment a rate limit counter stored in expirable keyvalue.
-	 * Returns structured result: [allowed, remaining, resetTime, total]
-	 */
 	private function checkLimit(
 		string $keyPrefix,
 		int $requests,
@@ -170,13 +166,6 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		];
 	}
 
-	/**
-	 * Global rate limit configuration. Reads (GET/HEAD/OPTIONS) get a much
-	 * larger budget than writes since they're cheaper and most hot reads are
-	 * served from the response cache (which bypasses this subscriber). Defaults
-	 * are tuned for a properly configured 4GB host and can be overridden via
-	 * environment variables.
-	 */
 	private function getGlobalConfig(bool $authenticated, bool $isRead): array
 	{
 		if ($authenticated) {
@@ -202,9 +191,6 @@ class RateLimitSubscriber implements EventSubscriberInterface
 		];
 	}
 
-	/**
-	 * Map route names to per-endpoint rate limit configurations.
-	 */
 	private function getEndpointConfig(string $routeName, bool $authenticated = false): ?array
 	{
 		$sec = fn(int $s) => new DateInterval('PT' . $s . 'S');

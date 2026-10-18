@@ -17,19 +17,13 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
+use Throwable;
 
 class PostResponseSubscriber implements EventSubscriberInterface
 {
 	private const NOTIFY_CREATION_RATE_LIMIT = 5;
 	private const NOTIFY_CREATION_RATE_WINDOW = 3600;
 
-	/**
-	 * Returns true and increments the counter when the adder is still under the
-	 * per-hour creation-notification budget. Returns false (no side effects)
-	 * once the budget is exhausted, so bulk creates from earth-app/cloud do not
-	 * fan out to FCM. Failures in Redis are treated as "allow" so we never
-	 * accidentally suppress real-user notifications.
-	 */
 	private static function tryConsumeCreationNotifyBudget(UserInterface $adder): bool
 	{
 		$key = 'notify_creation_rate_limit_' . $adder->id();
@@ -99,11 +93,6 @@ class PostResponseSubscriber implements EventSubscriberInterface
 		}
 	}
 
-	/**
-	 * Resolves the user's local timezone from their stored ISO-2 country code,
-	 * falling back to UTC. Used for time-of-day badges (night_owl / early_bird)
-	 * since the user model has no explicit timezone field.
-	 */
 	private static function userTimezone(UserInterface $user): DateTimeZone
 	{
 		$country = strtoupper(trim((string) ($user->get('field_country')->value ?? '')));
@@ -113,7 +102,7 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				if (!empty($ids)) {
 					return new DateTimeZone($ids[0]);
 				}
-			} catch (\Throwable $e) {
+			} catch (Throwable $e) {
 				// fall through to UTC
 			}
 		}
@@ -127,12 +116,6 @@ class PostResponseSubscriber implements EventSubscriberInterface
 		];
 	}
 
-	/**
-	 * Record a content-analytics event for the user who caused it.
-	 *
-	 * Anonymous traffic is dropped rather than bucketed: cloud keys every event on a user id, and
-	 * an "anonymous" bucket would dominate every read surface it feeds.
-	 */
 	private static function logAnalytics(
 		?UserInterface $user,
 		string $category,
@@ -360,7 +343,7 @@ class PostResponseSubscriber implements EventSubscriberInterface
 				$tz = self::userTimezone($user);
 				try {
 					$hour = (int) new DateTime('now', $tz)->format('G');
-				} catch (\Throwable $e) {
+				} catch (Throwable $e) {
 					return;
 				}
 

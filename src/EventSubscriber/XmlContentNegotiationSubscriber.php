@@ -4,6 +4,7 @@ namespace Drupal\mantle2\EventSubscriber;
 
 use DOMDocument;
 use DOMElement;
+use ReflectionObject;
 use SimpleXMLElement;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -282,7 +283,7 @@ class XmlContentNegotiationSubscriber implements EventSubscriberInterface
 
 	private static function setRequestContent(Request $request, string $content): void
 	{
-		$reflection = new \ReflectionObject($request);
+		$reflection = new ReflectionObject($request);
 		if (!$reflection->hasProperty('content')) {
 			return;
 		}

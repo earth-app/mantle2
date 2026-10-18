@@ -79,7 +79,6 @@ class RedisHelper
 		return is_array($decoded) ? array_values(array_filter($decoded, 'is_string')) : [];
 	}
 
-	/** redis-style glob match; fnmatch is discouraged here and is not portable */
 	private static function globMatches(string $pattern, string $subject): bool
 	{
 		$regex = '/^' . str_replace(['\*', '\?'], ['.*', '.'], preg_quote($pattern, '/')) . '$/';
@@ -169,7 +168,7 @@ class RedisHelper
 
 			if (!$redis || self::$use_cache_fallback) {
 				// Fallback to Drupal cache
-				$cache = \Drupal::cache('mantle2');
+				$cache = Drupal::cache('mantle2');
 
 				// the cache bin has no pattern delete, so a tracked key index stands in for
 				// SCAN; silently skipping globs left partitioned list caches stale forever

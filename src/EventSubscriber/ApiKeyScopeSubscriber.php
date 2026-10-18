@@ -7,6 +7,7 @@ use Drupal\mantle2\Service\ApiKeysHelper;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
@@ -88,11 +89,8 @@ class ApiKeyScopeSubscriber implements EventSubscriberInterface
 		$this->denyOrDemote($event, $request, "API key is missing required scope: $required");
 	}
 
-	private function denyOrDemote(
-		RequestEvent $event,
-		\Symfony\Component\HttpFoundation\Request $request,
-		string $message,
-	): void {
+	private function denyOrDemote(RequestEvent $event, Request $request, string $message): void
+	{
 		if ($request->isMethod('GET') || $request->isMethod('HEAD')) {
 			// Demote: tell getOwnerOfRequest() to act as if the request were
 			// anonymous. Controllers' own visibility checks will then gate

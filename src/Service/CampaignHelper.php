@@ -15,6 +15,7 @@ use Drupal\mantle2\Service\EventsHelper;
 use Drupal\mantle2\Service\PromptsHelper;
 use Drupal\mantle2\Service\UsersHelper;
 use Drupal\user\UserInterface;
+use Throwable;
 
 class CampaignHelper
 {
@@ -337,12 +338,6 @@ class CampaignHelper
 		return $href === null ? $image : '[' . $image . '](' . $href . ')';
 	}
 
-	/**
-	 * The banner for the current week, shared by every recipient.
-	 *
-	 * Rotating on the week rather than per user keeps a single cacheable image per send window and
-	 * gives roughly three months before any strip repeats.
-	 */
 	private static function weeklyMotdBanner(): string
 	{
 		$week = (int) floor(Drupal::time()->getCurrentTime() / 604800);
@@ -801,7 +796,7 @@ class CampaignHelper
 		// store global filter results to avoid redundant checks
 		$globalFilterResults = [];
 
-		/** @var \Drupal\user\UserInterface $user */
+		/** @var UserInterface $user */
 		foreach ($users as $user) {
 			try {
 				$userId = $user->id();
@@ -995,7 +990,7 @@ class CampaignHelper
 								'%name' => $user->getAccountName(),
 							],
 						);
-					} catch (\Throwable $sendError) {
+					} catch (Throwable $sendError) {
 						Drupal::logger('mantle2')->error(
 							"Failed to deliver campaign '%campaign' to user %user (@%name): %message",
 							[
@@ -1007,7 +1002,7 @@ class CampaignHelper
 						);
 					}
 				}
-			} catch (\Throwable $userError) {
+			} catch (Throwable $userError) {
 				Drupal::logger('mantle2')->error(
 					'Campaign processing failed for user %uid: %message',
 					[

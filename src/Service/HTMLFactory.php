@@ -3,6 +3,7 @@
 namespace Drupal\mantle2\Service;
 
 use Drupal;
+use Throwable;
 
 class HTMLFactory
 {
@@ -89,9 +90,6 @@ class HTMLFactory
 		return trim(preg_replace("/\n{3,}/", "\n\n", $text));
 	}
 
-	/**
-	 * Convert text with formatting markers to HTML
-	 */
 	private function convertToHtml(
 		string $text,
 		string $accent = self::ACCENT,
@@ -288,9 +286,6 @@ class HTMLFactory
 		return $html;
 	}
 
-	/**
-	 * Format header elements with appropriate styling
-	 */
 	private function formatHeader(int $level, string $text): string
 	{
 		$sizes = [
@@ -317,9 +312,6 @@ class HTMLFactory
 		return "<h{$level} style=\"margin: {$margin}; font-size: {$fontSize}; font-weight: bold; color: #222;\">{$text}</h{$level}>";
 	}
 
-	/**
-	 * Format inline elements like bold, links, etc.
-	 */
 	private function formatInlineElements(string $text, array $utm = []): string
 	{
 		// First, escape HTML to prevent XSS
@@ -396,9 +388,6 @@ class HTMLFactory
 		return $text;
 	}
 
-	/**
-	 * Wrap email content for better rendering in email clients
-	 */
 	private function wrapEmailContent(
 		string $html,
 		bool $includeUnsubscribe = false,
@@ -505,7 +494,7 @@ class HTMLFactory
 
 			$value = Drupal::service('settings')->get('mantle2.postal_address');
 			return is_string($value) ? $value : null;
-		} catch (\Throwable) {
+		} catch (Throwable) {
 			return null;
 		}
 	}
@@ -536,9 +525,6 @@ class HTMLFactory
 			'</td></tr>';
 	}
 
-	/**
-	 * Padded-anchor button; renders acceptably everywhere without VML.
-	 */
 	private function getCtaHtml(array $cta, string $accent, array $utm = []): string
 	{
 		$url = $this->sanitizeUrl($cta['url'] ?? '', $utm);

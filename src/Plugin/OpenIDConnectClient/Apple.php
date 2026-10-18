@@ -121,9 +121,6 @@ class Apple extends OpenIDConnectClientBase
 		return (bool) $value;
 	}
 
-	/**
-	 * Fetch (and cache) Apple's JWKS as an associative array.
-	 */
 	private function getAppleJwks(): ?array
 	{
 		$cached = RedisHelper::get(self::JWKS_CACHE_KEY);

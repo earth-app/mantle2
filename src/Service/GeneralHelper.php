@@ -3,6 +3,7 @@
 namespace Drupal\mantle2\Service;
 
 use Drupal;
+use Normalizer;
 use Symfony\Component\HttpFoundation\Exception\UnexpectedValueException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,6 +11,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\node\Entity\Node;
 use Drupal\user\Entity\User;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Throwable;
 
 class GeneralHelper
 {
@@ -104,7 +106,7 @@ class GeneralHelper
 		try {
 			$node = Node::load((int) $id);
 			return $node ? self::publicId($node) : self::formatId($id);
-		} catch (\Throwable) {
+		} catch (Throwable) {
 			return self::formatId($id);
 		}
 	}
@@ -121,13 +123,6 @@ class GeneralHelper
 		return str_replace('-', '', strtolower((string) $entity->uuid()));
 	}
 
-	/**
-	 * `publicId` for a bare integer user id, memoised for the request.
-	 *
-	 * Serialisers that hold only an id would otherwise load an entity per row, which is N+1 on any
-	 * list. Falls back to the padded id when the account is gone, so a stale reference stays
-	 * readable rather than becoming null.
-	 */
 	private static array $publicIdCache = [];
 
 	public static function publicIdOfUser(int|string $id): string
@@ -146,7 +141,7 @@ class GeneralHelper
 				if ($user) {
 					$resolved = self::publicId($user);
 				}
-			} catch (\Throwable) {
+			} catch (Throwable) {
 				// keep the padded form
 			}
 		}
@@ -488,7 +483,7 @@ class GeneralHelper
 	{
 		// 1) Normalize Unicode (NFKD) and remove combining diacritics (turn ó -> o, etc.)
 		if (class_exists('Normalizer')) {
-			$text = \Normalizer::normalize($text, \Normalizer::FORM_KD) ?: $text;
+			$text = Normalizer::normalize($text, Normalizer::FORM_KD) ?: $text;
 		}
 		// strip combining marks (accents)
 		$text = preg_replace('/\p{M}/u', '', $text);
@@ -520,9 +515,6 @@ class GeneralHelper
 		return $text;
 	}
 
-	/**
-	 * Expand leetspeak characters to generate multiple possible variations
-	 */
 	private static function expandLeetspeakVariations(string $text): string
 	{
 		// First apply simple replacements (characters with only one possible replacement)
@@ -549,9 +541,6 @@ class GeneralHelper
 		return $text;
 	}
 
-	/**
-	 * Resolve characters that have multiple possible substitutions
-	 */
 	private static function resolveAmbiguousCharacters(string $text, array $multiMap): string
 	{
 		// Generate all possible variations of the text
@@ -561,9 +550,6 @@ class GeneralHelper
 		return self::selectBestVariation($variations);
 	}
 
-	/**
-	 * Generate all possible variations of text given multiple character substitutions
-	 */
 	private static function generateVariations(string $text, array $multiMap): array
 	{
 		$variations = [$text];
@@ -590,9 +576,6 @@ class GeneralHelper
 		return array_unique($variations);
 	}
 
-	/**
-	 * Select the best variation based on which one is most likely to contain real words
-	 */
 	private static function selectBestVariation(array $variations): string
 	{
 		if (count($variations) <= 1) {
@@ -635,9 +618,6 @@ class GeneralHelper
 		return $scored[0]['text'];
 	}
 
-	/**
-	 * Score a text variation based on common letter patterns and word-like structures
-	 */
 	private static function scoreVariation(string $text): int
 	{
 		$score = 0;
@@ -741,9 +721,6 @@ class GeneralHelper
 		return ['flagged' => '', 'matched_word' => ''];
 	}
 
-	/**
-	 * Check if a bad word is contained in the normalized text with some context awareness
-	 */
 	private static function containsBadWord(string $normalized, string $badWord): bool
 	{
 		// Simple substring search for the bad word

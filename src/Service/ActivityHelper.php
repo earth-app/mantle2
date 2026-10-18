@@ -7,6 +7,7 @@ use Drupal\mantle2\Custom\ActivityType;
 use Drupal\node\Entity\Node;
 use Drupal\user\UserInterface;
 use Drupal;
+use InvalidArgumentException;
 
 class ActivityHelper
 {
@@ -151,7 +152,7 @@ class ActivityHelper
 	public static function updateActivity(Node $node, Activity $activity): Node
 	{
 		if ($node->getType() !== 'activity') {
-			throw new \InvalidArgumentException('Node is not of type activity');
+			throw new InvalidArgumentException('Node is not of type activity');
 		}
 
 		$node->setTitle($activity->getName());
@@ -179,7 +180,7 @@ class ActivityHelper
 	public static function deleteActivity(Node $node): void
 	{
 		if ($node->getType() !== 'activity') {
-			throw new \InvalidArgumentException('Node is not of type activity');
+			throw new InvalidArgumentException('Node is not of type activity');
 		}
 
 		$node->delete();

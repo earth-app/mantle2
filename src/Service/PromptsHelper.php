@@ -30,12 +30,9 @@ class PromptsHelper
 		return null;
 	}
 
-	/**
-	 * Resolve the comment type (bundle) configured on the comment field instance.
-	 */
 	private static function getCommentTypeForField(Node $node, string $fieldName): ?string
 	{
-		$definitions = \Drupal::service('entity_field.manager')->getFieldDefinitions(
+		$definitions = Drupal::service('entity_field.manager')->getFieldDefinitions(
 			'node',
 			$node->bundle(),
 		);

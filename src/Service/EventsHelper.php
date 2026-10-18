@@ -56,7 +56,7 @@ class EventsHelper
 					if ($type === 'activity') {
 						try {
 							$activities[] = Activity::fromArray($activityData);
-						} catch (\Exception $e) {
+						} catch (Exception $e) {
 							// Skip invalid activities
 						}
 					} elseif ($type === 'activity_type') {
@@ -78,11 +78,11 @@ class EventsHelper
 		// Convert datetime string to Unix timestamp in MILLISECONDS
 		$dateValue = $node->get('field_event_date')->value;
 		if (!$dateValue) {
-			throw new \Exception('Event date is required');
+			throw new Exception('Event date is required');
 		}
 		$dateTimestamp = strtotime($dateValue);
 		if ($dateTimestamp === false) {
-			throw new \Exception('Invalid event date format');
+			throw new Exception('Invalid event date format');
 		}
 		$date = $dateTimestamp * 1000;
 
@@ -932,9 +932,6 @@ class EventsHelper
 		);
 	}
 
-	/**
-	 * Notify attendees that an event is ending soon.
-	 */
 	private static function notifyEventEnding(Event $event, Node $node, int $minutes): void
 	{
 		$eventUrl = '/events/' . GeneralHelper::formatId($node->id());
@@ -960,9 +957,6 @@ class EventsHelper
 		);
 	}
 
-	/**
-	 * Notify attendees that an event has ended.
-	 */
 	private static function notifyEventEnded(Event $event, Node $node): void
 	{
 		$eventUrl = '/events/' . GeneralHelper::formatId($node->id());

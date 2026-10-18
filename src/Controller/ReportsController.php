@@ -11,15 +11,15 @@ use Drupal\mantle2\Service\UsersHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 use Exception;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 final class ReportsController extends ControllerBase
 {
-	public static function create(
-		\Symfony\Component\DependencyInjection\ContainerInterface $container,
-	): ReportsController|static {
+	public static function create(ContainerInterface $container): ReportsController|static
+	{
 		return new static();
 	}
 
@@ -304,7 +304,7 @@ final class ReportsController extends ControllerBase
 					if ($ownerId <= 0) {
 						return GeneralHelper::badRequest('Report has no content owner to ban');
 					}
-					$owner = \Drupal\user\Entity\User::load($ownerId);
+					$owner = User::load($ownerId);
 					if (!($owner instanceof UserInterface)) {
 						return GeneralHelper::notFound('Content owner not found');
 					}

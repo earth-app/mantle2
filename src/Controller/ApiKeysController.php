@@ -259,10 +259,6 @@ final class ApiKeysController extends ControllerBase
 
 	#region helpers
 
-	/**
-	 * Resolve the request to a session-authenticated user. API key callers
-	 * are rejected because every endpoint in this controller is session-only.
-	 */
 	private function ownSessionUser(Request $request): UserInterface|JsonResponse
 	{
 		$user = UsersHelper::getOwnerOfRequest($request);

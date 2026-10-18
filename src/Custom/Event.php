@@ -2,6 +2,8 @@
 
 namespace Drupal\mantle2\Custom;
 
+use DateTime;
+use DateTimeZone;
 use Drupal\mantle2\Service\GeneralHelper;
 use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
@@ -202,8 +204,8 @@ class Event implements JsonSerializable
 	{
 		$timestamp = (int) floor($this->date / 1000);
 
-		$datetime = new \DateTime('@' . $timestamp);
-		$datetime->setTimezone(new \DateTimeZone('UTC'));
+		$datetime = new DateTime('@' . $timestamp);
+		$datetime->setTimezone(new DateTimeZone('UTC'));
 
 		// Format as ISO 8601 without timezone (e.g. "2023-10-05T14:48:00")
 		return $datetime->format('Y-m-d\TH:i:s');
@@ -226,8 +228,8 @@ class Event implements JsonSerializable
 		}
 		$timestamp = (int) floor($this->endDate / 1000);
 
-		$datetime = new \DateTime('@' . $timestamp);
-		$datetime->setTimezone(new \DateTimeZone('UTC'));
+		$datetime = new DateTime('@' . $timestamp);
+		$datetime->setTimezone(new DateTimeZone('UTC'));
 
 		// Format as ISO 8601 without timezone (e.g. "2023-10-05T14:48:00")
 		return $datetime->format('Y-m-d\TH:i:s');
