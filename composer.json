@@ -9,7 +9,7 @@
 		"drupal/json_field": "^1.4",
 		"ext-json": "*",
 		"ext-curl": "*",
-		"drupal/key": "1.22.0",
+		"drupal/key": "1.23.0",
 		"drupal/smtp": "^1.4",
 		"drupal/redis": "^1.10",
 		"drupal/openid_connect": "^3.0@alpha",
