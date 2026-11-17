@@ -2312,7 +2312,7 @@ class UsersHelper
 	 */
 	public static function regenerateProfilePhoto(UserInterface $user): string
 	{
-		// sdxl-lightning can take 15-30s; default 10s timeout silently returns []
+		// image generation can take 10-30s; default 10s timeout silently returns []
 		$res = CloudHelper::sendRequest(
 			'/v1/users/profile_photo/' . $user->id(),
 			'PUT',
